@@ -1,123 +1,122 @@
-# Manga Panel Crop Coordinate Generation Prompt
+# Master Manga Panel & Dialogue Crop Coordinate Extraction Prompt
 
-## Task
-You are an expert manga visual analyzer and bounding-box coordinate detector.
-Given an ordered list of full manga chapter page images, your goal is to extract the exact bounding box for every story panel in correct reading order (Right-to-Left, Top-to-Bottom for standard Manga).
+## Role
+You are an expert anime director and master manga editor. Your objective is to analyze complete manga chapter pages and extract cleanly bounded, narrative-complete visual story panels for high-quality 16:9 video recap production.
 
-## Coordinate Representation & Token Optimization
-To keep the output JSON compact, resilient, and independent of image scaling differences:
-- Express all coordinates as **normalized integers from 0 to 1000** relative to each page's dimensions:
-  - `0,0` is top-left.
-  - `1000,1000` is bottom-right.
-- Coordinate format: `[ymin, xmin, ymax, xmax]`
-  - `ymin`: Top boundary (0-1000)
-  - `xmin`: Left boundary (0-1000)
-  - `ymax`: Bottom boundary (0-1000)
-  - `xmax`: Right boundary (0-1000)
+Every cropped panel will be centered on a solid canvas in the recap video. Therefore, each crop must be a coherent, complete visual and dialogue beat that is instantly readable and comfortable for viewers.
 
-## Rules
-1. **Reading Order**: Standard Japanese manga reads **Right to Left**, **Top to Bottom**. Sort the panels within each page accordingly.
-2. **Gutters & Borders**: Crop precisely inside or exactly along the panel outer border. Do not cut off character speech bubbles or sound effects that extend slightly out of the panel.
-3. **Full Page Spreads**: If a panel spans across two pages or occupies an entire page, label it with `full_bleed: true`.
-4. **No Placeholders**: Include every story panel. Do not group distinct action panels together.
+---
 
-## Output Schema
-Return **ONLY** valid, raw JSON with no Markdown wrapper or conversational filler:
+## Coordinate System
+- Use **normalized integer coordinates** from `0` to `1000` relative to each page:
+  - `0,0` represents the **top-left corner**.
+  - `1000,1000` represents the **bottom-right corner**.
+- Format: `[ymin, xmin, ymax, xmax]`
+  - `ymin`: Top boundary (0–1000)
+  - `xmin`: Left boundary (0–1000)
+  - `ymax`: Bottom boundary (0–1000)
+  - `xmax`: Right boundary (0–1000)
+
+---
+
+## Fundamental Cropping & Framing Rules
+
+### 1. Speech Bubble & Dialogue Integrity (HIGHEST PRIORITY)
+- **100% Complete Enclosure**: Every speech bubble, thought cloud, whisper text box, dialogue tail, and important scene onomatopoeia/sound effect (SFX) **MUST be entirely enclosed inside the crop box**.
+- **Never Slice Through Bubbles**: Never cut across text, dialogue clouds, or bubble tails.
+- **Gutter Overflows (*Fukidashi* Bleed)**: In Japanese manga, speech bubbles frequently protrude past the black panel border into the white gutter. When this occurs, **EXPAND the bounding box outward** into the gutter so the entire bubble is comfortably captured.
+- **Visual Breathing Room**: Ensure there is comfortable clearance (1–2% margin) around bubble edges so text does not press uncomfortably against the crop edge.
+
+### 2. Tier Integrity & Dialogue Continuity (NO MICRO-SLICING)
+- **Do Not Slice Conversation Rows**: If a horizontal tier/row contains characters talking back and forth (e.g., character A on the left, character B on the right), **crop the entire horizontal row as ONE single wide panel**.
+- **No Floating Bubble Strips**: Never isolate a single speech bubble, empty background wall, or locker door into a narrow vertical sliver. 
+- Keep the visual context, the speaker, and their dialogue together in the same frame.
+
+### 3. Frame Breaking & Overflows (*Buchi-nuki*)
+- When a character's head, hair, weapon, or body breaks out of a panel border into an adjacent gutter or row, **EXPAND the bounding box** to contain the entire subject.
+- **NEVER decapitate characters or slice across faces/foreheads.**
+
+### 4. Full Page Splashes & Cover Spreads (*Tachikiri*)
+- Single-page title covers, impact splashes, or establishing scenes with no internal sub-panel borders must be cropped as a single full-page panel:
+  `"box_1000": [0, 0, 1000, 1000]`
+
+### 5. Non-Story Page Filtering & Spread Deduplication
+- **Scanlator / Credit / Promo Pages**: If a page is a scanlator credit sheet, Ko-fi donation card, Discord invite, or translation preview card (not part of the actual comic story), output:
+  `"is_story_page": false, "panels": []`
+- **Duplicate Double Spreads**: If a double-page spread is provided both as split single pages (left/right) AND as a stitched 2-page wide spread, crop **ONLY the stitched wide image**. For the individual duplicate split pages, output:
+  `"is_story_page": false, "panels": []`
+
+### 6. Japanese Reading Order
+- Manga is read **Right to Left**, **Top to Bottom**. Order the panels within each page's `panels` array strictly following this narrative timeline.
+
+---
+
+## Output JSON Schema
+Return **ONLY** valid, raw JSON with no Markdown commentary before or after:
 
 ```json
 {
   "chapter": "01",
-  "total_pages": 18,
   "pages": [
     {
       "page_index": 1,
       "page_filename": "page_001.png",
+      "is_story_page": false,
+      "notes": "Scanlator credit sheet - skipped",
+      "panels": []
+    },
+    {
+      "page_index": 2,
+      "page_filename": "page_002.png",
+      "is_story_page": true,
+      "notes": "Chapter Title Page",
       "panels": [
         {
           "panel_id": 1,
-          "box_1000": [45, 520, 380, 960],
-          "notes": "Protagonist reaction top-right"
+          "box_1000": [0, 0, 1000, 1000],
+          "type": "full_splash",
+          "notes": "Full page cover artwork with title"
+        }
+      ]
+    },
+    {
+      "page_index": 3,
+      "page_filename": "page_003.png",
+      "is_story_page": true,
+      "notes": "Corridor and conversation scene",
+      "panels": [
+        {
+          "panel_id": 1,
+          "box_1000": [35, 40, 235, 960],
+          "type": "wide_tier",
+          "notes": "Top establishing corridor tier including upper sound effects"
         },
         {
           "panel_id": 2,
-          "box_1000": [50, 40, 390, 510],
-          "notes": "Opponent standing top-left"
+          "box_1000": [230, 490, 410, 960],
+          "type": "split_panel",
+          "notes": "Right side reaction panel with fully enclosed speech bubble"
         },
         {
           "panel_id": 3,
-          "box_1000": [400, 40, 950, 960],
-          "notes": "Clash bottom wide panel"
+          "box_1000": [230, 40, 410, 490],
+          "type": "split_panel",
+          "notes": "Left side letter flip panel with bubble"
+        },
+        {
+          "panel_id": 4,
+          "box_1000": [410, 40, 715, 960],
+          "type": "wide_tier",
+          "notes": "Full tier fantasy daydream showing chibi protagonist and angel girl"
+        },
+        {
+          "panel_id": 5,
+          "box_1000": [715, 40, 985, 960],
+          "type": "wide_tier",
+          "notes": "Bottom tier multi-character dialogue between Hinata and Shinji"
         }
       ]
     }
   ]
-}
-```
-```
-
----
-
-### File 7/7: `prompts/narration_generation_prompt.md`
-```markdown
-# Manga Recap Narration & Memory Continuity Prompt
-
-## Task
-You are a master anime/manga recap scriptwriter.
-You will be provided with:
-1. **Previous Chapter Memory (`memory.json`)**: Tracks story state, character knowledge, emotional stakes, and unresolved plot hooks.
-2. **Current Chapter Cropped Panels**: Ordered visual panels (`panel_001.png`, `panel_002.png`, ...).
-
-You must generate:
-1. An engaging, fast-paced, immersive **Narration Script (`narration.json`)** mapped panel-by-panel.
-2. An updated **Memory State (`memory.json`)** to maintain seamless continuity for the next chapter.
-
----
-
-## Narration Tone & Style Guidelines
-- **Recap Pacing**: High energy, punchy, dramatic present tense ("Jin-Woo steps forward, his aura overwhelming the entire room...").
-- **Visual Sync**: What the narrator describes must align directly with the visual action in that specific panel.
-- **Natural Timing**: Keep narration per panel between 8 to 22 words so visual pacing remains snappy and cinematic.
-- **Silent Beats**: If a panel is purely an impact sound or reaction, use short or empty narration with a deliberate `pause_after_ms`.
-
----
-
-## Output Schema
-Output a single valid JSON object containing both `narration` and `updated_memory`:
-
-```json
-{
-  "chapter": "01",
-  "narration": [
-    {
-      "panel_id": "panel_001",
-      "text": "Standing in the ruins of the lower district, Ray realizes his power has completely evolved.",
-      "emotion": "serious",
-      "pause_after_ms": 300
-    },
-    {
-      "panel_id": "panel_002",
-      "text": "Before he can test his new strength, a shadow drops from the ceiling.",
-      "emotion": "tense",
-      "pause_after_ms": 250
-    }
-  ],
-  "updated_memory": {
-    "series_title": "Manga Title",
-    "last_chapter_processed": "01",
-    "characters": {
-      "Ray": {
-        "status": "Alive",
-        "current_location": "Lower District Ruins",
-        "power_level_or_state": "Newly awakened ability"
-      }
-    },
-    "key_plot_points": [
-      "Ray unlocked stage two of his shadow awakening.",
-      "An unidentified assassin ambushed Ray at the district gate."
-    ],
-    "unresolved_cliffhangers": [
-      "Who sent the assassin to intercept Ray?"
-    ]
-  }
 }
 ```
