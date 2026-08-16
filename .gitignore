@@ -35,7 +35,7 @@ projects/*/chapters/*/video/
 *.mp4
 *.wav
 *.mp3
-
+projects/
 # Keep config local overrides private if containing keys
 config.json
 
