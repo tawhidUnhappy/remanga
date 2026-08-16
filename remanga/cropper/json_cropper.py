@@ -22,7 +22,7 @@ class CoordinateCropper:
         Packages ONLY vision contact sheets and manifest into a lightweight ZIP.
         Excludes raw panels to minimize upload size and LLM token usage.
         """
-        zip_path = chapter_dir / "panels.zip"
+        zip_path = chapter_dir / "sheets.zip"
         if zip_path.exists():
             zip_path.unlink()
 
@@ -46,7 +46,7 @@ class CoordinateCropper:
     def crop_chapter_from_json(self, project_name: str, chapter_num: str) -> List[Path]:
         """
         Reads crops.json in the chapter directory, crops panels, generates
-        vision-friendly panel sheets, and packages sheets into panels.zip.
+        vision-friendly panel sheets, and packages sheets into sheets.zip.
         """
         chapter_dir = get_chapter_dir(project_name, chapter_num)
         crops_json_path = chapter_dir / "crops.json"
