@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Isolated tools & virtualenv
+.tools/
+.venv/
+env/
+venv/
+ENV/
+
+# Project Data & Artifacts (Keep source, ignore heavy rendered outputs)
+projects/*/chapters/*/pages/
+projects/*/chapters/*/panels/
+projects/*/chapters/*/audio/
+projects/*/chapters/*/video/
+*.mp4
+*.wav
+*.mp3
+
+# Keep config local overrides private if containing keys
+config.json
+
+# IDEs and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

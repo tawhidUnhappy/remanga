@@ -1,0 +1,50 @@
+{
+  "system": {
+    "prefer_gpu": true,
+    "gpu_codec": "h264_nvenc",
+    "fallback_codec": "libx264",
+    "threads": 4,
+    "log_level": "INFO"
+  },
+  "downloader": {
+    "language": "en",
+    "image_quality": "data",
+    "max_retries": 3,
+    "retry_delay_seconds": 2
+  },
+  "cropper": {
+    "margin_padding_pixels": 8,
+    "auto_contrast_clean": false,
+    "save_format": "PNG"
+  },
+  "tts": {
+    "engine": "edge-tts",
+    "voice": "en-US-ChristopherNeural",
+    "rate": "+0%",
+    "pitch": "+0Hz",
+    "volume": "+0%"
+  },
+  "audio": {
+    "sample_rate": 44100,
+    "edge_fade_ms": 35,
+    "pause_between_panels_ms": 300,
+    "bgm_enabled": false,
+    "bgm_path": "assets/bgm/default_recap.mp3",
+    "bgm_volume_db": -22.0,
+    "enable_loudnorm": true
+  },
+  "video": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "background_color": "#000000",
+    "panel_padding_percent": 3,
+    "render_subtitles": true,
+    "font_name": "DejaVuSans-Bold",
+    "font_size": 48,
+    "subtitle_color": "&H00FFFFFF",
+    "subtitle_outline_color": "&H00000000",
+    "subtitle_outline_width": 3,
+    "subtitle_bottom_margin": 60
+  }
+}
