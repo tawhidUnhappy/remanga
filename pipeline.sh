@@ -4,7 +4,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# ANSI color codes
+# ANSI color definitions
 CYAN='\033[1;36m'
 GREEN='\033[1;32m'
 YELLOW='\033[1;33m'
@@ -12,6 +12,13 @@ MAGENTA='\033[1;35m'
 RED='\033[1;31m'
 BOLD='\033[1m'
 NC='\033[0m'
+
+# Graceful exit handler for Ctrl+C
+cleanup_and_exit() {
+    echo -e "\n\n${YELLOW}👋 Production paused. You can resume at any time by running ./pipeline.sh${NC}\n"
+    exit 0
+}
+trap cleanup_and_exit SIGINT SIGTERM
 
 echo -e "${CYAN}====================================================${NC}"
 echo -e "${BOLD}${MAGENTA}       remanga - Guided Video Production Pipeline   ${NC}"
@@ -30,7 +37,7 @@ done
 
 PROJECT_NAME=""
 if [ ${#existing_projects[@]} -gt 0 ]; then
-    echo -e "\n${YELLOW}Existing Projects Found:${NC}"
+    echo -e "\n${YELLOW}Existing Projects:${NC}"
     for i in "${!existing_projects[@]}"; do
         pname="${existing_projects[$i]}"
         meta_file="$PROJECTS_DIR/$pname/project.json"
@@ -79,7 +86,7 @@ fi
 MANGA_URL=""
 if [ -n "$SAVED_URL" ]; then
     echo -e "\n${CYAN}Saved Manga Source:${NC} ${BOLD}$SAVED_URL${NC}"
-    read -e -r -p "$(echo -e "${BOLD}Press Enter to reuse saved URL, or type a new URL:${NC} ")" input_url
+    read -e -r -p "$(echo -e "${BOLD}Press Enter to reuse saved URL, or enter a new URL:${NC} ")" input_url
     if [ -z "$input_url" ]; then
         MANGA_URL="$SAVED_URL"
     else
@@ -116,59 +123,79 @@ CHAP_DIR="$PROJECT_DIR/chapters/chapter_$CHAPTER"
 mkdir -p "$CHAP_DIR"
 
 echo -e "\n${GREEN}====================================================${NC}"
-echo -e "${BOLD}Starting Chapter Workflow: $PROJECT_NAME (Chapter $CHAPTER)${NC}"
+echo -e "${BOLD}Active Pipeline: $PROJECT_NAME (Chapter $CHAPTER)${NC}"
 echo -e "${GREEN}====================================================${NC}"
 
-# Step 1: Download Pages
-echo -e "\n${CYAN}[Step 1/6] Downloading Chapter Pages...${NC}"
+# Step 1: Download Pages & Generate pages.zip
+echo -e "\n${CYAN}[Step 1/6] Downloading Pages & Preparing pages.zip...${NC}"
 ./run.sh download --project "$PROJECT_NAME" --chapter "$CHAPTER" --url "$MANGA_URL"
 
-# Step 2: Crops JSON Placement
+# Step 2: Crops JSON Placement (with 0-byte placeholder creation)
 CROPS_JSON="$CHAP_DIR/crops.json"
 echo -e "\n${CYAN}[Step 2/6] LLM Panel Coordinate Crops${NC}"
+
+# Create a completely blank (0-byte) placeholder file if not present
 if [ ! -f "$CROPS_JSON" ]; then
-    echo -e "${YELLOW}Please generate 'crops.json' using 'prompts/crop_generation_prompt.md' and place it at:${NC}"
-    echo -e "${BOLD}$CROPS_JSON${NC}"
-    echo ""
-    while [ ! -f "$CROPS_JSON" ]; do
-        read -e -r -p "$(echo -e "${BOLD}Press Enter once 'crops.json' is saved at the above location...${NC} ")" _
-        if [ ! -f "$CROPS_JSON" ]; then
-            echo -e "${RED}File not found at $CROPS_JSON. Please ensure the file name and path are correct.${NC}"
-        fi
-    done
+    touch "$CROPS_JSON"
 fi
 
-# Step 3: Execute Cropping
-echo -e "\n${CYAN}[Step 3/6] Cropping Panels from Coordinates...${NC}"
-./run.sh crop --project "$PROJECT_NAME" --chapter "$CHAPTER"
-
-# Step 4: Narration JSON Placement
-NARRATION_JSON="$CHAP_DIR/narration.json"
-echo -e "\n${CYAN}[Step 4/6] LLM Narration Script${NC}"
-if [ ! -f "$NARRATION_JSON" ]; then
-    echo -e "${YELLOW}Please generate 'narration.json' using 'prompts/narration_generation_prompt.md' and place it at:${NC}"
-    echo -e "${BOLD}$NARRATION_JSON${NC}"
+if [ ! -s "$CROPS_JSON" ]; then
+    echo -e "${YELLOW}Upload '${BOLD}$CHAP_DIR/pages.zip${NC}${YELLOW}' along with '${BOLD}prompts/crop_generation_prompt.md${NC}${YELLOW}' into your LLM.${NC}"
+    echo -e "${YELLOW}Paste the resulting JSON directly into the placeholder file created at:${NC}"
+    echo -e "${BOLD}${CYAN}$CROPS_JSON${NC}"
     echo ""
-    while [ ! -f "$NARRATION_JSON" ]; do
-        read -e -r -p "$(echo -e "${BOLD}Press Enter once 'narration.json' is saved at the above location...${NC} ")" _
-        if [ ! -f "$NARRATION_JSON" ]; then
-            echo -e "${RED}File not found at $NARRATION_JSON. Please ensure the file name and path are correct.${NC}"
+    while [ ! -s "$CROPS_JSON" ]; do
+        read -e -r -p "$(echo -e "${BOLD}Press Enter once you have saved the JSON into '$CROPS_JSON'...${NC} ")" _
+        if [ ! -s "$CROPS_JSON" ]; then
+            echo -e "${RED}The file is still empty. Please paste your JSON into: $CROPS_JSON${NC}"
         fi
     done
+    echo -e "${GREEN}✓ Detected crops.json content!${NC}"
+else
+    echo -e "${GREEN}✓ Found existing crops.json ($CROPS_JSON)${NC}"
+fi
+
+# Step 3: Execute Cropping & Generate Panel Sheets + panels.zip
+echo -e "\n${CYAN}[Step 3/6] Cropping Panels, Building Vision Sheets & Creating panels.zip...${NC}"
+./run.sh crop --project "$PROJECT_NAME" --chapter "$CHAPTER"
+
+# Step 4: Narration JSON Placement (with 0-byte placeholder creation)
+NARRATION_JSON="$CHAP_DIR/narration.json"
+echo -e "\n${CYAN}[Step 4/6] LLM Narration Script${NC}"
+
+# Create a completely blank (0-byte) placeholder file if not present
+if [ ! -f "$NARRATION_JSON" ]; then
+    touch "$NARRATION_JSON"
+fi
+
+if [ ! -s "$NARRATION_JSON" ]; then
+    echo -e "${YELLOW}Feed the vision sheets from '${BOLD}$CHAP_DIR/sheets/${NC}${YELLOW}' (or '${BOLD}$CHAP_DIR/panels.zip${NC}${YELLOW}') along with '${BOLD}prompts/narration_generation_prompt.md${NC}${YELLOW}' into your LLM.${NC}"
+    echo -e "${YELLOW}Paste the resulting narration script JSON directly into:${NC}"
+    echo -e "${BOLD}${CYAN}$NARRATION_JSON${NC}"
+    echo ""
+    while [ ! -s "$NARRATION_JSON" ]; do
+        read -e -r -p "$(echo -e "${BOLD}Press Enter once you have saved the JSON into '$NARRATION_JSON'...${NC} ")" _
+        if [ ! -s "$NARRATION_JSON" ]; then
+            echo -e "${RED}The file is still empty. Please paste your JSON into: $NARRATION_JSON${NC}"
+        fi
+    done
+    echo -e "${GREEN}✓ Detected narration.json content!${NC}"
+else
+    echo -e "${GREEN}✓ Found existing narration.json ($NARRATION_JSON)${NC}"
 fi
 
 # Step 5: Voice Generation & Mixing
-echo -e "\n${CYAN}[Step 5/6] Synthesizing Narration Voice (en-US-GuyNeural)...${NC}"
+echo -e "\n${CYAN}[Step 5/6] Synthesizing Voice (en-US-GuyNeural)...${NC}"
 ./run.sh tts --project "$PROJECT_NAME" --chapter "$CHAPTER"
 
-echo -e "\n${CYAN}Mixing Master Audio Stream & Normalizing Loudness...${NC}"
+echo -e "\n${CYAN}Mixing Audio Track & Applying Loudness Normalization...${NC}"
 ./run.sh mix --project "$PROJECT_NAME" --chapter "$CHAPTER"
 
 # Step 6: Render Final Video
-echo -e "\n${CYAN}[Step 6/6] Rendering Final Recap MP4 Video...${NC}"
+echo -e "\n${CYAN}[Step 6/6] Rendering Recap MP4 Video...${NC}"
 ./run.sh render --project "$PROJECT_NAME" --chapter "$CHAPTER"
 
-# Display Status Summary
+# Summary
 echo -e "\n${GREEN}====================================================${NC}"
 echo -e "${BOLD}${GREEN}Production Complete!${NC}"
 echo -e "${GREEN}====================================================${NC}"

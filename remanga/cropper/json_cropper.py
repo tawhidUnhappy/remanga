@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from PIL import Image, ImageOps
 from rich.console import Console
 
 from remanga.config import CropperConfig, get_chapter_dir
+from remanga.cropper.sheet_generator import PanelSheetGenerator
 
 console = Console()
 
@@ -15,20 +17,43 @@ class CoordinateCropper:
     def __init__(self, config: Optional[CropperConfig] = None):
         self.config = config or CropperConfig()
 
+    def _create_panels_zip(self, chapter_dir: Path, panels_dir: Path, sheets_dir: Optional[Path]) -> Path:
+        """Packages cropped panels, sheets, and manifest into a single ZIP archive."""
+        zip_path = chapter_dir / "panels.zip"
+        if zip_path.exists():
+            zip_path.unlink()
+
+        panels = sorted(list(panels_dir.glob("panel_*.*")))
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for p in panels:
+                zf.write(p, arcname=f"panels/{p.name}")
+
+            if sheets_dir and sheets_dir.exists():
+                for s in sorted(list(sheets_dir.glob("sheet_*.*"))):
+                    zf.write(s, arcname=f"sheets/{s.name}")
+
+            manifest = chapter_dir / "panels_manifest.json"
+            if manifest.exists():
+                zf.write(manifest, arcname="panels_manifest.json")
+
+        console.print(f"[bold green]✓ Created Panels ZIP archive:[/] {zip_path}")
+        return zip_path
+
     def crop_chapter_from_json(self, project_name: str, chapter_num: str) -> List[Path]:
         """
-        Reads crops.json in the chapter directory and executes the exact bounding
-        boxes determined by the LLM without hardcoded heuristic filters.
+        Reads crops.json in the chapter directory, crops panels, generates
+        vision-friendly panel sheets, and packages panels.zip.
         """
         chapter_dir = get_chapter_dir(project_name, chapter_num)
         crops_json_path = chapter_dir / "crops.json"
         pages_dir = chapter_dir / "pages"
         panels_dir = chapter_dir / "panels"
+        sheets_dir = chapter_dir / "sheets"
 
-        if not crops_json_path.exists():
+        if not crops_json_path.exists() or crops_json_path.stat().st_size == 0:
             raise FileNotFoundError(
                 f"Missing crop instructions file: {crops_json_path}\n"
-                f"Please place your LLM-generated crops.json file in this directory."
+                f"Please paste your LLM-generated JSON into this placeholder file."
             )
 
         if not pages_dir.exists() or not list(pages_dir.glob("page_*.*")):
@@ -37,7 +62,7 @@ class CoordinateCropper:
                 f"Please download the chapter pages first."
             )
 
-        # Clear existing panels directory to prevent stale artifacts from previous runs
+        # Clear existing panels directory
         panels_dir.mkdir(parents=True, exist_ok=True)
         for old_file in list(panels_dir.glob("panel_*.*")):
             try:
@@ -59,14 +84,13 @@ class CoordinateCropper:
         manifest_data: List[Dict[str, Any]] = []
 
         for page_entry in pages_list:
-            # Respect LLM classification for credit pages, promo sheets, or duplicate spreads
             is_story_page = page_entry.get("is_story_page", True)
             panels = page_entry.get("panels", [])
 
             if not is_story_page or not panels:
                 page_desc = page_entry.get("page_filename") or f"page index {page_entry.get('page_index')}"
                 note_str = page_entry.get("notes", "non-story/duplicate")
-                console.print(f"[dim yellow]Skipping page ({page_desc}): {note_str}[/]")
+                console.print(f"[dim yellow]Skipping non-story page ({page_desc}): {note_str}[/]")
                 continue
 
             page_filename = page_entry.get("page_filename")
@@ -88,11 +112,9 @@ class CoordinateCropper:
                         console.print(f"[yellow]Skipping invalid panel coordinate entry: {panel}[/]")
                         continue
 
-                    # Direct LLM coordinate mapping: [ymin, xmin, ymax, xmax] -> (left, top, right, bottom)
                     is_normalized = "box_1000" in panel or max(box) <= 1000
                     crop_box = self._calculate_pixel_bounds(box, img_w, img_h, is_1000=is_normalized)
 
-                    # Optional margin padding
                     if self.config.margin_padding_pixels > 0:
                         crop_box = self._apply_padding(crop_box, img_w, img_h, self.config.margin_padding_pixels)
 
@@ -118,7 +140,7 @@ class CoordinateCropper:
 
                     panel_counter += 1
 
-        # Save manifest for downstream audio/video synchronization
+        # Save manifest
         manifest_path = chapter_dir / "panels_manifest.json"
         with open(manifest_path, "w", encoding="utf-8") as f:
             json.dump({
@@ -128,6 +150,19 @@ class CoordinateCropper:
             }, f, indent=2)
 
         console.print(f"[bold green]✓ Cropped {len(output_panel_paths)} panels successfully into:[/] {panels_dir}")
+
+        # Generate vision-optimized panel sheets
+        if self.config.create_sheets and output_panel_paths:
+            PanelSheetGenerator.create_panel_sheets(
+                panel_paths=output_panel_paths,
+                output_dir=sheets_dir,
+                panels_per_sheet=self.config.panels_per_sheet
+            )
+
+        # Create panels.zip containing panels, sheets, and manifest
+        if self.config.create_zip:
+            self._create_panels_zip(chapter_dir, panels_dir, sheets_dir)
+
         return output_panel_paths
 
     def _locate_page_file(self, pages_dir: Path, filename: Optional[str], page_index: Optional[int]) -> Optional[Path]:
@@ -165,7 +200,6 @@ class CoordinateCropper:
             right = int(xmax)
             bottom = int(ymax)
 
-        # Enforce valid bounding boundaries within image dimensions
         left = max(0, min(left, img_w - 1))
         top = max(0, min(top, img_h - 1))
         right = max(left + 1, min(right, img_w))

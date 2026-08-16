@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import re
 import time
+import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import requests
@@ -29,13 +31,14 @@ class MangaDexDownloader:
         })
 
     def _request_with_retry(self, method: str, url: str, **kwargs) -> requests.Response:
-        """Helper to send HTTP requests with automatic retry on rate limits or errors."""
+        """Polite HTTP caller with automatic retry, backoff, and MangaDex rate-limit protection."""
         kwargs.setdefault("timeout", 30)
         for attempt in range(self.config.max_retries + 1):
             try:
                 res = self.session.request(method, url, **kwargs)
                 if res.status_code == 429:
-                    wait_time = (attempt + 1) * 2
+                    wait_time = (attempt + 1) * 3
+                    console.print(f"[yellow]MangaDex rate limit encountered. Waiting {wait_time}s...[/]")
                     time.sleep(wait_time)
                     continue
                 res.raise_for_status()
@@ -47,10 +50,10 @@ class MangaDexDownloader:
         raise RuntimeError(f"Request failed after retries: {url}")
 
     def parse_manga_id(self, identifier: str) -> str:
-        """Extract MangaDex UUID from a URL (title or chapter), raw UUID, or search title."""
+        """Extract MangaDex UUID from a URL (title or chapter), raw UUID, or title query."""
         raw_id = identifier.strip().strip("'\"")
 
-        # 1. Direct Chapter URL -> query chapter metadata to obtain parent manga ID
+        # 1. Direct Chapter URL -> retrieve parent manga ID
         chapter_match = re.search(r"chapter/([a-f0-9\-]{36})", raw_id)
         if chapter_match:
             ch_uuid = chapter_match.group(1)
@@ -92,7 +95,7 @@ class MangaDexDownloader:
         return manga_id
 
     def list_chapters(self, manga_id: str) -> List[Dict[str, Any]]:
-        """Fetch all chapters for a manga filtered by language with pagination."""
+        """Fetch all chapters for a manga filtered by language with pagination and polite pacing."""
         chapters: List[Dict[str, Any]] = []
         limit = 100
         offset = 0
@@ -118,7 +121,7 @@ class MangaDexDownloader:
                 offset += limit
                 if offset >= res_data.get("total", 0):
                     break
-                time.sleep(0.1)
+                time.sleep(0.2)
             progress.update(task, completed=100, total=100)
 
         return chapters
@@ -154,9 +157,25 @@ class MangaDexDownloader:
 
         raise ValueError(f"Chapter '{chapter_num}' not found for manga ID: {manga_id}")
 
+    def _create_pages_zip(self, chapter_dir: Path, pages_dir: Path) -> Path:
+        """Package downloaded pages into a single ZIP archive for easy LLM uploading."""
+        zip_path = chapter_dir / "pages.zip"
+        if zip_path.exists():
+            zip_path.unlink()
+
+        pages = sorted(list(pages_dir.glob("page_*.*")))
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for p in pages:
+                zf.write(p, arcname=p.name)
+            meta_json = chapter_dir / "pages_metadata.json"
+            if meta_json.exists():
+                zf.write(meta_json, arcname="pages_metadata.json")
+
+        console.print(f"[bold green]✓ Created Pages ZIP archive:[/] {zip_path}")
+        return zip_path
+
     def download_chapter(self, manga_id_or_url: Optional[str], chapter_num: str, project_name: str) -> Path:
-        """Download high-resolution chapter images into project directory and save URL metadata."""
-        # Check saved URL if not provided
+        """Download high-resolution chapter images with idempotency check, metadata tracking, and auto-zip."""
         if not manga_id_or_url:
             meta = load_project_metadata(project_name)
             manga_id_or_url = meta.get("manga_url") or meta.get("manga_id")
@@ -167,7 +186,6 @@ class MangaDexDownloader:
 
         manga_id = self.parse_manga_id(manga_id_or_url)
 
-        # Save project metadata for reuse across chapters
         save_project_metadata(project_name, {
             "project_name": project_name,
             "manga_url": manga_id_or_url,
@@ -175,10 +193,12 @@ class MangaDexDownloader:
             "last_chapter": str(chapter_num)
         })
 
-        chapter_id = self.find_chapter_id(manga_id, chapter_num)
-
-        dest_dir = get_chapter_dir(project_name, chapter_num) / "pages"
+        chapter_dir = get_chapter_dir(project_name, chapter_num)
+        dest_dir = chapter_dir / "pages"
         dest_dir.mkdir(parents=True, exist_ok=True)
+        meta_json_path = chapter_dir / "pages_metadata.json"
+
+        chapter_id = self.find_chapter_id(manga_id, chapter_num)
 
         console.print(f"[cyan]Retrieving MangaDex node for chapter {chapter_num}...[/]")
         at_home_res = self._request_with_retry("GET", f"{self.BASE_URL}/at-home/server/{chapter_id}")
@@ -190,7 +210,35 @@ class MangaDexDownloader:
         quality_key = self.config.image_quality
         filenames = chapter_data[quality_key]
 
-        console.print(f"[green]Downloading {len(filenames)} pages to:[/] {dest_dir}")
+        # Check existing pages & verify against metadata
+        all_present = True
+        if meta_json_path.exists():
+            try:
+                with open(meta_json_path, "r", encoding="utf-8") as f:
+                    cached_meta = json.load(f)
+                if cached_meta.get("total_pages") == len(filenames) and cached_meta.get("chapter_id") == chapter_id:
+                    for idx, fn in enumerate(filenames, start=1):
+                        page_ext = Path(fn).suffix or ".png"
+                        p_file = dest_dir / f"page_{idx:03d}{page_ext}"
+                        if not p_file.exists() or p_file.stat().st_size == 0:
+                            all_present = False
+                            break
+                else:
+                    all_present = False
+            except Exception:
+                all_present = False
+        else:
+            all_present = False
+
+        if all_present:
+            console.print(f"[bold green]✓ All {len(filenames)} pages verified and already downloaded! Skipping download.[/]")
+            if self.config.create_zip:
+                self._create_pages_zip(chapter_dir, dest_dir)
+            return dest_dir
+
+        console.print(f"[green]Downloading {len(filenames)} pages politely to:[/] {dest_dir}")
+
+        downloaded_meta: List[Dict[str, Any]] = []
 
         with Progress(
             TextColumn("[progress.description]{task.description}"),
@@ -205,6 +253,12 @@ class MangaDexDownloader:
                 out_path = dest_dir / f"page_{idx:03d}{page_ext}"
 
                 if out_path.exists() and out_path.stat().st_size > 0:
+                    downloaded_meta.append({
+                        "page_index": idx,
+                        "filename": out_path.name,
+                        "source_file": filename,
+                        "size_bytes": out_path.stat().st_size
+                    })
                     progress.advance(dl_task)
                     continue
 
@@ -213,7 +267,36 @@ class MangaDexDownloader:
                 with open(out_path, "wb") as f:
                     f.write(r.content)
 
+                downloaded_meta.append({
+                    "page_index": idx,
+                    "filename": out_path.name,
+                    "source_file": filename,
+                    "size_bytes": out_path.stat().st_size
+                })
+
+                # Polite delay between page requests
+                if self.config.request_delay_seconds > 0:
+                    time.sleep(self.config.request_delay_seconds)
+
                 progress.advance(dl_task)
 
-        console.print(f"[bold green]✓ Successfully downloaded all {len(filenames)} pages![/]")
+        # Save verification metadata
+        with open(meta_json_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "project": project_name,
+                "chapter": str(chapter_num),
+                "chapter_id": chapter_id,
+                "manga_id": manga_id,
+                "total_pages": len(filenames),
+                "quality": quality_key,
+                "timestamp": time.time(),
+                "pages": downloaded_meta
+            }, f, indent=2)
+
+        console.print(f"[bold green]✓ Successfully downloaded and verified all {len(filenames)} pages![/]")
+
+        # Automatically create pages.zip
+        if self.config.create_zip:
+            self._create_pages_zip(chapter_dir, dest_dir)
+
         return dest_dir

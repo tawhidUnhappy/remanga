@@ -19,12 +19,17 @@ class DownloaderConfig(BaseModel):
     image_quality: str = "data"  # 'data' (high quality) or 'data-saver'
     max_retries: int = 3
     retry_delay_seconds: int = 2
+    request_delay_seconds: float = 0.35  # Polite delay between page requests to protect MangaDex
+    create_zip: bool = True
 
 
 class CropperConfig(BaseModel):
     margin_padding_pixels: int = 8
     auto_contrast_clean: bool = False
     save_format: str = "PNG"
+    create_sheets: bool = True
+    panels_per_sheet: int = 4  # 4 panels per 2x2 grid sheet for optimal LLM vision token efficiency
+    create_zip: bool = True
 
 
 class TTSConfig(BaseModel):
@@ -102,7 +107,7 @@ def get_chapter_dir(project_name: str, chapter_num: str) -> Path:
 
 
 def get_project_metadata_path(project_name: str) -> Path:
-    """Return path to project metadata json."""
+    """Return path to project metadata JSON."""
     return get_project_dir(project_name) / "project.json"
 
 

@@ -9,8 +9,10 @@ if [ -d "$SCRIPT_DIR/.tools" ]; then
     export PATH="$SCRIPT_DIR/.tools:$PATH"
 fi
 
-# Select Python binary
-if [ -f "$SCRIPT_DIR/.venv/bin/python" ]; then
+# Select Python binary inside .venv or system fallback
+if [ -f "$SCRIPT_DIR/.venv/bin/python3" ]; then
+    PYTHON_BIN="$SCRIPT_DIR/.venv/bin/python3"
+elif [ -f "$SCRIPT_DIR/.venv/bin/python" ]; then
     PYTHON_BIN="$SCRIPT_DIR/.venv/bin/python"
 elif [ -f "$SCRIPT_DIR/.venv/Scripts/python.exe" ]; then
     PYTHON_BIN="$SCRIPT_DIR/.venv/Scripts/python.exe"

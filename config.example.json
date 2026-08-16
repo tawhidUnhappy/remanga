@@ -10,12 +10,17 @@
     "language": "en",
     "image_quality": "data",
     "max_retries": 3,
-    "retry_delay_seconds": 2
+    "retry_delay_seconds": 2,
+    "request_delay_seconds": 0.35,
+    "create_zip": true
   },
   "cropper": {
     "margin_padding_pixels": 8,
     "auto_contrast_clean": false,
-    "save_format": "PNG"
+    "save_format": "PNG",
+    "create_sheets": true,
+    "panels_per_sheet": 4,
+    "create_zip": true
   },
   "tts": {
     "engine": "edge-tts",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import signal
 import sys
 from pathlib import Path
 from rich.console import Console
@@ -15,15 +16,27 @@ from remanga.video import VideoRenderer
 console = Console()
 
 
+def graceful_sigint_handler(signum, frame):
+    """Handle Ctrl+C gracefully without traceback noise."""
+    console.print("\n\n[bold yellow]👋 Production paused. You can resume at any time![/]")
+    sys.exit(0)
+
+
+signal.signal(signal.SIGINT, graceful_sigint_handler)
+
+
 def display_status(project: str, chapter: str):
     chap_dir = get_chapter_dir(project, chapter)
     meta = load_project_metadata(project)
     saved_url = meta.get("manga_url") or meta.get("manga_id", "Not set")
 
     pages_count = len(list((chap_dir / "pages").glob("page_*.*"))) if (chap_dir / "pages").exists() else 0
-    crops_exist = (chap_dir / "crops.json").exists()
+    pages_zip_exist = (chap_dir / "pages.zip").exists()
+    crops_exist = (chap_dir / "crops.json").exists() and (chap_dir / "crops.json").stat().st_size > 0
     panels_count = len(list((chap_dir / "panels").glob("panel_*.*"))) if (chap_dir / "panels").exists() else 0
-    narration_exist = (chap_dir / "narration.json").exists()
+    sheets_count = len(list((chap_dir / "sheets").glob("sheet_*.*"))) if (chap_dir / "sheets").exists() else 0
+    panels_zip_exist = (chap_dir / "panels.zip").exists()
+    narration_exist = (chap_dir / "narration.json").exists() and (chap_dir / "narration.json").stat().st_size > 0
     audio_exist = (chap_dir / "master_audio.wav").exists()
     video_exist = (chap_dir / f"{project}_ch{chapter}_recap.mp4").exists()
 
@@ -32,12 +45,15 @@ def display_status(project: str, chapter: str):
 [bold cyan]Saved Manga Source:[/] {saved_url}
 [bold]Workspace Directory:[/] {chap_dir.resolve()}
 
-  1. Pages Downloaded   : {'[green]✓ Yes (' + str(pages_count) + ' pages)[/]' if pages_count > 0 else '[red]✗ Missing[/]'}
-  2. Crop JSON          : {'[green]✓ Present (' + str(chap_dir / 'crops.json') + ')[/]' if crops_exist else '[yellow]✗ Missing (Place crops.json in folder)[/]'}
-  3. Panels Cropped     : {'[green]✓ Yes (' + str(panels_count) + ' panels)[/]' if panels_count > 0 else '[red]✗ Missing[/]'}
-  4. Narration JSON     : {'[green]✓ Present (' + str(chap_dir / 'narration.json') + ')[/]' if narration_exist else '[yellow]✗ Missing (Place narration.json in folder)[/]'}
-  5. Master Audio       : {'[green]✓ Generated[/]' if audio_exist else '[red]✗ Not built[/]'}
-  6. Final Recap Video  : {'[green]✓ Ready (' + str(chap_dir / f"{project}_ch{chapter}_recap.mp4") + ')[/]' if video_exist else '[red]✗ Not rendered[/]'}
+  1. Pages Downloaded    : {'[green]✓ Yes (' + str(pages_count) + ' pages)[/]' if pages_count > 0 else '[red]✗ Missing[/]'}
+  2. Pages ZIP Archive   : {'[green]✓ Ready (' + str(chap_dir / 'pages.zip') + ')[/]' if pages_zip_exist else '[dim yellow]✗ Not generated[/]'}
+  3. Crop Instructions   : {'[green]✓ Present (' + str(chap_dir / 'crops.json') + ')[/]' if crops_exist else '[yellow]✗ Missing/Empty placeholder[/]'}
+  4. Panels Cropped      : {'[green]✓ Yes (' + str(panels_count) + ' panels)[/]' if panels_count > 0 else '[red]✗ Missing[/]'}
+  5. Panel Sheets        : {'[green]✓ Yes (' + str(sheets_count) + ' sheets)[/]' if sheets_count > 0 else '[dim yellow]✗ Not generated[/]'}
+  6. Panels ZIP Archive  : {'[green]✓ Ready (' + str(chap_dir / 'panels.zip') + ')[/]' if panels_zip_exist else '[dim yellow]✗ Not generated[/]'}
+  7. Narration Script    : {'[green]✓ Present (' + str(chap_dir / 'narration.json') + ')[/]' if narration_exist else '[yellow]✗ Missing/Empty placeholder[/]'}
+  8. Master Audio Track  : {'[green]✓ Generated[/]' if audio_exist else '[red]✗ Not built[/]'}
+  9. Final Recap Video   : {'[green]✓ Ready (' + str(chap_dir / f"{project}_ch{chapter}_recap.mp4") + ')[/]' if video_exist else '[red]✗ Not rendered[/]'}
 """
     console.print(Panel(status_str.strip(), title="[bold white]remanga Chapter Status[/]", border_style="blue"))
 
