@@ -18,31 +18,35 @@ class CoordinateCropper:
         self.config = config or CropperConfig()
 
     def _create_panels_zip(self, chapter_dir: Path, panels_dir: Path, sheets_dir: Optional[Path]) -> Path:
-        """Packages cropped panels, sheets, and manifest into a single ZIP archive."""
+        """
+        Packages ONLY vision contact sheets and manifest into a lightweight ZIP.
+        Excludes raw panels to minimize upload size and LLM token usage.
+        """
         zip_path = chapter_dir / "panels.zip"
         if zip_path.exists():
             zip_path.unlink()
 
-        panels = sorted(list(panels_dir.glob("panel_*.*")))
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            for p in panels:
-                zf.write(p, arcname=f"panels/{p.name}")
-
-            if sheets_dir and sheets_dir.exists():
+            # If sheets were generated, pack ONLY the sheets at the archive root
+            if sheets_dir and sheets_dir.exists() and list(sheets_dir.glob("sheet_*.*")):
                 for s in sorted(list(sheets_dir.glob("sheet_*.*"))):
-                    zf.write(s, arcname=f"sheets/{s.name}")
+                    zf.write(s, arcname=s.name)
+            else:
+                # Fallback only if sheets are disabled in config
+                for p in sorted(list(panels_dir.glob("panel_*.*"))):
+                    zf.write(p, arcname=p.name)
 
             manifest = chapter_dir / "panels_manifest.json"
             if manifest.exists():
                 zf.write(manifest, arcname="panels_manifest.json")
 
-        console.print(f"[bold green]✓ Created Panels ZIP archive:[/] {zip_path}")
+        console.print(f"[bold green]✓ Created lightweight Sheets ZIP archive (ultra-small upload):[/] {zip_path}")
         return zip_path
 
     def crop_chapter_from_json(self, project_name: str, chapter_num: str) -> List[Path]:
         """
         Reads crops.json in the chapter directory, crops panels, generates
-        vision-friendly panel sheets, and packages panels.zip.
+        vision-friendly panel sheets, and packages sheets into panels.zip.
         """
         chapter_dir = get_chapter_dir(project_name, chapter_num)
         crops_json_path = chapter_dir / "crops.json"
@@ -140,7 +144,7 @@ class CoordinateCropper:
 
                     panel_counter += 1
 
-        # Save manifest
+        # Save manifest for downstream audio/video synchronization
         manifest_path = chapter_dir / "panels_manifest.json"
         with open(manifest_path, "w", encoding="utf-8") as f:
             json.dump({
@@ -151,7 +155,7 @@ class CoordinateCropper:
 
         console.print(f"[bold green]✓ Cropped {len(output_panel_paths)} panels successfully into:[/] {panels_dir}")
 
-        # Generate vision-optimized panel sheets
+        # 1. Generate vision-optimized panel contact sheets
         if self.config.create_sheets and output_panel_paths:
             PanelSheetGenerator.create_panel_sheets(
                 panel_paths=output_panel_paths,
@@ -159,7 +163,7 @@ class CoordinateCropper:
                 panels_per_sheet=self.config.panels_per_sheet
             )
 
-        # Create panels.zip containing panels, sheets, and manifest
+        # 2. Package ONLY the sheets & manifest into panels.zip
         if self.config.create_zip:
             self._create_panels_zip(chapter_dir, panels_dir, sheets_dir)
 
