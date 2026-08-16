@@ -19,7 +19,7 @@
   },
   "tts": {
     "engine": "edge-tts",
-    "voice": "en-US-ChristopherNeural",
+    "voice": "en-US-GuyNeural",
     "rate": "+0%",
     "pitch": "+0Hz",
     "volume": "+0%"

@@ -29,7 +29,7 @@ class CropperConfig(BaseModel):
 
 class TTSConfig(BaseModel):
     engine: str = "edge-tts"
-    voice: str = "en-US-ChristopherNeural"
+    voice: str = "en-US-GuyNeural"
     rate: str = "+0%"
     pitch: str = "+0Hz"
     volume: str = "+0%"
@@ -89,7 +89,40 @@ class RemangaConfig(BaseModel):
             json.dump(self.model_dump(), f, indent=2)
 
 
+def get_project_dir(project_name: str) -> Path:
+    """Return standard workspace directory path for a specific project."""
+    clean_proj = str(project_name).strip().replace("/", "_").replace("\\", "_")
+    return Path("projects") / clean_proj
+
+
 def get_chapter_dir(project_name: str, chapter_num: str) -> Path:
     """Return standard workspace directory path for a specific chapter."""
     clean_chap = str(chapter_num).strip().replace("/", "_").replace("\\", "_")
-    return Path("projects") / project_name / "chapters" / f"chapter_{clean_chap}"
+    return get_project_dir(project_name) / "chapters" / f"chapter_{clean_chap}"
+
+
+def get_project_metadata_path(project_name: str) -> Path:
+    """Return path to project metadata json."""
+    return get_project_dir(project_name) / "project.json"
+
+
+def load_project_metadata(project_name: str) -> Dict[str, Any]:
+    """Load project-level metadata (such as saved MangaDex URL)."""
+    meta_path = get_project_metadata_path(project_name)
+    if meta_path.exists():
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+
+def save_project_metadata(project_name: str, data: Dict[str, Any]) -> None:
+    """Save or update project-level metadata."""
+    meta_path = get_project_metadata_path(project_name)
+    meta_path.parent.mkdir(parents=True, exist_ok=True)
+    existing = load_project_metadata(project_name)
+    existing.update(data)
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(existing, f, indent=2)

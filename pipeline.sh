@@ -1,82 +1,175 @@
 #!/usr/bin/env bash
-set -euo pipefail
-
-# ANSI Styling
-BOLD='\033[1m'
-CYAN='\033[0;36m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m'
+set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "${SCRIPT_DIR}"
+cd "$SCRIPT_DIR"
 
-echo -e "${BOLD}${CYAN}=====================================================${NC}"
-echo -e "${BOLD}${CYAN}       remanga: Guided Manga Recap Production        ${NC}"
-echo -e "${BOLD}${CYAN}=====================================================${NC}"
+# ANSI color codes
+CYAN='\033[1;36m'
+GREEN='\033[1;32m'
+YELLOW='\033[1;33m'
+MAGENTA='\033[1;35m'
+RED='\033[1;31m'
+BOLD='\033[1m'
+NC='\033[0m'
 
-# 1. Project Details Input
-read -rp "Enter Project / Manga Name: " PROJECT_NAME
-read -rp "Enter MangaDex Title or URL/UUID: " MANGADEX_ID
-read -rp "Enter Chapter Number (e.g. 1): " CHAPTER_NUM
+echo -e "${CYAN}====================================================${NC}"
+echo -e "${BOLD}${MAGENTA}       remanga - Guided Video Production Pipeline   ${NC}"
+echo -e "${CYAN}====================================================${NC}"
 
-CHAPTER_DIR="${SCRIPT_DIR}/projects/${PROJECT_NAME}/chapters/chapter_${CHAPTER_NUM}"
+# 1. Project Selection & Discovery
+PROJECTS_DIR="projects"
+mkdir -p "$PROJECTS_DIR"
 
-echo -e "\n${BOLD}${CYAN}==> [Step 1/4] Downloading Chapter Pages...${NC}"
-./run.sh download --project "${PROJECT_NAME}" --url "${MANGADEX_ID}" --chapter "${CHAPTER_NUM}"
-
-echo -e "\n${BOLD}${YELLOW}-----------------------------------------------------${NC}"
-echo -e "${BOLD}${YELLOW}ACTION REQUIRED: Crop Coordinates (crops.json)${NC}"
-echo -e "${YELLOW}1. Pages have been saved to:${NC}"
-echo -e "   ${BOLD}${CHAPTER_DIR}/pages/${NC}"
-echo -e "${YELLOW}2. Feed these pages along with ${CYAN}prompts/crop_generation_prompt.md${YELLOW} into your LLM.${NC}"
-echo -e "${YELLOW}3. Save the returned JSON file to:${NC}"
-echo -e "   ${BOLD}${GREEN}${CHAPTER_DIR}/crops.json${NC}"
-echo -e "${BOLD}${YELLOW}-----------------------------------------------------${NC}"
-
-while true; do
-    read -rp "Have you placed 'crops.json' in the folder above? (y/n): " CONFIRM
-    if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
-        if [ -f "${CHAPTER_DIR}/crops.json" ]; then
-            break
-        else
-            echo -e "${RED}File not found at: ${CHAPTER_DIR}/crops.json. Please check and retry.${NC}"
-        fi
+existing_projects=()
+for d in "$PROJECTS_DIR"/*; do
+    if [ -d "$d" ]; then
+        existing_projects+=("$(basename "$d")")
     fi
 done
 
-echo -e "\n${BOLD}${CYAN}==> [Step 2/4] Cropping Panels...${NC}"
-./run.sh crop --project "${PROJECT_NAME}" --chapter "${CHAPTER_NUM}"
-
-echo -e "\n${BOLD}${YELLOW}-----------------------------------------------------${NC}"
-echo -e "${BOLD}${YELLOW}ACTION REQUIRED: Narration Script (narration.json)${NC}"
-echo -e "${YELLOW}1. Cropped panels are ready at:${NC}"
-echo -e "   ${BOLD}${CHAPTER_DIR}/panels/${NC}"
-echo -e "${YELLOW}2. Feed the panels and previous memory along with ${CYAN}prompts/narration_generation_prompt.md${YELLOW} to your LLM.${NC}"
-echo -e "${YELLOW}3. Save the returned narration JSON file to:${NC}"
-echo -e "   ${BOLD}${GREEN}${CHAPTER_DIR}/narration.json${NC}"
-echo -e "${BOLD}${YELLOW}-----------------------------------------------------${NC}"
-
-while true; do
-    read -rp "Have you placed 'narration.json' in the folder above? (y/n): " CONFIRM_NARR
-    if [[ "$CONFIRM_NARR" =~ ^[Yy]$ ]]; then
-        if [ -f "${CHAPTER_DIR}/narration.json" ]; then
-            break
-        else
-            echo -e "${RED}File not found at: ${CHAPTER_DIR}/narration.json. Please check and retry.${NC}"
+PROJECT_NAME=""
+if [ ${#existing_projects[@]} -gt 0 ]; then
+    echo -e "\n${YELLOW}Existing Projects Found:${NC}"
+    for i in "${!existing_projects[@]}"; do
+        pname="${existing_projects[$i]}"
+        meta_file="$PROJECTS_DIR/$pname/project.json"
+        saved_info=""
+        if [ -f "$meta_file" ]; then
+            saved_url=$(python3 -c "import json; print(json.load(open('$meta_file')).get('manga_url', ''))" 2>/dev/null || true)
+            if [ -n "$saved_url" ]; then
+                saved_info="[URL: $saved_url]"
+            fi
         fi
+        echo -e "  ${BOLD}[$((i+1))]${NC} $pname ${CYAN}$saved_info${NC}"
+    done
+    echo -e "  ${BOLD}[0]${NC} Create a new project"
+    echo ""
+    
+    while [ -z "$PROJECT_NAME" ]; do
+        read -e -r -p "$(echo -e "${BOLD}Select project number or type project name:${NC} ")" proj_choice
+        if [[ "$proj_choice" =~ ^[0-9]+$ ]] && [ "$proj_choice" -ge 1 ] && [ "$proj_choice" -le "${#existing_projects[@]}" ]; then
+            PROJECT_NAME="${existing_projects[$((proj_choice-1))]}"
+        elif [ "$proj_choice" == "0" ]; then
+            read -e -r -p "$(echo -e "${BOLD}Enter new project name:${NC} ")" new_name
+            PROJECT_NAME="$(echo "$new_name" | tr ' ' '_')"
+        elif [ -n "$proj_choice" ]; then
+            PROJECT_NAME="$(echo "$proj_choice" | tr ' ' '_')"
+        fi
+    done
+else
+    while [ -z "$PROJECT_NAME" ]; do
+        read -e -r -p "$(echo -e "${BOLD}Enter new project name (e.g. solo_leveling):${NC} ")" raw_name
+        PROJECT_NAME="$(echo "$raw_name" | tr ' ' '_')"
+    done
+fi
+
+echo -e "${GREEN}✓ Selected Project:${NC} ${BOLD}$PROJECT_NAME${NC}"
+
+# 2. Manga URL / Identifier (with automatic reuse)
+PROJECT_DIR="$PROJECTS_DIR/$PROJECT_NAME"
+mkdir -p "$PROJECT_DIR"
+META_FILE="$PROJECT_DIR/project.json"
+SAVED_URL=""
+
+if [ -f "$META_FILE" ]; then
+    SAVED_URL=$(python3 -c "import json; print(json.load(open('$META_FILE')).get('manga_url', ''))" 2>/dev/null || true)
+fi
+
+MANGA_URL=""
+if [ -n "$SAVED_URL" ]; then
+    echo -e "\n${CYAN}Saved Manga Source:${NC} ${BOLD}$SAVED_URL${NC}"
+    read -e -r -p "$(echo -e "${BOLD}Press Enter to reuse saved URL, or type a new URL:${NC} ")" input_url
+    if [ -z "$input_url" ]; then
+        MANGA_URL="$SAVED_URL"
+    else
+        MANGA_URL="$input_url"
     fi
-done
+else
+    while [ -z "$MANGA_URL" ]; do
+        read -e -r -p "$(echo -e "\n${BOLD}Enter MangaDex URL, UUID, or Manga Title:${NC} ")" MANGA_URL
+    done
+fi
 
-echo -e "\n${BOLD}${CYAN}==> [Step 3/4] Generating Voice Narration & Audio Mixing...${NC}"
-./run.sh tts --project "${PROJECT_NAME}" --chapter "${CHAPTER_NUM}"
-./run.sh mix --project "${PROJECT_NAME}" --chapter "${CHAPTER_NUM}"
+# 3. Chapter Selection with Auto-Increment Suggestion
+suggested_ch="1"
+if [ -d "$PROJECT_DIR/chapters" ]; then
+    highest_ch=0
+    for ch_dir in "$PROJECT_DIR/chapters"/chapter_*; do
+        if [ -d "$ch_dir" ]; then
+            ch_basename="$(basename "$ch_dir")"
+            ch_num="${ch_basename#chapter_}"
+            if [[ "$ch_num" =~ ^[0-9]+$ ]] && [ "$ch_num" -gt "$highest_ch" ]; then
+                highest_ch=$ch_num
+            fi
+        fi
+    done
+    if [ "$highest_ch" -gt 0 ]; then
+        suggested_ch="$((highest_ch + 1))"
+    fi
+fi
 
-echo -e "\n${BOLD}${CYAN}==> [Step 4/4] Rendering Final Recap MP4 Video...${NC}"
-./run.sh render --project "${PROJECT_NAME}" --chapter "${CHAPTER_NUM}"
+read -e -r -p "$(echo -e "\n${BOLD}Enter Chapter Number [default: $suggested_ch]:${NC} ")" ch_input
+CHAPTER="${ch_input:-$suggested_ch}"
 
-echo -e "\n${BOLD}${GREEN}=====================================================${NC}"
-echo -e "${BOLD}${GREEN} ✓ Pipeline Completed Successfully!${NC}"
-echo -e "${BOLD}${GREEN} Final Output: ${CHAPTER_DIR}/${PROJECT_NAME}_ch${CHAPTER_NUM}_recap.mp4${NC}"
-echo -e "${BOLD}${GREEN}=====================================================${NC}"
+CHAP_DIR="$PROJECT_DIR/chapters/chapter_$CHAPTER"
+mkdir -p "$CHAP_DIR"
+
+echo -e "\n${GREEN}====================================================${NC}"
+echo -e "${BOLD}Starting Chapter Workflow: $PROJECT_NAME (Chapter $CHAPTER)${NC}"
+echo -e "${GREEN}====================================================${NC}"
+
+# Step 1: Download Pages
+echo -e "\n${CYAN}[Step 1/6] Downloading Chapter Pages...${NC}"
+./run.sh download --project "$PROJECT_NAME" --chapter "$CHAPTER" --url "$MANGA_URL"
+
+# Step 2: Crops JSON Placement
+CROPS_JSON="$CHAP_DIR/crops.json"
+echo -e "\n${CYAN}[Step 2/6] LLM Panel Coordinate Crops${NC}"
+if [ ! -f "$CROPS_JSON" ]; then
+    echo -e "${YELLOW}Please generate 'crops.json' using 'prompts/crop_generation_prompt.md' and place it at:${NC}"
+    echo -e "${BOLD}$CROPS_JSON${NC}"
+    echo ""
+    while [ ! -f "$CROPS_JSON" ]; do
+        read -e -r -p "$(echo -e "${BOLD}Press Enter once 'crops.json' is saved at the above location...${NC} ")" _
+        if [ ! -f "$CROPS_JSON" ]; then
+            echo -e "${RED}File not found at $CROPS_JSON. Please ensure the file name and path are correct.${NC}"
+        fi
+    done
+fi
+
+# Step 3: Execute Cropping
+echo -e "\n${CYAN}[Step 3/6] Cropping Panels from Coordinates...${NC}"
+./run.sh crop --project "$PROJECT_NAME" --chapter "$CHAPTER"
+
+# Step 4: Narration JSON Placement
+NARRATION_JSON="$CHAP_DIR/narration.json"
+echo -e "\n${CYAN}[Step 4/6] LLM Narration Script${NC}"
+if [ ! -f "$NARRATION_JSON" ]; then
+    echo -e "${YELLOW}Please generate 'narration.json' using 'prompts/narration_generation_prompt.md' and place it at:${NC}"
+    echo -e "${BOLD}$NARRATION_JSON${NC}"
+    echo ""
+    while [ ! -f "$NARRATION_JSON" ]; do
+        read -e -r -p "$(echo -e "${BOLD}Press Enter once 'narration.json' is saved at the above location...${NC} ")" _
+        if [ ! -f "$NARRATION_JSON" ]; then
+            echo -e "${RED}File not found at $NARRATION_JSON. Please ensure the file name and path are correct.${NC}"
+        fi
+    done
+fi
+
+# Step 5: Voice Generation & Mixing
+echo -e "\n${CYAN}[Step 5/6] Synthesizing Narration Voice (en-US-GuyNeural)...${NC}"
+./run.sh tts --project "$PROJECT_NAME" --chapter "$CHAPTER"
+
+echo -e "\n${CYAN}Mixing Master Audio Stream & Normalizing Loudness...${NC}"
+./run.sh mix --project "$PROJECT_NAME" --chapter "$CHAPTER"
+
+# Step 6: Render Final Video
+echo -e "\n${CYAN}[Step 6/6] Rendering Final Recap MP4 Video...${NC}"
+./run.sh render --project "$PROJECT_NAME" --chapter "$CHAPTER"
+
+# Display Status Summary
+echo -e "\n${GREEN}====================================================${NC}"
+echo -e "${BOLD}${GREEN}Production Complete!${NC}"
+echo -e "${GREEN}====================================================${NC}"
+./run.sh status --project "$PROJECT_NAME" --chapter "$CHAPTER"

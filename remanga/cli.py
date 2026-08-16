@@ -6,7 +6,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 
-from remanga.config import RemangaConfig, get_chapter_dir
+from remanga.config import RemangaConfig, get_chapter_dir, load_project_metadata
 from remanga.downloader import MangaDexDownloader
 from remanga.cropper import CoordinateCropper
 from remanga.audio import TTSEngine, AudioProcessor
@@ -17,6 +17,9 @@ console = Console()
 
 def display_status(project: str, chapter: str):
     chap_dir = get_chapter_dir(project, chapter)
+    meta = load_project_metadata(project)
+    saved_url = meta.get("manga_url") or meta.get("manga_id", "Not set")
+
     pages_count = len(list((chap_dir / "pages").glob("page_*.*"))) if (chap_dir / "pages").exists() else 0
     crops_exist = (chap_dir / "crops.json").exists()
     panels_count = len(list((chap_dir / "panels").glob("panel_*.*"))) if (chap_dir / "panels").exists() else 0
@@ -26,6 +29,7 @@ def display_status(project: str, chapter: str):
 
     status_str = f"""
 [bold cyan]Project:[/] {project} | [bold cyan]Chapter:[/] {chapter}
+[bold cyan]Saved Manga Source:[/] {saved_url}
 [bold]Workspace Directory:[/] {chap_dir.resolve()}
 
   1. Pages Downloaded   : {'[green]✓ Yes (' + str(pages_count) + ' pages)[/]' if pages_count > 0 else '[red]✗ Missing[/]'}
@@ -44,9 +48,9 @@ def main():
 
     # download
     p_dl = subparsers.add_parser("download", help="Download manga chapter from MangaDex")
-    p_dl.add_argument("--url", "-u", required=True, help="Manga title or MangaDex URL/UUID")
-    p_dl.add_argument("--chapter", "-c", required=True, help="Chapter number (e.g. 1 or 01)")
     p_dl.add_argument("--project", "-p", required=True, help="Project name")
+    p_dl.add_argument("--chapter", "-c", required=True, help="Chapter number (e.g. 1 or 01)")
+    p_dl.add_argument("--url", "-u", required=False, default=None, help="Manga title or MangaDex URL/UUID (optional if saved)")
 
     # crop
     p_crop = subparsers.add_parser("crop", help="Crop panels using coordinates in crops.json")
