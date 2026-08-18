@@ -1,16 +1,21 @@
 # remanga
 
-**remanga** is an ultra-lightweight, modular, LLM-guided manga recap video production pipeline. Driven by standalone environment isolation powered by `uv`, it streamlines manga downloading, AI-assisted panel coordinate cropping, zero-shot neural voice cloning with **IndexTTS-2.5**, clickless audio edge-fading, dynamic audio mastering, and GPU-accelerated video rendering with clean black canvas composition.
+**remanga** is a 100% self-contained, modular, LLM-guided manga recap video production pipeline. Built with strict environment isolation, it provisions its own tools, manages its own runtimes, and leaves zero files outside the root directory.
 
 ---
 
 ## Key Features
 
-- **Hermetic Environment with `uv`:** Automatically installs standalone Python 3.11 and pre-compiled wheels, completely avoiding host Python 3.14 compilation errors and header conflicts.
-- **Automated IndexTTS-2.5 Model Fetching:** Automatically downloads official checkpoint weights from `IndexTeam/IndexTTS-2.5` on Hugging Face into `checkpoints/indextts_2.5/`.
-- **Zero-Shot Speaker Cloning:** Supply any 3–10s clean reference voice WAV path in `config.json` (`spk_audio_prompt`) or via `--voice` in CLI.
-- **8-Dimensional Neural Emotion Conditioning:** Dynamically maps 7 high-level recap emotion tags (`hype`, `tense`, `serious`, `shock`, `emotional`, `mysterious`, `neutral`) into IndexTTS emotion vectors.
-- **Lightweight Contact Sheets (`sheets.zip`):** Automatically packages cropped panels into 2x2 labeled contact sheets inside `sheets.zip` for maximum LLM vision token efficiency.
+- **100% Isolated & Cleanly Removable:**
+  - Contains its own standalone `uv` package manager in `bin/uv`.
+  - Downloads and uses isolated static `ffmpeg` and `ffprobe` binaries in `bin/`.
+  - Provisions a standalone Python 3.11 interpreter inside `.cache/`.
+  - All Hugging Face and PyTorch caches are locked inside `.cache/`.
+  - **Deleting the `remanga/` folder leaves ZERO leftover files or tool modifications on your system.**
+- **High-Speed Model Fetching (`hf-transfer`):** Automatically downloads official `IndexTeam/IndexTTS-2.5` model weights from Hugging Face using multi-connection parallel streams.
+- **Interactive Voice & BGM Prompting:** The terminal automatically validates your reference voice WAV and BGM path. If missing or invalid, it prompts you in the terminal with immediate file verification and saves it directly to `config.json`.
+- **Zero-Shot Neural Vocal Synthesis (IndexTTS-2.5):** Clones any 3–10s reference speaker voice with 8-dimensional emotion vector conditioning.
+- **Lightweight Contact Sheets (`sheets.zip`):** Packages cropped panels into 2x2 labeled contact sheets inside `sheets.zip` for maximum LLM vision token efficiency.
 - **Temporal Horizon Prompting:** Master recap prompt enforcing strict zero-spoiler rules (forbids using character names, relationships, or future plot reveals before they visually and textually occur).
 - **Audio Mastering & Normalization:** Per-panel micro edge-fading to eliminate digital clicks, optional background music looping with ducking, and broadcast EBU R128 loudness normalization.
 - **GPU-Accelerated Compositor & Renderer:** 1080p black canvas compositor with automatic NVENC GPU hardware encoding (`h264_nvenc`) and CPU fallback (`libx264`).
@@ -19,25 +24,31 @@
 
 ## Installation & Setup
 
-1. **Bootstrap Environment:**
+1. **Bootstrap Isolated Environment:**
    ```bash
    bash bootstrap.sh
    ```
-   This automatically provisions `uv`, creates a nested Python 3.11 virtual environment, installs dependencies, downloads IndexTTS-2.5 from Hugging Face, and initializes `config.json`.
-
-2. **Set Your Reference Voice:**
-   Open `config.json` and set `spk_audio_prompt` to your reference WAV audio file (e.g. `assets/voices/my_voice.wav`).
+   This provisions `uv`, downloads static `ffmpeg`, sets up Python 3.11, installs dependencies, turbo-downloads IndexTTS-2.5 from Hugging Face, and initializes `config.json`.
 
 ---
 
 ## Standard Workflow
 
-### Option A: Interactive Guided Mode (Recommended)
+### Option A: Interactive Guided Wizard (Recommended)
 Run the master interactive script:
 ```bash
 ./pipeline.sh
 ```
-Follow the terminal instructions to download chapters, crop panels, review `sheets.zip`, generate `narration.json`, synthesize speech, and render the final recap video.
+The wizard guides you through:
+1. Selecting or creating projects and chapters.
+2. Interactively prompting and verifying your reference voice audio file and background music (if not already set in `config.json`).
+3. Downloading pages from MangaDex.
+4. Prompting for `crops.json`.
+5. Cropping panels and compiling `sheets.zip`.
+6. Prompting for `narration.json`.
+7. Synthesizing voice audio via IndexTTS-2.5.
+8. Mastering audio with loudness normalization.
+9. Rendering the final 1080p recap video.
 
 ---
 
@@ -71,7 +82,7 @@ projects/yandere_sister/chapters/chapter_1/narration.json
 ./run.sh tts --project "yandere_sister" --chapter "1"
 ./run.sh mix --project "yandere_sister" --chapter "1"
 ```
-*(Optional: override your reference voice on the fly with `--voice path/to/voice.wav`)*
+*(Optional: override reference voice with `--voice path/to/voice.wav` or BGM with `--bgm path/to/bgm.mp3`)*
 
 #### 6. Render Final Video
 ```bash

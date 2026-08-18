@@ -9,5 +9,13 @@ if [ ! -f "$VENV_PYTHON" ]; then
     bash "$SCRIPT_DIR/bootstrap.sh"
 fi
 
+# Lock all environment variables and PATH strictly to remanga root
+export PATH="$SCRIPT_DIR/bin:$PATH"
+export UV_CACHE_DIR="$SCRIPT_DIR/.cache/uv"
+export HF_HOME="$SCRIPT_DIR/.cache/huggingface"
+export TRANSFORMERS_CACHE="$SCRIPT_DIR/.cache/huggingface"
+export TORCH_HOME="$SCRIPT_DIR/.cache/torch"
+export HF_HUB_ENABLE_HF_TRANSFER=1
 export PYTHONPATH="$SCRIPT_DIR:$PYTHONPATH"
+
 exec "$VENV_PYTHON" -m remanga.cli "$@"

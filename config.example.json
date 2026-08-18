@@ -28,7 +28,7 @@
     "hf_repo_id": "IndexTeam/IndexTTS-2.5",
     "model_dir": "checkpoints/indextts_2.5",
     "cfg_path": "checkpoints/indextts_2.5/config.yaml",
-    "spk_audio_prompt": "assets/voices/my_narrator_voice.wav",
+    "spk_audio_prompt": "",
     "lang": "EN",
     "use_bf16": true,
     "speed": 1.0,
@@ -50,7 +50,7 @@
     "edge_fade_ms": 35,
     "pause_between_panels_ms": 300,
     "bgm_enabled": false,
-    "bgm_path": "assets/bgm/default_recap.mp3",
+    "bgm_path": "",
     "bgm_volume_db": -22.0,
     "enable_loudnorm": true
   },

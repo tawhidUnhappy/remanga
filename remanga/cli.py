@@ -7,10 +7,11 @@ from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 
+from remanga.audio import AudioProcessor, TTSEngine
 from remanga.config import RemangaConfig, get_chapter_dir, load_project_metadata
-from remanga.downloader import MangaDexDownloader
 from remanga.cropper import CoordinateCropper
-from remanga.audio import TTSEngine, AudioProcessor
+from remanga.downloader import MangaDexDownloader
+from remanga.pipeline import run_interactive_pipeline
 from remanga.video import VideoRenderer
 
 console = Console()
@@ -41,14 +42,18 @@ def display_status(project: str, chapter: str):
     video_exist = (chap_dir / f"{project}_ch{chapter}_recap.mp4").exists()
 
     config = RemangaConfig.load()
-    voice_path = Path(config.tts.spk_audio_prompt)
-    voice_status = f"[green]Configured ({voice_path})[/]" if voice_path.exists() else f"[yellow]Not found ({voice_path})[/]"
+    voice_path = Path(config.tts.spk_audio_prompt).expanduser() if config.tts.spk_audio_prompt else None
+    voice_status = f"[green]Configured ({voice_path})[/]" if (voice_path and voice_path.exists()) else f"[yellow]Not set / Missing ({voice_path})[/]"
+
+    bgm_path = Path(config.audio.bgm_path).expanduser() if config.audio.bgm_path else None
+    bgm_status = f"[green]Enabled ({bgm_path})[/]" if (config.audio.bgm_enabled and bgm_path and bgm_path.exists()) else "[dim]Disabled / None[/]"
 
     status_str = f"""
 [bold cyan]Project:[/] {project} | [bold cyan]Chapter:[/] {chapter}
 [bold cyan]Saved Manga Source:[/] {saved_url}
 [bold]Workspace Directory:[/] {chap_dir.resolve()}
 [bold]Reference Voice Audio:[/] {voice_status}
+[bold]Background Music:[/] {bgm_status}
 
   1. Pages Downloaded    : {'[green]✓ Yes (' + str(pages_count) + ' pages)[/]' if pages_count > 0 else '[red]✗ Missing[/]'}
   2. Pages ZIP Archive   : {'[green]✓ Ready (' + str(chap_dir / 'pages.zip') + ')[/]' if pages_zip_exist else '[dim yellow]✗ Not generated[/]'}
@@ -64,8 +69,11 @@ def display_status(project: str, chapter: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="remanga: Lightweight Manga Recap Production Pipeline powered by IndexTTS-2.5")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    parser = argparse.ArgumentParser(description="remanga: Lightweight, Self-Contained Manga Recap Production Pipeline")
+    subparsers = parser.add_subparsers(dest="command")
+
+    # interactive wizard
+    subparsers.add_parser("interactive", help="Start interactive step-by-step production wizard")
 
     # download
     p_dl = subparsers.add_parser("download", help="Download manga chapter from MangaDex")
@@ -88,6 +96,7 @@ def main():
     p_mix = subparsers.add_parser("mix", help="Mix narration, apply edge fades, BGM, and normalize")
     p_mix.add_argument("--project", "-p", required=True, help="Project name")
     p_mix.add_argument("--chapter", "-c", required=True, help="Chapter number")
+    p_mix.add_argument("--bgm", "-b", required=False, default=None, help="Override background music audio path")
 
     # render
     p_rnd = subparsers.add_parser("render", help="Render final recap MP4 video")
@@ -103,7 +112,9 @@ def main():
     config = RemangaConfig.load()
 
     try:
-        if args.command == "download":
+        if args.command in ("interactive", None):
+            run_interactive_pipeline()
+        elif args.command == "download":
             dl = MangaDexDownloader(config.downloader)
             dl.download_chapter(args.url, args.chapter, args.project)
         elif args.command == "crop":
@@ -111,10 +122,10 @@ def main():
             cropper.crop_chapter_from_json(args.project, args.chapter)
         elif args.command == "tts":
             tts = TTSEngine(config.tts, config.audio)
-            tts.generate_narration_audio(args.project, args.chapter, voice_override=args.voice)
+            tts.generate_narration_audio(args.project, args.chapter, voice_override=args.voice, interactive=True)
         elif args.command == "mix":
             mixer = AudioProcessor(config.audio)
-            mixer.mix_master_audio(args.project, args.chapter)
+            mixer.mix_master_audio(args.project, args.chapter, bgm_override=args.bgm, interactive=True)
         elif args.command == "render":
             renderer = VideoRenderer(config.system, config.video)
             renderer.render_video(args.project, args.chapter)

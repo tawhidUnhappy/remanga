@@ -27,7 +27,7 @@ class MangaDexDownloader:
         self.config = config or DownloaderConfig()
         self.session = requests.Session()
         self.session.headers.update({
-            "User-Agent": "remanga-recap-pipeline/1.0"
+            "User-Agent": "remanga-recap-pipeline/2.0"
         })
 
     def _request_with_retry(self, method: str, url: str, **kwargs) -> requests.Response:
@@ -274,7 +274,6 @@ class MangaDexDownloader:
                     "size_bytes": out_path.stat().st_size
                 })
 
-                # Polite delay between page requests
                 if self.config.request_delay_seconds > 0:
                     time.sleep(self.config.request_delay_seconds)
 
@@ -295,7 +294,6 @@ class MangaDexDownloader:
 
         console.print(f"[bold green]✓ Successfully downloaded and verified all {len(filenames)} pages![/]")
 
-        # Automatically create pages.zip
         if self.config.create_zip:
             self._create_pages_zip(chapter_dir, dest_dir)
 

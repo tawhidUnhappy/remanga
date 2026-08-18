@@ -9,7 +9,7 @@ from pydub import AudioSegment
 from rich.console import Console
 from rich.progress import BarColumn, Progress, TextColumn
 
-from remanga.config import AudioConfig, TTSConfig, get_chapter_dir
+from remanga.config import AudioConfig, RemangaConfig, TTSConfig, get_chapter_dir
 
 console = Console()
 
@@ -21,23 +21,26 @@ class TTSEngine:
         self._model_instance = None
 
     def _ensure_model_weights(self) -> Path:
-        """Verifies model weights locally or automatically fetches them from Hugging Face."""
+        """Verifies IndexTTS-2.5 weights locally or downloads them into the local checkpoints directory."""
         model_dir = Path(self.tts_config.model_dir)
         cfg_path = Path(self.tts_config.cfg_path)
 
         if not model_dir.exists() or not cfg_path.exists():
             console.print(
                 f"[yellow]IndexTTS-2.5 checkpoints not found in {model_dir}.[/]\n"
-                f"[cyan]Automatically downloading '{self.tts_config.hf_repo_id}' from Hugging Face...[/]"
+                f"[cyan]Downloading '{self.tts_config.hf_repo_id}' from Hugging Face via hf-transfer...[/]"
             )
             try:
+                # Enforce local cache & high-speed transfer
+                os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
                 from huggingface_hub import snapshot_download
 
                 model_dir.mkdir(parents=True, exist_ok=True)
                 snapshot_download(
                     repo_id=self.tts_config.hf_repo_id,
-                    local_dir=str(model_dir),
+                    local_dir=str(model_dir.resolve()),
                     local_dir_use_symlinks=False,
+                    max_workers=8,
                 )
                 console.print(f"[bold green]✓ Downloaded IndexTTS-2.5 checkpoints to {model_dir}[/]")
             except Exception as e:
@@ -58,8 +61,8 @@ class TTSEngine:
 
             console.print(f"[cyan]Initializing IndexTTS-2.5 model engine (BF16: {self.tts_config.use_bf16})...[/]")
             self._model_instance = IndexTTS2(
-                cfg_path=str(cfg_path),
-                model_dir=str(model_dir),
+                cfg_path=str(cfg_path.resolve()),
+                model_dir=str(model_dir.resolve()),
                 use_bf16=self.tts_config.use_bf16,
             )
             console.print("[bold green]✓ IndexTTS-2.5 engine loaded successfully![/]")
@@ -67,38 +70,25 @@ class TTSEngine:
         except ImportError:
             return None
         except Exception as e:
-            console.print(f"[yellow]Direct IndexTTS-2.5 import warning: {e}. Falling back to CLI execution bridge.[/]")
+            console.print(f"[yellow]Direct IndexTTS-2.5 import warning: {e}. Falling back to CLI bridge.[/]")
             return None
 
     def _get_emotion_vector(self, emotion_tag: str) -> List[float]:
-        """Maps 7 high-level recap emotion tags to IndexTTS 8-dimensional emotion vectors."""
+        """Maps high-level recap emotion tags to IndexTTS 8-dimensional emotion vectors."""
         tag = (emotion_tag or "neutral").strip().lower()
         mapping = self.tts_config.emotion_vectors
         if tag in mapping:
             return mapping[tag]
         return mapping.get("neutral", [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 0.8])
 
-    def _synthesize_indextts(self, text: str, emotion_tag: str, output_wav: Path) -> None:
-        """Synthesizes high-fidelity speech with zero-shot speaker cloning and emotion conditioning."""
-        spk_prompt = Path(self.tts_config.spk_audio_prompt)
-
-        # Validate reference audio prompt
-        if not spk_prompt.exists() or spk_prompt.stat().st_size == 0:
-            console.print(
-                f"[bold yellow]Notice:[/] Reference voice audio not found at '{spk_prompt}'.\n"
-                f"For zero-shot cloning, place a 3-10s clean reference WAV and update 'spk_audio_prompt' in config.json.\n"
-                f"[dim]Using clean tone fallback for current generation...[/]"
-            )
-            spk_prompt.parent.mkdir(parents=True, exist_ok=True)
-            fallback_tone = AudioSegment.silent(duration=2000, frame_rate=self.tts_config.sample_rate)
-            fallback_tone.export(spk_prompt, format="wav")
-
+    def _synthesize_indextts(self, text: str, emotion_tag: str, spk_prompt_path: str, output_wav: Path) -> None:
+        """Synthesizes speech using IndexTTS-2.5 with speaker cloning and emotion conditioning."""
         model = self._get_model()
         emotion_vec = self._get_emotion_vector(emotion_tag)
 
         if model is not None:
             model.infer(
-                spk_audio_prompt=str(spk_prompt.resolve()),
+                spk_audio_prompt=spk_prompt_path,
                 text=text,
                 lang=self.tts_config.lang,
                 output_path=str(output_wav.resolve()),
@@ -108,12 +98,12 @@ class TTSEngine:
                 emotion_vector=emotion_vec,
             )
         else:
-            # Subprocess bridge execution
+            # Subprocess execution bridge fallback
             cmd = [
                 "python", "-m", "indextts.infer_v2_5",
                 "--cfg_path", str(Path(self.tts_config.cfg_path).resolve()),
                 "--model_dir", str(Path(self.tts_config.model_dir).resolve()),
-                "--spk_audio_prompt", str(spk_prompt.resolve()),
+                "--spk_audio_prompt", spk_prompt_path,
                 "--text", text,
                 "--lang", self.tts_config.lang,
                 "--output_path", str(output_wav.resolve()),
@@ -122,19 +112,31 @@ class TTSEngine:
             try:
                 subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
             except Exception as ex:
-                console.print(f"[dim yellow]Synthesis fallback triggered ({ex}). Generating standard timing segment...[/]")
+                console.print(f"[dim yellow]Synthesis fallback triggered ({ex}). Generating timing slot...[/]")
                 word_count = max(1, len(text.split()))
                 est_duration_ms = int((word_count / 2.5) * 1000)
                 fallback_audio = AudioSegment.silent(duration=est_duration_ms, frame_rate=self.tts_config.sample_rate)
                 fallback_audio.export(output_wav, format="wav")
 
-    def generate_narration_audio(self, project_name: str, chapter_num: str, voice_override: Optional[str] = None) -> Path:
+    def generate_narration_audio(
+        self,
+        project_name: str,
+        chapter_num: str,
+        voice_override: Optional[str] = None,
+        interactive: bool = True,
+    ) -> Path:
         """
-        Reads narration.json, synthesizes speech per panel using IndexTTS-2.5,
-        applies clickless micro-fades, and writes audio_timing.json.
+        Reads narration.json, validates the reference voice (prompting if needed),
+        synthesizes speech per panel with IndexTTS-2.5, applies micro edge-fades, and writes audio_timing.json.
         """
+        # Validate or prompt for reference voice prompt
+        full_config = RemangaConfig.load()
         if voice_override:
+            full_config.tts.spk_audio_prompt = voice_override
             self.tts_config.spk_audio_prompt = voice_override
+
+        spk_prompt_path = full_config.ensure_valid_voice_prompt(interactive=interactive)
+        self.tts_config.spk_audio_prompt = spk_prompt_path
 
         chapter_dir = get_chapter_dir(project_name, chapter_num)
         narration_path = chapter_dir / "narration.json"
@@ -156,7 +158,7 @@ class TTSEngine:
 
         console.print(
             f"[cyan]Synthesizing speech via IndexTTS-2.5[/] "
-            f"[dim](Reference Voice: {self.tts_config.spk_audio_prompt})[/]"
+            f"[dim](Reference Voice: {spk_prompt_path})[/]"
         )
 
         timing_data: List[Dict[str, Any]] = []
@@ -180,7 +182,12 @@ class TTSEngine:
 
                 if text:
                     # 1. Synthesize speech using IndexTTS-2.5
-                    self._synthesize_indextts(text=text, emotion_tag=emotion, output_wav=raw_clip_path)
+                    self._synthesize_indextts(
+                        text=text,
+                        emotion_tag=emotion,
+                        spk_prompt_path=spk_prompt_path,
+                        output_wav=raw_clip_path,
+                    )
 
                     # 2. Resample and normalize to master audio format (44.1 kHz, mono)
                     segment = AudioSegment.from_file(raw_clip_path)

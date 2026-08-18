@@ -37,7 +37,7 @@ class PanelSheetGenerator:
 
         cell_w = sheet_width // cols
         cell_h = sheet_height // rows
-        header_height = 42  # Space for panel title header tag
+        header_height = 42
 
         generated_sheets: List[Path] = []
         total_sheets = math.ceil(len(panel_paths) / panels_per_sheet)

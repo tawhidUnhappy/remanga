@@ -7,7 +7,7 @@ from typing import Optional
 from pydub import AudioSegment
 from rich.console import Console
 
-from remanga.config import AudioConfig, get_chapter_dir
+from remanga.config import AudioConfig, RemangaConfig, get_chapter_dir
 
 console = Console()
 
@@ -16,11 +16,29 @@ class AudioProcessor:
     def __init__(self, config: Optional[AudioConfig] = None):
         self.config = config or AudioConfig()
 
-    def mix_master_audio(self, project_name: str, chapter_num: str) -> Path:
+    def mix_master_audio(
+        self,
+        project_name: str,
+        chapter_num: str,
+        bgm_override: Optional[str] = None,
+        interactive: bool = True,
+    ) -> Path:
         """
         Combines narration segments, adds inter-panel pauses, overlays background music (if enabled),
         and applies EBU R128 loudness normalization.
         """
+        full_config = RemangaConfig.load()
+        if bgm_override:
+            full_config.audio.bgm_path = bgm_override
+            full_config.audio.bgm_enabled = True
+            self.config.bgm_path = bgm_override
+            self.config.bgm_enabled = True
+
+        valid_bgm = full_config.ensure_valid_bgm(interactive=interactive)
+        if valid_bgm:
+            self.config.bgm_path = valid_bgm
+            self.config.bgm_enabled = True
+
         chapter_dir = get_chapter_dir(project_name, chapter_num)
         timing_path = chapter_dir / "audio_timing.json"
         audio_dir = chapter_dir / "audio"
