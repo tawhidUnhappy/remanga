@@ -20,7 +20,7 @@ export UV_CACHE_DIR="$CACHE_DIR/uv"
 export HF_HOME="$CACHE_DIR/huggingface"
 export TRANSFORMERS_CACHE="$CACHE_DIR/huggingface"
 export TORCH_HOME="$CACHE_DIR/torch"
-export HF_HUB_ENABLE_HF_TRANSFER=1
+unset HF_HUB_ENABLE_HF_TRANSFER
 
 # 2. Install standalone uv locally inside remanga/bin
 if [ ! -f "$BIN_DIR/uv" ]; then
@@ -73,6 +73,7 @@ echo "[+] Creating isolated virtual environment in $VENV_DIR..."
 # 6. Install project dependencies into isolated venv
 echo "[+] Installing remanga and machine learning dependencies..."
 "$BIN_DIR/uv" pip install --python "$VENV_DIR" -e .
+"$BIN_DIR/uv" pip install --python "$VENV_DIR" modelscope "huggingface-hub[cli]"
 
 # 7. Initialize config.json from config.example.json if missing
 if [ ! -f "config.json" ]; then
@@ -80,25 +81,38 @@ if [ ! -f "config.json" ]; then
     cp config.example.json config.json
 fi
 
-# 8. High-Speed Parallel Download for IndexTTS-2.5 weights via hf-transfer
+# 8. High-Speed Download for IndexTTS-2.5 weights
 if [ ! -f "$CHECKPOINTS_DIR/config.yaml" ]; then
-    echo "[+] Turbo-downloading IndexTeam/IndexTTS-2.5 from Hugging Face via hf-transfer..."
+    echo "[+] Downloading IndexTTS-2.5 model weights into $CHECKPOINTS_DIR..."
+    
+    # Try high-speed ModelScope first (fastest in Asia/international), fallback to Hugging Face CLI with resume
     "$VENV_DIR/bin/python3" -c "
-import os
-from huggingface_hub import snapshot_download
+import sys
+from pathlib import Path
 
-target_dir = '$CHECKPOINTS_DIR'
-os.makedirs(target_dir, exist_ok=True)
-os.environ['HF_HUB_ENABLE_HF_TRANSFER'] = '1'
+target_dir = Path('$CHECKPOINTS_DIR')
+target_dir.mkdir(parents=True, exist_ok=True)
 
-print('Connecting to Hugging Face with parallel multi-connection streams...')
-snapshot_download(
-    repo_id='IndexTeam/IndexTTS-2.5',
-    local_dir=target_dir,
-    local_dir_use_symlinks=False,
-    max_workers=8
-)
-print('✓ IndexTTS-2.5 weights downloaded successfully!')
+success = False
+try:
+    print('[+] Connecting to high-speed mirror (ModelScope)...')
+    from modelscope import snapshot_download as ms_download
+    ms_download('IndexTeam/IndexTTS-2.5', local_dir=str(target_dir.resolve()))
+    success = True
+    print('✓ IndexTTS-2.5 weights downloaded via ModelScope mirror!')
+except Exception as e:
+    print(f'[!] ModelScope mirror notice: {e}. Switching to standard Hugging Face CLI...')
+
+if not success or not (target_dir / 'config.yaml').exists():
+    from huggingface_hub import snapshot_download as hf_download
+    print('[+] Downloading directly from Hugging Face with clean progress bar...')
+    hf_download(
+        repo_id='IndexTeam/IndexTTS-2.5',
+        local_dir=str(target_dir.resolve()),
+        local_dir_use_symlinks=False,
+        resume_download=True
+    )
+    print('✓ IndexTTS-2.5 weights downloaded via Hugging Face!')
 "
 else
     echo "[+] Found existing IndexTTS-2.5 model weights in $CHECKPOINTS_DIR."
