@@ -73,7 +73,7 @@ if [ ! -f "config.json" ]; then
     cp config.example.json config.json
 fi
 
-# 6. Verify and download model weights natively
+# 6. Verify and download model weights via ModelScope CDN
 "$VENV_DIR/bin/python3" -m remanga.cli setup-models
 
 echo "=========================================================="
