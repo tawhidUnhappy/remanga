@@ -64,15 +64,16 @@ echo "[+] Provisioning standalone Python 3.11 runtime..."
 "$BIN_DIR/uv" venv "$VENV_DIR" --python 3.11 --allow-existing
 
 # 4. Install dependencies inside isolated venv
-echo "[+] Installing remanga and machine learning dependencies..."
+echo "[+] Installing remanga and IndexTTS-2.5 package..."
 "$BIN_DIR/uv" pip install --python "$VENV_DIR" -e .
+"$BIN_DIR/uv" pip install --python "$VENV_DIR" git+https://github.com/index-tts/index-tts.git
 
 # 5. Initialize config.json from config.example.json if missing
 if [ ! -f "config.json" ]; then
     cp config.example.json config.json
 fi
 
-# 6. Let Hugging Face verify/download model weights natively
+# 6. Verify and download model weights natively
 "$VENV_DIR/bin/python3" -m remanga.cli setup-models
 
 echo "=========================================================="
