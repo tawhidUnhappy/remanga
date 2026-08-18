@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -20,7 +20,7 @@ class DownloaderConfig(BaseModel):
     max_retries: int = 3
     retry_delay_seconds: int = 2
     request_delay_seconds: float = 0.35  # Polite delay between page requests to protect MangaDex
-    create_zip: bool = True
+    create_zip: bool = true
 
 
 class CropperConfig(BaseModel):
@@ -30,14 +30,31 @@ class CropperConfig(BaseModel):
     create_sheets: bool = True
     panels_per_sheet: int = 4  # 4 panels per 2x2 grid sheet for optimal LLM vision token efficiency
     create_zip: bool = True
+    zip_filename: str = "sheets.zip"
 
 
 class TTSConfig(BaseModel):
-    engine: str = "edge-tts"
-    voice: str = "en-US-GuyNeural"
-    rate: str = "+0%"
-    pitch: str = "+0Hz"
-    volume: str = "+0%"
+    engine: str = "indextts-2.5"
+    model_dir: str = "checkpoints/indextts_2.5"
+    cfg_path: str = "checkpoints/indextts_2.5/config.yaml"
+    spk_audio_prompt: str = "assets/voices/narrator_default.wav"
+    lang: str = "EN"
+    use_bf16: bool = True
+    speed: float = 1.0
+    temperature: float = 0.7
+    top_p: float = 0.85
+    sample_rate: int = 22050
+    emotion_vectors: Dict[str, List[float]] = Field(
+        default_factory=lambda: {
+            "neutral": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 0.8],
+            "hype": [0.7, 0.3, 0.0, 0.0, 0.0, 0.4, 0.0, 0.0],
+            "tense": [0.0, 0.2, 0.1, 0.6, 0.0, 0.5, 0.0, 0.1],
+            "serious": [0.0, 0.1, 0.2, 0.0, 0.0, 0.1, 0.6, 0.3],
+            "shock": [0.0, 0.1, 0.0, 0.4, 0.0, 0.9, 0.0, 0.0],
+            "emotional": [0.1, 0.0, 0.7, 0.1, 0.0, 0.2, 0.2, 0.1],
+            "mysterious": [0.0, 0.0, 0.1, 0.3, 0.0, 0.3, 0.5, 0.2],
+        }
+    )
 
 
 class AudioConfig(BaseModel):

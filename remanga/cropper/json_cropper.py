@@ -17,12 +17,13 @@ class CoordinateCropper:
     def __init__(self, config: Optional[CropperConfig] = None):
         self.config = config or CropperConfig()
 
-    def _create_panels_zip(self, chapter_dir: Path, panels_dir: Path, sheets_dir: Optional[Path]) -> Path:
+    def _create_sheets_zip(self, chapter_dir: Path, panels_dir: Path, sheets_dir: Optional[Path]) -> Path:
         """
-        Packages ONLY vision contact sheets and manifest into a lightweight ZIP.
+        Packages ONLY vision contact sheets and manifest into a lightweight sheets.zip.
         Excludes raw panels to minimize upload size and LLM token usage.
         """
-        zip_path = chapter_dir / "sheets.zip"
+        zip_filename = getattr(self.config, "zip_filename", "sheets.zip") or "sheets.zip"
+        zip_path = chapter_dir / zip_filename
         if zip_path.exists():
             zip_path.unlink()
 
@@ -163,9 +164,9 @@ class CoordinateCropper:
                 panels_per_sheet=self.config.panels_per_sheet
             )
 
-        # 2. Package ONLY the sheets & manifest into panels.zip
+        # 2. Package ONLY the sheets & manifest into sheets.zip
         if self.config.create_zip:
-            self._create_panels_zip(chapter_dir, panels_dir, sheets_dir)
+            self._create_sheets_zip(chapter_dir, panels_dir, sheets_dir)
 
         return output_panel_paths
 

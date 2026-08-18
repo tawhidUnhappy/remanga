@@ -35,7 +35,7 @@ def display_status(project: str, chapter: str):
     crops_exist = (chap_dir / "crops.json").exists() and (chap_dir / "crops.json").stat().st_size > 0
     panels_count = len(list((chap_dir / "panels").glob("panel_*.*"))) if (chap_dir / "panels").exists() else 0
     sheets_count = len(list((chap_dir / "sheets").glob("sheet_*.*"))) if (chap_dir / "sheets").exists() else 0
-    panels_zip_exist = (chap_dir / "panels.zip").exists()
+    sheets_zip_exist = (chap_dir / "sheets.zip").exists()
     narration_exist = (chap_dir / "narration.json").exists() and (chap_dir / "narration.json").stat().st_size > 0
     audio_exist = (chap_dir / "master_audio.wav").exists()
     video_exist = (chap_dir / f"{project}_ch{chapter}_recap.mp4").exists()
@@ -49,17 +49,17 @@ def display_status(project: str, chapter: str):
   2. Pages ZIP Archive   : {'[green]✓ Ready (' + str(chap_dir / 'pages.zip') + ')[/]' if pages_zip_exist else '[dim yellow]✗ Not generated[/]'}
   3. Crop Instructions   : {'[green]✓ Present (' + str(chap_dir / 'crops.json') + ')[/]' if crops_exist else '[yellow]✗ Missing/Empty placeholder[/]'}
   4. Panels Cropped      : {'[green]✓ Yes (' + str(panels_count) + ' panels)[/]' if panels_count > 0 else '[red]✗ Missing[/]'}
-  5. Panel Sheets        : {'[green]✓ Yes (' + str(sheets_count) + ' sheets)[/]' if sheets_count > 0 else '[dim yellow]✗ Not generated[/]'}
-  6. Panels ZIP Archive  : {'[green]✓ Ready (' + str(chap_dir / 'panels.zip') + ')[/]' if panels_zip_exist else '[dim yellow]✗ Not generated[/]'}
+  5. Panel Contact Sheets: {'[green]✓ Yes (' + str(sheets_count) + ' sheets)[/]' if sheets_count > 0 else '[dim yellow]✗ Not generated[/]'}
+  6. Sheets ZIP Archive  : {'[green]✓ Ready (' + str(chap_dir / 'sheets.zip') + ')[/]' if sheets_zip_exist else '[dim yellow]✗ Not generated[/]'}
   7. Narration Script    : {'[green]✓ Present (' + str(chap_dir / 'narration.json') + ')[/]' if narration_exist else '[yellow]✗ Missing/Empty placeholder[/]'}
-  8. Master Audio Track  : {'[green]✓ Generated[/]' if audio_exist else '[red]✗ Not built[/]'}
+  8. Master Audio Track  : {'[green]✓ Generated (IndexTTS-2.5)[/]' if audio_exist else '[red]✗ Not built[/]'}
   9. Final Recap Video   : {'[green]✓ Ready (' + str(chap_dir / f"{project}_ch{chapter}_recap.mp4") + ')[/]' if video_exist else '[red]✗ Not rendered[/]'}
 """
-    console.print(Panel(status_str.strip(), title="[bold white]remanga Chapter Status[/]", border_style="blue"))
+    console.print(Panel(status_str.strip(), title="[bold white]remanga Chapter Production Status[/]", border_style="blue"))
 
 
 def main():
-    parser = argparse.ArgumentParser(description="remanga: Lightweight Manga Recap Production Pipeline")
+    parser = argparse.ArgumentParser(description="remanga: Lightweight Manga Recap Production Pipeline powered by IndexTTS-2.5")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # download
@@ -69,12 +69,12 @@ def main():
     p_dl.add_argument("--url", "-u", required=False, default=None, help="Manga title or MangaDex URL/UUID (optional if saved)")
 
     # crop
-    p_crop = subparsers.add_parser("crop", help="Crop panels using coordinates in crops.json")
+    p_crop = subparsers.add_parser("crop", help="Crop panels using coordinates in crops.json and package sheets.zip")
     p_crop.add_argument("--project", "-p", required=True, help="Project name")
     p_crop.add_argument("--chapter", "-c", required=True, help="Chapter number")
 
     # tts
-    p_tts = subparsers.add_parser("tts", help="Generate vocal audio from narration.json")
+    p_tts = subparsers.add_parser("tts", help="Generate vocal audio via IndexTTS-2.5 from narration.json")
     p_tts.add_argument("--project", "-p", required=True, help="Project name")
     p_tts.add_argument("--chapter", "-c", required=True, help="Chapter number")
 

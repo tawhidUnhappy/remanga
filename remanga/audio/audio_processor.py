@@ -18,7 +18,7 @@ class AudioProcessor:
 
     def mix_master_audio(self, project_name: str, chapter_num: str) -> Path:
         """
-        Combines narration segments, adds pauses, loops and ducks background music (if enabled),
+        Combines narration segments, adds inter-panel pauses, overlays background music (if enabled),
         and applies EBU R128 loudness normalization.
         """
         chapter_dir = get_chapter_dir(project_name, chapter_num)
@@ -44,9 +44,9 @@ class AudioProcessor:
                 segment = AudioSegment.from_file(clip_file)
             else:
                 segment = AudioSegment.silent(duration=p["duration_ms"], frame_rate=self.config.sample_rate)
-            
+
             combined_voice += segment
-            
+
             # Append inter-panel silence pause
             pause_ms = p.get("pause_after_ms", 0)
             if pause_ms > 0:
@@ -62,11 +62,11 @@ class AudioProcessor:
             bgm_track = bgm_track.set_channels(2).set_frame_rate(self.config.sample_rate)
             bgm_track = bgm_track + self.config.bgm_volume_db  # Adjust volume gain
 
-            # Loop BGM to match voice track length + 500ms tail
+            # Loop BGM to match voice track length + tail
             total_duration_ms = len(master_audio)
-            loop_count = (total_duration_ms // len(bgm_track)) + 1
+            loop_count = (total_duration_ms // max(1, len(bgm_track))) + 1
             bgm_loop = (bgm_track * loop_count)[:total_duration_ms]
-            
+
             # Smooth BGM entry & exit fades
             bgm_loop = bgm_loop.fade_in(1500).fade_out(2000)
 

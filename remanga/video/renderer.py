@@ -102,7 +102,7 @@ class VideoRenderer:
 
         panels = timing_info.get("panels", [])
         concat_file = video_dir / "concat_list.txt"
-        
+
         with open(concat_file, "w", encoding="utf-8") as f:
             for p in panels:
                 panel_id = p["panel_id"]

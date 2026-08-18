@@ -20,14 +20,29 @@
     "save_format": "PNG",
     "create_sheets": true,
     "panels_per_sheet": 4,
-    "create_zip": true
+    "create_zip": true,
+    "zip_filename": "sheets.zip"
   },
   "tts": {
-    "engine": "edge-tts",
-    "voice": "en-US-GuyNeural",
-    "rate": "+0%",
-    "pitch": "+0Hz",
-    "volume": "+0%"
+    "engine": "indextts-2.5",
+    "model_dir": "checkpoints/indextts_2.5",
+    "cfg_path": "checkpoints/indextts_2.5/config.yaml",
+    "spk_audio_prompt": "assets/voices/narrator_default.wav",
+    "lang": "EN",
+    "use_bf16": true,
+    "speed": 1.0,
+    "temperature": 0.7,
+    "top_p": 0.85,
+    "sample_rate": 22050,
+    "emotion_vectors": {
+      "neutral": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 0.8],
+      "hype": [0.7, 0.3, 0.0, 0.0, 0.0, 0.4, 0.0, 0.0],
+      "tense": [0.0, 0.2, 0.1, 0.6, 0.0, 0.5, 0.0, 0.1],
+      "serious": [0.0, 0.1, 0.2, 0.0, 0.0, 0.1, 0.6, 0.3],
+      "shock": [0.0, 0.1, 0.0, 0.4, 0.0, 0.9, 0.0, 0.0],
+      "emotional": [0.1, 0.0, 0.7, 0.1, 0.0, 0.2, 0.2, 0.1],
+      "mysterious": [0.0, 0.0, 0.1, 0.3, 0.0, 0.3, 0.5, 0.2]
+    }
   },
   "audio": {
     "sample_rate": 44100,
