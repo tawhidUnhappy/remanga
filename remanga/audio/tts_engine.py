@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -10,6 +9,7 @@ from rich.console import Console
 from rich.progress import BarColumn, Progress, TextColumn
 
 from remanga.config import AudioConfig, RemangaConfig, TTSConfig, get_chapter_dir
+from remanga.models import ModelManager
 
 console = Console()
 
@@ -19,41 +19,14 @@ class TTSEngine:
         self.tts_config = tts_config or TTSConfig()
         self.audio_config = audio_config or AudioConfig()
         self._model_instance = None
-
-    def _ensure_model_weights(self) -> Path:
-        """Verifies IndexTTS-2.5 weights locally or downloads them into the local checkpoints directory."""
-        model_dir = Path(self.tts_config.model_dir)
-        cfg_path = Path(self.tts_config.cfg_path)
-
-        if not model_dir.exists() or not cfg_path.exists():
-            console.print(
-                f"[yellow]IndexTTS-2.5 checkpoints not found in {model_dir}.[/]\n"
-                f"[cyan]Downloading '{self.tts_config.hf_repo_id}' from Hugging Face via hf-transfer...[/]"
-            )
-            try:
-                # Enforce local cache & high-speed transfer
-                os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
-                from huggingface_hub import snapshot_download
-
-                model_dir.mkdir(parents=True, exist_ok=True)
-                snapshot_download(
-                    repo_id=self.tts_config.hf_repo_id,
-                    local_dir=str(model_dir.resolve()),
-                    local_dir_use_symlinks=False,
-                    max_workers=8,
-                )
-                console.print(f"[bold green]✓ Downloaded IndexTTS-2.5 checkpoints to {model_dir}[/]")
-            except Exception as e:
-                console.print(f"[red]Failed to download weights from Hugging Face: {e}[/]")
-
-        return model_dir
+        self.model_manager = ModelManager(self.tts_config.model_dir, self.tts_config.hf_repo_id)
 
     def _get_model(self):
         """Lazy-loads and caches the IndexTTS-2.5 model instance."""
         if self._model_instance is not None:
             return self._model_instance
 
-        model_dir = self._ensure_model_weights()
+        model_dir = self.model_manager.ensure_model()
         cfg_path = Path(self.tts_config.cfg_path)
 
         try:
@@ -98,7 +71,6 @@ class TTSEngine:
                 emotion_vector=emotion_vec,
             )
         else:
-            # Subprocess execution bridge fallback
             cmd = [
                 "python", "-m", "indextts.infer_v2_5",
                 "--cfg_path", str(Path(self.tts_config.cfg_path).resolve()),
@@ -129,7 +101,6 @@ class TTSEngine:
         Reads narration.json, validates the reference voice (prompting if needed),
         synthesizes speech per panel with IndexTTS-2.5, applies micro edge-fades, and writes audio_timing.json.
         """
-        # Validate or prompt for reference voice prompt
         full_config = RemangaConfig.load()
         if voice_override:
             full_config.tts.spk_audio_prompt = voice_override
@@ -181,7 +152,6 @@ class TTSEngine:
                 processed_clip_path = audio_dir / f"{panel_id}.wav"
 
                 if text:
-                    # 1. Synthesize speech using IndexTTS-2.5
                     self._synthesize_indextts(
                         text=text,
                         emotion_tag=emotion,
@@ -189,11 +159,9 @@ class TTSEngine:
                         output_wav=raw_clip_path,
                     )
 
-                    # 2. Resample and normalize to master audio format (44.1 kHz, mono)
                     segment = AudioSegment.from_file(raw_clip_path)
                     segment = segment.set_frame_rate(self.audio_config.sample_rate).set_channels(1)
 
-                    # 3. Apply micro edge-fades to eliminate digital clicks
                     if self.audio_config.edge_fade_ms > 0 and len(segment) > (self.audio_config.edge_fade_ms * 2):
                         segment = segment.fade_in(self.audio_config.edge_fade_ms).fade_out(self.audio_config.edge_fade_ms)
 
@@ -204,7 +172,6 @@ class TTSEngine:
 
                     duration_ms = len(segment)
                 else:
-                    # Silent impact/reaction panel
                     duration_ms = max(pause_after_ms, 500)
                     silence = AudioSegment.silent(duration=duration_ms, frame_rate=self.audio_config.sample_rate)
                     silence.export(processed_clip_path, format="wav")
@@ -232,7 +199,6 @@ class TTSEngine:
                 current_timeline_ms += total_panel_slot_ms
                 progress.advance(task)
 
-        # Save timing manifest
         timing_manifest_path = chapter_dir / "audio_timing.json"
         with open(timing_manifest_path, "w", encoding="utf-8") as f:
             json.dump({

@@ -11,6 +11,7 @@ from remanga.audio import AudioProcessor, TTSEngine
 from remanga.config import RemangaConfig, get_chapter_dir, load_project_metadata
 from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
+from remanga.models import ModelManager
 from remanga.pipeline import run_interactive_pipeline
 from remanga.video import VideoRenderer
 
@@ -75,6 +76,9 @@ def main():
     # interactive wizard
     subparsers.add_parser("interactive", help="Start interactive step-by-step production wizard")
 
+    # setup models
+    subparsers.add_parser("setup-models", help="Verify and download model weights with SHA-256 verification")
+
     # download
     p_dl = subparsers.add_parser("download", help="Download manga chapter from MangaDex")
     p_dl.add_argument("--project", "-p", required=True, help="Project name")
@@ -114,6 +118,9 @@ def main():
     try:
         if args.command in ("interactive", None):
             run_interactive_pipeline()
+        elif args.command == "setup-models":
+            mgr = ModelManager(config.tts.model_dir, config.tts.hf_repo_id)
+            mgr.ensure_model()
         elif args.command == "download":
             dl = MangaDexDownloader(config.downloader)
             dl.download_chapter(args.url, args.chapter, args.project)
