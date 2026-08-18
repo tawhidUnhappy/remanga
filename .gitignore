@@ -37,6 +37,8 @@ projects/*/chapters/*/video/
 *.mp3
 projects/
 checkpoints/
+.cache/
+bin/
 # Keep config local overrides private if containing keys
 config.json
 

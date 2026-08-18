@@ -30,18 +30,36 @@ fi
 
 echo "[+] Using local uv: $("$BIN_DIR/uv" --version)"
 
-# 3. Download standalone static FFmpeg and FFprobe into remanga/bin
+# 3. Download standalone static FFmpeg and FFprobe from BtbN GitHub into remanga/bin
 if [ ! -f "$BIN_DIR/ffmpeg" ] || [ ! -f "$BIN_DIR/ffprobe" ]; then
-    echo "[+] Downloading isolated static FFmpeg binaries into $BIN_DIR..."
-    FFMPEG_TMP="$CACHE_DIR/ffmpeg_static.tar.xz"
-    curl -L "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz" -o "$FFMPEG_TMP"
-    tar -xf "$FFMPEG_TMP" -C "$CACHE_DIR"
-    FFMPEG_EXTRACTED="$(find "$CACHE_DIR" -maxdepth 1 -type d -name "ffmpeg-*-amd64-static" | head -n 1)"
-    cp "$FFMPEG_EXTRACTED/ffmpeg" "$BIN_DIR/ffmpeg"
-    cp "$FFMPEG_EXTRACTED/ffprobe" "$BIN_DIR/ffprobe"
-    chmod +x "$BIN_DIR/ffmpeg" "$BIN_DIR/ffprobe"
-    rm -rf "$FFMPEG_TMP" "$FFMPEG_EXTRACTED"
-    echo "[+] Static FFmpeg and FFprobe installed locally in $BIN_DIR"
+    echo "[+] Downloading isolated static FFmpeg (GPL/NVENC) into $BIN_DIR..."
+    FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz"
+    FFMPEG_TMP="$CACHE_DIR/ffmpeg.tar.xz"
+
+    if curl -fL -A "Mozilla/5.0" "$FFMPEG_URL" -o "$FFMPEG_TMP" 2>/dev/null; then
+        tar -xf "$FFMPEG_TMP" -C "$CACHE_DIR"
+        EXTRACTED_DIR="$(find "$CACHE_DIR" -maxdepth 1 -type d -name "ffmpeg-*-linux64-gpl" | head -n 1)"
+        if [ -n "$EXTRACTED_DIR" ] && [ -d "$EXTRACTED_DIR" ]; then
+            cp "$EXTRACTED_DIR/bin/ffmpeg" "$BIN_DIR/ffmpeg"
+            cp "$EXTRACTED_DIR/bin/ffprobe" "$BIN_DIR/ffprobe"
+            chmod +x "$BIN_DIR/ffmpeg" "$BIN_DIR/ffprobe"
+            rm -rf "$FFMPEG_TMP" "$EXTRACTED_DIR"
+            echo "[+] Static FFmpeg and FFprobe installed locally in $BIN_DIR"
+        fi
+    fi
+
+    # Fallback to system ffmpeg copy if download was blocked
+    if [ ! -f "$BIN_DIR/ffmpeg" ]; then
+        if command -v ffmpeg >/dev/null 2>&1; then
+            echo "[!] Using copy of system ffmpeg as local binary fallback..."
+            cp "$(command -v ffmpeg)" "$BIN_DIR/ffmpeg"
+            cp "$(command -v ffprobe 2>/dev/null || command -v ffmpeg)" "$BIN_DIR/ffprobe"
+            chmod +x "$BIN_DIR/ffmpeg" "$BIN_DIR/ffprobe"
+        else
+            echo "[-] Error: Failed to download static FFmpeg and no system FFmpeg found."
+            exit 1
+        fi
+    fi
 fi
 
 # 4. Provision standalone Python 3.11 inside remanga/.cache
