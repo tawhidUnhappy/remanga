@@ -2,26 +2,12 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+VENV_PYTHON="$SCRIPT_DIR/.venv/bin/python3"
 
-# Add portable tools to PATH if present
-if [ -d "$SCRIPT_DIR/.tools" ]; then
-    export PATH="$SCRIPT_DIR/.tools:$PATH"
-fi
-
-# Select Python binary inside .venv or system fallback
-if [ -f "$SCRIPT_DIR/.venv/bin/python3" ]; then
-    PYTHON_BIN="$SCRIPT_DIR/.venv/bin/python3"
-elif [ -f "$SCRIPT_DIR/.venv/bin/python" ]; then
-    PYTHON_BIN="$SCRIPT_DIR/.venv/bin/python"
-elif [ -f "$SCRIPT_DIR/.venv/Scripts/python.exe" ]; then
-    PYTHON_BIN="$SCRIPT_DIR/.venv/Scripts/python.exe"
-elif command -v python3 >/dev/null 2>&1; then
-    PYTHON_BIN="python3"
-else
-    PYTHON_BIN="python"
+if [ ! -f "$VENV_PYTHON" ]; then
+    echo "[-] Virtual environment not found. Running bootstrap.sh first..."
+    bash "$SCRIPT_DIR/bootstrap.sh"
 fi
 
 export PYTHONPATH="$SCRIPT_DIR:$PYTHONPATH"
-
-exec "$PYTHON_BIN" -m remanga.cli "$@"
+exec "$VENV_PYTHON" -m remanga.cli "$@"

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 from PIL import Image, ImageColor
 from rich.console import Console
 
@@ -22,7 +22,7 @@ class FrameCompositor:
         considering padding, centers it on a solid black background, and exports.
         """
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         with Image.open(image_path) as img:
             img = img.convert("RGB")
             img_w, img_h = img.size

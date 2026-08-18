@@ -25,9 +25,10 @@
   },
   "tts": {
     "engine": "indextts-2.5",
+    "hf_repo_id": "IndexTeam/IndexTTS-2.5",
     "model_dir": "checkpoints/indextts_2.5",
     "cfg_path": "checkpoints/indextts_2.5/config.yaml",
-    "spk_audio_prompt": "assets/voices/narrator_default.wav",
+    "spk_audio_prompt": "assets/voices/my_narrator_voice.wav",
     "lang": "EN",
     "use_bf16": true,
     "speed": 1.0,

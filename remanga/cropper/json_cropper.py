@@ -28,12 +28,10 @@ class CoordinateCropper:
             zip_path.unlink()
 
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            # If sheets were generated, pack ONLY the sheets at the archive root
             if sheets_dir and sheets_dir.exists() and list(sheets_dir.glob("sheet_*.*")):
                 for s in sorted(list(sheets_dir.glob("sheet_*.*"))):
                     zf.write(s, arcname=s.name)
             else:
-                # Fallback only if sheets are disabled in config
                 for p in sorted(list(panels_dir.glob("panel_*.*"))):
                     zf.write(p, arcname=p.name)
 
@@ -156,7 +154,7 @@ class CoordinateCropper:
 
         console.print(f"[bold green]✓ Cropped {len(output_panel_paths)} panels successfully into:[/] {panels_dir}")
 
-        # 1. Generate vision-optimized panel contact sheets
+        # 1. Generate vision contact sheets
         if self.config.create_sheets and output_panel_paths:
             PanelSheetGenerator.create_panel_sheets(
                 panel_paths=output_panel_paths,
@@ -164,7 +162,7 @@ class CoordinateCropper:
                 panels_per_sheet=self.config.panels_per_sheet
             )
 
-        # 2. Package ONLY the sheets & manifest into sheets.zip
+        # 2. Package sheets and manifest into sheets.zip
         if self.config.create_zip:
             self._create_sheets_zip(chapter_dir, panels_dir, sheets_dir)
 

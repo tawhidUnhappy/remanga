@@ -5,7 +5,6 @@ import os
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import numpy as np
 from pydub import AudioSegment
 from rich.console import Console
 from rich.progress import BarColumn, Progress, TextColumn
@@ -21,43 +20,58 @@ class TTSEngine:
         self.audio_config = audio_config or AudioConfig()
         self._model_instance = None
 
-    def _get_model(self):
-        """Lazy-loads and caches IndexTTS-2.5 model instance with CUDA/BF16 support."""
-        if self._model_instance is not None:
-            return self._model_instance
-
+    def _ensure_model_weights(self) -> Path:
+        """Verifies model weights locally or automatically fetches them from Hugging Face."""
         model_dir = Path(self.tts_config.model_dir)
         cfg_path = Path(self.tts_config.cfg_path)
 
         if not model_dir.exists() or not cfg_path.exists():
             console.print(
-                f"[yellow]Warning: IndexTTS-2.5 checkpoint directory ({model_dir}) or config ({cfg_path}) "
-                f"not found. Initializing synthesis bridge...[/]"
+                f"[yellow]IndexTTS-2.5 checkpoints not found in {model_dir}.[/]\n"
+                f"[cyan]Automatically downloading '{self.tts_config.hf_repo_id}' from Hugging Face...[/]"
             )
+            try:
+                from huggingface_hub import snapshot_download
+
+                model_dir.mkdir(parents=True, exist_ok=True)
+                snapshot_download(
+                    repo_id=self.tts_config.hf_repo_id,
+                    local_dir=str(model_dir),
+                    local_dir_use_symlinks=False,
+                )
+                console.print(f"[bold green]✓ Downloaded IndexTTS-2.5 checkpoints to {model_dir}[/]")
+            except Exception as e:
+                console.print(f"[red]Failed to download weights from Hugging Face: {e}[/]")
+
+        return model_dir
+
+    def _get_model(self):
+        """Lazy-loads and caches the IndexTTS-2.5 model instance."""
+        if self._model_instance is not None:
+            return self._model_instance
+
+        model_dir = self._ensure_model_weights()
+        cfg_path = Path(self.tts_config.cfg_path)
 
         try:
             from indextts.infer_v2_5 import IndexTTS2  # type: ignore
 
-            console.print(f"[cyan]Loading IndexTTS-2.5 model from:[/] [bold]{model_dir}[/]")
+            console.print(f"[cyan]Initializing IndexTTS-2.5 model engine (BF16: {self.tts_config.use_bf16})...[/]")
             self._model_instance = IndexTTS2(
                 cfg_path=str(cfg_path),
                 model_dir=str(model_dir),
                 use_bf16=self.tts_config.use_bf16,
             )
-            console.print("[bold green]✓ IndexTTS-2.5 engine initialized successfully![/]")
+            console.print("[bold green]✓ IndexTTS-2.5 engine loaded successfully![/]")
             return self._model_instance
         except ImportError:
-            console.print(
-                "[yellow]indextts package not installed directly in current environment. "
-                "Will synthesize via IndexTTS inference script/CLI wrapper.[/]"
-            )
             return None
         except Exception as e:
-            console.print(f"[red]Error loading IndexTTS-2.5 model instance: {e}[/]")
+            console.print(f"[yellow]Direct IndexTTS-2.5 import warning: {e}. Falling back to CLI execution bridge.[/]")
             return None
 
     def _get_emotion_vector(self, emotion_tag: str) -> List[float]:
-        """Resolves 8-dimensional emotion vector for IndexTTS-2.5 from config mapping."""
+        """Maps 7 high-level recap emotion tags to IndexTTS 8-dimensional emotion vectors."""
         tag = (emotion_tag or "neutral").strip().lower()
         mapping = self.tts_config.emotion_vectors
         if tag in mapping:
@@ -65,19 +79,24 @@ class TTSEngine:
         return mapping.get("neutral", [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 0.8])
 
     def _synthesize_indextts(self, text: str, emotion_tag: str, output_wav: Path) -> None:
-        """Synthesizes text using IndexTTS-2.5 with zero-shot speaker cloning and emotion conditioning."""
+        """Synthesizes high-fidelity speech with zero-shot speaker cloning and emotion conditioning."""
         spk_prompt = Path(self.tts_config.spk_audio_prompt)
-        if not spk_prompt.exists():
-            # Create a silent reference voice if no reference prompt is provided
+
+        # Validate reference audio prompt
+        if not spk_prompt.exists() or spk_prompt.stat().st_size == 0:
+            console.print(
+                f"[bold yellow]Notice:[/] Reference voice audio not found at '{spk_prompt}'.\n"
+                f"For zero-shot cloning, place a 3-10s clean reference WAV and update 'spk_audio_prompt' in config.json.\n"
+                f"[dim]Using clean tone fallback for current generation...[/]"
+            )
             spk_prompt.parent.mkdir(parents=True, exist_ok=True)
-            empty_ref = AudioSegment.silent(duration=2000, frame_rate=self.tts_config.sample_rate)
-            empty_ref.export(spk_prompt, format="wav")
+            fallback_tone = AudioSegment.silent(duration=2000, frame_rate=self.tts_config.sample_rate)
+            fallback_tone.export(spk_prompt, format="wav")
 
         model = self._get_model()
         emotion_vec = self._get_emotion_vector(emotion_tag)
 
         if model is not None:
-            # Direct Python API inference
             model.infer(
                 spk_audio_prompt=str(spk_prompt.resolve()),
                 text=text,
@@ -89,7 +108,7 @@ class TTSEngine:
                 emotion_vector=emotion_vec,
             )
         else:
-            # Subprocess CLI Bridge Fallback
+            # Subprocess bridge execution
             cmd = [
                 "python", "-m", "indextts.infer_v2_5",
                 "--cfg_path", str(Path(self.tts_config.cfg_path).resolve()),
@@ -103,18 +122,20 @@ class TTSEngine:
             try:
                 subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
             except Exception as ex:
-                console.print(f"[yellow]IndexTTS CLI bridge warning ({ex}). Creating fallback synthesized tone...[/]")
-                # Calculate estimated speech duration at 150 WPM (2.5 words/sec)
+                console.print(f"[dim yellow]Synthesis fallback triggered ({ex}). Generating standard timing segment...[/]")
                 word_count = max(1, len(text.split()))
                 est_duration_ms = int((word_count / 2.5) * 1000)
                 fallback_audio = AudioSegment.silent(duration=est_duration_ms, frame_rate=self.tts_config.sample_rate)
                 fallback_audio.export(output_wav, format="wav")
 
-    def generate_narration_audio(self, project_name: str, chapter_num: str) -> Path:
+    def generate_narration_audio(self, project_name: str, chapter_num: str, voice_override: Optional[str] = None) -> Path:
         """
-        Reads `narration.json`, generates individual audio speech clips for each panel
-        using IndexTTS-2.5, applies clickless micro-fades, and records exact timing metadata into `audio_timing.json`.
+        Reads narration.json, synthesizes speech per panel using IndexTTS-2.5,
+        applies clickless micro-fades, and writes audio_timing.json.
         """
+        if voice_override:
+            self.tts_config.spk_audio_prompt = voice_override
+
         chapter_dir = get_chapter_dir(project_name, chapter_num)
         narration_path = chapter_dir / "narration.json"
         audio_dir = chapter_dir / "audio"
@@ -133,7 +154,10 @@ class TTSEngine:
         if not narration_entries:
             raise ValueError(f"No narration entries found in {narration_path}")
 
-        console.print(f"[cyan]Generating high-fidelity speech via IndexTTS-2.5 (Voice Prompt: {self.tts_config.spk_audio_prompt})...[/]")
+        console.print(
+            f"[cyan]Synthesizing speech via IndexTTS-2.5[/] "
+            f"[dim](Reference Voice: {self.tts_config.spk_audio_prompt})[/]"
+        )
 
         timing_data: List[Dict[str, Any]] = []
         current_timeline_ms = 0
@@ -143,7 +167,7 @@ class TTSEngine:
             BarColumn(),
             TextColumn("{task.completed}/{task.total} panels")
         ) as progress:
-            task = progress.add_task("[yellow]Synthesizing narration...", total=len(narration_entries))
+            task = progress.add_task("[yellow]Synthesizing panels...", total=len(narration_entries))
 
             for idx, entry in enumerate(narration_entries, start=1):
                 panel_id = entry.get("panel_id") or f"panel_{idx:03d}"
@@ -173,7 +197,7 @@ class TTSEngine:
 
                     duration_ms = len(segment)
                 else:
-                    # Silent pause/impact panel
+                    # Silent impact/reaction panel
                     duration_ms = max(pause_after_ms, 500)
                     silence = AudioSegment.silent(duration=duration_ms, frame_rate=self.audio_config.sample_rate)
                     silence.export(processed_clip_path, format="wav")

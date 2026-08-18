@@ -1,68 +1,82 @@
 #!/usr/bin/env bash
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+echo "=== Initializing remanga Environment with uv ==="
 
-echo -e "\033[1;34m=== Initializing remanga Environment ===\033[0m"
-
-mkdir -p .tools
-
-# 1. Clean up broken or incomplete virtual environments if present
-if [ -d ".venv" ]; then
-    if [ ! -f ".venv/bin/python" ] && [ ! -f ".venv/bin/python3" ] && [ ! -f ".venv/Scripts/python.exe" ]; then
-        echo "Found broken or empty .venv directory, cleaning up..."
-        rm -rf .venv
-    fi
-fi
-
-# 2. Setup virtual environment
-if [ ! -d ".venv" ]; then
-    echo "Creating Python virtual environment..."
-    if command -v python3 >/dev/null 2>&1; then
-        python3 -m venv .venv || python3 -m venv --without-pip .venv
-    elif command -v python >/dev/null 2>&1; then
-        python -m venv .venv || python -m venv --without-pip .venv
+# 1. Install or locate uv (ultra-fast standalone Python & venv manager)
+if ! command -v uv >/dev/null 2>&1; then
+    if [ -f "$HOME/.local/bin/uv" ]; then
+        export PATH="$HOME/.local/bin:$PATH"
+    elif [ -f "$HOME/.cargo/bin/uv" ]; then
+        export PATH="$HOME/.cargo/bin:$PATH"
     else
-        echo "Error: Python 3 is not installed or not in PATH."
-        exit 1
+        echo "[+] Installing standalone uv tool..."
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
     fi
 fi
 
-# 3. Locate Python executable in .venv
-if [ -f ".venv/bin/python3" ]; then
-    VENV_PYTHON=".venv/bin/python3"
-elif [ -f ".venv/bin/python" ]; then
-    VENV_PYTHON=".venv/bin/python"
-elif [ -f ".venv/Scripts/python.exe" ]; then
-    VENV_PYTHON=".venv/Scripts/python.exe"
-else
-    echo "Error: Could not locate Python binary inside .venv."
+if ! command -v uv >/dev/null 2>&1; then
+    echo "[-] Failed to locate uv. Please ensure curl is installed and try again."
     exit 1
 fi
 
-# 4. Ensure pip is available inside the virtual environment
-if ! "$VENV_PYTHON" -m pip --version >/dev/null 2>&1; then
-    echo "Bootstrapping pip inside virtual environment..."
-    "$VENV_PYTHON" -m ensurepip --default-pip 2>/dev/null || {
-        echo "Downloading pip bootstrap utility..."
-        curl -sSL https://bootstrap.pypa.io/get-pip.py -o .tools/get-pip.py
-        "$VENV_PYTHON" .tools/get-pip.py
-        rm -f .tools/get-pip.py
-    }
-fi
+echo "[+] Using uv version: $(uv --version)"
 
-echo "Installing project dependencies..."
-"$VENV_PYTHON" -m pip install --upgrade pip
-"$VENV_PYTHON" -m pip install -e .
+# 2. Provision hermetic Python 3.11 runtime (avoids Python 3.14 build/header issues)
+echo "[+] Ensuring standalone Python 3.11 is provisioned..."
+uv python install 3.11
 
-# 5. Initialize config.json from config.example.json if not present
-if [ ! -f "config.json" ] && [ -f "config.example.json" ]; then
+# 3. Create isolated virtual environment
+VENV_DIR=".venv"
+echo "[+] Creating isolated virtual environment at $VENV_DIR with Python 3.11..."
+uv venv "$VENV_DIR" --python 3.11
+
+# 4. Install dependencies inside isolated venv using pre-compiled wheels
+echo "[+] Installing PyTorch, torchaudio, and remanga dependencies..."
+uv pip install --python "$VENV_DIR" -e .
+
+# 5. Initialize config.json from config.example.json if missing
+if [ ! -f "config.json" ]; then
+    echo "[+] Initializing config.json from config.example.json..."
     cp config.example.json config.json
-    echo "Created config.json from config.example.json"
 fi
 
-# 6. Set executable permissions
-chmod +x run.sh pipeline.sh bootstrap.sh 2>/dev/null || true
+# 6. Verify ffmpeg
+if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "[!] Warning: ffmpeg was not found on your system PATH."
+    echo "    On Ubuntu/Debian, install it via: sudo apt install ffmpeg"
+fi
 
-echo -e "\033[1;32m=== remanga Environment Ready! ===\033[0m"
+# 7. Check & Download IndexTTS-2.5 weights from Hugging Face
+CHECKPOINTS_DIR="checkpoints/indextts_2.5"
+if [ ! -f "$CHECKPOINTS_DIR/config.yaml" ]; then
+    echo "[+] IndexTTS-2.5 model weights not detected locally."
+    echo "[+] Automatically downloading IndexTeam/IndexTTS-2.5 from Hugging Face into $CHECKPOINTS_DIR..."
+    "$VENV_DIR/bin/python3" -c "
+from huggingface_hub import snapshot_download
+import os
+
+target_dir = '$CHECKPOINTS_DIR'
+os.makedirs(target_dir, exist_ok=True)
+print('Downloading snapshot from IndexTeam/IndexTTS-2.5...')
+snapshot_download(
+    repo_id='IndexTeam/IndexTTS-2.5',
+    local_dir=target_dir,
+    local_dir_use_symlinks=False
+)
+print('✓ IndexTTS-2.5 weights downloaded successfully!')
+"
+else
+    echo "[+] Found existing IndexTTS-2.5 model weights in $CHECKPOINTS_DIR."
+fi
+
+# 8. Create workspace directories
+mkdir -p assets/voices assets/bgm projects
+
+echo "=========================================================="
+echo "✓ remanga environment initialized successfully!"
+echo "  To use the CLI, run: ./run.sh --help"
+echo "  To start the guided workflow, run: ./pipeline.sh"
+echo "  Set your reference voice path in config.json ('spk_audio_prompt')"
+echo "=========================================================="

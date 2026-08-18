@@ -1,20 +1,19 @@
 # remanga
 
-**remanga** is an ultra-lightweight, modular, LLM-guided manga recap video production pipeline. Driven by standalone environment isolation, it streamlines manga downloading, AI-assisted panel coordinate cropping, zero-shot neural voice cloning with **IndexTTS-2.5**, clickless audio edge-fading, dynamic audio mastering, and GPU-accelerated video rendering with clean black canvas composition.
+**remanga** is an ultra-lightweight, modular, LLM-guided manga recap video production pipeline. Driven by standalone environment isolation powered by `uv`, it streamlines manga downloading, AI-assisted panel coordinate cropping, zero-shot neural voice cloning with **IndexTTS-2.5**, clickless audio edge-fading, dynamic audio mastering, and GPU-accelerated video rendering with clean black canvas composition.
 
 ---
 
 ## Key Features
 
-- **Zero Global Dependency Footprint:** Automatically provisions its own isolated Python environment and static `ffmpeg` binaries.
-- **MangaDex Downloader:** Direct chapter image fetching by manga title, UUID, or URL with rate-limiting backoff and URL reuse across chapters.
-- **IndexTTS-2.5 Vocal Synthesis:** State-of-the-art zero-shot voice cloning from any reference speaker audio (`narrator_default.wav`), 8-dimensional neural emotion conditioning, and 2.28× real-time factor acceleration.
-- **Lightweight Contact Sheets (`sheets.zip`):** Automatically compiles sequential panels into 2x2 labeled contact sheets packaged into `sheets.zip` to minimize LLM token usage during vision prompt analysis.
-- **Temporal Horizon Prompting:** LLM prompt framework strictly preventing premature character name reveals or forward plot spoilers before they visually and textually occur in the chapter.
-- **Dynamic Audio Mastering:** Per-panel micro edge-fading to eliminate digital clicks, optional background music looping with ducking, and broadcast EBU R128 loudness normalization.
-- **Lightweight Black Canvas Compositor:** Clean, centered, aspect-ratio-preserving panel composition on a solid `#000000` background.
-- **GPU Acceleration:** Automatic hardware encoding detection (`h264_nvenc`) with automatic CPU (`libx264`) fallback.
-- **Subtitle Generation:** Automatic time-aligned SRT subtitle creation from narration timing metadata.
+- **Hermetic Environment with `uv`:** Automatically installs standalone Python 3.11 and pre-compiled wheels, completely avoiding host Python 3.14 compilation errors and header conflicts.
+- **Automated IndexTTS-2.5 Model Fetching:** Automatically downloads official checkpoint weights from `IndexTeam/IndexTTS-2.5` on Hugging Face into `checkpoints/indextts_2.5/`.
+- **Zero-Shot Speaker Cloning:** Supply any 3–10s clean reference voice WAV path in `config.json` (`spk_audio_prompt`) or via `--voice` in CLI.
+- **8-Dimensional Neural Emotion Conditioning:** Dynamically maps 7 high-level recap emotion tags (`hype`, `tense`, `serious`, `shock`, `emotional`, `mysterious`, `neutral`) into IndexTTS emotion vectors.
+- **Lightweight Contact Sheets (`sheets.zip`):** Automatically packages cropped panels into 2x2 labeled contact sheets inside `sheets.zip` for maximum LLM vision token efficiency.
+- **Temporal Horizon Prompting:** Master recap prompt enforcing strict zero-spoiler rules (forbids using character names, relationships, or future plot reveals before they visually and textually occur).
+- **Audio Mastering & Normalization:** Per-panel micro edge-fading to eliminate digital clicks, optional background music looping with ducking, and broadcast EBU R128 loudness normalization.
+- **GPU-Accelerated Compositor & Renderer:** 1080p black canvas compositor with automatic NVENC GPU hardware encoding (`h264_nvenc`) and CPU fallback (`libx264`).
 
 ---
 
@@ -24,8 +23,10 @@
    ```bash
    bash bootstrap.sh
    ```
-2. **Download IndexTTS-2.5 Checkpoints:**
-   Place the IndexTTS-2.5 model weights into `checkpoints/indextts_2.5/` and your reference narrator voice audio at `assets/voices/narrator_default.wav`.
+   This automatically provisions `uv`, creates a nested Python 3.11 virtual environment, installs dependencies, downloads IndexTTS-2.5 from Hugging Face, and initializes `config.json`.
+
+2. **Set Your Reference Voice:**
+   Open `config.json` and set `spk_audio_prompt` to your reference WAV audio file (e.g. `assets/voices/my_voice.wav`).
 
 ---
 
@@ -36,7 +37,7 @@ Run the master interactive script:
 ```bash
 ./pipeline.sh
 ```
-Follow the terminal instructions. The script guides you through downloading pages, generating `crops.json`, cropping panels, packaging `sheets.zip`, generating `narration.json`, synthesizing IndexTTS-2.5 speech, mixing audio, and rendering the final recap MP4.
+Follow the terminal instructions to download chapters, crop panels, review `sheets.zip`, generate `narration.json`, synthesize speech, and render the final recap video.
 
 ---
 
@@ -70,6 +71,7 @@ projects/yandere_sister/chapters/chapter_1/narration.json
 ./run.sh tts --project "yandere_sister" --chapter "1"
 ./run.sh mix --project "yandere_sister" --chapter "1"
 ```
+*(Optional: override your reference voice on the fly with `--voice path/to/voice.wav`)*
 
 #### 6. Render Final Video
 ```bash

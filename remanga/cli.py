@@ -40,10 +40,15 @@ def display_status(project: str, chapter: str):
     audio_exist = (chap_dir / "master_audio.wav").exists()
     video_exist = (chap_dir / f"{project}_ch{chapter}_recap.mp4").exists()
 
+    config = RemangaConfig.load()
+    voice_path = Path(config.tts.spk_audio_prompt)
+    voice_status = f"[green]Configured ({voice_path})[/]" if voice_path.exists() else f"[yellow]Not found ({voice_path})[/]"
+
     status_str = f"""
 [bold cyan]Project:[/] {project} | [bold cyan]Chapter:[/] {chapter}
 [bold cyan]Saved Manga Source:[/] {saved_url}
 [bold]Workspace Directory:[/] {chap_dir.resolve()}
+[bold]Reference Voice Audio:[/] {voice_status}
 
   1. Pages Downloaded    : {'[green]✓ Yes (' + str(pages_count) + ' pages)[/]' if pages_count > 0 else '[red]✗ Missing[/]'}
   2. Pages ZIP Archive   : {'[green]✓ Ready (' + str(chap_dir / 'pages.zip') + ')[/]' if pages_zip_exist else '[dim yellow]✗ Not generated[/]'}
@@ -77,6 +82,7 @@ def main():
     p_tts = subparsers.add_parser("tts", help="Generate vocal audio via IndexTTS-2.5 from narration.json")
     p_tts.add_argument("--project", "-p", required=True, help="Project name")
     p_tts.add_argument("--chapter", "-c", required=True, help="Chapter number")
+    p_tts.add_argument("--voice", "-v", required=False, default=None, help="Override reference speaker WAV path")
 
     # mix
     p_mix = subparsers.add_parser("mix", help="Mix narration, apply edge fades, BGM, and normalize")
@@ -105,7 +111,7 @@ def main():
             cropper.crop_chapter_from_json(args.project, args.chapter)
         elif args.command == "tts":
             tts = TTSEngine(config.tts, config.audio)
-            tts.generate_narration_audio(args.project, args.chapter)
+            tts.generate_narration_audio(args.project, args.chapter, voice_override=args.voice)
         elif args.command == "mix":
             mixer = AudioProcessor(config.audio)
             mixer.mix_master_audio(args.project, args.chapter)

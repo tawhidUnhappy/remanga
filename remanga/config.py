@@ -20,7 +20,7 @@ class DownloaderConfig(BaseModel):
     max_retries: int = 3
     retry_delay_seconds: int = 2
     request_delay_seconds: float = 0.35  # Polite delay between page requests to protect MangaDex
-    create_zip: bool = true
+    create_zip: bool = True
 
 
 class CropperConfig(BaseModel):
@@ -35,9 +35,10 @@ class CropperConfig(BaseModel):
 
 class TTSConfig(BaseModel):
     engine: str = "indextts-2.5"
+    hf_repo_id: str = "IndexTeam/IndexTTS-2.5"
     model_dir: str = "checkpoints/indextts_2.5"
     cfg_path: str = "checkpoints/indextts_2.5/config.yaml"
-    spk_audio_prompt: str = "assets/voices/narrator_default.wav"
+    spk_audio_prompt: str = "assets/voices/my_narrator_voice.wav"
     lang: str = "EN"
     use_bf16: bool = True
     speed: float = 1.0

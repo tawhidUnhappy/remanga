@@ -110,7 +110,6 @@ class VideoRenderer:
                 duration = p["total_slot_sec"]
                 f.write(f"file '{frame_file.resolve()}'\n")
                 f.write(f"duration {duration}\n")
-            # Concat demuxer requirement: repeat last file once
             if panels:
                 last_frame = video_dir / "frames" / f"frame_{panels[-1]['panel_id']}.png"
                 f.write(f"file '{last_frame.resolve()}'\n")

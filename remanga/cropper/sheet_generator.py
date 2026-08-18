@@ -42,7 +42,6 @@ class PanelSheetGenerator:
         generated_sheets: List[Path] = []
         total_sheets = math.ceil(len(panel_paths) / panels_per_sheet)
 
-        # Try to load default font, fallback to basic bitmap font
         try:
             font = ImageFont.load_default()
         except Exception:
