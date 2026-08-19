@@ -76,7 +76,7 @@ class VideoRenderer:
         except Exception:
             return False
 
-    def render_video(self, project_name: str, chapter_num: str) -> Path:
+    def render_video(self, project_name: str, chapter_num: str, force: bool = False) -> Path:
         """
         Composites frames, generates subtitles, synchronizes with master audio,
         and renders final MP4 with GPU acceleration (or fallback CPU encoder).
@@ -87,11 +87,15 @@ class VideoRenderer:
         video_dir = chapter_dir / "video"
         final_video = chapter_dir / f"{project_name}_ch{chapter_num}_recap.mp4"
 
+        if not force and final_video.exists() and final_video.stat().st_size > 1000:
+            console.print(f"[bold green]✓ Recap video already rendered:[/] {final_video}")
+            return final_video
+
         if not master_audio.exists():
             raise FileNotFoundError(f"Master audio not found: {master_audio}")
 
         # 1. Composite frames to solid black canvas
-        self.compositor.prepare_composited_frames(project_name, chapter_num)
+        self.compositor.prepare_composited_frames(project_name, chapter_num, force=force)
 
         # 2. Generate Subtitles
         srt_path = self.generate_srt_subtitles(project_name, chapter_num)

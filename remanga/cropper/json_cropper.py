@@ -20,7 +20,7 @@ class CoordinateCropper:
     def _create_sheets_zip(self, chapter_dir: Path, panels_dir: Path, sheets_dir: Optional[Path]) -> Path:
         """
         Packages ONLY vision contact sheets and manifest into a lightweight sheets.zip.
-        Excludes raw panels to minimize upload size and LLM token usage.
+        Excludes raw panels to minimize upload size and LLM vision token consumption.
         """
         zip_filename = getattr(self.config, "zip_filename", "sheets.zip") or "sheets.zip"
         zip_path = chapter_dir / zip_filename
@@ -42,20 +42,23 @@ class CoordinateCropper:
         console.print(f"[bold green]✓ Created lightweight Sheets ZIP archive (ultra-small upload):[/] {zip_path}")
         return zip_path
 
-    def crop_chapter_from_json(self, project_name: str, chapter_num: str) -> List[Path]:
+    def crop_chapter_from_json(self, project_name: str, chapter_num: str, force: bool = False) -> List[Path]:
         """
         Reads crops.json in the chapter directory, crops panels, generates
         vision-friendly panel sheets, and packages sheets into sheets.zip.
+        Skips if already cropped and force is False.
         """
         chapter_dir = get_chapter_dir(project_name, chapter_num)
         crops_json_path = chapter_dir / "crops.json"
         pages_dir = chapter_dir / "pages"
         panels_dir = chapter_dir / "panels"
         sheets_dir = chapter_dir / "sheets"
+        manifest_path = chapter_dir / "panels_manifest.json"
+        sheets_zip = chapter_dir / "sheets.zip"
 
-        if not crops_json_path.exists() or crops_json_path.stat().st_size == 0:
+        if not crops_json_path.exists() or crops_json_path.stat().st_size <= 10:
             raise FileNotFoundError(
-                f"Missing crop instructions file: {crops_json_path}\n"
+                f"Missing or empty crop instructions file: {crops_json_path}\n"
                 f"Please paste your LLM-generated JSON into this placeholder file."
             )
 
@@ -65,7 +68,13 @@ class CoordinateCropper:
                 f"Please download the chapter pages first."
             )
 
-        # Clear existing panels directory
+        # RESUME CHECK: If panels already exist and force=False, verify and skip
+        existing_panels = sorted(list(panels_dir.glob("panel_*.*")))
+        if not force and existing_panels and manifest_path.exists() and sheets_zip.exists():
+            console.print(f"[bold green]✓ Found {len(existing_panels)} panels already cropped and sheets.zip ready! Skipping re-crop.[/]")
+            return existing_panels
+
+        # Clear existing panels directory before fresh cropping
         panels_dir.mkdir(parents=True, exist_ok=True)
         for old_file in list(panels_dir.glob("panel_*.*")):
             try:
@@ -144,7 +153,6 @@ class CoordinateCropper:
                     panel_counter += 1
 
         # Save manifest for downstream audio/video synchronization
-        manifest_path = chapter_dir / "panels_manifest.json"
         with open(manifest_path, "w", encoding="utf-8") as f:
             json.dump({
                 "chapter": str(chapter_num),

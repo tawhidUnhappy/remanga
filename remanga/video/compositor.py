@@ -52,8 +52,8 @@ class FrameCompositor:
 
         return output_path
 
-    def prepare_composited_frames(self, project_name: str, chapter_num: str) -> Path:
-        """Processes all cropped panels into full-resolution canvas frames."""
+    def prepare_composited_frames(self, project_name: str, chapter_num: str, force: bool = False) -> Path:
+        """Processes all cropped panels into full-resolution canvas frames with resume caching."""
         chapter_dir = get_chapter_dir(project_name, chapter_num)
         panels_dir = chapter_dir / "panels"
         frames_dir = chapter_dir / "video" / "frames"
@@ -64,8 +64,16 @@ class FrameCompositor:
             raise FileNotFoundError(f"No cropped panels found in: {panels_dir}")
 
         console.print(f"[cyan]Compositing {len(panels)} panels onto {self.config.width}x{self.config.height} black canvas...[/]")
+        reused_count = 0
+
         for p in panels:
             out_frame = frames_dir / f"frame_{p.stem}.png"
+            if not force and out_frame.exists() and out_frame.stat().st_size > 1000:
+                reused_count += 1
+                continue
             self.fit_image_on_canvas(p, out_frame)
+
+        if reused_count > 0:
+            console.print(f"[dim cyan](Reused {reused_count} existing composited frames)[/]")
 
         return frames_dir

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 import subprocess
 from pathlib import Path
@@ -41,7 +42,18 @@ class TTSEngine:
             console.print("[bold green]✓ IndexTTS-2.5 engine loaded successfully![/]")
             return self._model_instance
         except ImportError:
-            return None
+            try:
+                from indextts.infer_v2 import IndexTTS2  # type: ignore
+
+                console.print(f"[cyan]Initializing IndexTTS-2 model engine...[/]")
+                self._model_instance = IndexTTS2(
+                    cfg_path=str(cfg_path.resolve()),
+                    model_dir=str(model_dir.resolve()),
+                )
+                console.print("[bold green]✓ IndexTTS-2 engine loaded successfully![/]")
+                return self._model_instance
+            except Exception:
+                return None
         except Exception as e:
             console.print(f"[yellow]Direct IndexTTS-2.5 import warning: {e}. Falling back to CLI bridge.[/]")
             return None
@@ -54,35 +66,78 @@ class TTSEngine:
             return mapping[tag]
         return mapping.get("neutral", [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 0.8])
 
+    def _adjust_audio_speed(self, wav_path: Path, speed: float) -> None:
+        """Adjusts speaking tempo using pitch-preserving FFmpeg atempo filter."""
+        if abs(speed - 1.0) < 0.02 or not wav_path.exists():
+            return
+        temp_wav = wav_path.with_name(f"{wav_path.stem}_speedtmp.wav")
+        wav_path.rename(temp_wav)
+        tempo = max(0.5, min(2.0, speed))
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", str(temp_wav),
+            "-filter:a", f"atempo={tempo}",
+            "-ar", str(self.audio_config.sample_rate),
+            str(wav_path)
+        ]
+        try:
+            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if temp_wav.exists():
+                temp_wav.unlink()
+        except Exception:
+            if temp_wav.exists() and not wav_path.exists():
+                temp_wav.rename(wav_path)
+
     def _synthesize_indextts(self, text: str, emotion_tag: str, spk_prompt_path: str, output_wav: Path) -> None:
-        """Synthesizes speech using IndexTTS-2.5 with speaker cloning and emotion conditioning."""
+        """
+        Synthesizes speech using IndexTTS-2.5.
+        Passes only supported parameters to prevent Transformers generate() keyword crashes.
+        """
         model = self._get_model()
         emotion_vec = self._get_emotion_vector(emotion_tag)
 
         if model is not None:
-            model.infer(
-                spk_audio_prompt=spk_prompt_path,
-                text=text,
-                lang=self.tts_config.lang,
-                output_path=str(output_wav.resolve()),
-                speed=self.tts_config.speed,
-                temperature=self.tts_config.temperature,
-                top_p=self.tts_config.top_p,
-                emotion_vector=emotion_vec,
-            )
+            # Inspect infer() signature to pass only valid arguments
+            sig = inspect.signature(model.infer)
+            params = sig.parameters
+
+            call_kwargs: Dict[str, Any] = {
+                "spk_audio_prompt": spk_prompt_path,
+                "text": text,
+                "output_path": str(output_wav.resolve()),
+            }
+
+            # IndexTTS expects 'emo_vector' (not 'emotion_vector')
+            if "emo_vector" in params:
+                call_kwargs["emo_vector"] = emotion_vec
+            elif "emotion_vector" in params:
+                call_kwargs["emotion_vector"] = emotion_vec
+
+            # Safe generation kwargs for Hugging Face Transformers
+            if self.tts_config.temperature is not None:
+                call_kwargs["temperature"] = float(self.tts_config.temperature)
+            if self.tts_config.top_p is not None:
+                call_kwargs["top_p"] = float(self.tts_config.top_p)
+
+            model.infer(**call_kwargs)
+
+            # Apply speed adjustment if requested
+            if abs(self.tts_config.speed - 1.0) >= 0.02:
+                self._adjust_audio_speed(output_wav, self.tts_config.speed)
         else:
+            # Fallback CLI bridge
             cmd = [
                 "python", "-m", "indextts.infer_v2_5",
                 "--cfg_path", str(Path(self.tts_config.cfg_path).resolve()),
                 "--model_dir", str(Path(self.tts_config.model_dir).resolve()),
                 "--spk_audio_prompt", spk_prompt_path,
                 "--text", text,
-                "--lang", self.tts_config.lang,
                 "--output_path", str(output_wav.resolve()),
-                "--speed", str(self.tts_config.speed),
             ]
             try:
                 subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                if abs(self.tts_config.speed - 1.0) >= 0.02:
+                    self._adjust_audio_speed(output_wav, self.tts_config.speed)
             except Exception as ex:
                 console.print(f"[dim yellow]Synthesis fallback triggered ({ex}). Generating timing slot...[/]")
                 word_count = max(1, len(text.split()))
@@ -96,10 +151,12 @@ class TTSEngine:
         chapter_num: str,
         voice_override: Optional[str] = None,
         interactive: bool = True,
+        force: bool = False,
     ) -> Path:
         """
-        Reads narration.json, validates the reference voice (prompting if needed),
-        synthesizes speech per panel with IndexTTS-2.5, applies micro edge-fades, and writes audio_timing.json.
+        Reads narration.json, validates the reference voice, synthesizes speech per panel with IndexTTS-2.5,
+        applies micro edge-fades, and writes audio_timing.json.
+        Resumes automatically: skips already synthesized panels unless force=True.
         """
         full_config = RemangaConfig.load()
         if voice_override:
@@ -134,13 +191,14 @@ class TTSEngine:
 
         timing_data: List[Dict[str, Any]] = []
         current_timeline_ms = 0
+        resumed_count = 0
 
         with Progress(
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
             TextColumn("{task.completed}/{task.total} panels")
         ) as progress:
-            task = progress.add_task("[yellow]Synthesizing panels...", total=len(narration_entries))
+            task = progress.add_task("[yellow]Synthesizing vocal tracks...", total=len(narration_entries))
 
             for idx, entry in enumerate(narration_entries, start=1):
                 panel_id = entry.get("panel_id") or f"panel_{idx:03d}"
@@ -151,30 +209,36 @@ class TTSEngine:
                 raw_clip_path = audio_dir / f"{panel_id}_raw.wav"
                 processed_clip_path = audio_dir / f"{panel_id}.wav"
 
-                if text:
-                    self._synthesize_indextts(
-                        text=text,
-                        emotion_tag=emotion,
-                        spk_prompt_path=spk_prompt_path,
-                        output_wav=raw_clip_path,
-                    )
-
-                    segment = AudioSegment.from_file(raw_clip_path)
-                    segment = segment.set_frame_rate(self.audio_config.sample_rate).set_channels(1)
-
-                    if self.audio_config.edge_fade_ms > 0 and len(segment) > (self.audio_config.edge_fade_ms * 2):
-                        segment = segment.fade_in(self.audio_config.edge_fade_ms).fade_out(self.audio_config.edge_fade_ms)
-
-                    segment.export(processed_clip_path, format="wav")
-
-                    if raw_clip_path.exists():
-                        raw_clip_path.unlink()
-
+                # RESUME GUARD: Check if already synthesized
+                if not force and processed_clip_path.exists() and processed_clip_path.stat().st_size > 1000:
+                    segment = AudioSegment.from_file(processed_clip_path)
                     duration_ms = len(segment)
+                    resumed_count += 1
                 else:
-                    duration_ms = max(pause_after_ms, 500)
-                    silence = AudioSegment.silent(duration=duration_ms, frame_rate=self.audio_config.sample_rate)
-                    silence.export(processed_clip_path, format="wav")
+                    if text:
+                        self._synthesize_indextts(
+                            text=text,
+                            emotion_tag=emotion,
+                            spk_prompt_path=spk_prompt_path,
+                            output_wav=raw_clip_path,
+                        )
+
+                        segment = AudioSegment.from_file(raw_clip_path)
+                        segment = segment.set_frame_rate(self.audio_config.sample_rate).set_channels(1)
+
+                        if self.audio_config.edge_fade_ms > 0 and len(segment) > (self.audio_config.edge_fade_ms * 2):
+                            segment = segment.fade_in(self.audio_config.edge_fade_ms).fade_out(self.audio_config.edge_fade_ms)
+
+                        segment.export(processed_clip_path, format="wav")
+
+                        if raw_clip_path.exists():
+                            raw_clip_path.unlink()
+
+                        duration_ms = len(segment)
+                    else:
+                        duration_ms = max(pause_after_ms, 500)
+                        silence = AudioSegment.silent(duration=duration_ms, frame_rate=self.audio_config.sample_rate)
+                        silence.export(processed_clip_path, format="wav")
 
                 start_ms = current_timeline_ms
                 end_ms = start_ms + duration_ms
@@ -208,5 +272,7 @@ class TTSEngine:
                 "panels": timing_data
             }, f, indent=2)
 
-        console.print(f"[bold green]✓ Synthesized IndexTTS-2.5 audio for {len(narration_entries)} panels![/]")
+        if resumed_count > 0:
+            console.print(f"[dim cyan](Resumed {resumed_count} existing audio clips without re-generating)[/]")
+        console.print(f"[bold green]✓ Voice audio synthesized and synchronized for {len(narration_entries)} panels![/]")
         return timing_manifest_path

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
@@ -203,9 +204,15 @@ class RemangaConfig(BaseModel):
                 console.print(f"[bold red]✗ Audio file not found:[/] {test_path}. Please try again.")
 
 
+def get_projects_dir() -> Path:
+    p = Path("projects")
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
 def get_project_dir(project_name: str) -> Path:
     clean_proj = str(project_name).strip().replace("/", "_").replace("\\", "_")
-    return Path("projects") / clean_proj
+    return get_projects_dir() / clean_proj
 
 
 def get_chapter_dir(project_name: str, chapter_num: str) -> Path:
@@ -235,3 +242,108 @@ def save_project_metadata(project_name: str, data: Dict[str, Any]) -> None:
     existing.update(data)
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(existing, f, indent=2)
+
+
+def list_projects() -> List[Dict[str, Any]]:
+    """Discovers and summarizes all projects in the projects/ root."""
+    root = get_projects_dir()
+    results = []
+    if not root.exists():
+        return results
+
+    for p in sorted(root.iterdir()):
+        if p.is_dir():
+            meta = load_project_metadata(p.name)
+            chapters_dir = p / "chapters"
+            chapters = []
+            if chapters_dir.exists():
+                for c in sorted(chapters_dir.iterdir()):
+                    if c.is_dir() and c.name.startswith("chapter_"):
+                        ch_num = c.name.replace("chapter_", "")
+                        chapters.append(ch_num)
+            results.append({
+                "name": p.name,
+                "path": p,
+                "manga_url": meta.get("manga_url", ""),
+                "manga_id": meta.get("manga_id", ""),
+                "last_chapter": meta.get("last_chapter", ""),
+                "chapters": chapters,
+            })
+    return results
+
+
+def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
+    """Inspects all production artifacts for a specific chapter."""
+    chap_dir = get_chapter_dir(project_name, chapter_num)
+    pages_dir = chap_dir / "pages"
+    panels_dir = chap_dir / "panels"
+    sheets_dir = chap_dir / "sheets"
+    audio_dir = chap_dir / "audio"
+    video_dir = chap_dir / "video"
+
+    pages_count = len(list(pages_dir.glob("page_*.*"))) if pages_dir.exists() else 0
+    pages_zip_exist = (chap_dir / "pages.zip").exists()
+    crops_file = chap_dir / "crops.json"
+    crops_exist = crops_file.exists() and crops_file.stat().st_size > 10
+
+    panels_count = len(list(panels_dir.glob("panel_*.*"))) if panels_dir.exists() else 0
+    sheets_count = len(list(sheets_dir.glob("sheet_*.*"))) if sheets_dir.exists() else 0
+    sheets_zip_exist = (chap_dir / "sheets.zip").exists()
+
+    narration_file = chap_dir / "narration.json"
+    narration_exist = narration_file.exists() and narration_file.stat().st_size > 10
+    total_narration_entries = 0
+    if narration_exist:
+        try:
+            with open(narration_file, "r", encoding="utf-8") as f:
+                n_data = json.load(f)
+                total_narration_entries = len(n_data.get("narration", []))
+        except Exception:
+            pass
+
+    audio_clips_count = len(list(audio_dir.glob("panel_*.wav"))) if audio_dir.exists() else 0
+    timing_exist = (chap_dir / "audio_timing.json").exists()
+    master_audio_exist = (chap_dir / "master_audio.wav").exists()
+
+    final_video_path = chap_dir / f"{project_name}_ch{chapter_num}_recap.mp4"
+    video_exist = final_video_path.exists() and final_video_path.stat().st_size > 1000
+
+    # Determine stage summary
+    if video_exist:
+        summary = "Recap Ready"
+    elif master_audio_exist:
+        summary = "Audio Ready (Pending Render)"
+    elif total_narration_entries > 0 and audio_clips_count >= total_narration_entries:
+        summary = "TTS Ready (Pending Mix)"
+    elif total_narration_entries > 0 and audio_clips_count > 0:
+        summary = f"TTS In-Progress ({audio_clips_count}/{total_narration_entries})"
+    elif narration_exist:
+        summary = "Narration Script Ready"
+    elif sheets_zip_exist or panels_count > 0:
+        summary = f"Cropped ({panels_count} panels)"
+    elif crops_exist:
+        summary = "Crops JSON Ready"
+    elif pages_count > 0:
+        summary = f"Pages Ready ({pages_count} pages)"
+    else:
+        summary = "Not Started"
+
+    return {
+        "project": project_name,
+        "chapter": str(chapter_num),
+        "chap_dir": chap_dir,
+        "pages_count": pages_count,
+        "pages_zip_exist": pages_zip_exist,
+        "crops_exist": crops_exist,
+        "panels_count": panels_count,
+        "sheets_count": sheets_count,
+        "sheets_zip_exist": sheets_zip_exist,
+        "narration_exist": narration_exist,
+        "total_narration_entries": total_narration_entries,
+        "audio_clips_count": audio_clips_count,
+        "timing_exist": timing_exist,
+        "master_audio_exist": master_audio_exist,
+        "video_exist": video_exist,
+        "video_path": final_video_path,
+        "summary": summary,
+    }
