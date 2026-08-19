@@ -21,8 +21,8 @@ from remanga.video import VideoRenderer
 console = Console()
 
 
-def _select_or_create_project() -> str:
-    """Interactively displays existing projects in a table and allows selection or new creation."""
+def _select_or_create_project(config: RemangaConfig) -> str:
+    """Interactively displays existing projects or configuration setup option."""
     existing_projects = list_projects()
 
     if existing_projects:
@@ -38,10 +38,13 @@ def _select_or_create_project() -> str:
             table.add_row(str(idx), p["name"], chaps_str, src_str[:55] + ("..." if len(src_str) > 55 else ""))
 
         console.print(table)
-        console.print("[dim]Select a project number, or type 'n' to create a new project.[/]\n")
+        console.print("[dim]Select a project number, 'n' for new project, or 's' to configure settings (Voice/BGM/Resolution/Blur).[/]\n")
 
         choice = Prompt.ask("[bold cyan]Choose project number or enter new project name[/]", default="1").strip()
-        if choice.isdigit():
+        if choice.lower() == "s":
+            config.run_setup_wizard()
+            return _select_or_create_project(config)
+        elif choice.isdigit():
             idx = int(choice)
             if 1 <= idx <= len(existing_projects):
                 return existing_projects[idx - 1]["name"]
@@ -81,13 +84,13 @@ def _select_chapter(project_name: str) -> str:
 
 
 def run_interactive_pipeline():
-    """Master interactive production wizard with full project discovery, resume guards, and power-cut recovery."""
+    """Master interactive production wizard with project discovery, resume guards, and setup option."""
     console.print(Panel("[bold magenta]✨ remanga: Interactive Recap Production Engine (IndexTTS-2.5)[/]", border_style="magenta"))
 
     config = RemangaConfig.load()
 
-    # 1. Project Selection / Creation
-    project = _select_or_create_project()
+    # 1. Project Selection / Creation / Settings
+    project = _select_or_create_project(config)
     meta = load_project_metadata(project)
     saved_url = meta.get("manga_url", "")
 
@@ -105,7 +108,8 @@ def run_interactive_pipeline():
     # 3. Status Overview
     status = get_chapter_status(project, chapter)
     console.print(f"\n[bold]Current Chapter Workspace:[/] {chap_dir.resolve()}")
-    console.print(f"[bold]Current Chapter Status:[/] [{'green' if 'Ready' in status['summary'] else 'yellow'}]{status['summary']}[/]\n")
+    console.print(f"[bold]Current Chapter Status:[/] [{'green' if 'Ready' in status['summary'] else 'yellow'}]{status['summary']}[/]")
+    console.print(f"[bold]Render Output:[/] {config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)\n")
 
     # 4. Reference Voice & BGM Path Validation
     config.ensure_valid_voice_prompt(interactive=True)
@@ -172,15 +176,16 @@ def run_interactive_pipeline():
     mixer.mix_master_audio(project, chapter, interactive=True)
 
     # =========================================================================
-    # Step 7: Render Final 1080p Recap MP4
+    # Step 7: Render Final Video (1080p / 2K / 4K)
     # =========================================================================
-    console.print(f"\n[bold blue]=== Step 5: Rendering Final 1080p Recap Video ===[/]")
+    console.print(f"\n[bold blue]=== Step 5: Rendering Final {config.video.height}p Recap Video ===[/]")
     renderer = VideoRenderer(config.system, config.video)
     final_video = renderer.render_video(project, chapter)
 
     console.print(Panel(
         f"[bold green]🎉 Recap Video Production Complete![/]\n\n"
-        f"[bold white]Output File:[/] {final_video.resolve()}",
+        f"[bold white]Output File:[/] {final_video.resolve()}\n"
+        f"[bold white]Resolution:[/] {config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)",
         title="[bold green]Success[/]",
         border_style="green"
     ))

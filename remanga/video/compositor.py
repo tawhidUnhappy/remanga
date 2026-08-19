@@ -20,7 +20,7 @@ class FrameCompositor:
     def _create_fast_canvas_blur(self, src_img: Image.Image) -> Image.Image:
         """
         CapCut-Style Ultra-Fast Canvas Bokeh Blur:
-        Downsamples to 64x36, applies a tiny blur kernel, upscales to 1920x1080, and dims.
+        Downsamples to 64x36, applies a tiny blur kernel, upscales to full canvas, and dims.
         Executes in < 1.5ms per frame with zero CPU bottleneck.
         """
         cw, ch = self.canvas_size
@@ -42,10 +42,10 @@ class FrameCompositor:
         tiny = cropped_cover.resize((tiny_w, tiny_h), Image.Resampling.BILINEAR)
         tiny_blurred = tiny.filter(ImageFilter.GaussianBlur(radius=2))
 
-        # 3. Upscale back to 1080p canvas
+        # 3. Upscale back to full canvas
         blurred_canvas = tiny_blurred.resize((cw, ch), Image.Resampling.BICUBIC)
 
-        # 4. Apply brightness dimming so foreground panel and subtitles pop clearly
+        # 4. Apply brightness dimming so foreground panel pops clearly
         dim_factor = max(0.1, min(1.0, getattr(self.config, "blur_brightness", 0.42)))
         enhancer = ImageEnhance.Brightness(blurred_canvas)
         dark_blurred_canvas = enhancer.enhance(dim_factor)
@@ -56,18 +56,17 @@ class FrameCompositor:
         """
         Calculates recommended adaptive margins per panel aspect ratio:
         - Wide tiers: maximizes horizontal width while preserving breathing gutters.
-        - Vertical splashes: maintains safe headroom and leaves clearance for subtitles at the bottom.
+        - Vertical splashes: maintains safe vertical headroom, centered on screen.
         """
         cw, ch = self.canvas_size
         aspect = img_w / max(1, img_h)
 
-        # Subtitle safe zone clearance at bottom (60-120px)
-        subtitle_clearance = getattr(self.config, "subtitle_bottom_margin", 60) + 70 if self.config.render_subtitles else 40
         top_margin = 36
+        bottom_margin = 36
         side_margin = 48
 
         avail_w = cw - (side_margin * 2)
-        avail_h = ch - top_margin - subtitle_clearance
+        avail_h = ch - (top_margin + bottom_margin)
 
         # Adaptive fitting
         if aspect > 1.6:
@@ -84,7 +83,6 @@ class FrameCompositor:
         new_h = max(1, int(img_h * fit_scale))
 
         offset_x = (cw - new_w) // 2
-        # Position panel above subtitle safe-zone
         offset_y = top_margin + (avail_h - new_h) // 2
 
         return (new_w, new_h, offset_x, offset_y)
@@ -149,7 +147,7 @@ class FrameCompositor:
             raise FileNotFoundError(f"No cropped panels found in: {panels_dir}")
 
         bg_mode = getattr(self.config, "background_style", "blur")
-        console.print(f"[cyan]Compositing {len(panels)} panels onto 1080p canvas (Mode: {bg_mode}, Adaptive Margins)...[/]")
+        console.print(f"[cyan]Compositing {len(panels)} panels onto {self.config.width}x{self.config.height} canvas (Mode: {bg_mode})...[/]")
         reused_count = 0
 
         for p in panels:

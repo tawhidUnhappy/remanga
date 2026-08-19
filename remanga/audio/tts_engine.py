@@ -101,7 +101,6 @@ class TTSEngine:
             sig = inspect.signature(model.infer)
             params = sig.parameters
 
-            # Core positional/required kwargs
             call_kwargs: Dict[str, Any] = {
                 "spk_audio_prompt": spk_prompt_path,
                 "text": text,
@@ -109,17 +108,14 @@ class TTSEngine:
                 "output_path": str(output_wav.resolve()),
             }
 
-            # IndexTTS emotion conditioning
             if "emo_vector" in params:
                 call_kwargs["emo_vector"] = emotion_vec
             elif "emotion_vector" in params:
                 call_kwargs["emotion_vector"] = emotion_vec
 
-            # Duration factor in IndexTTS-2.5 (if supported)
             if "duration_factor" in params and abs(self.tts_config.speed - 1.0) >= 0.02:
                 call_kwargs["duration_factor"] = round(1.0 / self.tts_config.speed, 3)
 
-            # Safe generation kwargs for transformers
             if "temperature" in params or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()):
                 if self.tts_config.temperature is not None:
                     call_kwargs["temperature"] = float(self.tts_config.temperature)
@@ -129,11 +125,9 @@ class TTSEngine:
 
             model.infer(**call_kwargs)
 
-            # Fallback speed adjustment if duration_factor was not directly in model.infer
             if "duration_factor" not in params and abs(self.tts_config.speed - 1.0) >= 0.02:
                 self._adjust_audio_speed(output_wav, self.tts_config.speed)
         else:
-            # Fallback CLI bridge
             cmd = [
                 "python", "-m", "indextts.infer_v2_5",
                 "--cfg_path", str(Path(self.tts_config.cfg_path).resolve()),

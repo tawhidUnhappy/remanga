@@ -58,14 +58,12 @@
     "width": 1920,
     "height": 1080,
     "fps": 30,
+    "background_style": "blur",
+    "blur_brightness": 0.42,
     "background_color": "#000000",
-    "panel_padding_percent": 3,
-    "render_subtitles": true,
-    "font_name": "DejaVuSans-Bold",
-    "font_size": 48,
-    "subtitle_color": "&H00FFFFFF",
-    "subtitle_outline_color": "&H00000000",
-    "subtitle_outline_width": 3,
-    "subtitle_bottom_margin": 60
+    "panel_padding_percent": 4,
+    "auto_adaptive_padding": true,
+    "panel_border_width": 2,
+    "panel_border_color": "#222222"
   }
 }

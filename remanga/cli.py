@@ -39,10 +39,13 @@ def display_status(project: str, chapter: str):
     bgm_path = Path(config.audio.bgm_path).expanduser() if config.audio.bgm_path else None
     bgm_status = f"[green]Enabled ({bgm_path})[/]" if (config.audio.bgm_enabled and bgm_path and bgm_path.exists()) else "[dim]Disabled / None[/]"
 
+    res_str = f"{config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)"
+
     status_str = f"""
 [bold cyan]Project:[/] {project} | [bold cyan]Chapter:[/] {chapter}
 [bold cyan]Saved Manga Source:[/] {saved_url}
 [bold]Workspace Directory:[/] {st['chap_dir'].resolve()}
+[bold]Video Resolution:[/] {res_str}
 [bold]Reference Voice Audio:[/] {voice_status}
 [bold]Background Music:[/] {bgm_status}
 
@@ -65,6 +68,9 @@ def main():
 
     # interactive wizard
     subparsers.add_parser("interactive", help="Start interactive step-by-step production wizard")
+
+    # setup configuration
+    subparsers.add_parser("setup-config", help="Walkthrough configuration setup (voice, BGM, resolution, blur)")
 
     # setup models
     subparsers.add_parser("setup-models", help="Verify and download model weights with SHA-256 verification")
@@ -111,6 +117,8 @@ def main():
     try:
         if args.command in ("interactive", None):
             run_interactive_pipeline()
+        elif args.command == "setup-config":
+            config.run_setup_wizard()
         elif args.command == "setup-models":
             mgr = ModelManager(config.tts.model_dir, config.tts.hf_repo_id)
             mgr.ensure_model()

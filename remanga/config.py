@@ -5,7 +5,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 from rich.console import Console
+from rich.panel import Panel
 from rich.prompt import Prompt, Confirm
+from rich.table import Table
 
 console = Console()
 
@@ -83,13 +85,6 @@ class VideoConfig(BaseModel):
     auto_adaptive_padding: bool = True
     panel_border_width: int = 2
     panel_border_color: str = "#222222"
-    render_subtitles: bool = True
-    font_name: str = "DejaVuSans-Bold"
-    font_size: int = 48
-    subtitle_color: str = "&H00FFFFFF"
-    subtitle_outline_color: str = "&H00000000"
-    subtitle_outline_width: int = 3
-    subtitle_bottom_margin: int = 60
 
 
 class RemangaConfig(BaseModel):
@@ -119,6 +114,167 @@ class RemangaConfig(BaseModel):
         target_path.parent.mkdir(parents=True, exist_ok=True)
         with open(target_path, "w", encoding="utf-8") as f:
             json.dump(self.model_dump(), f, indent=2)
+
+    def run_setup_wizard(self) -> "RemangaConfig":
+        """
+        Interactive step-by-step configuration wizard.
+        Guides the user through Voice reference, BGM, YouTube quality/resolution, canvas blur, and rendering.
+        """
+        console.print(Panel(
+            "[bold cyan]⚙️  remanga Production Settings Setup Wizard[/]\n"
+            "[dim]Configure vocal reference, background music, video resolution, and canvas background style.[/]",
+            border_style="cyan"
+        ))
+
+        # 1. Reference Vocal Audio (Voice Cloning)
+        console.print("\n[bold yellow]1. Reference Speaker Voice (IndexTTS-2.5 Cloning)[/]")
+        console.print("[dim]Provide a clean 3-10 second WAV file of the target voice.[/]")
+        curr_voice = self.tts.spk_audio_prompt
+        if curr_voice and Path(curr_voice).expanduser().exists():
+            console.print(f"Current Voice: [green]{curr_voice}[/]")
+            if Confirm.ask("Keep current reference voice?", default=True):
+                pass
+            else:
+                self.ensure_valid_voice_prompt(interactive=True)
+        else:
+            self.ensure_valid_voice_prompt(interactive=True)
+
+        # 2. Voice Language Selection
+        console.print("\n[bold yellow]2. Voice Language[/]")
+        lang_table = Table(border_style="blue", show_header=True)
+        lang_table.add_column("#", style="bold yellow", width=4)
+        lang_table.add_column("Language", style="bold white")
+        lang_table.add_column("Code", style="cyan")
+
+        languages = [
+            ("1", "English", "EN"),
+            ("2", "Japanese", "JA"),
+            ("3", "Chinese (Mandarin)", "ZH"),
+            ("4", "Spanish", "ES"),
+            ("5", "Arabic", "AR"),
+        ]
+        for num, name, code in languages:
+            lang_table.add_row(num, name, code)
+        console.print(lang_table)
+
+        curr_lang = self.tts.lang.upper()
+        default_lang_num = next((num for num, _, code in languages if code == curr_lang), "1")
+        lang_choice = Prompt.ask("[bold cyan]Select narration language[/]", default=default_lang_num).strip()
+        matched_lang = next((code for num, _, code in languages if num == lang_choice or code.lower() == lang_choice.lower()), "EN")
+        self.tts.lang = matched_lang
+        console.print(f"[green]✓ Language set to:[/] {matched_lang}")
+
+        # 3. Background Music (BGM)
+        console.print("\n[bold yellow]3. Background Music (BGM)[/]")
+        enable_bgm = Confirm.ask("Enable background music track for recaps?", default=self.audio.bgm_enabled)
+        self.audio.bgm_enabled = enable_bgm
+        if enable_bgm:
+            while True:
+                curr_bgm = self.audio.bgm_path or ""
+                bgm_input = Prompt.ask("[bold cyan]Enter path to BGM audio file (MP3/WAV/AAC)[/]", default=curr_bgm).strip().strip("'\"")
+                if bgm_input:
+                    p = Path(bgm_input).expanduser()
+                    if p.exists() and p.is_file():
+                        self.audio.bgm_path = str(p.resolve())
+                        console.print(f"[green]✓ BGM path saved:[/] {self.audio.bgm_path}")
+                        break
+                    else:
+                        console.print(f"[red]File not found:[/] {p}. Please enter a valid file path.")
+                else:
+                    self.audio.bgm_enabled = False
+                    console.print("[yellow]No path entered. BGM disabled.[/]")
+                    break
+
+            if self.audio.bgm_enabled:
+                vol_str = Prompt.ask("[bold cyan]BGM Volume Gain in dB (recommended -22 to -18 dB)[/]", default=str(self.audio.bgm_volume_db))
+                try:
+                    self.audio.bgm_volume_db = float(vol_str)
+                except ValueError:
+                    self.audio.bgm_volume_db = -22.0
+
+        # 4. YouTube Quality / Video Resolution Presets
+        console.print("\n[bold yellow]4. YouTube Quality & Video Resolution[/]")
+        res_table = Table(title="Available Resolution Presets", border_style="blue")
+        res_table.add_column("#", style="bold yellow", width=4)
+        res_table.add_column("Preset Quality", style="bold white")
+        res_table.add_column("Resolution", style="cyan")
+        res_table.add_column("Description", style="dim")
+
+        resolutions = [
+            ("1", "1080p Full HD", "1920x1080", "Standard YouTube 1080p broadcast [Recommended]", 1920, 1080),
+            ("2", "1440p 2K QHD", "2560x1440", "High clarity & higher YouTube VP9/AV1 bitrate allocation", 2560, 1440),
+            ("3", "2160p 4K UHD", "3840x2160", "Maximum ultra HD clarity & master render quality", 3840, 2160),
+            ("4", "720p HD", "1280x720", "Ultra-fast rendering / lightweight preview quality", 1280, 720),
+            ("5", "Custom", "Custom", "Specify custom width and height", 0, 0),
+        ]
+
+        for num, title, res, desc, _, _ in resolutions:
+            res_table.add_row(num, title, res, desc)
+        console.print(res_table)
+
+        curr_res_str = f"{self.video.width}x{self.video.height}"
+        default_res_num = next((num for num, _, res, _, _, _ in resolutions if res == curr_res_str), "1")
+
+        res_choice = Prompt.ask("[bold cyan]Choose video resolution preset[/]", default=default_res_num).strip()
+        selected_preset = next((item for item in resolutions if item[0] == res_choice), resolutions[0])
+
+        if selected_preset[0] == "5":
+            w = int(Prompt.ask("Enter width in pixels", default="1920"))
+            h = int(Prompt.ask("Enter height in pixels", default="1080"))
+            self.video.width = w
+            self.video.height = h
+        else:
+            _, _, _, _, w, h = selected_preset
+            self.video.width = w
+            self.video.height = h
+
+        console.print(f"[green]✓ Resolution configured:[/] {self.video.width}x{self.video.height}")
+
+        # 5. Canvas Background Style (CapCut Blur vs Solid Black)
+        console.print("\n[bold yellow]5. Canvas Background Style[/]")
+        bg_table = Table(border_style="blue")
+        bg_table.add_column("#", style="bold yellow", width=4)
+        bg_table.add_column("Background Style", style="bold white")
+        bg_table.add_column("Description", style="dim")
+
+        bg_styles = [
+            ("1", "CapCut-Style Fast Bokeh Canvas Blur", "Dynamic blurred background of the current panel (<1.5ms) [Recommended]"),
+            ("2", "Solid Black Canvas", "Traditional solid black background (#000000)"),
+        ]
+        for num, title, desc in bg_styles:
+            bg_table.add_row(num, title, desc)
+        console.print(bg_table)
+
+        default_bg_num = "1" if self.video.background_style == "blur" else "2"
+        bg_choice = Prompt.ask("[bold cyan]Choose background style[/]", default=default_bg_num).strip()
+        if bg_choice == "2":
+            self.video.background_style = "solid"
+            console.print("[green]✓ Background set to:[/] Solid Black (#000000)")
+        else:
+            self.video.background_style = "blur"
+            console.print("[green]✓ Background set to:[/] CapCut-Style Fast Bokeh Canvas Blur")
+
+        # 6. Hardware Acceleration
+        console.print("\n[bold yellow]6. Hardware Acceleration[/]")
+        self.system.prefer_gpu = Confirm.ask("Prefer NVIDIA GPU Hardware Acceleration (NVENC)?", default=self.system.prefer_gpu)
+
+        # Save Configuration
+        self.save()
+
+        summary_table = Table(title="[bold green]✓ Updated Production Settings (config.json)[/]", border_style="green")
+        summary_table.add_column("Setting", style="bold white")
+        summary_table.add_column("Value", style="cyan")
+
+        summary_table.add_row("Resolution", f"{self.video.width}x{self.video.height} @ {self.video.fps}fps")
+        summary_table.add_row("Background Style", f"{self.video.background_style.title()} (Bokeh Canvas Blur)" if self.video.background_style == "blur" else "Solid Black")
+        summary_table.add_row("Narration Language", self.tts.lang.upper())
+        summary_table.add_row("Reference Speaker Voice", str(Path(self.tts.spk_audio_prompt).name) if self.tts.spk_audio_prompt else "[red]Not configured[/]")
+        summary_table.add_row("Background Music (BGM)", f"Enabled ({Path(self.audio.bgm_path).name}, {self.audio.bgm_volume_db}dB)" if self.audio.bgm_enabled else "Disabled")
+        summary_table.add_row("GPU Codec", f"{self.system.gpu_codec} (Fallback: {self.system.fallback_codec})")
+
+        console.print(summary_table)
+        console.print("[bold green]All settings successfully saved to config.json![/]\n")
+        return self
 
     def ensure_valid_voice_prompt(self, interactive: bool = True) -> str:
         raw_path = self.tts.spk_audio_prompt.strip()
