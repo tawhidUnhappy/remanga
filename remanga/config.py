@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
@@ -77,8 +76,13 @@ class VideoConfig(BaseModel):
     width: int = 1920
     height: int = 1080
     fps: int = 30
+    background_style: str = "blur"  # 'blur' (CapCut-style fast bokeh blur) or 'solid' (black canvas)
+    blur_brightness: float = 0.42   # Dimming multiplier for canvas blur (0.35 to 0.55 recommended)
     background_color: str = "#000000"
-    panel_padding_percent: int = 3
+    panel_padding_percent: int = 4
+    auto_adaptive_padding: bool = True
+    panel_border_width: int = 2
+    panel_border_color: str = "#222222"
     render_subtitles: bool = True
     font_name: str = "DejaVuSans-Bold"
     font_size: int = 48
@@ -117,11 +121,6 @@ class RemangaConfig(BaseModel):
             json.dump(self.model_dump(), f, indent=2)
 
     def ensure_valid_voice_prompt(self, interactive: bool = True) -> str:
-        """
-        Validates the configured reference voice WAV path.
-        If missing or invalid, prompts the user via terminal in a loop until a valid path is given,
-        then automatically saves it to config.json.
-        """
         raw_path = self.tts.spk_audio_prompt.strip()
         if raw_path:
             p = Path(raw_path).expanduser()
@@ -156,10 +155,6 @@ class RemangaConfig(BaseModel):
                 console.print(f"[bold red]✗ File not found or empty:[/] {test_path}. Please try again.")
 
     def ensure_valid_bgm(self, interactive: bool = True) -> Optional[str]:
-        """
-        Validates background music configuration.
-        If enabled but path is invalid, interactively prompts for path or allows disabling BGM.
-        """
         if not self.audio.bgm_enabled:
             return None
 
@@ -245,7 +240,6 @@ def save_project_metadata(project_name: str, data: Dict[str, Any]) -> None:
 
 
 def list_projects() -> List[Dict[str, Any]]:
-    """Discovers and summarizes all projects in the projects/ root."""
     root = get_projects_dir()
     results = []
     if not root.exists():
@@ -273,13 +267,11 @@ def list_projects() -> List[Dict[str, Any]]:
 
 
 def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
-    """Inspects all production artifacts for a specific chapter."""
     chap_dir = get_chapter_dir(project_name, chapter_num)
     pages_dir = chap_dir / "pages"
     panels_dir = chap_dir / "panels"
     sheets_dir = chap_dir / "sheets"
     audio_dir = chap_dir / "audio"
-    video_dir = chap_dir / "video"
 
     pages_count = len(list(pages_dir.glob("page_*.*"))) if pages_dir.exists() else 0
     pages_zip_exist = (chap_dir / "pages.zip").exists()
@@ -308,7 +300,6 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
     final_video_path = chap_dir / f"{project_name}_ch{chapter_num}_recap.mp4"
     video_exist = final_video_path.exists() and final_video_path.stat().st_size > 1000
 
-    # Determine stage summary
     if video_exist:
         summary = "Recap Ready"
     elif master_audio_exist:

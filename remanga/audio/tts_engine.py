@@ -45,7 +45,7 @@ class TTSEngine:
             try:
                 from indextts.infer_v2 import IndexTTS2  # type: ignore
 
-                console.print(f"[cyan]Initializing IndexTTS-2 model engine...[/]")
+                console.print("[cyan]Initializing IndexTTS-2 model engine...[/]")
                 self._model_instance = IndexTTS2(
                     cfg_path=str(cfg_path.resolve()),
                     model_dir=str(model_dir.resolve()),
@@ -91,38 +91,46 @@ class TTSEngine:
     def _synthesize_indextts(self, text: str, emotion_tag: str, spk_prompt_path: str, output_wav: Path) -> None:
         """
         Synthesizes speech using IndexTTS-2.5.
-        Passes only supported parameters to prevent Transformers generate() keyword crashes.
+        Explicitly passes 'lang' and only supported arguments to prevent model_kwargs crashes.
         """
         model = self._get_model()
         emotion_vec = self._get_emotion_vector(emotion_tag)
+        target_lang = (self.tts_config.lang or "EN").strip().upper()
 
         if model is not None:
-            # Inspect infer() signature to pass only valid arguments
             sig = inspect.signature(model.infer)
             params = sig.parameters
 
+            # Core positional/required kwargs
             call_kwargs: Dict[str, Any] = {
                 "spk_audio_prompt": spk_prompt_path,
                 "text": text,
+                "lang": target_lang,
                 "output_path": str(output_wav.resolve()),
             }
 
-            # IndexTTS expects 'emo_vector' (not 'emotion_vector')
+            # IndexTTS emotion conditioning
             if "emo_vector" in params:
                 call_kwargs["emo_vector"] = emotion_vec
             elif "emotion_vector" in params:
                 call_kwargs["emotion_vector"] = emotion_vec
 
-            # Safe generation kwargs for Hugging Face Transformers
-            if self.tts_config.temperature is not None:
-                call_kwargs["temperature"] = float(self.tts_config.temperature)
-            if self.tts_config.top_p is not None:
-                call_kwargs["top_p"] = float(self.tts_config.top_p)
+            # Duration factor in IndexTTS-2.5 (if supported)
+            if "duration_factor" in params and abs(self.tts_config.speed - 1.0) >= 0.02:
+                call_kwargs["duration_factor"] = round(1.0 / self.tts_config.speed, 3)
+
+            # Safe generation kwargs for transformers
+            if "temperature" in params or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()):
+                if self.tts_config.temperature is not None:
+                    call_kwargs["temperature"] = float(self.tts_config.temperature)
+            if "top_p" in params or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()):
+                if self.tts_config.top_p is not None:
+                    call_kwargs["top_p"] = float(self.tts_config.top_p)
 
             model.infer(**call_kwargs)
 
-            # Apply speed adjustment if requested
-            if abs(self.tts_config.speed - 1.0) >= 0.02:
+            # Fallback speed adjustment if duration_factor was not directly in model.infer
+            if "duration_factor" not in params and abs(self.tts_config.speed - 1.0) >= 0.02:
                 self._adjust_audio_speed(output_wav, self.tts_config.speed)
         else:
             # Fallback CLI bridge
@@ -132,6 +140,7 @@ class TTSEngine:
                 "--model_dir", str(Path(self.tts_config.model_dir).resolve()),
                 "--spk_audio_prompt", spk_prompt_path,
                 "--text", text,
+                "--lang", target_lang,
                 "--output_path", str(output_wav.resolve()),
             ]
             try:
@@ -154,9 +163,8 @@ class TTSEngine:
         force: bool = False,
     ) -> Path:
         """
-        Reads narration.json, validates the reference voice, synthesizes speech per panel with IndexTTS-2.5,
-        applies micro edge-fades, and writes audio_timing.json.
-        Resumes automatically: skips already synthesized panels unless force=True.
+        Synthesizes narration audio per panel with IndexTTS-2.5.
+        Resumes automatically by checking existing panel WAV clips.
         """
         full_config = RemangaConfig.load()
         if voice_override:
@@ -186,7 +194,7 @@ class TTSEngine:
 
         console.print(
             f"[cyan]Synthesizing speech via IndexTTS-2.5[/] "
-            f"[dim](Reference Voice: {spk_prompt_path})[/]"
+            f"[dim](Lang: {self.tts_config.lang}, Reference Voice: {spk_prompt_path})[/]"
         )
 
         timing_data: List[Dict[str, Any]] = []
@@ -209,7 +217,7 @@ class TTSEngine:
                 raw_clip_path = audio_dir / f"{panel_id}_raw.wav"
                 processed_clip_path = audio_dir / f"{panel_id}.wav"
 
-                # RESUME GUARD: Check if already synthesized
+                # RESUME GUARD: Reuse existing clean WAV if present and non-empty
                 if not force and processed_clip_path.exists() and processed_clip_path.stat().st_size > 1000:
                     segment = AudioSegment.from_file(processed_clip_path)
                     duration_ms = len(segment)
