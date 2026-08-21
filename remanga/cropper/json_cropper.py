@@ -17,20 +17,26 @@ class CoordinateCropper:
     def __init__(self, config: Optional[CropperConfig] = None):
         self.config = config or CropperConfig()
 
-    def _create_sheets_zip(self, chapter_dir: Path, panels_dir: Path, sheets_dir: Optional[Path]) -> Path:
+    def _create_vision_archive(self, chapter_dir: Path, panels_dir: Path, sheets_dir: Optional[Path]) -> Path:
         """
-        Packages ONLY vision contact sheets and manifest into a lightweight sheets.zip.
-        Excludes raw panels to minimize upload size and LLM vision token consumption.
+        Packages cropped assets into either sheets.zip (2x2 contact sheets) or panels.zip (individual crops)
+        based on the user's configured vision_asset_type.
         """
-        zip_filename = getattr(self.config, "zip_filename", "sheets.zip") or "sheets.zip"
+        asset_type = getattr(self.config, "vision_asset_type", "sheets").lower()
+        zip_filename = "panels.zip" if asset_type == "panels" else "sheets.zip"
         zip_path = chapter_dir / zip_filename
+
         if zip_path.exists():
             zip_path.unlink()
 
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            if sheets_dir and sheets_dir.exists() and list(sheets_dir.glob("sheet_*.*")):
-                for s in sorted(list(sheets_dir.glob("sheet_*.*"))):
-                    zf.write(s, arcname=s.name)
+            if asset_type == "sheets":
+                if sheets_dir and sheets_dir.exists() and list(sheets_dir.glob("sheet_*.*")):
+                    for s in sorted(list(sheets_dir.glob("sheet_*.*"))):
+                        zf.write(s, arcname=s.name)
+                else:
+                    for p in sorted(list(panels_dir.glob("panel_*.*"))):
+                        zf.write(p, arcname=p.name)
             else:
                 for p in sorted(list(panels_dir.glob("panel_*.*"))):
                     zf.write(p, arcname=p.name)
@@ -39,13 +45,13 @@ class CoordinateCropper:
             if manifest.exists():
                 zf.write(manifest, arcname="panels_manifest.json")
 
-        console.print(f"[bold green]✓ Created lightweight Sheets ZIP archive (ultra-small upload):[/] {zip_path}")
+        console.print(f"[bold green]✓ Created Vision Archive ({zip_filename} - Mode: {asset_type.upper()}):[/] {zip_path}")
         return zip_path
 
     def crop_chapter_from_json(self, project_name: str, chapter_num: str, force: bool = False) -> List[Path]:
         """
         Reads crops.json in the chapter directory, crops panels, generates
-        vision-friendly panel sheets, and packages sheets into sheets.zip.
+        contact sheets or panel archives, and packages according to config.
         Skips if already cropped and force is False.
         """
         chapter_dir = get_chapter_dir(project_name, chapter_num)
@@ -54,7 +60,9 @@ class CoordinateCropper:
         panels_dir = chapter_dir / "panels"
         sheets_dir = chapter_dir / "sheets"
         manifest_path = chapter_dir / "panels_manifest.json"
-        sheets_zip = chapter_dir / "sheets.zip"
+
+        asset_type = getattr(self.config, "vision_asset_type", "sheets").lower()
+        expected_zip = chapter_dir / ("panels.zip" if asset_type == "panels" else "sheets.zip")
 
         if not crops_json_path.exists() or crops_json_path.stat().st_size <= 10:
             raise FileNotFoundError(
@@ -70,8 +78,8 @@ class CoordinateCropper:
 
         # RESUME CHECK: If panels already exist and force=False, verify and skip
         existing_panels = sorted(list(panels_dir.glob("panel_*.*")))
-        if not force and existing_panels and manifest_path.exists() and sheets_zip.exists():
-            console.print(f"[bold green]✓ Found {len(existing_panels)} panels already cropped and sheets.zip ready! Skipping re-crop.[/]")
+        if not force and existing_panels and manifest_path.exists() and expected_zip.exists():
+            console.print(f"[bold green]✓ Found {len(existing_panels)} panels already cropped and {expected_zip.name} ready! Skipping re-crop.[/]")
             return existing_panels
 
         # Clear existing panels directory before fresh cropping
@@ -162,17 +170,17 @@ class CoordinateCropper:
 
         console.print(f"[bold green]✓ Cropped {len(output_panel_paths)} panels successfully into:[/] {panels_dir}")
 
-        # 1. Generate vision contact sheets
-        if self.config.create_sheets and output_panel_paths:
+        # 1. Generate vision contact sheets if enabled or if requested
+        if output_panel_paths and (self.config.create_sheets or asset_type == "sheets"):
             PanelSheetGenerator.create_panel_sheets(
                 panel_paths=output_panel_paths,
                 output_dir=sheets_dir,
                 panels_per_sheet=self.config.panels_per_sheet
             )
 
-        # 2. Package sheets and manifest into sheets.zip
+        # 2. Package into sheets.zip or panels.zip
         if self.config.create_zip:
-            self._create_sheets_zip(chapter_dir, panels_dir, sheets_dir)
+            self._create_vision_archive(chapter_dir, panels_dir, sheets_dir)
 
         return output_panel_paths
 

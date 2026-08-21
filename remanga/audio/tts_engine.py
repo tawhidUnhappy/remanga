@@ -59,12 +59,12 @@ class TTSEngine:
             return None
 
     def _get_emotion_vector(self, emotion_tag: str) -> List[float]:
-        """Maps high-level recap emotion tags to IndexTTS 8-dimensional emotion vectors."""
-        tag = (emotion_tag or "neutral").strip().lower()
-        mapping = self.tts_config.emotion_vectors
-        if tag in mapping:
-            return mapping[tag]
-        return mapping.get("neutral", [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 0.8])
+        """
+        Always returns a flat 8-dimensional zero vector [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0].
+        This completely eliminates emotional fluctuations, screams, shock spikes, and vocal strain,
+        ensuring uniform, objective, and consistent documentary-style narration across all panels.
+        """
+        return [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
     def _adjust_audio_speed(self, wav_path: Path, speed: float) -> None:
         """Adjusts speaking tempo using pitch-preserving FFmpeg atempo filter."""
@@ -91,7 +91,7 @@ class TTSEngine:
     def _synthesize_indextts(self, text: str, emotion_tag: str, spk_prompt_path: str, output_wav: Path) -> None:
         """
         Synthesizes speech using IndexTTS-2.5.
-        Explicitly passes 'lang' and only supported arguments to prevent model_kwargs crashes.
+        Uses flat zero emotion vector and low temperature/top_p to ensure consistent vocal delivery.
         """
         model = self._get_model()
         emotion_vec = self._get_emotion_vector(emotion_tag)
@@ -116,12 +116,13 @@ class TTSEngine:
             if "duration_factor" in params and abs(self.tts_config.speed - 1.0) >= 0.02:
                 call_kwargs["duration_factor"] = round(1.0 / self.tts_config.speed, 3)
 
+            # Pass low temperature and top_p for consistent cadence
             if "temperature" in params or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()):
-                if self.tts_config.temperature is not None:
-                    call_kwargs["temperature"] = float(self.tts_config.temperature)
+                temp_val = float(self.tts_config.temperature if self.tts_config.temperature is not None else 0.2)
+                call_kwargs["temperature"] = temp_val
             if "top_p" in params or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()):
-                if self.tts_config.top_p is not None:
-                    call_kwargs["top_p"] = float(self.tts_config.top_p)
+                top_p_val = float(self.tts_config.top_p if self.tts_config.top_p is not None else 0.7)
+                call_kwargs["top_p"] = top_p_val
 
             model.infer(**call_kwargs)
 
@@ -187,8 +188,8 @@ class TTSEngine:
             raise ValueError(f"No narration entries found in {narration_path}")
 
         console.print(
-            f"[cyan]Synthesizing speech via IndexTTS-2.5[/] "
-            f"[dim](Lang: {self.tts_config.lang}, Reference Voice: {spk_prompt_path})[/]"
+            f"[cyan]Synthesizing consistent speech via IndexTTS-2.5[/] "
+            f"[dim](Lang: {self.tts_config.lang}, Temp: {self.tts_config.temperature}, Reference Voice: {spk_prompt_path})[/]"
         )
 
         timing_data: List[Dict[str, Any]] = []

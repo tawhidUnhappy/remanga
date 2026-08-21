@@ -40,12 +40,16 @@ def display_status(project: str, chapter: str):
     bgm_status = f"[green]Enabled ({bgm_path})[/]" if (config.audio.bgm_enabled and bgm_path and bgm_path.exists()) else "[dim]Disabled / None[/]"
 
     res_str = f"{config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)"
+    asset_mode = config.cropper.vision_asset_type
+    target_zip_name = "panels.zip" if asset_mode == "panels" else "sheets.zip"
+    target_zip_ready = st['panels_zip_exist'] if asset_mode == "panels" else st['sheets_zip_exist']
 
     status_str = f"""
 [bold cyan]Project:[/] {project} | [bold cyan]Chapter:[/] {chapter}
 [bold cyan]Saved Manga Source:[/] {saved_url}
 [bold]Workspace Directory:[/] {st['chap_dir'].resolve()}
 [bold]Video Resolution:[/] {res_str}
+[bold]Vision Packaging Format:[/] {asset_mode.title()} ({target_zip_name})
 [bold]Reference Voice Audio:[/] {voice_status}
 [bold]Background Music:[/] {bgm_status}
 
@@ -53,10 +57,10 @@ def display_status(project: str, chapter: str):
   2. Pages ZIP Archive   : {'[green]✓ Ready (' + str(st['chap_dir'] / 'pages.zip') + ')[/]' if st['pages_zip_exist'] else '[dim yellow]✗ Not generated[/]'}
   3. Crop Instructions   : {'[green]✓ Present (' + str(st['chap_dir'] / 'crops.json') + ')[/]' if st['crops_exist'] else '[yellow]✗ Missing/Empty placeholder[/]'}
   4. Panels Cropped      : {'[green]✓ Yes (' + str(st['panels_count']) + ' panels)[/]' if st['panels_count'] > 0 else '[red]✗ Missing[/]'}
-  5. Panel Contact Sheets: {'[green]✓ Yes (' + str(st['sheets_count']) + ' sheets)[/]' if st['sheets_count'] > 0 else '[dim yellow]✗ Not generated[/]'}
-  6. Sheets ZIP Archive  : {'[green]✓ Ready (' + str(st['chap_dir'] / 'sheets.zip') + ')[/]' if st['sheets_zip_exist'] else '[dim yellow]✗ Not generated[/]'}
+  5. Panel Contact Sheets: {'[green]✓ Yes (' + str(st['sheets_count']) + ' sheets)[/]' if st['sheets_count'] > 0 else '[dim yellow]✗ Not generated (Mode: ' + asset_mode + ')[/]'}
+  6. Vision ZIP Archive  : {'[green]✓ Ready (' + str(st['chap_dir'] / target_zip_name) + ')[/]' if target_zip_ready else '[dim yellow]✗ Not generated[/]'}
   7. Narration Script    : {'[green]✓ Present (' + str(st['chap_dir'] / 'narration.json') + ')[/]' if st['narration_exist'] else '[yellow]✗ Missing/Empty placeholder[/]'}
-  8. Master Audio Track  : {'[green]✓ Generated (IndexTTS-2.5)[/]' if st['master_audio_exist'] else '[red]✗ Not built (' + str(st['audio_clips_count']) + '/' + str(st['total_narration_entries']) + ' clips)[/]'}
+  8. Master Audio Track  : {'[green]✓ Generated (IndexTTS-2.5 Monotone)[/]' if st['master_audio_exist'] else '[red]✗ Not built (' + str(st['audio_clips_count']) + '/' + str(st['total_narration_entries']) + ' clips)[/]'}
   9. Final Recap Video   : {'[green]✓ Ready (' + str(st['video_path']) + ')[/]' if st['video_exist'] else '[red]✗ Not rendered[/]'}
 """
     console.print(Panel(status_str.strip(), title="[bold white]remanga Chapter Production Status[/]", border_style="blue"))
@@ -70,7 +74,7 @@ def main():
     subparsers.add_parser("interactive", help="Start interactive step-by-step production wizard")
 
     # setup configuration
-    subparsers.add_parser("setup-config", help="Walkthrough configuration setup (voice, BGM, resolution, blur)")
+    subparsers.add_parser("setup-config", help="Walkthrough configuration setup (voice, BGM, resolution, vision format, blur)")
 
     # setup models
     subparsers.add_parser("setup-models", help="Verify and download model weights with SHA-256 verification")
@@ -82,7 +86,7 @@ def main():
     p_dl.add_argument("--url", "-u", required=False, default=None, help="Manga title or MangaDex URL/UUID (optional if saved)")
 
     # crop
-    p_crop = subparsers.add_parser("crop", help="Crop panels using coordinates in crops.json and package sheets.zip")
+    p_crop = subparsers.add_parser("crop", help="Crop panels using coordinates in crops.json and package sheets.zip or panels.zip")
     p_crop.add_argument("--project", "-p", required=True, help="Project name")
     p_crop.add_argument("--chapter", "-c", required=True, help="Chapter number")
     p_crop.add_argument("--force", "-f", action="store_true", help="Force re-cropping even if panels exist")

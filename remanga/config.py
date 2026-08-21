@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Prompt, Confirm
+from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 console = Console()
@@ -33,6 +33,7 @@ class CropperConfig(BaseModel):
     margin_padding_pixels: int = 8
     auto_contrast_clean: bool = False
     save_format: str = "PNG"
+    vision_asset_type: str = "sheets"  # 'sheets' (2x2 contact sheets) or 'panels' (individual panel crops)
     create_sheets: bool = True
     panels_per_sheet: int = 4
     create_zip: bool = True
@@ -48,18 +49,18 @@ class TTSConfig(BaseModel):
     lang: str = "EN"
     use_bf16: bool = True
     speed: float = 1.0
-    temperature: float = 0.7
-    top_p: float = 0.85
+    temperature: float = 0.2  # Low temperature prevents stochastic pitch inflections
+    top_p: float = 0.7        # Tight nucleus sampling keeps vocal prosody stable
     sample_rate: int = 22050
     emotion_vectors: Dict[str, List[float]] = Field(
         default_factory=lambda: {
-            "neutral": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 0.8],
-            "hype": [0.7, 0.3, 0.0, 0.0, 0.0, 0.4, 0.0, 0.0],
-            "tense": [0.0, 0.2, 0.1, 0.6, 0.0, 0.5, 0.0, 0.1],
-            "serious": [0.0, 0.1, 0.2, 0.0, 0.0, 0.1, 0.6, 0.3],
-            "shock": [0.0, 0.1, 0.0, 0.4, 0.0, 0.9, 0.0, 0.0],
-            "emotional": [0.1, 0.0, 0.7, 0.1, 0.0, 0.2, 0.2, 0.1],
-            "mysterious": [0.0, 0.0, 0.1, 0.3, 0.0, 0.3, 0.5, 0.2],
+            "neutral": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "hype": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "tense": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "serious": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "shock": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "emotional": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "mysterious": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         }
     )
 
@@ -78,7 +79,7 @@ class VideoConfig(BaseModel):
     width: int = 1920
     height: int = 1080
     fps: int = 30
-    background_style: str = "blur"  # 'blur' (CapCut-style fast bokeh blur) or 'solid' (black canvas)
+    background_style: str = "blur"  # 'blur' (Fast bokeh blur) or 'solid' (black canvas)
     blur_brightness: float = 0.42   # Dimming multiplier for canvas blur (0.35 to 0.55 recommended)
     background_color: str = "#000000"
     panel_padding_percent: int = 4
@@ -115,32 +116,79 @@ class RemangaConfig(BaseModel):
         with open(target_path, "w", encoding="utf-8") as f:
             json.dump(self.model_dump(), f, indent=2)
 
+    def ensure_valid_vision_asset_preference(self, interactive: bool = True) -> str:
+        """Ensures the vision package format ('sheets' vs 'panels') is configured and saved."""
+        current = (self.cropper.vision_asset_type or "").strip().lower()
+        if current in ("sheets", "panels"):
+            return current
+
+        if not interactive:
+            self.cropper.vision_asset_type = "sheets"
+            self.cropper.zip_filename = "sheets.zip"
+            return "sheets"
+
+        console.print(
+            "\n[bold yellow]🖼️  LLM Vision Asset Upload Format[/]\n"
+            "Choose how cropped manga artwork is packaged for your LLM:\n"
+            "  1. [bold cyan]Contact Sheets (sheets.zip)[/] — 2x2 labeled grid sheets (Recommended, lowest vision token cost)\n"
+            "  2. [bold cyan]Individual Panels (panels.zip)[/] — Individual high-resolution cropped panel files\n"
+        )
+        choice = Prompt.ask("[bold cyan]Choose vision packaging format[/]", choices=["1", "2"], default="1").strip()
+        if choice == "2":
+            self.cropper.vision_asset_type = "panels"
+            self.cropper.zip_filename = "panels.zip"
+        else:
+            self.cropper.vision_asset_type = "sheets"
+            self.cropper.zip_filename = "sheets.zip"
+
+        self.save()
+        console.print(f"[bold green]✓ Vision asset format set to '{self.cropper.vision_asset_type}' ({self.cropper.zip_filename}) and saved to config.json![/]\n")
+        return self.cropper.vision_asset_type
+
     def run_setup_wizard(self) -> "RemangaConfig":
-        """
-        Interactive step-by-step configuration wizard.
-        Guides the user through Voice reference, BGM, YouTube quality/resolution, canvas blur, and rendering.
-        """
+        """Interactive step-by-step configuration wizard."""
         console.print(Panel(
             "[bold cyan]⚙️  remanga Production Settings Setup Wizard[/]\n"
-            "[dim]Configure vocal reference, background music, video resolution, and canvas background style.[/]",
+            "[dim]Configure vocal reference, vision upload formats, BGM, video resolution, and canvas background style.[/]",
             border_style="cyan"
         ))
 
         # 1. Reference Vocal Audio (Voice Cloning)
         console.print("\n[bold yellow]1. Reference Speaker Voice (IndexTTS-2.5 Cloning)[/]")
-        console.print("[dim]Provide a clean 3-10 second WAV file of the target voice.[/]")
+        console.print("[dim]Provide a clean 3-10 second WAV file of a neutral, steady voice.[/]")
         curr_voice = self.tts.spk_audio_prompt
         if curr_voice and Path(curr_voice).expanduser().exists():
             console.print(f"Current Voice: [green]{curr_voice}[/]")
-            if Confirm.ask("Keep current reference voice?", default=True):
-                pass
-            else:
+            if not Confirm.ask("Keep current reference voice?", default=True):
                 self.ensure_valid_voice_prompt(interactive=True)
         else:
             self.ensure_valid_voice_prompt(interactive=True)
 
-        # 2. Voice Language Selection
-        console.print("\n[bold yellow]2. Voice Language[/]")
+        # 2. Vision Packaging Format (Sheets vs Panels)
+        console.print("\n[bold yellow]2. Vision Asset Upload Format (LLM Input)[/]")
+        pack_table = Table(border_style="blue", show_header=True)
+        pack_table.add_column("#", style="bold yellow", width=4)
+        pack_table.add_column("Package Type", style="bold white")
+        pack_table.add_column("Archive File", style="cyan")
+        pack_table.add_column("Description", style="dim")
+
+        pack_table.add_row("1", "Vision Contact Sheets", "sheets.zip", "2x2 labeled grid sheets [Recommended for token efficiency]")
+        pack_table.add_row("2", "Individual Panels", "panels.zip", "Direct standalone high-res crops for each panel")
+        console.print(pack_table)
+
+        curr_pref = "1" if self.cropper.vision_asset_type == "sheets" else "2"
+        pack_choice = Prompt.ask("[bold cyan]Select vision upload format[/]", choices=["1", "2"], default=curr_pref).strip()
+        if pack_choice == "2":
+            self.cropper.vision_asset_type = "panels"
+            self.cropper.zip_filename = "panels.zip"
+            console.print("[green]✓ Vision upload format set to:[/] Individual Panels (panels.zip)")
+        else:
+            self.cropper.vision_asset_type = "sheets"
+            self.cropper.zip_filename = "sheets.zip"
+            console.print("[green]✓ Vision upload format set to:[/] Contact Sheets (sheets.zip)")
+
+        # 3. Voice Language Selection
+        console.print("\n[bold yellow]3. Voice Language[/]")
         lang_table = Table(border_style="blue", show_header=True)
         lang_table.add_column("#", style="bold yellow", width=4)
         lang_table.add_column("Language", style="bold white")
@@ -164,8 +212,8 @@ class RemangaConfig(BaseModel):
         self.tts.lang = matched_lang
         console.print(f"[green]✓ Language set to:[/] {matched_lang}")
 
-        # 3. Background Music (BGM)
-        console.print("\n[bold yellow]3. Background Music (BGM)[/]")
+        # 4. Background Music (BGM)
+        console.print("\n[bold yellow]4. Background Music (BGM)[/]")
         enable_bgm = Confirm.ask("Enable background music track for recaps?", default=self.audio.bgm_enabled)
         self.audio.bgm_enabled = enable_bgm
         if enable_bgm:
@@ -192,8 +240,8 @@ class RemangaConfig(BaseModel):
                 except ValueError:
                     self.audio.bgm_volume_db = -22.0
 
-        # 4. YouTube Quality / Video Resolution Presets
-        console.print("\n[bold yellow]4. YouTube Quality & Video Resolution[/]")
+        # 5. YouTube Quality / Video Resolution Presets
+        console.print("\n[bold yellow]5. Video Resolution Presets[/]")
         res_table = Table(title="Available Resolution Presets", border_style="blue")
         res_table.add_column("#", style="bold yellow", width=4)
         res_table.add_column("Preset Quality", style="bold white")
@@ -230,15 +278,15 @@ class RemangaConfig(BaseModel):
 
         console.print(f"[green]✓ Resolution configured:[/] {self.video.width}x{self.video.height}")
 
-        # 5. Canvas Background Style (CapCut Blur vs Solid Black)
-        console.print("\n[bold yellow]5. Canvas Background Style[/]")
+        # 6. Canvas Background Style
+        console.print("\n[bold yellow]6. Canvas Background Style[/]")
         bg_table = Table(border_style="blue")
         bg_table.add_column("#", style="bold yellow", width=4)
         bg_table.add_column("Background Style", style="bold white")
         bg_table.add_column("Description", style="dim")
 
         bg_styles = [
-            ("1", "CapCut-Style Fast Bokeh Canvas Blur", "Dynamic blurred background of the current panel (<1.5ms) [Recommended]"),
+            ("1", "Fast Bokeh Canvas Blur", "Dynamic blurred background of current panel (<1.5ms) [Recommended]"),
             ("2", "Solid Black Canvas", "Traditional solid black background (#000000)"),
         ]
         for num, title, desc in bg_styles:
@@ -252,23 +300,24 @@ class RemangaConfig(BaseModel):
             console.print("[green]✓ Background set to:[/] Solid Black (#000000)")
         else:
             self.video.background_style = "blur"
-            console.print("[green]✓ Background set to:[/] CapCut-Style Fast Bokeh Canvas Blur")
+            console.print("[green]✓ Background set to:[/] Fast Bokeh Canvas Blur")
 
-        # 6. Hardware Acceleration
-        console.print("\n[bold yellow]6. Hardware Acceleration[/]")
+        # 7. Hardware Acceleration
+        console.print("\n[bold yellow]7. Hardware Acceleration[/]")
         self.system.prefer_gpu = Confirm.ask("Prefer NVIDIA GPU Hardware Acceleration (NVENC)?", default=self.system.prefer_gpu)
 
         # Save Configuration
         self.save()
 
-        summary_table = Table(title="[bold green]✓ Updated Production Settings (config.json)[/]", border_style="green")
+        summary_table = Table(title="[bold green]✓ Production Settings Saved (config.json)[/]", border_style="green")
         summary_table.add_column("Setting", style="bold white")
         summary_table.add_column("Value", style="cyan")
 
+        summary_table.add_row("Vision Upload Format", f"{self.cropper.vision_asset_type.title()} ({self.cropper.zip_filename})")
         summary_table.add_row("Resolution", f"{self.video.width}x{self.video.height} @ {self.video.fps}fps")
-        summary_table.add_row("Background Style", f"{self.video.background_style.title()} (Bokeh Canvas Blur)" if self.video.background_style == "blur" else "Solid Black")
+        summary_table.add_row("Background Style", f"{self.video.background_style.title()} Blur" if self.video.background_style == "blur" else "Solid Black")
         summary_table.add_row("Narration Language", self.tts.lang.upper())
-        summary_table.add_row("Reference Speaker Voice", str(Path(self.tts.spk_audio_prompt).name) if self.tts.spk_audio_prompt else "[red]Not configured[/]")
+        summary_table.add_row("Reference Voice", str(Path(self.tts.spk_audio_prompt).name) if self.tts.spk_audio_prompt else "[red]Not configured[/]")
         summary_table.add_row("Background Music (BGM)", f"Enabled ({Path(self.audio.bgm_path).name}, {self.audio.bgm_volume_db}dB)" if self.audio.bgm_enabled else "Disabled")
         summary_table.add_row("GPU Codec", f"{self.system.gpu_codec} (Fallback: {self.system.fallback_codec})")
 
@@ -423,6 +472,7 @@ def list_projects() -> List[Dict[str, Any]]:
 
 
 def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
+    config = RemangaConfig.load()
     chap_dir = get_chapter_dir(project_name, chapter_num)
     pages_dir = chap_dir / "pages"
     panels_dir = chap_dir / "panels"
@@ -437,6 +487,7 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
     panels_count = len(list(panels_dir.glob("panel_*.*"))) if panels_dir.exists() else 0
     sheets_count = len(list(sheets_dir.glob("sheet_*.*"))) if sheets_dir.exists() else 0
     sheets_zip_exist = (chap_dir / "sheets.zip").exists()
+    panels_zip_exist = (chap_dir / "panels.zip").exists()
 
     narration_file = chap_dir / "narration.json"
     narration_exist = narration_file.exists() and narration_file.stat().st_size > 10
@@ -456,6 +507,8 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
     final_video_path = chap_dir / f"{project_name}_ch{chapter_num}_recap.mp4"
     video_exist = final_video_path.exists() and final_video_path.stat().st_size > 1000
 
+    vision_ready = (config.cropper.vision_asset_type == "panels" and panels_zip_exist) or (config.cropper.vision_asset_type == "sheets" and sheets_zip_exist) or sheets_zip_exist or panels_zip_exist
+
     if video_exist:
         summary = "Recap Ready"
     elif master_audio_exist:
@@ -466,7 +519,7 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
         summary = f"TTS In-Progress ({audio_clips_count}/{total_narration_entries})"
     elif narration_exist:
         summary = "Narration Script Ready"
-    elif sheets_zip_exist or panels_count > 0:
+    elif vision_ready or panels_count > 0:
         summary = f"Cropped ({panels_count} panels)"
     elif crops_exist:
         summary = "Crops JSON Ready"
@@ -485,6 +538,7 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
         "panels_count": panels_count,
         "sheets_count": sheets_count,
         "sheets_zip_exist": sheets_zip_exist,
+        "panels_zip_exist": panels_zip_exist,
         "narration_exist": narration_exist,
         "total_narration_entries": total_narration_entries,
         "audio_clips_count": audio_clips_count,

@@ -38,7 +38,7 @@ def _select_or_create_project(config: RemangaConfig) -> str:
             table.add_row(str(idx), p["name"], chaps_str, src_str[:55] + ("..." if len(src_str) > 55 else ""))
 
         console.print(table)
-        console.print("[dim]Select a project number, 'n' for new project, or 's' to configure settings (Voice/BGM/Resolution/Blur).[/]\n")
+        console.print("[dim]Select a project number, 'n' for new project, or 's' to configure settings (Voice/BGM/Resolution/Blur/Vision Format).[/]\n")
 
         choice = Prompt.ask("[bold cyan]Choose project number or enter new project name[/]", default="1").strip()
         if choice.lower() == "s":
@@ -105,15 +105,20 @@ def run_interactive_pipeline():
     chapter = _select_chapter(project)
     chap_dir = get_chapter_dir(project, chapter)
 
-    # 3. Status Overview
-    status = get_chapter_status(project, chapter)
-    console.print(f"\n[bold]Current Chapter Workspace:[/] {chap_dir.resolve()}")
-    console.print(f"[bold]Current Chapter Status:[/] [{'green' if 'Ready' in status['summary'] else 'yellow'}]{status['summary']}[/]")
-    console.print(f"[bold]Render Output:[/] {config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)\n")
-
-    # 4. Reference Voice & BGM Path Validation
+    # 3. Reference Voice, BGM, and Vision Packaging Preference Validation
+    config.ensure_valid_vision_asset_preference(interactive=True)
     config.ensure_valid_voice_prompt(interactive=True)
     config.ensure_valid_bgm(interactive=True)
+
+    # 4. Status Overview
+    status = get_chapter_status(project, chapter)
+    asset_mode = config.cropper.vision_asset_type
+    archive_name = "panels.zip" if asset_mode == "panels" else "sheets.zip"
+
+    console.print(f"\n[bold]Current Chapter Workspace:[/] {chap_dir.resolve()}")
+    console.print(f"[bold]Current Chapter Status:[/] [{'green' if 'Ready' in status['summary'] else 'yellow'}]{status['summary']}[/]")
+    console.print(f"[bold]Vision Packaging Format:[/] {asset_mode.title()} ({archive_name})")
+    console.print(f"[bold]Render Output:[/] {config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)\n")
 
     # =========================================================================
     # Step 1: Download Pages
@@ -139,9 +144,9 @@ def run_interactive_pipeline():
         Prompt.ask("[bold cyan]Press Enter once crops.json is saved and ready[/]")
 
     # =========================================================================
-    # Step 3: Cropping Panels & Building sheets.zip
+    # Step 3: Cropping Panels & Building Vision Archive (sheets.zip or panels.zip)
     # =========================================================================
-    console.print(f"\n[bold blue]=== Step 2: Cropping Panels & Compiling sheets.zip ===[/]")
+    console.print(f"\n[bold blue]=== Step 2: Cropping Panels & Compiling {archive_name} ===[/]")
     cropper = CoordinateCropper(config.cropper)
     cropper.crop_chapter_from_json(project, chapter)
 
@@ -149,12 +154,14 @@ def run_interactive_pipeline():
     # Step 4: Narration Script (narration.json)
     # =========================================================================
     narration_path = chap_dir / "narration.json"
+    target_vision_archive = chap_dir / archive_name
+
     if not narration_path.exists() or narration_path.stat().st_size <= 10:
         narration_path.parent.mkdir(parents=True, exist_ok=True)
         narration_path.write_text("{}", encoding="utf-8")
         console.print(Panel(
             f"[bold yellow]Action Required:[/]\n"
-            f"1. Upload [bold]{chap_dir}/sheets.zip[/] along with [bold]prompts/narration_generation_prompt.md[/] to your LLM.\n"
+            f"1. Upload [bold]{target_vision_archive.resolve()}[/] along with [bold]prompts/narration_generation_prompt.md[/] to your LLM.\n"
             f"2. Save the resulting narration JSON directly into:\n   [bold green]{narration_path.resolve()}[/]",
             title="[bold white]Generate narration.json[/]",
             border_style="yellow"
@@ -164,7 +171,7 @@ def run_interactive_pipeline():
     # =========================================================================
     # Step 5: Synthesizing Vocal Audio via IndexTTS-2.5
     # =========================================================================
-    console.print(f"\n[bold blue]=== Step 3: Synthesizing Vocal Audio via IndexTTS-2.5 ===[/]")
+    console.print(f"\n[bold blue]=== Step 3: Synthesizing Vocal Audio via IndexTTS-2.5 (Monotone / Zero-Emotion) ===[/]")
     tts = TTSEngine(config.tts, config.audio)
     tts.generate_narration_audio(project, chapter, interactive=True)
 
@@ -185,7 +192,8 @@ def run_interactive_pipeline():
     console.print(Panel(
         f"[bold green]🎉 Recap Video Production Complete![/]\n\n"
         f"[bold white]Output File:[/] {final_video.resolve()}\n"
-        f"[bold white]Resolution:[/] {config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)",
+        f"[bold white]Resolution:[/] {config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)\n"
+        f"[bold white]Vision Format:[/] {asset_mode.title()} ({archive_name})",
         title="[bold green]Success[/]",
         border_style="green"
     ))
