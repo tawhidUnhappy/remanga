@@ -1,83 +1,23 @@
+"""The master interactive production wizard: project/chapter discovery followed by the
+full download -> crop -> narrate -> synthesize -> mix -> render pipeline, in order."""
+
 from __future__ import annotations
 
-from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
-from rich.table import Table
 
 from remanga import setup
 from remanga.audio import AudioProcessor, TTSEngine
 from remanga.config import RemangaConfig
 from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
-from remanga.paths import get_chapter_dir, list_projects, load_project_metadata
+from remanga.paths import get_chapter_dir, load_project_metadata
 from remanga.status import get_chapter_status
 from remanga.video import VideoRenderer
+from remanga.wizard_prompts import select_chapter, select_or_create_project
 
 console = Console()
-
-
-def _select_or_create_project(config: RemangaConfig) -> str:
-    """Interactively displays existing projects or configuration setup option."""
-    existing_projects = list_projects()
-
-    if existing_projects:
-        table = Table(title="[bold cyan]📁 Existing Projects[/]", border_style="blue")
-        table.add_column("#", style="bold yellow", width=4)
-        table.add_column("Project Name", style="bold white")
-        table.add_column("Chapters", style="green")
-        table.add_column("Saved Manga Source", style="dim")
-
-        for idx, p in enumerate(existing_projects, start=1):
-            chaps_str = ", ".join(p["chapters"]) if p["chapters"] else "[dim]None[/]"
-            src_str = p["manga_url"] or p["manga_id"] or "[dim]None[/]"
-            table.add_row(str(idx), p["name"], chaps_str, src_str[:55] + ("..." if len(src_str) > 55 else ""))
-
-        console.print(table)
-        console.print("[dim]Select a project number, 'n' for new project, or 's' to configure settings (Voice/BGM/Resolution/Blur/Vision Format).[/]\n")
-
-        choice = Prompt.ask("[bold cyan]Choose project number or enter new project name[/]", default="1").strip()
-        if choice.lower() == "s":
-            setup.run_setup_wizard(config)
-            return _select_or_create_project(config)
-        elif choice.isdigit():
-            idx = int(choice)
-            if 1 <= idx <= len(existing_projects):
-                return existing_projects[idx - 1]["name"]
-        elif choice.lower() == "n":
-            return Prompt.ask("[bold cyan]Enter new project name[/]").strip()
-        elif choice:
-            return choice
-
-    return Prompt.ask("[bold cyan]Enter project name[/]", default="DefinitelyYandere").strip()
-
-
-def _select_chapter(project_name: str) -> str:
-    """Interactively lists chapters with their production status for the chosen project."""
-    existing_projects = {p["name"]: p for p in list_projects()}
-    project_info = existing_projects.get(project_name)
-
-    if project_info and project_info["chapters"]:
-        table = Table(title=f"[bold cyan]📑 Chapters for '{project_name}'[/]", border_style="cyan")
-        table.add_column("#", style="bold yellow", width=4)
-        table.add_column("Chapter", style="bold white")
-        table.add_column("Current Status", style="green")
-
-        for idx, ch in enumerate(project_info["chapters"], start=1):
-            status = get_chapter_status(project_name, ch)
-            table.add_row(str(idx), f"Chapter {ch}", f"[{'green' if 'Ready' in status['summary'] else 'yellow'}]{status['summary']}[/]")
-
-        console.print(table)
-        console.print("[dim]Select a chapter number to resume, or type a new chapter number.[/]\n")
-
-        default_ch = project_info["chapters"][-1]
-        choice = Prompt.ask("[bold cyan]Enter chapter number to process[/]", default=str(default_ch)).strip()
-        if choice.isdigit() and int(choice) <= len(project_info["chapters"]) and int(choice) >= 1:
-            return project_info["chapters"][int(choice) - 1]
-        return choice
-
-    return Prompt.ask("[bold cyan]Enter chapter number to process (e.g. 1 or 01)[/]", default="1").strip()
 
 
 def run_interactive_pipeline():
@@ -87,7 +27,7 @@ def run_interactive_pipeline():
     config = RemangaConfig.load()
 
     # 1. Project Selection / Creation / Settings
-    project = _select_or_create_project(config)
+    project = select_or_create_project(config)
     meta = load_project_metadata(project)
     saved_url = meta.get("manga_url", "")
 
@@ -99,7 +39,7 @@ def run_interactive_pipeline():
         url = Prompt.ask("[bold cyan]Enter MangaDex title URL/ID[/]").strip()
 
     # 2. Chapter Selection
-    chapter = _select_chapter(project)
+    chapter = select_chapter(project)
     chap_dir = get_chapter_dir(project, chapter)
 
     # 3. Reference Voice, BGM, and Vision Packaging Preference Validation

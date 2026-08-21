@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 from PIL import Image, ImageOps
 from rich.console import Console
 
 from remanga.config import CropperConfig
+from remanga.cropper.geometry import apply_padding, calculate_pixel_bounds
 from remanga.cropper.sheets import PanelSheetGenerator
 from remanga.json_io import read_json, write_json
 from remanga.paths import get_chapter_dir
@@ -133,10 +134,10 @@ class CoordinateCropper:
                         continue
 
                     is_normalized = "box_1000" in panel or max(box) <= 1000
-                    crop_box = self._calculate_pixel_bounds(box, img_w, img_h, is_1000=is_normalized)
+                    crop_box = calculate_pixel_bounds(box, img_w, img_h, is_1000=is_normalized)
 
                     if self.config.margin_padding_pixels > 0:
-                        crop_box = self._apply_padding(crop_box, img_w, img_h, self.config.margin_padding_pixels)
+                        crop_box = apply_padding(crop_box, img_w, img_h, self.config.margin_padding_pixels)
 
                     cropped_img = img.crop(crop_box)
                     if self.config.auto_contrast_clean:
@@ -202,35 +203,3 @@ class CoordinateCropper:
             return all_pages[page_index - 1]
 
         return None
-
-    def _calculate_pixel_bounds(self, box: List[int], img_w: int, img_h: int, is_1000: bool) -> Tuple[int, int, int, int]:
-        """Converts [ymin, xmin, ymax, xmax] into Pillow crop box (left, upper, right, lower)."""
-        ymin, xmin, ymax, xmax = box
-
-        if is_1000:
-            left = int((xmin / 1000.0) * img_w)
-            top = int((ymin / 1000.0) * img_h)
-            right = int((xmax / 1000.0) * img_w)
-            bottom = int((ymax / 1000.0) * img_h)
-        else:
-            left = int(xmin)
-            top = int(ymin)
-            right = int(xmax)
-            bottom = int(ymax)
-
-        left = max(0, min(left, img_w - 1))
-        top = max(0, min(top, img_h - 1))
-        right = max(left + 1, min(right, img_w))
-        bottom = max(top + 1, min(bottom, img_h))
-
-        return (left, top, right, bottom)
-
-    def _apply_padding(self, bounds: Tuple[int, int, int, int], img_w: int, img_h: int, padding: int) -> Tuple[int, int, int, int]:
-        """Expands bounds by padding pixels while preserving image bounds."""
-        left, top, right, bottom = bounds
-        return (
-            max(0, left - padding),
-            max(0, top - padding),
-            min(img_w, right + padding),
-            min(img_h, bottom + padding)
-        )

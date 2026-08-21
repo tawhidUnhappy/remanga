@@ -5,12 +5,15 @@ import signal
 import sys
 from rich.console import Console
 
-from remanga import setup
+from rich.prompt import Confirm
+
+from remanga import reset
 from remanga.audio import AudioProcessor, TTSEngine
 from remanga.config import RemangaConfig
 from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
 from remanga.models import ModelManager
+from remanga.setup_wizard import run_setup_wizard
 from remanga.status import render_status_panel
 from remanga.video import VideoRenderer
 from remanga.wizard import run_interactive_pipeline
@@ -76,6 +79,12 @@ def main():
     p_stat.add_argument("--project", "-p", required=True, help="Project name")
     p_stat.add_argument("--chapter", "-c", required=True, help="Chapter number")
 
+    # restart
+    p_restart = subparsers.add_parser("restart", help="Wipe a chapter back to just its downloaded pages so it can be reprocessed from scratch")
+    p_restart.add_argument("--project", "-p", required=True, help="Project name")
+    p_restart.add_argument("--chapter", "-c", required=True, help="Chapter number")
+    p_restart.add_argument("--force", "-f", action="store_true", help="Skip the confirmation prompt")
+
     args = parser.parse_args()
     config = RemangaConfig.load()
 
@@ -83,7 +92,7 @@ def main():
         if args.command in ("interactive", None):
             run_interactive_pipeline()
         elif args.command == "setup-config":
-            setup.run_setup_wizard(config)
+            run_setup_wizard(config)
         elif args.command == "setup-models":
             mgr = ModelManager(config.tts.model_dir, config.tts.hf_repo_id)
             mgr.ensure_model()
@@ -104,6 +113,22 @@ def main():
             renderer.render_video(args.project, args.chapter, force=args.force)
         elif args.command == "status":
             console.print(render_status_panel(args.project, args.chapter))
+        elif args.command == "restart":
+            candidates = reset.restart_candidates(args.project, args.chapter)
+            if not candidates:
+                console.print("[dim]Nothing to delete besides the downloaded pages.[/]")
+            else:
+                console.print("[bold red]The following will be permanently deleted:[/]")
+                for c in candidates:
+                    console.print(f"  [dim]- {c}[/]")
+                if args.force or Confirm.ask(
+                    f"[bold red]Confirm: permanently delete these {len(candidates)} item(s) for Chapter {args.chapter}? This cannot be undone.[/]",
+                    default=False,
+                ):
+                    reset.restart_chapter(args.project, args.chapter)
+                    console.print(f"[bold green]✓ Chapter {args.chapter} reset. Downloaded pages kept — ready to reprocess.[/]")
+                else:
+                    console.print("[dim]Restart cancelled.[/]")
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
         sys.exit(1)
