@@ -5,7 +5,8 @@ from typing import Optional, Tuple
 from PIL import Image, ImageColor, ImageDraw, ImageEnhance, ImageFilter, ImageOps
 from rich.console import Console
 
-from remanga.config import VideoConfig, get_chapter_dir
+from remanga.config import VideoConfig
+from remanga.paths import get_chapter_dir
 
 console = Console()
 

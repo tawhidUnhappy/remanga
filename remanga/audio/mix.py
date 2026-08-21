@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-import json
-import subprocess
 from pathlib import Path
 from typing import Optional
 from pydub import AudioSegment
 from rich.console import Console
 
-from remanga.config import AudioConfig, RemangaConfig, get_chapter_dir
+from remanga import setup
+from remanga.config import AudioConfig, RemangaConfig
+from remanga.ffmpeg_io import run_ffmpeg
+from remanga.json_io import read_json
+from remanga.paths import get_chapter_dir
 
 console = Console()
 
@@ -34,7 +36,7 @@ class AudioProcessor:
             self.config.bgm_path = bgm_override
             self.config.bgm_enabled = True
 
-        valid_bgm = full_config.ensure_valid_bgm(interactive=interactive)
+        valid_bgm = setup.ensure_valid_bgm(full_config, interactive=interactive)
         if valid_bgm:
             self.config.bgm_path = valid_bgm
             self.config.bgm_enabled = True
@@ -48,8 +50,7 @@ class AudioProcessor:
         if not timing_path.exists():
             raise FileNotFoundError(f"Missing audio timing metadata at: {timing_path}")
 
-        with open(timing_path, "r", encoding="utf-8") as f:
-            timing_info = json.load(f)
+        timing_info = read_json(timing_path)
 
         panels = timing_info.get("panels", [])
         console.print(f"[cyan]Assembling master audio stream for chapter {chapter_num}...[/]")
@@ -107,7 +108,7 @@ class AudioProcessor:
                 str(master_final_path)
             ]
             try:
-                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                run_ffmpeg(cmd, check=True, capture=True)
                 if master_raw_path.exists():
                     master_raw_path.unlink()
             except Exception as e:

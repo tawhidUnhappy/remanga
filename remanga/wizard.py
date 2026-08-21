@@ -6,16 +6,13 @@ from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
+from remanga import setup
 from remanga.audio import AudioProcessor, TTSEngine
-from remanga.config import (
-    RemangaConfig,
-    get_chapter_dir,
-    get_chapter_status,
-    list_projects,
-    load_project_metadata,
-)
+from remanga.config import RemangaConfig
 from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
+from remanga.paths import get_chapter_dir, list_projects, load_project_metadata
+from remanga.status import get_chapter_status
 from remanga.video import VideoRenderer
 
 console = Console()
@@ -42,7 +39,7 @@ def _select_or_create_project(config: RemangaConfig) -> str:
 
         choice = Prompt.ask("[bold cyan]Choose project number or enter new project name[/]", default="1").strip()
         if choice.lower() == "s":
-            config.run_setup_wizard()
+            setup.run_setup_wizard(config)
             return _select_or_create_project(config)
         elif choice.isdigit():
             idx = int(choice)
@@ -106,9 +103,9 @@ def run_interactive_pipeline():
     chap_dir = get_chapter_dir(project, chapter)
 
     # 3. Reference Voice, BGM, and Vision Packaging Preference Validation
-    config.ensure_valid_vision_asset_preference(interactive=True)
-    config.ensure_valid_voice_prompt(interactive=True)
-    config.ensure_valid_bgm(interactive=True)
+    setup.ensure_valid_vision_asset_preference(config, interactive=True)
+    setup.ensure_valid_voice_prompt(config, interactive=True)
+    setup.ensure_valid_bgm(config, interactive=True)
 
     # 4. Status Overview
     status = get_chapter_status(project, chapter)

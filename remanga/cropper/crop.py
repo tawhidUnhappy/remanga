@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import json
 import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from PIL import Image, ImageOps
 from rich.console import Console
 
-from remanga.config import CropperConfig, get_chapter_dir
-from remanga.cropper.sheet_generator import PanelSheetGenerator
+from remanga.config import CropperConfig
+from remanga.cropper.sheets import PanelSheetGenerator
+from remanga.json_io import read_json, write_json
+from remanga.paths import get_chapter_dir
 
 console = Console()
 
@@ -90,8 +91,7 @@ class CoordinateCropper:
             except Exception:
                 pass
 
-        with open(crops_json_path, "r", encoding="utf-8") as f:
-            crop_data = json.load(f)
+        crop_data = read_json(crops_json_path)
 
         pages_list = crop_data.get("pages", [])
         if not pages_list:
@@ -161,12 +161,11 @@ class CoordinateCropper:
                     panel_counter += 1
 
         # Save manifest for downstream audio/video synchronization
-        with open(manifest_path, "w", encoding="utf-8") as f:
-            json.dump({
-                "chapter": str(chapter_num),
-                "total_panels": len(output_panel_paths),
-                "panels": manifest_data
-            }, f, indent=2)
+        write_json(manifest_path, {
+            "chapter": str(chapter_num),
+            "total_panels": len(output_panel_paths),
+            "panels": manifest_data
+        })
 
         console.print(f"[bold green]✓ Cropped {len(output_panel_paths)} panels successfully into:[/] {panels_dir}")
 

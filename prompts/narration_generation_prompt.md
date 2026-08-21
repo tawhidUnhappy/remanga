@@ -49,9 +49,16 @@ To ensure 100% consistent, flat, documentary-style vocal narration across all ch
 
 ### Rule 6: Strict Sequential Panel Coverage
 - Include an entry for **every sequential panel ID** (`panel_001` through `panel_NNN`) in exact chronological sequence.
-- **Never skip, merge, or omit panel IDs.**
+- **Never skip, merge, or omit panel IDs.** If a panel seems minor, low-content, or repetitive, it still gets its own entry — use a short line or a silent beat (`"text": ""`, Rule 4), but the entry must exist. `narration.total_panels` must equal the number of panels actually supplied, and the `narration` array length must match it exactly — treat any mismatch as an error to fix before output, not an acceptable shortcut.
 
-### Rule 7: Phonetic Clarity
+### Rule 7: Complete Dialogue & Action Coverage (ZERO OMISSION)
+Every panel must be fully accounted for — do not silently drop content because it's inconvenient to fit, redundant-seeming, or not the "main" beat of the panel.
+- **All dialogue, in order:** If a panel contains multiple speech bubbles, thought bubbles, captions, or SFX text, the narration must reflect the substance of **every one of them**, not just the first or the most dramatic line. Synthesize them into flowing prose (per Rule 5) rather than dropping the rest — condensing wording is fine, discarding a speaker's line entirely is not.
+- **All actions, in order:** Every distinct physical action or event depicted in the panel (an entrance, a gesture, an object changing hands, a reaction) must be represented in the narration in the same order it reads on the page. Do not narrate only the first action in a panel and ignore a second one drawn in the same frame.
+- **Preserve reading order across the whole page/sequence:** narration order must follow the same right-to-left, top-to-bottom flow the panels were cropped in — never reorder events, and never narrate a later panel's content early or a fact before the panel that establishes it.
+- Before finalizing output, re-scan each panel image against its narration line and confirm nothing visible or spoken in it was left out; if something was omitted, revise the line (or split it across `text` and an adjacent silent beat) rather than letting it disappear.
+
+### Rule 8: Phonetic Clarity
 - Spell out abbreviations, ranks, and chapter numbers phonetically (e.g., "Class One-One", "Chapter One", "Room Three-B").
 
 ---

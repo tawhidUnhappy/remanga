@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import inspect
-import json
-import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from pydub import AudioSegment
 from rich.console import Console
 from rich.progress import BarColumn, Progress, TextColumn
 
-from remanga.config import AudioConfig, RemangaConfig, TTSConfig, get_chapter_dir
+from remanga import setup
+from remanga.config import AudioConfig, RemangaConfig, TTSConfig
+from remanga.ffmpeg_io import run_ffmpeg
+from remanga.json_io import read_json, write_json
 from remanga.models import ModelManager
+from remanga.paths import get_chapter_dir
 
 console = Console()
 
@@ -81,7 +83,7 @@ class TTSEngine:
             str(wav_path)
         ]
         try:
-            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            run_ffmpeg(cmd, check=True)
             if temp_wav.exists():
                 temp_wav.unlink()
         except Exception:
@@ -166,7 +168,7 @@ class TTSEngine:
             full_config.tts.spk_audio_prompt = voice_override
             self.tts_config.spk_audio_prompt = voice_override
 
-        spk_prompt_path = full_config.ensure_valid_voice_prompt(interactive=interactive)
+        spk_prompt_path = setup.ensure_valid_voice_prompt(full_config, interactive=interactive)
         self.tts_config.spk_audio_prompt = spk_prompt_path
 
         chapter_dir = get_chapter_dir(project_name, chapter_num)
@@ -180,8 +182,7 @@ class TTSEngine:
                 f"Please provide your narration JSON file before generating speech."
             )
 
-        with open(narration_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        data = read_json(narration_path)
 
         narration_entries = data.get("narration", [])
         if not narration_entries:
@@ -267,13 +268,12 @@ class TTSEngine:
                 progress.advance(task)
 
         timing_manifest_path = chapter_dir / "audio_timing.json"
-        with open(timing_manifest_path, "w", encoding="utf-8") as f:
-            json.dump({
-                "chapter": str(chapter_num),
-                "total_timeline_ms": current_timeline_ms,
-                "total_timeline_sec": round(current_timeline_ms / 1000.0, 3),
-                "panels": timing_data
-            }, f, indent=2)
+        write_json(timing_manifest_path, {
+            "chapter": str(chapter_num),
+            "total_timeline_ms": current_timeline_ms,
+            "total_timeline_sec": round(current_timeline_ms / 1000.0, 3),
+            "panels": timing_data
+        })
 
         if resumed_count > 0:
             console.print(f"[dim cyan](Resumed {resumed_count} existing audio clips without re-generating)[/]")

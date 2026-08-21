@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import json
-import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
 from rich.console import Console
 
-from remanga.config import SystemConfig, VideoConfig, get_chapter_dir
-from remanga.video.compositor import FrameCompositor
+from remanga.config import SystemConfig, VideoConfig
+from remanga.ffmpeg_io import run_ffmpeg
+from remanga.json_io import read_json
+from remanga.paths import get_chapter_dir
+from remanga.video.compose import FrameCompositor
 
 console = Console()
 
@@ -24,7 +25,7 @@ class VideoRenderer:
             return False
         cmd = ["ffmpeg", "-y", "-f", "lavfi", "-i", "nullsrc=s=64x64:d=0.1", "-c:v", self.system_config.gpu_codec, "-f", "null", "-"]
         try:
-            res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            res = run_ffmpeg(cmd)
             return res.returncode == 0
         except Exception:
             return False
@@ -51,8 +52,7 @@ class VideoRenderer:
         self.compositor.prepare_composited_frames(project_name, chapter_num, force=force)
 
         # 2. Create FFmpeg Concat Script
-        with open(timing_path, "r", encoding="utf-8") as f:
-            timing_info = json.load(f)
+        timing_info = read_json(timing_path)
 
         panels = timing_info.get("panels", [])
         concat_file = video_dir / "concat_list.txt"
@@ -97,7 +97,7 @@ class VideoRenderer:
         ])
 
         console.print("[yellow]Starting video rendering... This may take a moment.[/]")
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        result = run_ffmpeg(cmd, capture=True)
 
         if result.returncode != 0:
             console.print(f"[red]FFmpeg Error Details:\n{result.stderr}[/]")

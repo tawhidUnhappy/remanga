@@ -1,4 +1,4 @@
-from .json_cropper import CoordinateCropper
-from .sheet_generator import PanelSheetGenerator
+from .crop import CoordinateCropper
+from .sheets import PanelSheetGenerator
 
 __all__ = ["CoordinateCropper", "PanelSheetGenerator"]

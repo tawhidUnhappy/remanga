@@ -1,3 +1,3 @@
-from .manager import ModelManager
+from .weights import ModelManager
 
 __all__ = ["ModelManager"]

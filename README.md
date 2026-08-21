@@ -335,12 +335,19 @@ remanga/
 │               ├── video/frames/       # Composited 1080p/2K/4K canvas frames
 │               └── <project>_ch<num>_recap.mp4  # FINAL RECAP VIDEO
 ├── remanga/                    # Python core pipeline package
-│   ├── audio/                  # IndexTTS-2.5 engine & audio mixer
-│   ├── cropper/                # Coordinate cropper & sheet generator
-│   ├── downloader/             # MangaDex client
-│   ├── video/                  # Frame compositor & GPU renderer
-│   ├── config.py               # Pydantic configuration schemas & wizards
-│   └── cli.py                  # CLI command dispatcher
+│   ├── audio/                  # tts.py (IndexTTS-2.5 engine) & mix.py (master audio mixer)
+│   ├── cropper/                # crop.py (coordinate cropper) & sheets.py (contact sheet generator)
+│   ├── downloader/             # mangadex.py (MangaDex client)
+│   ├── models/                 # weights.py (model weight download/verification)
+│   ├── video/                  # compose.py (frame compositor) & render.py (GPU/CPU renderer)
+│   ├── config.py                # Pydantic configuration schemas (load/save only)
+│   ├── paths.py                 # Project/chapter directory layout & metadata persistence
+│   ├── status.py                # Chapter production-status computation & display
+│   ├── setup.py                 # Interactive Rich setup-wizard prompts
+│   ├── json_io.py               # Shared JSON read/write helpers
+│   ├── ffmpeg_io.py             # Shared ffmpeg subprocess helper
+│   ├── wizard.py                # Interactive step-by-step production wizard
+│   └── cli.py                   # CLI command dispatcher
 ├── config.json                 # Active user production settings
 ├── bootstrap.sh                # Zero-dependency sandbox environment installer
 ├── pipeline.sh                 # Master interactive pipeline launcher

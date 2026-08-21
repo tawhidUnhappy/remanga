@@ -22,6 +22,12 @@ Analyze raw sequential manga chapter pages with surgical focus and extract clean
 - Output **ONLY** the raw, valid JSON object matching the schema below.
 - Do **NOT** include introductory text, explanations, markdown comments, or concluding remarks.
 
+### Rule D: Crop Data ONLY — No Foreign Content in the JSON
+`crops.json` is a **coordinate/cropping instruction file**, consumed by an automated cropping script — it is not a story document. It must contain **strictly and only** the fields defined in the schema in Section 5, nothing else:
+- **No new top-level or per-object fields.** Do not add keys beyond `chapter`, `pages[]` (`page_index`, `page_filename`, `is_story_page`, `notes`, `panels[]`), and `panels[]` (`panel_id`, `box_1000`, `type`, `notes`). Do not add fields like `dialogue`, `speech`, `characters`, `summary`, `synopsis`, `emotion`, or anything belonging to the separate narration stage.
+- **`notes` is a short visual/compositional locator tag, not a scene description.** Keep it to a few words identifying what the box contains for a human spot-checking the crop (e.g., `"Boy pulling shoes from locker"`), never a full sentence-by-sentence narrative, a dialogue transcript, or plot commentary. Dialogue transcription and narrative writing happen later, in the narration stage — do not do that work here.
+- Every panel that is physically present on a story page must get a crop entry (subject to the merge rule above) — do not silently drop a panel because it seems minor or hard to bound.
+
 ---
 
 ## 2. Normalized Coordinate System `[ymin, xmin, ymax, xmax]`
@@ -37,6 +43,13 @@ All panel bounding boxes must strictly use **normalized integer coordinates from
 *Validation Rules:*
 1. `ymin < ymax` and `xmin < xmax` must always be strictly true.
 2. Coordinates must be integers between `0` and `1000`.
+
+### Pixel-Precision Mandate (CRITICAL — most common failure mode)
+Because pages are rendered at high resolution, an error of even 20-40 units on the 0-1000 scale becomes 100-200+ real pixels of misplaced crop — enough to slice a panel edge, a speech bubble, or a character. Sloppy, "eyeballed" coordinates are the single biggest quality failure in this task, so treat coordinate accuracy as equal in priority to Rule 1.
+- **Trace, don't estimate.** Locate the exact physical panel border (the ink line or the gutter edge) on each side before writing a number. Do not round to convenient values like `100`, `250`, `500` unless the border genuinely falls there.
+- **Self-check every box before output:** mentally re-project the `[ymin, xmin, ymax, xmax]` box back onto the page and confirm it lands exactly on the panel border / bubble tail / bleeding art, with no visible sliver of the neighboring panel and no clipped content. Adjust and re-verify if it doesn't line up.
+- **Use the gutter as your ruler.** The blank space (gutter) between panels is your reference — the crop boundary should sit in the middle of the gutter on shared edges, not drift into the neighboring panel or leave excess gutter inside the crop.
+- Small, deliberate margin expansion for bubble/bleed protection (Rules 1-2 below) is expected and good. Large, careless offsets from imprecise reading of the page are not — they are the defect this mandate exists to prevent.
 
 ---
 
@@ -55,8 +68,11 @@ All panel bounding boxes must strictly use **normalized integer coordinates from
 - **Do Not Slice Conversational Tiers:** If a row features two or three characters exchanging dialogue across sub-panels, crop the entire horizontal row as ONE unified panel (`"type": "wide_tier"` or `"type": "dialogue_exchange"`).
 - **No Floating Bubble Slivers:** Keep the speaker, the context, and the dialogue bubble united in the same crop.
 
-### Rule 4: Multi-Tier Environmental Context
-- When a scene establishes a physical action across split tiers (e.g., shoe locker compartment above and character reaction below), keep the prop interaction complete and cleanly bounded.
+### Rule 4: One Bordered Frame = One Panel (Do Not Over-Split)
+- **The panel border/gutter is the ONLY thing that defines where one panel ends and another begins — not the number of actions or beats happening inside it.** A single panel frame frequently contains two or more sequential beats drawn inside the same border (e.g., a character glancing at his locker AND discovering a letter inside it, both inked within one continuous frame with no dividing line between them). This is still **ONE panel** and must be output as a **single crop entry**, never split into two.
+- **Failure pattern to avoid:** emitting two separate `panels` entries for content that shares one unbroken border. Before finalizing a page, check every pair of adjacent panels you are about to output — if there is no ink border, no gutter gap, and no visual frame break between them, merge them into one box (`"type": "wide_tier"` or `"dialogue_exchange"` as appropriate) instead of two.
+- **When a scene DOES establish a physical action across genuinely split tiers with a visible border between them** (e.g., a shoe locker compartment tier above a separately bordered reaction tier below), keep each tier as its own crop, but ensure each crop's prop interaction is complete and cleanly bounded within its own border — don't cut the locker off from the hand reaching into it, or the reaction face off from its dialogue bubble.
+- When genuinely uncertain whether two adjacent beats share a border, prefer the merged single-panel interpretation — an unnecessarily split panel disrupts recap video pacing more than a slightly wider crop does.
 
 ### Rule 5: Double-Page Spread Deduplication (CRITICAL)
 - If a spread exists as both split individual pages AND a stitched combined image in the chapter:

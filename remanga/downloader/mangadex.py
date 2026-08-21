@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 import time
 import zipfile
@@ -10,12 +9,9 @@ import requests
 from rich.console import Console
 from rich.progress import BarColumn, DownloadColumn, Progress, TextColumn, TimeRemainingColumn
 
-from remanga.config import (
-    DownloaderConfig,
-    get_chapter_dir,
-    load_project_metadata,
-    save_project_metadata,
-)
+from remanga.config import DownloaderConfig
+from remanga.json_io import read_json_or, write_json
+from remanga.paths import get_chapter_dir, load_project_metadata, save_project_metadata
 
 console = Console()
 
@@ -212,21 +208,14 @@ class MangaDexDownloader:
 
         # Check existing pages & verify against metadata
         all_present = True
-        if meta_json_path.exists():
-            try:
-                with open(meta_json_path, "r", encoding="utf-8") as f:
-                    cached_meta = json.load(f)
-                if cached_meta.get("total_pages") == len(filenames) and cached_meta.get("chapter_id") == chapter_id:
-                    for idx, fn in enumerate(filenames, start=1):
-                        page_ext = Path(fn).suffix or ".png"
-                        p_file = dest_dir / f"page_{idx:03d}{page_ext}"
-                        if not p_file.exists() or p_file.stat().st_size == 0:
-                            all_present = False
-                            break
-                else:
+        cached_meta = read_json_or(meta_json_path, None)
+        if cached_meta and cached_meta.get("total_pages") == len(filenames) and cached_meta.get("chapter_id") == chapter_id:
+            for idx, fn in enumerate(filenames, start=1):
+                page_ext = Path(fn).suffix or ".png"
+                p_file = dest_dir / f"page_{idx:03d}{page_ext}"
+                if not p_file.exists() or p_file.stat().st_size == 0:
                     all_present = False
-            except Exception:
-                all_present = False
+                    break
         else:
             all_present = False
 
@@ -280,17 +269,16 @@ class MangaDexDownloader:
                 progress.advance(dl_task)
 
         # Save verification metadata
-        with open(meta_json_path, "w", encoding="utf-8") as f:
-            json.dump({
-                "project": project_name,
-                "chapter": str(chapter_num),
-                "chapter_id": chapter_id,
-                "manga_id": manga_id,
-                "total_pages": len(filenames),
-                "quality": quality_key,
-                "timestamp": time.time(),
-                "pages": downloaded_meta
-            }, f, indent=2)
+        write_json(meta_json_path, {
+            "project": project_name,
+            "chapter": str(chapter_num),
+            "chapter_id": chapter_id,
+            "manga_id": manga_id,
+            "total_pages": len(filenames),
+            "quality": quality_key,
+            "timestamp": time.time(),
+            "pages": downloaded_meta
+        })
 
         console.print(f"[bold green]✓ Successfully downloaded and verified all {len(filenames)} pages![/]")
 
