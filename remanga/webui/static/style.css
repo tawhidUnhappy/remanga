@@ -182,6 +182,9 @@ body {
 .page-stage.select-mode { cursor: default; }
 .page-stage img { display: block; user-select: none; -webkit-user-drag: none; pointer-events: none; }
 
+.canvas-wrap.space-pan, .canvas-wrap.space-pan .page-stage { cursor: grab; }
+.canvas-wrap.panning, .canvas-wrap.panning .page-stage { cursor: grabbing; }
+
 /* ---------- Marks ---------- */
 .mark {
   position: absolute;

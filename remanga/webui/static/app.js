@@ -31,6 +31,7 @@ let scale = 1;
 let nextLocalId = 1;
 let saveDebounce = null;
 let magiEnabled = false;
+let pageLoaded = false;   // false until the very first loadPage() has completed
 
 async function api(path, opts) {
   const res = await fetch(path, opts);
@@ -61,7 +62,13 @@ async function init() {
 }
 
 async function loadPage(idx) {
-  flushSave(true);
+  // On the very first call, pageIndex is already 0 (its initial value), so
+  // flushing "the page we're leaving" here would flush *this same* page with
+  // its still-empty marks array and mark it touched server-side - which then
+  // makes the server permanently refuse to apply MAGI's detections to it
+  // (apply_detected() never overwrites a touched page). Only flush when we're
+  // actually navigating away from a page that was on screen.
+  if (pageLoaded) flushSave(true);
   pageIndex = Math.max(0, Math.min(chapter.pages.length - 1, idx));
   const page = chapter.pages[pageIndex];
   marks = pageMarksCache[page.filename];
@@ -79,6 +86,7 @@ async function loadPage(idx) {
   fitZoomToWrap(page.width, page.height);
   applyZoom();
   render();
+  pageLoaded = true;
 }
 
 function fitZoomToWrap(naturalW, naturalH) {
@@ -304,7 +312,7 @@ function onMarkMouseDown(e, m) {
 // ---------------- Draw a new mark (Canva-style: can start outside the page) ----------------
 let drawing = null, ghostEl = null;
 canvasWrap.addEventListener("mousedown", (e) => {
-  if (mode !== "draw" || e.button !== 0) return;
+  if (mode !== "draw" || e.button !== 0 || spaceHeld) return;
   if (e.target.closest(".mark")) return; // let mark-level handler deal with it
   e.preventDefault();
 
@@ -352,21 +360,125 @@ function setMode(next) {
 document.getElementById("toolDraw").addEventListener("click", () => setMode("draw"));
 document.getElementById("toolSelect").addEventListener("click", () => setMode("select"));
 
-document.getElementById("zoomIn").addEventListener("click", () => { scale = Math.min(3, scale + 0.1); applyZoom(); render(); });
-document.getElementById("zoomOut").addEventListener("click", () => { scale = Math.max(0.15, scale - 0.1); applyZoom(); render(); });
+const MIN_SCALE = 0.05, MAX_SCALE = 8;
+
+// Zoom while keeping a given point on the page (in canvasWrap viewport
+// coordinates) visually fixed - the same anchor-under-cursor behavior as
+// Canva/Illustrator's ctrl+scroll and +/- zoom, instead of always re-centering.
+function zoomTo(newScale, anchorClientX, anchorClientY) {
+  newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
+  if (anchorClientX === undefined) {
+    const rect = canvasWrap.getBoundingClientRect();
+    anchorClientX = rect.left + rect.width / 2;
+    anchorClientY = rect.top + rect.height / 2;
+  }
+  const wrapRect = canvasWrap.getBoundingClientRect();
+  // Point under the cursor, in unscaled stage coordinates (stable across a
+  // scale change since it's the page content itself, not screen pixels).
+  const stageX = (canvasWrap.scrollLeft + anchorClientX - wrapRect.left) / scale;
+  const stageY = (canvasWrap.scrollTop + anchorClientY - wrapRect.top) / scale;
+
+  scale = newScale;
+  applyZoom();
+  render();
+
+  canvasWrap.scrollLeft = stageX * scale - (anchorClientX - wrapRect.left);
+  canvasWrap.scrollTop = stageY * scale - (anchorClientY - wrapRect.top);
+}
+
+document.getElementById("zoomIn").addEventListener("click", () => zoomTo(scale + 0.1));
+document.getElementById("zoomOut").addEventListener("click", () => zoomTo(scale - 0.1));
 
 document.getElementById("prevPage").addEventListener("click", () => loadPage(pageIndex - 1));
 document.getElementById("nextPage").addEventListener("click", () => loadPage(pageIndex + 1));
 
+// ---------------- Canva/Illustrator-style zoom + free panning ----------------
+// Plain wheel/trackpad scroll already pans freely (canvasWrap is a native
+// overflow:auto viewport). Ctrl/Cmd+wheel (and trackpad pinch, which the
+// browser reports as a wheel event with ctrlKey set) zooms in place around
+// the cursor instead of scrolling.
+canvasWrap.addEventListener("wheel", (e) => {
+  if (!e.ctrlKey && !e.metaKey) return; // plain scroll: let native panning happen
+  e.preventDefault();
+  const factor = Math.exp(-e.deltaY * 0.01);
+  zoomTo(scale * factor, e.clientX, e.clientY);
+}, { passive: false });
+
+// Spacebar-held + drag pans the canvas (hand tool), same as Illustrator/
+// Photoshop/Canva. Also supports middle-mouse-button drag directly, no key
+// needed.
+let spaceHeld = false;
+let panning = null; // { startX, startY, startScrollLeft, startScrollTop }
+
+function beginPan(e) {
+  panning = {
+    startX: e.clientX, startY: e.clientY,
+    startScrollLeft: canvasWrap.scrollLeft, startScrollTop: canvasWrap.scrollTop,
+  };
+  canvasWrap.classList.add("panning");
+  const onMove = (ev) => {
+    if (!panning) return;
+    canvasWrap.scrollLeft = panning.startScrollLeft - (ev.clientX - panning.startX);
+    canvasWrap.scrollTop = panning.startScrollTop - (ev.clientY - panning.startY);
+  };
+  const onUp = () => {
+    panning = null;
+    canvasWrap.classList.remove("panning");
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", onUp);
+  };
+  document.addEventListener("mousemove", onMove);
+  document.addEventListener("mouseup", onUp);
+}
+
+canvasWrap.addEventListener("mousedown", (e) => {
+  if (e.button === 1 || (e.button === 0 && spaceHeld)) {
+    e.preventDefault();
+    beginPan(e);
+  }
+}, { capture: true });
+
+document.addEventListener("keydown", (e) => {
+  if (e.code === "Space" && !e.repeat && !isTypingTarget(e.target)) {
+    spaceHeld = true;
+    canvasWrap.classList.add("space-pan");
+    e.preventDefault();
+  }
+});
+document.addEventListener("keyup", (e) => {
+  if (e.code === "Space") {
+    spaceHeld = false;
+    canvasWrap.classList.remove("space-pan");
+  }
+});
+function isTypingTarget(el) {
+  return el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+}
+
 document.addEventListener("keydown", (e) => {
   const cmd = isMac ? e.metaKey : e.ctrlKey;
   if (cmd && e.key.toLowerCase() === "s") { e.preventDefault(); saveAndContinue(); return; }
+  if (cmd && e.key.toLowerCase() === "f") { e.preventDefault(); markFullPage(); return; }
   if (e.key === "d" || e.key === "D") setMode("draw");
   if (e.key === "v" || e.key === "V") setMode("select");
   if (e.key === "ArrowLeft") loadPage(pageIndex - 1);
   if (e.key === "ArrowRight") loadPage(pageIndex + 1);
   if ((e.key === "Delete" || e.key === "Backspace") && selectedId !== null) deleteMark(selectedId);
 });
+
+// Ctrl/Cmd+F: wipe every mark on the current page and replace them with a
+// single panel covering the whole page - for pages that are just one big
+// panel (splash pages, single-panel spreads), so no per-panel drawing is
+// needed for those at all.
+function markFullPage() {
+  const page = chapter.pages[pageIndex];
+  const full = { id: "local-" + (nextLocalId++), x: 0, y: 0, w: page.width, h: page.height, src: "manual" };
+  marks = [full];
+  pageMarksCache[currentFilename()] = marks;
+  selectedId = full.id;
+  markDirty();
+  render();
+}
 
 // ---------------- MAGI v3 assist ----------------
 async function runDetect() {
