@@ -1,8 +1,9 @@
 """Classical computer-vision refinement for LLM-guessed crop boxes.
 
 The vision LLM that produces `crops.json` is good at *finding* panels but, per the
-crop prompt's own "Pixel-Precision Mandate", is prone to eyeballing edges 20-40
-units off on the 0-1000 scale — enough to slice a panel edge or a speech bubble.
+crop prompt's own "Pixel-Precision Mandate", is prone to eyeballing edges off by a
+wide margin — enough to slice a panel edge, a speech bubble, or leave a strip of
+the wrong panel in the crop.
 
 This module treats the LLM's box as a best guess, not ground truth, and snaps each
 of its four edges onto the real boundary it was aiming for: it looks for the band
@@ -13,16 +14,20 @@ ruler"). If no confident gutter band exists near an edge (frame-breaking bleed a
 or the true physical edge of the page), that edge is left untouched rather than
 forced to snap somewhere wrong.
 
+See also: `remanga.cropper.seams` (a second pass that reconciles the shared edge
+between two adjacent panels instead of refining each independently) and
+`remanga.cropper.gutter_debug` (a standalone CLI for eyeballing one box's result).
+
 Pure numpy + Pillow — no OpenCV dependency (kept intentionally lightweight since
 this runs inline in the crop pipeline for every panel of every page).
 """
 
 from __future__ import annotations
 
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image
 
 PixelBox = Tuple[int, int, int, int]  # (left, top, right, bottom) - Pillow crop-box order
 
@@ -84,7 +89,7 @@ def _find_nearest_run(mask: np.ndarray, center_offset: int, min_run: int) -> Opt
     return min(runs, key=distance)
 
 
-def _locate_gutter_band(
+def locate_gutter_band(
     gray: np.ndarray,
     axis_len: int,
     center: int,
@@ -97,10 +102,11 @@ def _locate_gutter_band(
     min_run: int,
     min_bg_fraction: float,
 ) -> Optional[int]:
-    """Core search shared by single-edge refinement and seam reconciliation: looks
-    for the background/gutter band nearest `center` within `search_radius` along one
-    axis, scored over the perpendicular span [perp_lo, perp_hi). Returns the band's
-    midpoint as an absolute coordinate, or None if no qualifying band exists nearby."""
+    """Core search shared by single-edge refinement (below) and seam reconciliation
+    (`remanga.cropper.seams`): looks for the background/gutter band nearest `center`
+    within `search_radius` along one axis, scored over the perpendicular span
+    [perp_lo, perp_hi). Returns the band's midpoint as an absolute coordinate, or
+    None if no qualifying band exists nearby."""
     perp_lo = max(0, perp_lo)
     perp_hi = max(perp_lo + 1, perp_hi)
     if perp_hi - perp_lo < 1:
@@ -146,7 +152,7 @@ def _refine_edge(
     if coord <= 0 or coord >= axis_len:
         return coord  # true page edge - nothing to snap to, this is full bleed
 
-    mid = _locate_gutter_band(
+    mid = locate_gutter_band(
         gray, axis_len, coord, perp_lo, perp_hi, along_rows, bg, tolerance, search_radius, min_run, min_bg_fraction
     )
     return coord if mid is None else mid
@@ -188,129 +194,7 @@ def refine_box_to_gutters(
     return (left_r, top_r, right_r, bottom_r)
 
 
-def _range_overlap_fraction(a0: float, a1: float, b0: float, b1: float) -> float:
-    """What fraction of the *smaller* of two 1D ranges the overlap between them covers."""
-    inter = max(0.0, min(a1, b1) - max(a0, b0))
-    smaller = min(a1 - a0, b1 - b0)
-    return inter / smaller if smaller > 0 else 0.0
-
-
-def reconcile_adjacent_seams(
-    gray: np.ndarray,
-    boxes: List[PixelBox],
-    bg: float,
-    search_radius: int = 120,
-    tolerance: float = 20.0,
-    min_run: int = 3,
-    min_bg_fraction: float = 0.96,
-    max_seam_gap_fraction: float = 0.15,
-    min_axis_overlap_fraction: float = 0.5,
-) -> List[PixelBox]:
-    """Second pass over one page's already gutter-snapped panel boxes, in reading
-    order. Independent per-edge refinement (refine_box_to_gutters) can leave two
-    supposedly-adjacent tiles disagreeing about where their shared border actually
-    is - one undershoots (leaving a strip of its own content uncropped, which reads
-    as a "gutter" gap) while the other overshoots into that same strip (bleeding a
-    slice of its neighbor's content into its own crop). Both symptoms come from the
-    same wrong seam.
-
-    For every consecutive pair of boxes that looks like stacked or side-by-side
-    tiles (their shared axis overlaps substantially and their facing edges are
-    within a plausible gutter distance of each other, gap or overlap alike), this
-    re-derives BOTH facing edges from a single joint gutter search centered between
-    them, so they are geometrically guaranteed to agree - no gap, no overlap -
-    instead of trusting two independent, possibly-inconsistent guesses.
-    """
-    boxes = list(boxes)
-    h, w = gray.shape
-
-    for i in range(len(boxes) - 1):
-        l1, t1, r1, b1 = boxes[i]
-        l2, t2, r2, b2 = boxes[i + 1]
-
-        # Vertically stacked tiles: box i sits above box i+1, sharing a horizontal span.
-        x_overlap = _range_overlap_fraction(l1, r1, l2, r2)
-        gap = t2 - b1
-        max_gap = int(h * max_seam_gap_fraction)
-        if x_overlap >= min_axis_overlap_fraction and -search_radius <= gap <= max_gap:
-            center = (b1 + t2) // 2
-            radius = max(search_radius, abs(gap) // 2 + search_radius)
-            perp_lo, perp_hi = max(l1, l2), min(r1, r2)
-            mid = _locate_gutter_band(gray, h, center, perp_lo, perp_hi, True, bg, tolerance, radius, min_run, min_bg_fraction)
-            if mid is not None and t1 < mid < b2:
-                boxes[i] = (l1, t1, r1, mid)
-                boxes[i + 1] = (l2, mid, r2, b2)
-                continue
-
-        # Horizontally adjacent tiles: box i left of box i+1, sharing a vertical span.
-        y_overlap = _range_overlap_fraction(t1, b1, t2, b2)
-        gap_x = l2 - r1
-        max_gap_x = int(w * max_seam_gap_fraction)
-        if y_overlap >= min_axis_overlap_fraction and -search_radius <= gap_x <= max_gap_x:
-            center = (r1 + l2) // 2
-            radius = max(search_radius, abs(gap_x) // 2 + search_radius)
-            perp_lo, perp_hi = max(t1, t2), min(b1, b2)
-            mid = _locate_gutter_band(gray, w, center, perp_lo, perp_hi, False, bg, tolerance, radius, min_run, min_bg_fraction)
-            if mid is not None and l1 < mid < r2:
-                boxes[i] = (l1, t1, mid, b1)
-                boxes[i + 1] = (mid, t2, r2, b2)
-
-    return boxes
-
-
 def count_adjusted_edges(original: PixelBox, refined: PixelBox, min_shift: int = 1) -> int:
     """How many of the 4 edges actually moved by at least `min_shift` px - used for
     the crop pipeline's summary line, not for any decision-making."""
     return sum(1 for a, b in zip(original, refined) if abs(a - b) >= min_shift)
-
-
-def _debug_visualize(page_path: str, box: PixelBox, refined: PixelBox, out_path: str) -> None:
-    """Draws the LLM's original box (red) and the gutter-refined box (green) over
-    the page for visual sanity-checking. Debug/manual-use only - not called by the
-    production pipeline."""
-    img = Image.open(page_path).convert("RGB")
-    draw = ImageDraw.Draw(img)
-    draw.rectangle(box, outline=(255, 0, 0), width=3)
-    draw.rectangle(refined, outline=(0, 200, 0), width=3)
-    img.save(out_path)
-
-
-def _main() -> None:
-    """Standalone CLI for eyeballing the gutter-snap on one panel of one page:
-
-        python -m remanga.cropper.gutter <page_image> <ymin> <xmin> <ymax> <xmax> [out_debug.png]
-
-    Coordinates are in the same normalized 0-1000 scale crops.json uses.
-    """
-    import sys
-
-    from remanga.cropper.geometry import calculate_pixel_bounds
-
-    if len(sys.argv) < 6:
-        print(__doc__)
-        print(_main.__doc__)
-        raise SystemExit(1)
-
-    page_path = sys.argv[1]
-    ymin, xmin, ymax, xmax = (int(v) for v in sys.argv[2:6])
-    out_path = sys.argv[6] if len(sys.argv) > 6 else "gutter_debug.png"
-
-    img = Image.open(page_path)
-    img_w, img_h = img.size
-    gray = page_grayscale_array(img)
-    bg = sample_background_color(gray)
-
-    original_box = calculate_pixel_bounds([ymin, xmin, ymax, xmax], img_w, img_h, is_1000=True)
-    refined_box = refine_box_to_gutters(gray, original_box, bg)
-
-    print(f"Page background level (0-255): {bg:.1f}")
-    print(f"LLM guess (pixels, L/T/R/B):     {original_box}")
-    print(f"Gutter-refined (pixels, L/T/R/B): {refined_box}")
-    print(f"Edges adjusted: {count_adjusted_edges(original_box, refined_box)}/4")
-
-    _debug_visualize(page_path, original_box, refined_box, out_path)
-    print(f"Debug overlay (red=LLM guess, green=refined) saved to: {out_path}")
-
-
-if __name__ == "__main__":
-    _main()

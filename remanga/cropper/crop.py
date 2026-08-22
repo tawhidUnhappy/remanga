@@ -1,21 +1,22 @@
+"""Chapter-level crop orchestration: reads crops.json, resolves and crops every
+panel, then packages the vision upload archive. The actual box math lives in
+remanga.cropper.panel_boxes/gutter/seams/dedupe - this module just wires the
+pipeline stages together in order."""
+
 from __future__ import annotations
 
-import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from PIL import Image, ImageOps
 from rich.console import Console
 
 from remanga.config import CropperConfig
+from remanga.cropper.archive import create_vision_archive
 from remanga.cropper.dedupe import dedupe_panels
-from remanga.cropper.geometry import apply_padding, calculate_pixel_bounds
-from remanga.cropper.gutter import (
-    count_adjusted_edges,
-    page_grayscale_array,
-    reconcile_adjacent_seams,
-    refine_box_to_gutters,
-    sample_background_color,
-)
+from remanga.cropper.geometry import apply_padding
+from remanga.cropper.gutter import count_adjusted_edges, page_grayscale_array, sample_background_color
+from remanga.cropper.page_locator import locate_page_file
+from remanga.cropper.panel_boxes import resolve_page_panel_boxes
 from remanga.cropper.sheets import PanelSheetGenerator
 from remanga.json_io import read_json, write_json
 from remanga.paths import get_chapter_dir
@@ -26,37 +27,6 @@ console = Console()
 class CoordinateCropper:
     def __init__(self, config: Optional[CropperConfig] = None):
         self.config = config or CropperConfig()
-
-    def _create_vision_archive(self, chapter_dir: Path, panels_dir: Path, sheets_dir: Optional[Path]) -> Path:
-        """
-        Packages cropped assets into either sheets.zip (2x2 contact sheets) or panels.zip (individual crops)
-        based on the user's configured vision_asset_type.
-        """
-        asset_type = getattr(self.config, "vision_asset_type", "sheets").lower()
-        zip_filename = "panels.zip" if asset_type == "panels" else "sheets.zip"
-        zip_path = chapter_dir / zip_filename
-
-        if zip_path.exists():
-            zip_path.unlink()
-
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            if asset_type == "sheets":
-                if sheets_dir and sheets_dir.exists() and list(sheets_dir.glob("sheet_*.*")):
-                    for s in sorted(list(sheets_dir.glob("sheet_*.*"))):
-                        zf.write(s, arcname=s.name)
-                else:
-                    for p in sorted(list(panels_dir.glob("panel_*.*"))):
-                        zf.write(p, arcname=p.name)
-            else:
-                for p in sorted(list(panels_dir.glob("panel_*.*"))):
-                    zf.write(p, arcname=p.name)
-
-            manifest = chapter_dir / "panels_manifest.json"
-            if manifest.exists():
-                zf.write(manifest, arcname="panels_manifest.json")
-
-        console.print(f"[bold green]✓ Created Vision Archive ({zip_filename} - Mode: {asset_type.upper()}):[/] {zip_path}")
-        return zip_path
 
     def crop_chapter_from_json(self, project_name: str, chapter_num: str, force: bool = False) -> List[Path]:
         """
@@ -148,7 +118,7 @@ class CoordinateCropper:
             page_filename = page_entry.get("page_filename")
             page_index = page_entry.get("page_index")
 
-            page_img_path = self._locate_page_file(pages_dir, page_filename, page_index)
+            page_img_path = locate_page_file(pages_dir, page_filename, page_index)
             if not page_img_path or not page_img_path.exists():
                 console.print(f"[yellow]Warning: Could not locate page image for: {page_entry}. Skipping...[/]")
                 continue
@@ -158,67 +128,18 @@ class CoordinateCropper:
                 img = img.convert("RGB")
                 img_w, img_h = img.size
 
-                # Computed once per page (not per panel) and reused by the gutter-snap
-                # refinement and seam reconciliation below - see remanga/cropper/gutter.py.
+                # Computed once per page (not per panel) and reused by panel box
+                # resolution below - see remanga/cropper/panel_boxes.py.
                 gray_arr = page_grayscale_array(img) if self.config.snap_to_gutters else None
                 bg_level = (
                     sample_background_color(gray_arr, self.config.gutter_background_sample_strip_pixels)
                     if gray_arr is not None else None
                 )
-                # A flat pixel radius undershoots on large scans; scale it with the page's
-                # longer side so a big LLM coordinate error is still reachable.
-                gutter_radius = max(
-                    self.config.gutter_search_radius_pixels,
-                    round(max(img_w, img_h) * self.config.gutter_search_radius_fraction),
+
+                valid_panels, original_boxes, panel_boxes = resolve_page_panel_boxes(
+                    panels, img_w, img_h, gray_arr, bg_level, self.config
                 )
 
-                # Pass 1: resolve every panel's crop box (gutter-snapped) before cropping
-                # anything, so seam reconciliation (pass 2 below) can see the whole page's
-                # layout at once instead of one panel at a time.
-                valid_panels: List[Dict[str, Any]] = []
-                original_boxes: List[Any] = []
-                panel_boxes: List[Any] = []
-                for panel in panels:
-                    box = panel.get("box_1000") or panel.get("box_pixel") or panel.get("coordinates")
-                    if not box or len(box) != 4:
-                        console.print(f"[yellow]Skipping invalid panel coordinate entry: {panel}[/]")
-                        continue
-
-                    is_normalized = "box_1000" in panel or max(box) <= 1000
-                    original_box = calculate_pixel_bounds(box, img_w, img_h, is_1000=is_normalized)
-                    crop_box = original_box
-
-                    # Treat the LLM's box as a best guess: snap each edge onto the real
-                    # gutter/panel border nearest to it before applying safety padding.
-                    if gray_arr is not None:
-                        crop_box = refine_box_to_gutters(
-                            gray_arr, crop_box, bg_level,
-                            search_radius=gutter_radius,
-                            tolerance=self.config.gutter_bg_tolerance,
-                            min_run=self.config.gutter_min_run_pixels,
-                            min_bg_fraction=self.config.gutter_min_background_fraction,
-                        )
-
-                    valid_panels.append(panel)
-                    original_boxes.append(original_box)
-                    panel_boxes.append(crop_box)
-
-                # Pass 2: reconcile shared borders between reading-order-adjacent panels so
-                # neither undershoots (a visible gutter gap) while the other overshoots into
-                # it (bleeding the neighbor's content into its own crop) - see
-                # remanga/cropper/gutter.py:reconcile_adjacent_seams.
-                if gray_arr is not None and self.config.reconcile_panel_seams and len(panel_boxes) > 1:
-                    panel_boxes = reconcile_adjacent_seams(
-                        gray_arr, panel_boxes, bg_level,
-                        search_radius=gutter_radius,
-                        tolerance=self.config.gutter_bg_tolerance,
-                        min_run=self.config.gutter_min_run_pixels,
-                        min_bg_fraction=self.config.gutter_min_background_fraction,
-                        max_seam_gap_fraction=self.config.seam_max_gap_fraction,
-                        min_axis_overlap_fraction=self.config.seam_min_axis_overlap_fraction,
-                    )
-
-                # Pass 3: pad, crop, save, and record each panel.
                 for panel, original_box, crop_box in zip(valid_panels, original_boxes, panel_boxes):
                     if gray_arr is not None:
                         adjusted = count_adjusted_edges(original_box, crop_box)
@@ -280,26 +201,6 @@ class CoordinateCropper:
 
         # 2. Package into sheets.zip or panels.zip
         if self.config.create_zip:
-            self._create_vision_archive(chapter_dir, panels_dir, sheets_dir)
+            create_vision_archive(self.config, chapter_dir, panels_dir, sheets_dir)
 
         return output_panel_paths
-
-    def _locate_page_file(self, pages_dir: Path, filename: Optional[str], page_index: Optional[int]) -> Optional[Path]:
-        """Resolves target page image path using filename or numeric index fallback."""
-        if filename and (pages_dir / filename).exists():
-            return pages_dir / filename
-
-        if page_index is not None:
-            candidates = (
-                list(pages_dir.glob(f"page_{page_index:03d}.*")) +
-                list(pages_dir.glob(f"page_{page_index:02d}.*")) +
-                list(pages_dir.glob(f"page_{page_index}.*"))
-            )
-            if candidates:
-                return candidates[0]
-
-        all_pages = sorted(list(pages_dir.glob("page_*.*")))
-        if page_index and 1 <= page_index <= len(all_pages):
-            return all_pages[page_index - 1]
-
-        return None
