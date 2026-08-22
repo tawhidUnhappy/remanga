@@ -63,6 +63,14 @@ class CropperConfig(BaseModel):
     seam_min_axis_overlap_fraction: float = 0.5   # how much of the shared axis must overlap to count as "stacked/side-by-side"
     gutter_background_sample_strip_pixels: int = 12  # page-margin strip used to sample the background color
 
+    # Final per-panel whitespace trim: after a panel is cropped (gutter-snapped,
+    # seam-reconciled, and padded), trims any leftover thin band of pure background
+    # still baked into the saved image - the last safety net for panels with no
+    # neighbor to reconcile a seam against. See remanga/cropper/trim.py.
+    trim_panel_whitespace: bool = True
+    trim_min_background_fraction: float = 0.985   # stricter than gutter detection - only trims near-pure blank bands
+    trim_max_margin_fraction: float = 0.04        # never trims more than this fraction of a panel's width/height per side
+
     # Duplicate-crop safety net: drops any crops.json panel whose box duplicates or
     # heavily overlaps an earlier one on the same page (same frame cropped twice),
     # keeping the earlier crop. See remanga/cropper/dedupe.py and crop prompt Rule 8.

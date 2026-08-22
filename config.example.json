@@ -32,6 +32,9 @@
     "reconcile_panel_seams": true,
     "seam_max_gap_fraction": 0.15,
     "seam_min_axis_overlap_fraction": 0.5,
+    "trim_panel_whitespace": true,
+    "trim_min_background_fraction": 0.985,
+    "trim_max_margin_fraction": 0.04,
     "dedupe_duplicate_panels": true,
     "duplicate_iou_threshold": 0.6,
     "duplicate_containment_threshold": 0.85

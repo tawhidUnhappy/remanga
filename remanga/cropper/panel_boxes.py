@@ -46,7 +46,8 @@ def resolve_page_panel_boxes(
     enabled, seam reconciliation; `original_boxes` are the LLM's un-refined
     guesses, kept around only so the caller can report how much correction
     happened."""
-    gutter_radius = adaptive_gutter_radius(config, img_w, img_h) if gray_arr is not None else 0
+    do_gutter_snap = gray_arr is not None and config.snap_to_gutters
+    gutter_radius = adaptive_gutter_radius(config, img_w, img_h) if do_gutter_snap else 0
 
     valid_panels: List[Dict[str, Any]] = []
     original_boxes: List[PixelBox] = []
@@ -64,7 +65,7 @@ def resolve_page_panel_boxes(
 
         # Treat the LLM's box as a best guess: snap each edge onto the real
         # gutter/panel border nearest to it before the caller applies safety padding.
-        if gray_arr is not None:
+        if do_gutter_snap:
             crop_box = refine_box_to_gutters(
                 gray_arr, crop_box, bg_level,
                 search_radius=gutter_radius,
@@ -80,7 +81,7 @@ def resolve_page_panel_boxes(
     # Reconcile shared borders between reading-order-adjacent panels so neither
     # undershoots (a visible gutter gap) while the other overshoots into it
     # (bleeding the neighbor's content into its own crop).
-    if gray_arr is not None and config.reconcile_panel_seams and len(panel_boxes) > 1:
+    if do_gutter_snap and config.reconcile_panel_seams and len(panel_boxes) > 1:
         panel_boxes = reconcile_adjacent_seams(
             gray_arr, panel_boxes, bg_level,
             search_radius=gutter_radius,

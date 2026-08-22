@@ -18,6 +18,7 @@ from remanga.cropper.gutter import count_adjusted_edges, page_grayscale_array, s
 from remanga.cropper.page_locator import locate_page_file
 from remanga.cropper.panel_boxes import resolve_page_panel_boxes
 from remanga.cropper.sheets import PanelSheetGenerator
+from remanga.cropper.trim import trim_panel_margins
 from remanga.json_io import has_real_json_content, read_json, write_json
 from remanga.paths import get_chapter_dir
 
@@ -84,6 +85,7 @@ class CoordinateCropper:
         gutter_panels_adjusted = 0
         gutter_edges_adjusted = 0
         duplicate_panels_dropped = 0
+        panels_trimmed = 0
 
         for page_entry in pages_list:
             is_story_page = page_entry.get("is_story_page", True)
@@ -129,8 +131,10 @@ class CoordinateCropper:
                 img_w, img_h = img.size
 
                 # Computed once per page (not per panel) and reused by panel box
-                # resolution below - see remanga/cropper/panel_boxes.py.
-                gray_arr = page_grayscale_array(img) if self.config.snap_to_gutters else None
+                # resolution below (remanga/cropper/panel_boxes.py) and by the
+                # final per-panel trim (remanga/cropper/trim.py).
+                needs_page_analysis = self.config.snap_to_gutters or self.config.trim_panel_whitespace
+                gray_arr = page_grayscale_array(img) if needs_page_analysis else None
                 bg_level = (
                     sample_background_color(gray_arr, self.config.gutter_background_sample_strip_pixels)
                     if gray_arr is not None else None
@@ -141,7 +145,7 @@ class CoordinateCropper:
                 )
 
                 for panel, original_box, crop_box in zip(valid_panels, original_boxes, panel_boxes):
-                    if gray_arr is not None:
+                    if self.config.snap_to_gutters:
                         adjusted = count_adjusted_edges(original_box, crop_box)
                         if adjusted:
                             gutter_panels_adjusted += 1
@@ -151,6 +155,24 @@ class CoordinateCropper:
                         crop_box = apply_padding(crop_box, img_w, img_h, self.config.margin_padding_pixels)
 
                     cropped_img = img.crop(crop_box)
+
+                    # Last safety net: trim any leftover blank margin still baked
+                    # into the saved image (e.g. a panel with no neighbor to
+                    # reconcile a seam against) - see remanga/cropper/trim.py.
+                    if self.config.trim_panel_whitespace and bg_level is not None:
+                        cl, ct, cr, cb = crop_box
+                        cropped_img, (tl, tt, tr, tb) = trim_panel_margins(
+                            cropped_img, bg_level,
+                            tolerance=self.config.gutter_bg_tolerance,
+                            min_bg_fraction=self.config.trim_min_background_fraction,
+                            max_trim_fraction=self.config.trim_max_margin_fraction,
+                        )
+                        if (tl, tt, tr, tb) != (0, 0, cr - cl, cb - ct):
+                            panels_trimmed += 1
+                            # Keep crop_box's provenance (recorded below) accurate:
+                            # translate the trim's local box back onto the page.
+                            crop_box = (cl + tl, ct + tt, cl + tr, ct + tb)
+
                     if self.config.auto_contrast_clean:
                         cropped_img = ImageOps.autocontrast(cropped_img, cutoff=1)
 
@@ -184,6 +206,10 @@ class CoordinateCropper:
             console.print(
                 f"[dim]  ↳ Gutter-snap refined {gutter_panels_adjusted}/{len(output_panel_paths)} panels "
                 f"({gutter_edges_adjusted} edge(s) corrected from the LLM's guess via pixel analysis)[/]"
+            )
+        if self.config.trim_panel_whitespace and panels_trimmed:
+            console.print(
+                f"[dim]  ↳ Trimmed leftover blank margin off {panels_trimmed}/{len(output_panel_paths)} panels[/]"
             )
         if self.config.dedupe_duplicate_panels and duplicate_panels_dropped:
             console.print(
