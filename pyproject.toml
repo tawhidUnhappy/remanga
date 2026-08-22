@@ -15,7 +15,7 @@ dependencies = [
     "rich>=13.7.1",
     "pydub>=0.25.1",
     "tqdm>=4.66.5",
-    "transformers>=4.40.0",
+    "transformers>=4.40.0,<4.52.0",  # >=4.52.1 dropped PreTrainedModel._initialize_weights, which MAGI v3's DaViT vision encoder (trust_remote_code) still calls directly
     "accelerate>=0.30.0",
     "huggingface-hub>=0.23.0",
     "modelscope>=1.15.0",
