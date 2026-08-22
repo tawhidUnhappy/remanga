@@ -49,14 +49,8 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
 
     curr_pref = "1" if config.cropper.vision_asset_type == "sheets" else "2"
     pack_choice = Prompt.ask("[bold cyan]Select vision upload format[/]", choices=["1", "2"], default=curr_pref).strip()
-    if pack_choice == "2":
-        config.cropper.vision_asset_type = "panels"
-        config.cropper.zip_filename = "panels.zip"
-        console.print("[green]✓ Vision upload format set to:[/] Individual Panels (panels.zip)")
-    else:
-        config.cropper.vision_asset_type = "sheets"
-        config.cropper.zip_filename = "sheets.zip"
-        console.print("[green]✓ Vision upload format set to:[/] Contact Sheets (sheets.zip)")
+    config.cropper.vision_asset_type = "panels" if pack_choice == "2" else "sheets"
+    console.print(f"[green]✓ Vision upload format set to:[/] {config.cropper.vision_asset_type.title()} ({config.cropper.expected_zip_name})")
 
     # 3. Voice Language Selection
     console.print("\n[bold yellow]3. Voice Language[/]")
@@ -184,7 +178,7 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     summary_table.add_column("Setting", style="bold white")
     summary_table.add_column("Value", style="cyan")
 
-    summary_table.add_row("Vision Upload Format", f"{config.cropper.vision_asset_type.title()} ({config.cropper.zip_filename})")
+    summary_table.add_row("Vision Upload Format", f"{config.cropper.vision_asset_type.title()} ({config.cropper.expected_zip_name})")
     summary_table.add_row("Resolution", f"{config.video.width}x{config.video.height} @ {config.video.fps}fps")
     summary_table.add_row("Background Style", f"{config.video.background_style.title()} Blur" if config.video.background_style == "blur" else "Solid Black")
     summary_table.add_row("Narration Language", config.tts.lang.upper())

@@ -22,7 +22,6 @@
     "create_sheets": true,
     "panels_per_sheet": 4,
     "create_zip": true,
-    "zip_filename": "sheets.zip",
     "snap_to_gutters": true,
     "gutter_search_radius_pixels": 60,
     "gutter_search_radius_fraction": 0.10,

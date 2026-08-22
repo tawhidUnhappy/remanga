@@ -8,7 +8,7 @@ from typing import Any, Dict
 from rich.panel import Panel
 
 from remanga.config import RemangaConfig
-from remanga.json_io import read_json_or
+from remanga.json_io import has_real_json_content, read_json_or
 from remanga.paths import get_chapter_dir, load_project_metadata
 
 
@@ -22,8 +22,7 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
 
     pages_count = len(list(pages_dir.glob("page_*.*"))) if pages_dir.exists() else 0
     pages_zip_exist = (chap_dir / "pages.zip").exists()
-    crops_file = chap_dir / "crops.json"
-    crops_exist = crops_file.exists() and crops_file.stat().st_size > 10
+    crops_exist = has_real_json_content(chap_dir / "crops.json")
 
     panels_count = len(list(panels_dir.glob("panel_*.*"))) if panels_dir.exists() else 0
     sheets_count = len(list(sheets_dir.glob("sheet_*.*"))) if sheets_dir.exists() else 0
@@ -31,7 +30,7 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
     panels_zip_exist = (chap_dir / "panels.zip").exists()
 
     narration_file = chap_dir / "narration.json"
-    narration_exist = narration_file.exists() and narration_file.stat().st_size > 10
+    narration_exist = has_real_json_content(narration_file)
     total_narration_entries = 0
     if narration_exist:
         n_data = read_json_or(narration_file, {})
@@ -102,7 +101,7 @@ def render_status_panel(project: str, chapter: str) -> Panel:
 
     res_str = f"{config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)"
     asset_mode = config.cropper.vision_asset_type
-    target_zip_name = "panels.zip" if asset_mode == "panels" else "sheets.zip"
+    target_zip_name = config.cropper.expected_zip_name
     target_zip_ready = st['panels_zip_exist'] if asset_mode == "panels" else st['sheets_zip_exist']
 
     status_str = f"""

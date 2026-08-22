@@ -12,6 +12,7 @@ from remanga.audio import AudioProcessor, TTSEngine
 from remanga.config import RemangaConfig
 from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
+from remanga.json_io import has_real_json_content
 from remanga.paths import get_chapter_dir, load_project_metadata
 from remanga.status import get_chapter_status
 from remanga.video import VideoRenderer
@@ -50,7 +51,7 @@ def run_interactive_pipeline():
     # 4. Status Overview
     status = get_chapter_status(project, chapter)
     asset_mode = config.cropper.vision_asset_type
-    archive_name = "panels.zip" if asset_mode == "panels" else "sheets.zip"
+    archive_name = config.cropper.expected_zip_name
 
     console.print(f"\n[bold]Current Chapter Workspace:[/] {chap_dir.resolve()}")
     console.print(f"[bold]Current Chapter Status:[/] [{'green' if 'Ready' in status['summary'] else 'yellow'}]{status['summary']}[/]")
@@ -68,7 +69,7 @@ def run_interactive_pipeline():
     # Step 2: Crop Instructions (crops.json)
     # =========================================================================
     crops_path = chap_dir / "crops.json"
-    if not crops_path.exists() or crops_path.stat().st_size <= 10:
+    if not has_real_json_content(crops_path):
         crops_path.parent.mkdir(parents=True, exist_ok=True)
         crops_path.write_text("", encoding="utf-8")
         console.print(Panel(
@@ -93,7 +94,7 @@ def run_interactive_pipeline():
     narration_path = chap_dir / "narration.json"
     target_vision_archive = chap_dir / archive_name
 
-    if not narration_path.exists() or narration_path.stat().st_size <= 10:
+    if not has_real_json_content(narration_path):
         narration_path.parent.mkdir(parents=True, exist_ok=True)
         narration_path.write_text("", encoding="utf-8")
         console.print(Panel(

@@ -34,7 +34,6 @@ def ensure_valid_vision_asset_preference(config: RemangaConfig, interactive: boo
 
     if not interactive:
         config.cropper.vision_asset_type = "sheets"
-        config.cropper.zip_filename = "sheets.zip"
         return "sheets"
 
     console.print(
@@ -44,15 +43,10 @@ def ensure_valid_vision_asset_preference(config: RemangaConfig, interactive: boo
         "  2. [bold cyan]Individual Panels (panels.zip)[/] — Individual high-resolution cropped panel files\n"
     )
     choice = Prompt.ask("[bold cyan]Choose vision packaging format[/]", choices=["1", "2"], default="1").strip()
-    if choice == "2":
-        config.cropper.vision_asset_type = "panels"
-        config.cropper.zip_filename = "panels.zip"
-    else:
-        config.cropper.vision_asset_type = "sheets"
-        config.cropper.zip_filename = "sheets.zip"
+    config.cropper.vision_asset_type = "panels" if choice == "2" else "sheets"
 
     config.save()
-    console.print(f"[bold green]✓ Vision asset format set to '{config.cropper.vision_asset_type}' ({config.cropper.zip_filename}) and saved to config.json![/]\n")
+    console.print(f"[bold green]✓ Vision asset format set to '{config.cropper.vision_asset_type}' ({config.cropper.expected_zip_name}) and saved to config.json![/]\n")
     return config.cropper.vision_asset_type
 
 

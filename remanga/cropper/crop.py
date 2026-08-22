@@ -18,7 +18,7 @@ from remanga.cropper.gutter import count_adjusted_edges, page_grayscale_array, s
 from remanga.cropper.page_locator import locate_page_file
 from remanga.cropper.panel_boxes import resolve_page_panel_boxes
 from remanga.cropper.sheets import PanelSheetGenerator
-from remanga.json_io import read_json, write_json
+from remanga.json_io import has_real_json_content, read_json, write_json
 from remanga.paths import get_chapter_dir
 
 console = Console()
@@ -42,9 +42,9 @@ class CoordinateCropper:
         manifest_path = chapter_dir / "panels_manifest.json"
 
         asset_type = getattr(self.config, "vision_asset_type", "sheets").lower()
-        expected_zip = chapter_dir / ("panels.zip" if asset_type == "panels" else "sheets.zip")
+        expected_zip = chapter_dir / self.config.expected_zip_name
 
-        if not crops_json_path.exists() or crops_json_path.stat().st_size <= 10:
+        if not has_real_json_content(crops_json_path):
             raise FileNotFoundError(
                 f"Missing or empty crop instructions file: {crops_json_path}\n"
                 f"Please paste your LLM-generated JSON into this placeholder file."

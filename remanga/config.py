@@ -32,7 +32,12 @@ class CropperConfig(BaseModel):
     create_sheets: bool = True
     panels_per_sheet: int = 4
     create_zip: bool = True
-    zip_filename: str = "sheets.zip"
+
+    @property
+    def expected_zip_name(self) -> str:
+        """The vision-archive filename this `vision_asset_type` implies - computed
+        on demand instead of stored, so it can never drift out of sync with it."""
+        return "panels.zip" if self.vision_asset_type.lower() == "panels" else "sheets.zip"
 
     # Gutter-snap refinement: treats the LLM's crops.json box as a best guess and
     # corrects each edge against real pixel evidence (see remanga/cropper/gutter.py)

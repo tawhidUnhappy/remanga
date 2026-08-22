@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 from rich.console import Console
 
 from remanga.config import SystemConfig, VideoConfig

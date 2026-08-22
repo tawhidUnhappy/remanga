@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 from pathlib import Path
 from rich.console import Console
 
@@ -48,8 +47,8 @@ class ModelManager:
                 )
                 console.print("[bold green]✓ IndexTTS-2.5 model weights verified and ready![/]")
                 return self.model_dir
-            except Exception as e:
-                pass
+            except Exception:
+                pass  # fall through to the Hugging Face Hub mirror below
 
             # 2. Hugging Face Hub Fallback
             try:
