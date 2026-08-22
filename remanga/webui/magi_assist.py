@@ -18,8 +18,11 @@ turned off.
 
 from __future__ import annotations
 
+import re
+import subprocess
+import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 import numpy as np
 from PIL import Image
@@ -35,6 +38,16 @@ _model = None
 _processor = None
 _loaded_repo_id: Optional[str] = None
 
+# transformers' trust_remote_code error looks like: "This modeling file requires
+# the following packages that were not found in your environment: foo, bar. Run
+# `pip install foo bar`". MAGI's own modeling file can gain a new import in a
+# future revision without pyproject.toml being updated to match, so this parses
+# that message instead of hardcoding the package list.
+_MISSING_PKG_RE = re.compile(
+    r"the following packages that were not found in your environment:\s*([^.]+)\.", re.IGNORECASE
+)
+_MAX_AUTO_HEAL_ATTEMPTS = 5
+
 
 def is_gpu_available() -> bool:
     try:
@@ -44,12 +57,77 @@ def is_gpu_available() -> bool:
         return False
 
 
+def _pip_install(packages: Set[str]) -> bool:
+    """Installs `packages` into the interpreter currently running. Prefers this
+    repo's own `bin/uv` (the isolated venv bootstrap.sh builds has no `pip`
+    module at all), falling back to plain pip for anyone running outside it."""
+    names = sorted(packages)
+    console.print(f"[yellow]Installing missing dependency: {' '.join(names)}...[/]")
+
+    repo_root = Path(__file__).resolve().parents[2]
+    uv_bin = repo_root / "bin" / "uv"
+    if uv_bin.exists():
+        cmd = [str(uv_bin), "pip", "install", "--python", sys.executable, *names]
+    else:
+        cmd = [sys.executable, "-m", "pip", "install", *names]
+
+    result = subprocess.run(cmd)
+    if result.returncode != 0:
+        console.print(f"[bold red]Failed to install {' '.join(names)} automatically.[/]")
+        return False
+    console.print(f"[bold green]✓ Installed {' '.join(names)}.[/]")
+    return True
+
+
+def _load_with_auto_heal(config: MarkerConfig):
+    """Loads the MAGI v3 model + processor, automatically pip-installing and
+    retrying if `trust_remote_code`'s dynamic import reports a missing package -
+    used both by setup-time verification (ensure_weights_downloaded) and the
+    first real use (_load), so a dependency MAGI's own modeling file needs but
+    this project doesn't pin gets caught and fixed rather than raising mid-session."""
+    import torch
+    from transformers import AutoModelForCausalLM, AutoProcessor
+
+    attempted: Set[str] = set()
+    for _ in range(_MAX_AUTO_HEAL_ATTEMPTS + 1):
+        try:
+            with console.status(f"[bold cyan]Loading MAGI v3 ({config.magi_repo_id})...[/]", spinner="dots"):
+                model = AutoModelForCausalLM.from_pretrained(
+                    config.magi_repo_id,
+                    torch_dtype=torch.float16,
+                    trust_remote_code=True,
+                    cache_dir=config.magi_model_dir,
+                ).cuda().eval()
+                processor = AutoProcessor.from_pretrained(
+                    config.magi_repo_id,
+                    trust_remote_code=True,
+                    cache_dir=config.magi_model_dir,
+                )
+            return model, processor
+        except ImportError as e:
+            match = _MISSING_PKG_RE.search(str(e))
+            if not match:
+                raise
+            missing = {pkg.strip() for pkg in match.group(1).replace(",", " ").split() if pkg.strip()}
+            missing -= attempted
+            if not missing:
+                raise  # already tried installing this exact set - genuinely stuck
+            attempted |= missing
+            if not _pip_install(missing):
+                raise
+            console.print("[dim]Retrying MAGI v3 load with the newly installed package(s)...[/]")
+
+    raise RuntimeError(f"MAGI v3 still fails to load after installing: {', '.join(sorted(attempted))}")
+
+
 def ensure_weights_downloaded(config: MarkerConfig) -> Optional[Path]:
-    """Pre-fetches the MAGI v3 weights via the HF Hub, without loading them onto
-    a GPU - called from `remanga setup-models` / bootstrap.sh, the same moment
-    IndexTTS-2.5's weights are fetched, so the panel-marking assist is ready the
-    first time someone actually opens the web UI. No-ops (with a note) if MAGI is
-    disabled in config, or if there's no GPU to ever run it on."""
+    """Pre-fetches the MAGI v3 weights via the HF Hub and does a full load/
+    release pass so any missing dependency (see _load_with_auto_heal) surfaces
+    and gets auto-installed now - called from `remanga setup-models` /
+    bootstrap.sh, the same moment IndexTTS-2.5's weights are fetched, so the
+    panel-marking assist is actually ready the first time someone opens the web
+    UI, not just downloaded. No-ops (with a note) if MAGI is disabled in
+    config, or if there's no GPU to ever run it on."""
     if not config.magi_enabled:
         console.print("[dim]MAGI v3 assist is disabled (marker.magi_enabled=false) - skipping weight download.[/]")
         return None
@@ -67,12 +145,19 @@ def ensure_weights_downloaded(config: MarkerConfig) -> Optional[Path]:
     model_dir.mkdir(parents=True, exist_ok=True)
 
     # `cache_dir`, not `local_dir` - this must match the `cache_dir=` passed to
-    # AutoModelForCausalLM.from_pretrained() in _load() above, or the two use
-    # different on-disk layouts and _load() ends up re-downloading everything.
+    # AutoModelForCausalLM.from_pretrained() in _load_with_auto_heal(), or the
+    # two use different on-disk layouts and end up re-downloading everything.
     with console.status(f"[bold cyan]Fetching MAGI v3 weights ({config.magi_repo_id})...[/]", spinner="dots"):
         snapshot_download(repo_id=config.magi_repo_id, cache_dir=str(model_dir))
+    console.print(f"[bold green]✓ MAGI v3 weights downloaded:[/] {model_dir}")
 
-    console.print(f"[bold green]✓ MAGI v3 weights ready:[/] {model_dir}")
+    console.print("[cyan]Verifying MAGI v3 loads correctly...[/]")
+    model, processor = _load_with_auto_heal(config)
+    del model, processor
+    import torch
+    torch.cuda.empty_cache()  # setup-models shouldn't leave GPU memory reserved after it exits
+
+    console.print("[bold green]✓ MAGI v3 verified and ready.[/]")
     return model_dir
 
 
@@ -83,27 +168,13 @@ def _load(config: MarkerConfig):
         return _model, _processor
 
     import torch
-    from transformers import AutoModelForCausalLM, AutoProcessor
-
     if not torch.cuda.is_available():
         raise RuntimeError(
             "MAGI v3 assist requires a CUDA GPU, but none is available. "
             "Disable it via marker.magi_enabled=false in config.json, or mark panels manually."
         )
 
-    with console.status(f"[bold cyan]Loading MAGI v3 ({config.magi_repo_id})...[/]", spinner="dots"):
-        model = AutoModelForCausalLM.from_pretrained(
-            config.magi_repo_id,
-            torch_dtype=torch.float16,
-            trust_remote_code=True,
-            cache_dir=config.magi_model_dir,
-        ).cuda().eval()
-        processor = AutoProcessor.from_pretrained(
-            config.magi_repo_id,
-            trust_remote_code=True,
-            cache_dir=config.magi_model_dir,
-        )
-
+    model, processor = _load_with_auto_heal(config)
     _model, _processor, _loaded_repo_id = model, processor, config.magi_repo_id
     console.print("[bold green]✓ MAGI v3 loaded.[/]")
     return _model, _processor
