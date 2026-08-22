@@ -22,7 +22,13 @@
     "create_sheets": true,
     "panels_per_sheet": 4,
     "create_zip": true,
-    "zip_filename": "sheets.zip"
+    "zip_filename": "sheets.zip",
+    "snap_to_gutters": true,
+    "gutter_search_radius_pixels": 40,
+    "gutter_bg_tolerance": 20.0,
+    "gutter_min_run_pixels": 3,
+    "gutter_min_background_fraction": 0.96,
+    "gutter_background_sample_strip_pixels": 12
   },
   "tts": {
     "engine": "indextts-2.5",

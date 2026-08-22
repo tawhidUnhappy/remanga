@@ -34,6 +34,15 @@ class CropperConfig(BaseModel):
     create_zip: bool = True
     zip_filename: str = "sheets.zip"
 
+    # Gutter-snap refinement: treats the LLM's crops.json box as a best guess and
+    # corrects each edge against real pixel evidence (see remanga/cropper/gutter.py)
+    # before margin_padding_pixels is applied.
+    snap_to_gutters: bool = True
+    gutter_search_radius_pixels: int = 40       # how far from the LLM's guess to look for a real gutter
+    gutter_bg_tolerance: float = 20.0           # gray-level tolerance for "counts as background"
+    gutter_min_run_pixels: int = 3              # minimum gutter band width to trust as real, not noise
+    gutter_min_background_fraction: float = 0.96  # fraction of a row/col that must match bg to call it gutter
+    gutter_background_sample_strip_pixels: int = 12  # page-margin strip used to sample the background color
 
 class TTSConfig(BaseModel):
     engine: str = "indextts-2.5"

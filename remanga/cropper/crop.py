@@ -8,6 +8,12 @@ from rich.console import Console
 
 from remanga.config import CropperConfig
 from remanga.cropper.geometry import apply_padding, calculate_pixel_bounds
+from remanga.cropper.gutter import (
+    count_adjusted_edges,
+    page_grayscale_array,
+    refine_box_to_gutters,
+    sample_background_color,
+)
 from remanga.cropper.sheets import PanelSheetGenerator
 from remanga.json_io import read_json, write_json
 from remanga.paths import get_chapter_dir
@@ -103,6 +109,8 @@ class CoordinateCropper:
         panel_counter = 1
         output_panel_paths: List[Path] = []
         manifest_data: List[Dict[str, Any]] = []
+        gutter_panels_adjusted = 0
+        gutter_edges_adjusted = 0
 
         for page_entry in pages_list:
             is_story_page = page_entry.get("is_story_page", True)
@@ -127,6 +135,14 @@ class CoordinateCropper:
                 img = img.convert("RGB")
                 img_w, img_h = img.size
 
+                # Computed once per page (not per panel) and reused by the gutter-snap
+                # refinement below - see remanga/cropper/gutter.py.
+                gray_arr = page_grayscale_array(img) if self.config.snap_to_gutters else None
+                bg_level = (
+                    sample_background_color(gray_arr, self.config.gutter_background_sample_strip_pixels)
+                    if gray_arr is not None else None
+                )
+
                 for panel in panels:
                     box = panel.get("box_1000") or panel.get("box_pixel") or panel.get("coordinates")
                     if not box or len(box) != 4:
@@ -135,6 +151,22 @@ class CoordinateCropper:
 
                     is_normalized = "box_1000" in panel or max(box) <= 1000
                     crop_box = calculate_pixel_bounds(box, img_w, img_h, is_1000=is_normalized)
+
+                    # Treat the LLM's box as a best guess: snap each edge onto the real
+                    # gutter/panel border nearest to it before applying safety padding.
+                    if gray_arr is not None:
+                        llm_box = crop_box
+                        crop_box = refine_box_to_gutters(
+                            gray_arr, crop_box, bg_level,
+                            search_radius=self.config.gutter_search_radius_pixels,
+                            tolerance=self.config.gutter_bg_tolerance,
+                            min_run=self.config.gutter_min_run_pixels,
+                            min_bg_fraction=self.config.gutter_min_background_fraction,
+                        )
+                        adjusted = count_adjusted_edges(llm_box, crop_box)
+                        if adjusted:
+                            gutter_panels_adjusted += 1
+                            gutter_edges_adjusted += adjusted
 
                     if self.config.margin_padding_pixels > 0:
                         crop_box = apply_padding(crop_box, img_w, img_h, self.config.margin_padding_pixels)
@@ -169,6 +201,11 @@ class CoordinateCropper:
         })
 
         console.print(f"[bold green]✓ Cropped {len(output_panel_paths)} panels successfully into:[/] {panels_dir}")
+        if self.config.snap_to_gutters:
+            console.print(
+                f"[dim]  ↳ Gutter-snap refined {gutter_panels_adjusted}/{len(output_panel_paths)} panels "
+                f"({gutter_edges_adjusted} edge(s) corrected from the LLM's guess via pixel analysis)[/]"
+            )
 
         # 1. Generate vision contact sheets if enabled or if requested
         if output_panel_paths and (self.config.create_sheets or asset_type == "sheets"):
