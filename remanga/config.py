@@ -44,6 +44,13 @@ class CropperConfig(BaseModel):
     gutter_min_background_fraction: float = 0.96  # fraction of a row/col that must match bg to call it gutter
     gutter_background_sample_strip_pixels: int = 12  # page-margin strip used to sample the background color
 
+    # Duplicate-crop safety net: drops any crops.json panel whose box duplicates or
+    # heavily overlaps an earlier one on the same page (same frame cropped twice),
+    # keeping the earlier crop. See remanga/cropper/dedupe.py and crop prompt Rule 8.
+    dedupe_duplicate_panels: bool = True
+    duplicate_iou_threshold: float = 0.6          # intersection-over-union that counts as a duplicate
+    duplicate_containment_threshold: float = 0.85  # or: this fraction of the smaller box swallowed by the other
+
 class TTSConfig(BaseModel):
     engine: str = "indextts-2.5"
     hf_repo_id: str = "IndexTeam/IndexTTS-2.5"

@@ -28,7 +28,10 @@
     "gutter_bg_tolerance": 20.0,
     "gutter_min_run_pixels": 3,
     "gutter_min_background_fraction": 0.96,
-    "gutter_background_sample_strip_pixels": 12
+    "gutter_background_sample_strip_pixels": 12,
+    "dedupe_duplicate_panels": true,
+    "duplicate_iou_threshold": 0.6,
+    "duplicate_containment_threshold": 0.85
   },
   "tts": {
     "engine": "indextts-2.5",

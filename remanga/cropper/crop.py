@@ -7,6 +7,7 @@ from PIL import Image, ImageOps
 from rich.console import Console
 
 from remanga.config import CropperConfig
+from remanga.cropper.dedupe import dedupe_panels
 from remanga.cropper.geometry import apply_padding, calculate_pixel_bounds
 from remanga.cropper.gutter import (
     count_adjusted_edges,
@@ -111,6 +112,7 @@ class CoordinateCropper:
         manifest_data: List[Dict[str, Any]] = []
         gutter_panels_adjusted = 0
         gutter_edges_adjusted = 0
+        duplicate_panels_dropped = 0
 
         for page_entry in pages_list:
             is_story_page = page_entry.get("is_story_page", True)
@@ -121,6 +123,26 @@ class CoordinateCropper:
                 note_str = page_entry.get("notes", "non-story/duplicate")
                 console.print(f"[dim yellow]Skipping non-story page ({page_desc}): {note_str}[/]")
                 continue
+
+            # Safety net for crop-prompt Rule 8: drop any panel entry whose box is a
+            # duplicate/near-duplicate of an earlier one on this page (same bordered
+            # frame re-cropped twice), keeping the earliest occurrence per reading
+            # order. A recurring character across genuinely distinct, non-overlapping
+            # panel boxes is untouched - see remanga/cropper/dedupe.py.
+            if self.config.dedupe_duplicate_panels:
+                page_desc = page_entry.get("page_filename") or f"page index {page_entry.get('page_index')}"
+                panels, dupe_report = dedupe_panels(
+                    panels,
+                    iou_threshold=self.config.duplicate_iou_threshold,
+                    containment_threshold=self.config.duplicate_containment_threshold,
+                )
+                for dupe in dupe_report:
+                    duplicate_panels_dropped += 1
+                    console.print(
+                        f"[bold yellow]⚠ Duplicate crop dropped on {page_desc}:[/] "
+                        f"panel_id {dupe['dropped_panel_id']!r} overlaps panel_id {dupe['kept_panel_id']!r} "
+                        f"(IoU {dupe['iou']:.2f}, containment {dupe['containment']:.2f}) - keeping the earlier crop."
+                    )
 
             page_filename = page_entry.get("page_filename")
             page_index = page_entry.get("page_index")
@@ -205,6 +227,11 @@ class CoordinateCropper:
             console.print(
                 f"[dim]  ↳ Gutter-snap refined {gutter_panels_adjusted}/{len(output_panel_paths)} panels "
                 f"({gutter_edges_adjusted} edge(s) corrected from the LLM's guess via pixel analysis)[/]"
+            )
+        if self.config.dedupe_duplicate_panels and duplicate_panels_dropped:
+            console.print(
+                f"[dim]  ↳ Dedup removed {duplicate_panels_dropped} duplicate/overlapping panel crop(s) "
+                f"before cropping (see warnings above) - crops.json may be worth reviewing.[/]"
             )
 
         # 1. Generate vision contact sheets if enabled or if requested

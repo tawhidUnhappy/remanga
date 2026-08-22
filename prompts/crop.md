@@ -73,6 +73,7 @@ Because pages are rendered at high resolution, an error of even 20-40 units on t
 - **Failure pattern to avoid:** emitting two separate `panels` entries for content that shares one unbroken border. Before finalizing a page, check every pair of adjacent panels you are about to output — if there is no ink border, no gutter gap, and no visual frame break between them, merge them into one box instead of two.
 - **When a scene DOES establish a physical action across genuinely split tiers with a visible border between them** (e.g., a shoe locker compartment tier above a separately bordered reaction tier below), keep each tier as its own crop, but ensure each crop's prop interaction is complete and cleanly bounded within its own border — don't cut the locker off from the hand reaching into it, or the reaction face off from its dialogue bubble.
 - When genuinely uncertain whether two adjacent beats share a border, prefer the merged single-panel interpretation — an unnecessarily split panel disrupts recap video pacing more than a slightly wider crop does.
+- See Rule 8 for the related, equally common failure mode: two crop entries that overlap or duplicate the same frame instead of sharing one border.
 
 ### Rule 5: Double-Page Spread Deduplication (CRITICAL)
 - If a spread exists as both split individual pages AND a stitched combined image in the chapter:
@@ -86,6 +87,12 @@ Order panels in the `panels` array chronologically following the authentic Japan
 ### Rule 7: Non-Story Page Filtering
 Scanlator credits, recruitment promos, raw cover advertisements, and blank pages must be marked:
 `"is_story_page": false, "panels": []`
+
+### Rule 8: One Physical Frame, One Crop — No Duplicate or Overlapping Panels (CRITICAL)
+- **A recurring character is NOT a duplicate.** Manga constantly draws the same character across multiple separately bordered panels in a row (a close-up, then a wider reaction shot, then another close-up) — each of those is its own physical frame with its own border, and each gets its own distinct crop entry. Recognizing a familiar face is never a reason to skip, merge, or reuse a box.
+- **A duplicate is re-cropping the SAME physical frame twice.** Never emit two `panels` entries whose boxes describe the same bordered frame (or the same undivided region of art) on a page — for example, generating one box for "the character's face" and a second, separate box for "the character's letter" when both are drawn inside the exact same panel border. Per Rule 4, that content belongs in a **single** merged crop, not two overlapping ones.
+- **Self-check before finalizing a page:** compare every pair of panel boxes you are about to output for that page. If two boxes overlap by more than a sliver (i.e. one box sits almost entirely inside, or nearly duplicates, another), that is a bug — determine which single bordered frame they actually both belong to and collapse them into one correct box per Rule 4, or, if they truly are two separate bordered frames, tighten each box so it only covers its own frame with no substantial overlap into the other's.
+- **Never pad two adjacent boxes into each other.** The bleed margins from Rules 1–2 protect bubbles/hair/limbs that break a border — they must not be stretched so far that one panel's box swallows part or all of its neighbor's frame.
 
 ---
 
