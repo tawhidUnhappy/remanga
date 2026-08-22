@@ -64,7 +64,7 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
 | **CUDA Driver** | NVIDIA Driver >= 525.60.13 | NVIDIA Driver >= 535+ (CUDA 12.x) |
 | **CPU** | 4 Cores x86_64 | 8+ Cores x86_64 |
 | **RAM** | 8 GB RAM | 16 GB+ RAM |
-| **Disk Space** | 15 GB free disk space (models + workspace) | 30 GB+ SSD |
+| **Disk Space** | 20 GB free disk space (three isolated venvs + models + workspace) | 35 GB+ SSD |
 
 ---
 
@@ -94,10 +94,14 @@ bash bootstrap.sh
 
 **What `bootstrap.sh` does automatically:**
 1. Downloads and provisions static `bin/uv`, `bin/ffmpeg`, and `bin/ffprobe`.
-2. Provisions a private Python 3.11 virtual environment in `.venv/`.
-3. Installs PyTorch with CUDA support, Pillow, Pydantic, requests, rich, and pydub.
-4. Turbo-downloads official `IndexTeam/IndexTTS-2.5` model weights into `checkpoints/indextts_2.5`.
-5. Initializes default `config.json`.
+2. Provisions **three** isolated Python 3.11 virtual environments instead of one:
+   - `.venv/` — remanga's own lightweight core (Pillow, Pydantic, requests, rich, pydub, Flask). No ML libraries at all.
+   - `.venv-indextts/` — PyTorch + IndexTTS-2.5's own pinned dependencies.
+   - `.venv-magi/` — PyTorch + MAGI v3's own pinned dependencies (including a `transformers` capped below its DaViT-breaking `4.52`).
+
+   IndexTTS and MAGI each pin their own, sometimes mutually incompatible, versions of shared libraries like `transformers` — separate environments mean neither can ever silently break the other. The main env only ever talks to them as subprocesses (see `remanga/venvs.py`); the storage trade-off buys permanent isolation instead of a pin that has to be babysat.
+3. Turbo-downloads official `IndexTeam/IndexTTS-2.5` weights into `checkpoints/indextts_2.5` and `ragavsachdeva/magiv3` weights into `checkpoints/magiv3` (skipped automatically if no GPU is present).
+4. Initializes default `config.json`.
 
 ---
 
@@ -331,6 +335,9 @@ To maintain a consistent, flat, documentary-style recap narration without scream
 ```text
 remanga/
 ├── bin/                        # Isolated standalone binaries (uv, ffmpeg, ffprobe)
+├── .venv/                      # Main env - remanga's own lightweight core, no ML libs
+├── .venv-indextts/             # Isolated env - PyTorch + IndexTTS-2.5's own pins
+├── .venv-magi/                 # Isolated env - PyTorch + MAGI v3's own pins
 ├── checkpoints/
 │   ├── indextts_2.5/           # IndexTTS-2.5 neural model weights
 │   └── magiv3/                 # MAGI v3 panel-detection weights (Panel Marker assist)
@@ -356,12 +363,16 @@ remanga/
 │               ├── video/frames/       # Composited 1080p/2K/4K canvas frames
 │               └── <project>_ch<num>_recap.mp4  # FINAL RECAP VIDEO
 ├── remanga/                    # Python core pipeline package
-│   ├── audio/                  # tts.py (IndexTTS-2.5 engine) & mix.py (master audio mixer)
+│   ├── audio/                  # synth.py (talks to the .venv-indextts worker) & mix.py (master audio mixer)
+│   │   └── scripts/             # indextts_worker.py - runs inside .venv-indextts, not the main env
 │   ├── cropper/                # crop.py (coordinate cropper) & sheets.py (contact sheet generator)
 │   ├── downloader/             # mangadex.py (MangaDex client)
-│   ├── models/                 # weights.py (model weight download/verification)
-│   ├── webui/                  # Panel Marker: server.py (Flask backend) & magi_assist.py (MAGI v3)
+│   ├── models/                 # weights.py (talks to .venv-indextts to fetch/verify weights)
+│   │   └── scripts/             # download_indextts.py - runs inside .venv-indextts
+│   ├── webui/                  # Panel Marker: server.py (Flask backend) & magi_assist.py (talks to .venv-magi)
+│   │   └── scripts/             # magi_worker.py, download_magi.py - run inside .venv-magi
 │   ├── video/                  # compose.py (frame compositor) & render.py (GPU/CPU renderer)
+│   ├── venvs.py                 # Locates the .venv-indextts / .venv-magi isolated environments
 │   ├── config.py                # Pydantic configuration schemas (load/save only)
 │   ├── paths.py                 # Project/chapter directory layout & metadata persistence
 │   ├── status.py                # Chapter production-status computation & display

@@ -9,6 +9,8 @@ echo "=== Initializing 100% Self-Contained remanga Environment ==="
 BIN_DIR="$SCRIPT_DIR/bin"
 CACHE_DIR="$SCRIPT_DIR/.cache"
 VENV_DIR="$SCRIPT_DIR/.venv"
+INDEXTTS_VENV_DIR="$SCRIPT_DIR/.venv-indextts"
+MAGI_VENV_DIR="$SCRIPT_DIR/.venv-magi"
 
 mkdir -p "$BIN_DIR" "$CACHE_DIR/uv" "$CACHE_DIR/huggingface" "$CACHE_DIR/torch" assets/voices assets/bgm projects
 
@@ -58,30 +60,39 @@ if [ ! -f "$BIN_DIR/ffmpeg" ] || [ ! -f "$BIN_DIR/ffprobe" ]; then
     fi
 fi
 
-# 3. Provision standalone Python 3.11 & create virtual environment
+# 3. Provision standalone Python 3.11 & create the three isolated virtual
+# environments: the main env (remanga's own lightweight core), plus one per
+# heavy ML dependency so their conflicting requirements never have to share a
+# resolution - IndexTTS-2.5 and MAGI v3 each pin their own torch/transformers
+# stack, sometimes incompatibly (MAGI v3 needs transformers<4.52; nothing
+# guarantees IndexTTS or some future tool won't need something newer). The
+# storage trade-off (three venvs instead of one) buys permanent isolation
+# instead of a pin that has to be re-asserted and re-verified by hand every
+# time one tool's install could clobber another's. See remanga/venvs.py for
+# how the main env locates and talks to these two as subprocesses.
 echo "[+] Provisioning standalone Python 3.11 runtime..."
 "$BIN_DIR/uv" python install 3.11
+
+echo "[+] Creating main environment ($VENV_DIR)..."
 "$BIN_DIR/uv" venv "$VENV_DIR" --python 3.11 --allow-existing
-
-# 4. Install dependencies inside isolated venv
-echo "[+] Installing remanga and IndexTTS-2.5 package..."
-"$BIN_DIR/uv" pip install --python "$VENV_DIR" -e .
-"$BIN_DIR/uv" pip install --python "$VENV_DIR" git+https://github.com/index-tts/index-tts.git
-
-# IndexTTS's own install above resolves independently of remanga's pyproject.toml
-# constraints and can silently re-bump a package remanga pinned for a different
-# reason (e.g. transformers, capped below 4.52 for MAGI v3's DaViT encoder -
-# see pyproject.toml). Re-assert remanga's own pins last so whichever install
-# ran most recently, the final environment still satisfies them.
-echo "[+] Re-asserting remanga's own dependency pins after the IndexTTS install..."
 "$BIN_DIR/uv" pip install --python "$VENV_DIR" -e .
 
-# 5. Initialize config.json from config.example.json if missing
+echo "[+] Creating isolated IndexTTS-2.5 environment ($INDEXTTS_VENV_DIR)..."
+"$BIN_DIR/uv" venv "$INDEXTTS_VENV_DIR" --python 3.11 --allow-existing
+"$BIN_DIR/uv" pip install --python "$INDEXTTS_VENV_DIR" torch torchaudio transformers accelerate huggingface-hub modelscope
+"$BIN_DIR/uv" pip install --python "$INDEXTTS_VENV_DIR" git+https://github.com/index-tts/index-tts.git
+
+echo "[+] Creating isolated MAGI v3 environment ($MAGI_VENV_DIR)..."
+"$BIN_DIR/uv" venv "$MAGI_VENV_DIR" --python 3.11 --allow-existing
+"$BIN_DIR/uv" pip install --python "$MAGI_VENV_DIR" "torch" "transformers<4.52.0" timm shapely pytorch-metric-learning huggingface-hub pillow numpy
+
+# 4. Initialize config.json from config.example.json if missing
 if [ ! -f "config.json" ]; then
     cp config.example.json config.json
 fi
 
-# 6. Verify and download model weights via ModelScope CDN
+# 5. Verify and download model weights (IndexTTS-2.5 via ModelScope/HF, MAGI v3
+# via HF) - each downloaded and verified using its own isolated environment.
 "$VENV_DIR/bin/python3" -m remanga.cli setup-models
 
 echo "=========================================================="

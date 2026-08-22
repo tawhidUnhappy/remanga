@@ -1,25 +1,18 @@
 from __future__ import annotations
 
-import logging
-import os
+import subprocess
 from pathlib import Path
 from rich.console import Console
 
+from remanga.venvs import get_scripts_dir, get_tool_python
+
 console = Console()
-
-# Suppress noisy download bar spamming across submodules
-os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
-os.environ["MODELSCOPE_LOG_LEVEL"] = "40"
-os.environ["TRANSFORMERS_VERBOSITY"] = "error"
-
-logging.getLogger("modelscope").setLevel(logging.ERROR)
-logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
-logging.getLogger("urllib3").setLevel(logging.ERROR)
 
 
 class ModelManager:
-    """Manages IndexTTS-2.5 weights with clean status indicators and fallback tolerance."""
+    """Ensures IndexTTS-2.5 weights are present, downloading them via the
+    isolated `.venv-indextts` environment's own modelscope/huggingface_hub
+    install (those packages aren't part of the main env - see remanga/venvs.py)."""
 
     def __init__(self, model_dir: Path | str = "checkpoints/indextts_2.5", repo_id: str = "IndexTeam/IndexTTS-2.5"):
         self.model_dir = Path(model_dir)
@@ -32,38 +25,23 @@ class ModelManager:
         gpt_path = self.model_dir / "gpt.pth"
         s2mel_path = self.model_dir / "s2mel.pth"
 
-        # Check if already present to skip unnecessary network hits
+        # Check if already present to skip unnecessary network hits (and the
+        # subprocess spin-up entirely)
         if gpt_path.exists() and s2mel_path.exists() and gpt_path.stat().st_size > 100000:
             return self.model_dir
 
+        python = get_tool_python("indextts")
+        script = get_scripts_dir("models") / "download_indextts.py"
+
         with console.status(f"[bold cyan]Verifying IndexTTS-2.5 model weights ({self.repo_id})...[/]", spinner="dots"):
-            # 1. High-speed ModelScope mirror
-            try:
-                from modelscope import snapshot_download as ms_download
+            result = subprocess.run(
+                [str(python), str(script), str(self.model_dir.resolve()), self.repo_id],
+                capture_output=True, text=True,
+            )
 
-                ms_download(
-                    model_id=self.repo_id,
-                    local_dir=str(self.model_dir.resolve()),
-                )
-                console.print("[bold green]✓ IndexTTS-2.5 model weights verified and ready![/]")
-                return self.model_dir
-            except Exception:
-                pass  # fall through to the Hugging Face Hub mirror below
+        if result.returncode != 0:
+            console.print(f"[bold red]Error downloading model weights:[/] {result.stderr.strip()}")
+            raise RuntimeError(f"IndexTTS-2.5 weight download failed: {result.stderr.strip()}")
 
-            # 2. Hugging Face Hub Fallback
-            try:
-                from huggingface_hub import snapshot_download as hf_download
-
-                hf_download(
-                    repo_id=self.repo_id,
-                    local_dir=str(self.model_dir.resolve()),
-                    local_dir_use_symlinks=False,
-                    resume_download=True,
-                    max_retries=10,
-                )
-                console.print("[bold green]✓ IndexTTS-2.5 model weights verified and ready![/]")
-            except Exception as e:
-                console.print(f"[bold red]Error downloading model weights:[/] {e}")
-                raise e
-
+        console.print("[bold green]✓ IndexTTS-2.5 model weights verified and ready![/]")
         return self.model_dir

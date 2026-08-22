@@ -1,67 +1,72 @@
-"""Low-level IndexTTS-2.5 speech synthesis: model loading, single-utterance inference, and tempo adjustment."""
+"""Low-level IndexTTS-2.5 speech synthesis: spawns and talks to the isolated
+`.venv-indextts` worker process (remanga/audio/scripts/indextts_worker.py) so
+IndexTTS's own dependency pins never have to share a Python process - or a
+dependency resolution - with the rest of remanga or with MAGI v3's isolated
+environment. See remanga/venvs.py for how that environment is located."""
 
 from __future__ import annotations
 
-import contextlib
-import inspect
-import io
+import atexit
+import json
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import List, Optional
 from pydub import AudioSegment
 from rich.console import Console
 
 from remanga.config import AudioConfig, TTSConfig
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.models import ModelManager
+from remanga.venvs import get_scripts_dir, get_tool_python
 
 console = Console()
 
 
 class IndexTTSSynthesizer:
-    """Loads the IndexTTS-2.5 model once and synthesizes individual narration clips with it."""
+    """Owns one long-lived `.venv-indextts` worker subprocess and speaks to it
+    over stdin/stdout for every synthesize() call, so the model loads onto the
+    GPU once per production run instead of once per panel."""
 
     def __init__(self, tts_config: TTSConfig, audio_config: AudioConfig):
         self.tts_config = tts_config
         self.audio_config = audio_config
-        self._model_instance = None
         self.model_manager = ModelManager(tts_config.model_dir, tts_config.hf_repo_id)
+        self._proc: Optional[subprocess.Popen] = None
+        atexit.register(self.shutdown)
 
-    def _get_model(self):
-        """Lazy-loads and caches the IndexTTS-2.5 model instance."""
-        if self._model_instance is not None:
-            return self._model_instance
+    def _ensure_worker(self) -> subprocess.Popen:
+        if self._proc is not None and self._proc.poll() is None:
+            return self._proc
 
         model_dir = self.model_manager.ensure_model()
-        cfg_path = Path(self.tts_config.cfg_path)
+        python = get_tool_python("indextts")
+        script = get_scripts_dir("audio") / "indextts_worker.py"
 
-        try:
-            from indextts.infer_v2_5 import IndexTTS2  # type: ignore
+        cmd: List[str] = [
+            str(python), "-u", str(script),
+            "--cfg_path", str(Path(self.tts_config.cfg_path).resolve()),
+            "--model_dir", str(model_dir.resolve()),
+        ]
+        if self.tts_config.use_bf16:
+            cmd.append("--use_bf16")
 
-            console.print(f"[cyan]Initializing IndexTTS-2.5 model engine (BF16: {self.tts_config.use_bf16})...[/]")
-            self._model_instance = IndexTTS2(
-                cfg_path=str(cfg_path.resolve()),
-                model_dir=str(model_dir.resolve()),
-                use_bf16=self.tts_config.use_bf16,
-            )
-            console.print("[bold green]✓ IndexTTS-2.5 engine loaded successfully![/]")
-            return self._model_instance
-        except ImportError:
-            try:
-                from indextts.infer_v2 import IndexTTS2  # type: ignore
+        console.print(f"[cyan]Starting IndexTTS-2.5 worker ({python})...[/]")
+        proc = subprocess.Popen(
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, bufsize=1,
+        )
 
-                console.print("[cyan]Initializing IndexTTS-2 model engine...[/]")
-                self._model_instance = IndexTTS2(
-                    cfg_path=str(cfg_path.resolve()),
-                    model_dir=str(model_dir.resolve()),
-                )
-                console.print("[bold green]✓ IndexTTS-2 engine loaded successfully![/]")
-                return self._model_instance
-            except Exception:
-                return None
-        except Exception as e:
-            console.print(f"[yellow]Direct IndexTTS-2.5 import warning: {e}. Falling back to CLI bridge.[/]")
-            return None
+        ready_line = proc.stdout.readline()
+        if not ready_line:
+            stderr = proc.stderr.read()
+            raise RuntimeError(f"IndexTTS-2.5 worker exited before starting up:\n{stderr}")
+        event = json.loads(ready_line)
+        if event.get("event") != "ready":
+            raise RuntimeError(f"IndexTTS-2.5 worker failed to load: {event.get('error', event)}")
+
+        console.print("[bold green]✓ IndexTTS-2.5 worker ready.[/]")
+        self._proc = proc
+        return proc
 
     def _get_emotion_vector(self, emotion_tag: str) -> List[float]:
         """
@@ -94,71 +99,54 @@ class IndexTTSSynthesizer:
                 temp_wav.rename(wav_path)
 
     def synthesize(self, text: str, emotion_tag: str, spk_prompt_path: str, output_wav: Path) -> None:
-        """
-        Synthesizes speech using IndexTTS-2.5.
-        Uses flat zero emotion vector and low temperature/top_p to ensure consistent vocal delivery.
-        """
-        model = self._get_model()
-        emotion_vec = self._get_emotion_vector(emotion_tag)
-        target_lang = (self.tts_config.lang or "EN").strip().upper()
+        """Synthesizes speech via the IndexTTS-2.5 worker process. Uses a flat
+        zero emotion vector and low temperature/top_p for consistent delivery."""
+        proc = self._ensure_worker()
 
-        if model is not None:
-            sig = inspect.signature(model.infer)
-            params = sig.parameters
+        request = {
+            "cmd": "synthesize",
+            "spk_audio_prompt": spk_prompt_path,
+            "text": text,
+            "lang": (self.tts_config.lang or "EN").strip().upper(),
+            "output_path": str(output_wav.resolve()),
+            "emo_vector": self._get_emotion_vector(emotion_tag),
+            "temperature": self.tts_config.temperature,
+            "top_p": self.tts_config.top_p,
+        }
+        if abs(self.tts_config.speed - 1.0) >= 0.02:
+            request["duration_factor"] = round(1.0 / self.tts_config.speed, 3)
 
-            call_kwargs: Dict[str, Any] = {
-                "spk_audio_prompt": spk_prompt_path,
-                "text": text,
-                "lang": target_lang,
-                "output_path": str(output_wav.resolve()),
-            }
+        try:
+            proc.stdin.write(json.dumps(request) + "\n")
+            proc.stdin.flush()
+            response_line = proc.stdout.readline()
+        except (BrokenPipeError, OSError) as e:
+            stderr = proc.stderr.read() if proc.stderr else ""
+            raise RuntimeError(f"IndexTTS-2.5 worker died mid-synthesis: {e}\n{stderr}") from e
 
-            if "emo_vector" in params:
-                call_kwargs["emo_vector"] = emotion_vec
-            elif "emotion_vector" in params:
-                call_kwargs["emotion_vector"] = emotion_vec
+        if not response_line:
+            stderr = proc.stderr.read() if proc.stderr else ""
+            raise RuntimeError(f"IndexTTS-2.5 worker closed its output unexpectedly:\n{stderr}")
 
-            if "duration_factor" in params and abs(self.tts_config.speed - 1.0) >= 0.02:
-                call_kwargs["duration_factor"] = round(1.0 / self.tts_config.speed, 3)
+        response = json.loads(response_line)
+        if not response.get("ok"):
+            raise RuntimeError(f"IndexTTS-2.5 synthesis failed: {response.get('error')}")
 
-            # Pass low temperature and top_p for consistent cadence
-            if "temperature" in params or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()):
-                temp_val = float(self.tts_config.temperature if self.tts_config.temperature is not None else 0.2)
-                call_kwargs["temperature"] = temp_val
-            if "top_p" in params or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()):
-                top_p_val = float(self.tts_config.top_p if self.tts_config.top_p is not None else 0.7)
-                call_kwargs["top_p"] = top_p_val
+        # duration_factor already handles speed on the model side when supported;
+        # only fall back to the ffmpeg post-process if the worker couldn't use it
+        # (older IndexTTS checkouts without a duration_factor parameter).
+        if "duration_factor" not in request and abs(self.tts_config.speed - 1.0) >= 0.02:
+            self._adjust_audio_speed(output_wav, self.tts_config.speed)
 
-            # IndexTTS2.infer() prints several unconditional progress/timing lines
-            # (">> starting inference...", ">> gpt_gen_time: ...", etc.) that aren't
-            # gated by a verbose flag. Left alone, those raw prints land in the
-            # middle of the caller's rich Progress bar's live-render region and
-            # fight it for the terminal - each print pushes the bar's redraw onto
-            # a new line instead of updating in place, which reads as spam. Swallow
-            # them the same way the CLI-fallback path below already discards
-            # IndexTTS's stdout, so the one progress bar we want stays in control.
-            with contextlib.redirect_stdout(io.StringIO()):
-                model.infer(**call_kwargs)
-
-            if "duration_factor" not in params and abs(self.tts_config.speed - 1.0) >= 0.02:
-                self._adjust_audio_speed(output_wav, self.tts_config.speed)
-        else:
-            cmd = [
-                "python", "-m", "indextts.infer_v2_5",
-                "--cfg_path", str(Path(self.tts_config.cfg_path).resolve()),
-                "--model_dir", str(Path(self.tts_config.model_dir).resolve()),
-                "--spk_audio_prompt", spk_prompt_path,
-                "--text", text,
-                "--lang", target_lang,
-                "--output_path", str(output_wav.resolve()),
-            ]
-            try:
-                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-                if abs(self.tts_config.speed - 1.0) >= 0.02:
-                    self._adjust_audio_speed(output_wav, self.tts_config.speed)
-            except Exception as ex:
-                console.print(f"[dim yellow]Synthesis fallback triggered ({ex}). Generating timing slot...[/]")
-                word_count = max(1, len(text.split()))
-                est_duration_ms = int((word_count / 2.5) * 1000)
-                fallback_audio = AudioSegment.silent(duration=est_duration_ms, frame_rate=self.tts_config.sample_rate)
-                fallback_audio.export(output_wav, format="wav")
+    def shutdown(self) -> None:
+        """Cleanly stops the worker process, if one is running. Safe to call
+        multiple times; also registered via atexit as a safety net."""
+        proc, self._proc = self._proc, None
+        if proc is None or proc.poll() is not None:
+            return
+        try:
+            proc.stdin.write(json.dumps({"cmd": "shutdown"}) + "\n")
+            proc.stdin.flush()
+            proc.wait(timeout=5)
+        except Exception:
+            proc.terminate()
