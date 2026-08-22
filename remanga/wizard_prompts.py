@@ -1,5 +1,5 @@
 """Interactive project/chapter picker prompts used at the start of the production wizard,
-including the already-complete-chapter restart offer."""
+including the resume-vs-restart offer for a chapter that already has generated progress."""
 
 from __future__ import annotations
 
@@ -53,27 +53,27 @@ def select_or_create_project(config: RemangaConfig) -> str:
 
 
 def offer_chapter_restart(project_name: str, chapter_num: str) -> None:
-    """If the chosen chapter is already fully complete, offers to wipe it back to just the
-    downloaded pages (which are then re-verified by the normal Step 1 download check) so it
-    can be reprocessed from scratch. Requires two separate confirmations before deleting."""
+    """If the chosen chapter already has any generated progress beyond the downloaded pages
+    (partially done or fully complete), asks whether to resume from where it left off or wipe
+    it back to just the downloaded pages and restart from scratch. Restarting still requires a
+    second, explicit confirmation before anything is actually deleted."""
     status = get_chapter_status(project_name, chapter_num)
-    if not status["video_exist"]:
-        return
-
-    console.print(Panel(
-        f"[bold yellow]Chapter {chapter_num} is already fully complete:[/]\n{status['video_path']}",
-        border_style="yellow"
-    ))
-    if not Confirm.ask(
-        f"[bold cyan]Restart Chapter {chapter_num} from scratch?[/] "
-        f"(keeps downloaded pages, re-verifies them, deletes crops/panels/narration/audio/video)",
-        default=False,
-    ):
-        return
-
     candidates = reset.restart_candidates(project_name, chapter_num)
     if not candidates:
-        console.print("[dim]Nothing to delete besides the downloaded pages.[/]")
+        return  # nothing generated yet beyond the downloaded pages - nothing to choose between
+
+    console.print(Panel(
+        f"[bold yellow]Chapter {chapter_num} already has progress:[/] {status['summary']}\n"
+        f"[dim]{len(candidates)} generated item(s) present (crops/panels/narration/audio/video).[/]",
+        border_style="yellow"
+    ))
+    choice = Prompt.ask(
+        "[bold cyan]Resume Chapter {}[/] where it left off, or [bold red]restart[/] it from scratch?".format(chapter_num),
+        choices=["resume", "restart"],
+        default="resume",
+    )
+    if choice == "resume":
+        console.print(f"[dim]Resuming Chapter {chapter_num} from its current progress.[/]\n")
         return
 
     console.print("[bold red]The following will be permanently deleted:[/]")
@@ -87,7 +87,7 @@ def offer_chapter_restart(project_name: str, chapter_num: str) -> None:
         reset.restart_chapter(project_name, chapter_num)
         console.print(f"[bold green]✓ Chapter {chapter_num} reset. Downloaded pages kept — ready to reprocess.[/]\n")
     else:
-        console.print("[dim]Restart cancelled. Continuing with the chapter as-is.[/]\n")
+        console.print(f"[dim]Restart cancelled. Resuming Chapter {chapter_num} from its current progress instead.[/]\n")
 
 
 def select_chapter(project_name: str) -> str:
