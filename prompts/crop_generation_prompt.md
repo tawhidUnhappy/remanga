@@ -15,8 +15,8 @@ Analyze raw sequential manga chapter pages with surgical focus and extract clean
 - **Never crop random background whitespace or empty margins** as standalone panels.
 
 ### Rule B: Zero Future Knowledge Horizon (Anti-Spoiler Notes)
-- In the `"notes"` fields, describe **ONLY** what is physically happening in that exact frame.
-- **Never reveal future plot twists, true motives, real identities, or character names** before they are visually and textually introduced in the sequential panels.
+- While silently reasoning about panel boundaries, judge each frame **ONLY** by what is physically happening in that exact frame.
+- **Never let future plot twists, true motives, real identities, or character names** you may recognize from later pages bias where a box is drawn or which panels get merged — decide boundaries strictly from what is visible on that page, in that reading position.
 
 ### Rule C: Zero Conversational Output
 - Output **ONLY** the raw, valid JSON object matching the schema below.
@@ -24,8 +24,8 @@ Analyze raw sequential manga chapter pages with surgical focus and extract clean
 
 ### Rule D: Crop Data ONLY — No Foreign Content in the JSON
 `crops.json` is a **coordinate/cropping instruction file**, consumed by an automated cropping script — it is not a story document. It must contain **strictly and only** the fields defined in the schema in Section 5, nothing else:
-- **No new top-level or per-object fields.** Do not add keys beyond `chapter`, `pages[]` (`page_index`, `page_filename`, `is_story_page`, `notes`, `panels[]`), and `panels[]` (`panel_id`, `box_1000`, `type`, `notes`). Do not add fields like `dialogue`, `speech`, `characters`, `summary`, `synopsis`, `emotion`, or anything belonging to the separate narration stage.
-- **`notes` is a short visual/compositional locator tag, not a scene description.** Keep it to a few words identifying what the box contains for a human spot-checking the crop (e.g., `"Boy pulling shoes from locker"`), never a full sentence-by-sentence narrative, a dialogue transcript, or plot commentary. Dialogue transcription and narrative writing happen later, in the narration stage — do not do that work here.
+- **No new top-level or per-object fields.** Do not add keys beyond `chapter`, `pages[]` (`page_index`, `page_filename`, `is_story_page`, `panels[]`), and `panels[]` (`panel_id`, `box_1000`). Do not add fields like `dialogue`, `speech`, `characters`, `summary`, `synopsis`, `emotion`, `notes`, `type`, or anything belonging to the separate narration stage.
+- **The file holds coordinates and nothing else.** No scene descriptions, locator tags, dialogue transcripts, or plot commentary anywhere in the JSON — not at the page level, not at the panel level. If you need to reason about panel composition (tiers, splashes, dialogue rows) while deciding how to draw the boxes, do that reasoning silently; only the final `box_1000` coordinates go into the file.
 - Every panel that is physically present on a story page must get a crop entry (subject to the merge rule above) — do not silently drop a panel because it seems minor or hard to bound.
 
 ---
@@ -65,20 +65,20 @@ Because pages are rendered at high resolution, an error of even 20-40 units on t
 - Never cut off heads, hair tips, foreheads, or weapon ends.
 
 ### Rule 3: Tier & Dialogue Integrity (16:9 Composition Rule)
-- **Do Not Slice Conversational Tiers:** If a row features two or three characters exchanging dialogue across sub-panels, crop the entire horizontal row as ONE unified panel (`"type": "wide_tier"` or `"type": "dialogue_exchange"`).
+- **Do Not Slice Conversational Tiers:** If a row features two or three characters exchanging dialogue across sub-panels, crop the entire horizontal row as ONE unified panel (a "wide tier" or "dialogue exchange" beat — see Section 4).
 - **No Floating Bubble Slivers:** Keep the speaker, the context, and the dialogue bubble united in the same crop.
 
 ### Rule 4: One Bordered Frame = One Panel (Do Not Over-Split)
 - **The panel border/gutter is the ONLY thing that defines where one panel ends and another begins — not the number of actions or beats happening inside it.** A single panel frame frequently contains two or more sequential beats drawn inside the same border (e.g., a character glancing at his locker AND discovering a letter inside it, both inked within one continuous frame with no dividing line between them). This is still **ONE panel** and must be output as a **single crop entry**, never split into two.
-- **Failure pattern to avoid:** emitting two separate `panels` entries for content that shares one unbroken border. Before finalizing a page, check every pair of adjacent panels you are about to output — if there is no ink border, no gutter gap, and no visual frame break between them, merge them into one box (`"type": "wide_tier"` or `"dialogue_exchange"` as appropriate) instead of two.
+- **Failure pattern to avoid:** emitting two separate `panels` entries for content that shares one unbroken border. Before finalizing a page, check every pair of adjacent panels you are about to output — if there is no ink border, no gutter gap, and no visual frame break between them, merge them into one box instead of two.
 - **When a scene DOES establish a physical action across genuinely split tiers with a visible border between them** (e.g., a shoe locker compartment tier above a separately bordered reaction tier below), keep each tier as its own crop, but ensure each crop's prop interaction is complete and cleanly bounded within its own border — don't cut the locker off from the hand reaching into it, or the reaction face off from its dialogue bubble.
 - When genuinely uncertain whether two adjacent beats share a border, prefer the merged single-panel interpretation — an unnecessarily split panel disrupts recap video pacing more than a slightly wider crop does.
 
 ### Rule 5: Double-Page Spread Deduplication (CRITICAL)
 - If a spread exists as both split individual pages AND a stitched combined image in the chapter:
   - Mark split individual pages as:
-    `"is_story_page": false, "notes": "Split page skipped in favor of stitched spread on page X", "panels": []`
-  - Crop **ONLY** the stitched image (`"type": "full_splash"`).
+    `"is_story_page": false, "panels": []`
+  - Crop **ONLY** the stitched image, as a single full-page panel entry.
 
 ### Rule 6: Strict Japanese Reading Order (RTL Flow)
 Order panels in the `panels` array chronologically following the authentic Japanese manga flow: **Right to Left, Top to Bottom**.
@@ -89,18 +89,18 @@ Scanlator credits, recruitment promos, raw cover advertisements, and blank pages
 
 ---
 
-## 4. Visual Beat Types
-- `"full_splash"`: Full-page impact shot, cover artwork, or double spread.
-- `"wide_tier"`: Full horizontal tier containing multiple interacting subjects or scenery.
-- `"dialogue_exchange"`: Multi-panel conversational row kept together for narrative flow.
-- `"split_panel"`: Standard single bounded panel.
-- `"action_climax"`: High-intensity combat, sudden movement, or dramatic climax.
-- `"reaction_beat"`: Close-up reaction, realization, or silent stare.
+## 4. Panel Composition Reasoning (Internal Use — Not Output Fields)
+Use these categories only to decide **how many boxes to draw and where their borders fall** per Rules 3–5. They are a mental checklist, not JSON fields — none of these labels appear in `crops.json` (see Rule D and Section 5).
+- **Full splash:** Full-page impact shot, cover artwork, or double spread → one box covering the whole page/spread.
+- **Wide tier:** Full horizontal tier containing multiple interacting subjects or scenery → one box for the whole tier.
+- **Dialogue exchange:** Multi-panel conversational row kept together for narrative flow → one box for the whole row.
+- **Split panel:** Standard single bounded panel → one box matching its border.
+- **Action climax / reaction beat:** High-intensity or close-up single panels → one box matching its border, expanded per Rules 1–2 for bleed.
 
 ---
 
 ## 5. Output JSON Schema
-Return **ONLY** valid raw JSON.
+Return **ONLY** valid raw JSON. Every field below is required; **no other fields are permitted anywhere in the file** (see Rule D) — this is a coordinate file, not a story document.
 
 ```json
 {
@@ -110,20 +110,16 @@ Return **ONLY** valid raw JSON.
       "page_index": 1,
       "page_filename": "page_001.png",
       "is_story_page": false,
-      "notes": "Scanlator credit sheet - skipped",
       "panels": []
     },
     {
       "page_index": 2,
       "page_filename": "page_002.png",
       "is_story_page": true,
-      "notes": "Chapter opening splash shot",
       "panels": [
         {
           "panel_id": 1,
-          "box_1000": [0, 0, 1000, 1000],
-          "type": "full_splash",
-          "notes": "Opening splash of protagonist standing before school gate"
+          "box_1000": [0, 0, 1000, 1000]
         }
       ]
     },
@@ -131,27 +127,22 @@ Return **ONLY** valid raw JSON.
       "page_index": 3,
       "page_filename": "page_003.png",
       "is_story_page": false,
-      "notes": "Split right page of double spread - skipped in favor of stitched spread on page 5",
       "panels": []
     },
     {
       "page_index": 4,
       "page_filename": "page_004.png",
       "is_story_page": false,
-      "notes": "Split left page of double spread - skipped in favor of stitched spread on page 5",
       "panels": []
     },
     {
       "page_index": 5,
       "page_filename": "page_005.png",
       "is_story_page": true,
-      "notes": "Stitched prologue double spread",
       "panels": [
         {
           "panel_id": 1,
-          "box_1000": [0, 0, 1000, 1000],
-          "type": "full_splash",
-          "notes": "Stitched double-page establishing spread of courtyard"
+          "box_1000": [0, 0, 1000, 1000]
         }
       ]
     },
@@ -159,19 +150,14 @@ Return **ONLY** valid raw JSON.
       "page_index": 6,
       "page_filename": "page_006.png",
       "is_story_page": true,
-      "notes": "Locker room discovery scene",
       "panels": [
         {
           "panel_id": 1,
-          "box_1000": [0, 70, 580, 930],
-          "type": "wide_tier",
-          "notes": "Top wide tier showing shoe locker compartment"
+          "box_1000": [0, 70, 580, 930]
         },
         {
           "panel_id": 2,
-          "box_1000": [365, 70, 1000, 1000],
-          "type": "reaction_beat",
-          "notes": "Bottom panel of dark-haired student pulling out an envelope"
+          "box_1000": [365, 70, 1000, 1000]
         }
       ]
     }

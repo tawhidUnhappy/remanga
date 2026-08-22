@@ -213,7 +213,7 @@ Upload your generated vision archive (`sheets.zip` or `panels.zip`) and `prompts
 ```text
 projects/yandere_sister/chapters/chapter_1/narration.json
 ```
-*(Also update `projects/yandere_sister/memory.json` to maintain continuity across chapters).*
+*(`memory.json` is auto-created as an empty placeholder at `projects/yandere_sister/memory.json` the first time the project is touched — feed its current contents to the LLM alongside the panels so it can update it in place to maintain continuity across chapters).*
 
 ### 5. Synthesize Vocal Audio (IndexTTS-2.5)
 ```bash

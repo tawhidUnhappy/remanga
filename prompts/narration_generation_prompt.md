@@ -47,9 +47,11 @@ To ensure 100% consistent, flat, documentary-style vocal narration across all ch
   - ❌ *Robotic Transcription:* "He opens the locker and thinks, 'Is this a love letter? Who could have put this here?'"
   - ✅ *Objective Synthesis:* "Opening his locker, he discovers an anonymous sealed letter resting beside his shoes."
 
-### Rule 6: Strict Sequential Panel Coverage
+### Rule 6: Strict Sequential Panel Coverage — Every Story Panel, No Exceptions
+- Every panel image you are given (`panel_001` through `panel_NNN`) has **already been through story-page filtering upstream** — non-story pages (credits, ads, blank pages, duplicate spread halves) were dropped before cropping ever happened. That means **every single panel you receive is, by definition, part of the story** — there is no such thing as a supplied panel that is "not story-relevant." Never reason your way into skipping one on those grounds.
 - Include an entry for **every sequential panel ID** (`panel_001` through `panel_NNN`) in exact chronological sequence.
-- **Never skip, merge, or omit panel IDs.** If a panel seems minor, low-content, or repetitive, it still gets its own entry — use a short line or a silent beat (`"text": ""`, Rule 4), but the entry must exist. `narration.total_panels` must equal the number of panels actually supplied, and the `narration` array length must match it exactly — treat any mismatch as an error to fix before output, not an acceptable shortcut.
+- **Never skip, merge, or omit panel IDs.** If a panel seems minor, low-content, transitional, or repetitive, it still gets its own entry — use a short line or a silent beat (`"text": ""`, Rule 4), but the entry must exist. `narration.total_panels` must equal the number of panels actually supplied, and the `narration` array length must match it exactly — treat any mismatch as an error to fix before output, not an acceptable shortcut.
+- Before finalizing, count the panel images you were given and count the entries in your `narration` array — if they don't match 1:1 by `panel_id`, find the missing or extra entry and fix it before returning output.
 
 ### Rule 7: Complete Dialogue & Action Coverage (ZERO OMISSION)
 Every panel must be fully accounted for — do not silently drop content because it's inconvenient to fit, redundant-seeming, or not the "main" beat of the panel.
@@ -125,6 +127,14 @@ Save to: `projects/<project_name>/chapters/chapter_<num>/narration.json`
 
 ### Block 2: `memory.json`
 Save to: `projects/<project_name>/memory.json`
+
+`memory.json` is auto-created as an **empty placeholder file** at the manga project root the first time the project is touched. On chapter 1 you are effectively starting from nothing — populate every field from what this chapter establishes. On chapter 2 onward, you will typically be given the **current contents of `memory.json`** (the state left by the previous chapter) alongside the new panels — **update it in place, do not discard it**:
+- Carry forward every existing character, faction, and unresolved cliffhanger untouched unless this chapter changes their status.
+- Append new `key_plot_points` from this chapter; do not delete prior chapters' entries.
+- Resolve any `unresolved_cliffhangers` this chapter pays off (remove them) and add any new ones this chapter opens.
+- Bump `last_chapter_processed` to the chapter you just processed.
+- If no prior `memory.json` content was provided to you at all, treat this as the first chapter and build the file fresh from the schema below.
+
 ```json
 {
   "series_title": "Series Name",

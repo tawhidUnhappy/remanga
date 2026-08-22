@@ -70,7 +70,7 @@ def run_interactive_pipeline():
     crops_path = chap_dir / "crops.json"
     if not crops_path.exists() or crops_path.stat().st_size <= 10:
         crops_path.parent.mkdir(parents=True, exist_ok=True)
-        crops_path.write_text("{}", encoding="utf-8")
+        crops_path.write_text("", encoding="utf-8")
         console.print(Panel(
             f"[bold yellow]Action Required:[/]\n"
             f"1. Upload [bold]{chap_dir}/pages.zip[/] along with [bold]prompts/crop_generation_prompt.md[/] to your LLM.\n"
@@ -95,7 +95,7 @@ def run_interactive_pipeline():
 
     if not narration_path.exists() or narration_path.stat().st_size <= 10:
         narration_path.parent.mkdir(parents=True, exist_ok=True)
-        narration_path.write_text("{}", encoding="utf-8")
+        narration_path.write_text("", encoding="utf-8")
         console.print(Panel(
             f"[bold yellow]Action Required:[/]\n"
             f"1. Upload [bold]{target_vision_archive.resolve()}[/] along with [bold]prompts/narration_generation_prompt.md[/] to your LLM.\n"
