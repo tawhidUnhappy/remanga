@@ -23,28 +23,18 @@ true in config, so nothing about this stage costs anything when it's off.
 from __future__ import annotations
 
 import json
-import re
 import subprocess
-import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 from rich.console import Console
 
 from remanga.config import MarkerConfig
-from remanga.venvs import get_scripts_dir, get_tool_python
+from remanga.venvs import REPO_ROOT, extract_missing_packages, get_scripts_dir, get_tool_python
 
 console = Console()
 
-# transformers' trust_remote_code error looks like: "This modeling file requires
-# the following packages that were not found in your environment: foo, bar. Run
-# `pip install foo bar`". MAGI's own modeling file can gain a new import in a
-# future revision without pyproject.toml being updated to match, so this parses
-# that message out of the worker's stderr instead of hardcoding the package list.
-_MISSING_PKG_RE = re.compile(
-    r"the following packages that were not found in your environment:\s*([^.]+)\.", re.IGNORECASE
-)
-_MAX_AUTO_HEAL_ATTEMPTS = 5
+_MAX_AUTO_HEAL_ATTEMPTS = 8
 
 
 def is_gpu_available() -> bool:
@@ -70,8 +60,7 @@ def _pip_install_into_magi_env(packages: Set[str]) -> bool:
     names = sorted(packages)
     console.print(f"[yellow]Installing missing dependency into .venv-magi: {' '.join(names)}...[/]")
 
-    repo_root = Path(__file__).resolve().parents[2]
-    uv_bin = repo_root / "bin" / "uv"
+    uv_bin = REPO_ROOT / "bin" / "uv"
     magi_python = get_tool_python("magi")
     if uv_bin.exists():
         cmd = [str(uv_bin), "pip", "install", "--python", str(magi_python), *names]
@@ -102,10 +91,12 @@ def _spawn_worker(config: MarkerConfig) -> subprocess.Popen:
 
 def _spawn_worker_with_auto_heal(config: MarkerConfig) -> subprocess.Popen:
     """Spawns the MAGI worker, waits for its startup event, and - if it
-    reports a missing trust_remote_code dependency - installs the package(s)
-    into `.venv-magi` and retries, up to _MAX_AUTO_HEAL_ATTEMPTS distinct
-    packages, instead of raising mid-session over something one pip install
-    would have fixed."""
+    reports a missing dependency (either transformers' own trust_remote_code
+    check, or a plain unlisted `import` MAGI's remote code just happens to
+    need - matplotlib and einops have both come up in practice) - installs the
+    package(s) into `.venv-magi` and retries, up to _MAX_AUTO_HEAL_ATTEMPTS
+    distinct packages, instead of raising mid-session over something one pip
+    install would have fixed."""
     attempted: Set[str] = set()
 
     for _ in range(_MAX_AUTO_HEAL_ATTEMPTS + 1):
@@ -122,14 +113,10 @@ def _spawn_worker_with_auto_heal(config: MarkerConfig) -> subprocess.Popen:
             return proc
 
         error_text = event.get("error", "")
-        match = _MISSING_PKG_RE.search(error_text)
-        if not match:
+        missing = extract_missing_packages(error_text) - attempted
+        if not missing:
             raise RuntimeError(f"MAGI v3 worker failed to load: {error_text}")
 
-        missing = {pkg.strip() for pkg in match.group(1).replace(",", " ").split() if pkg.strip()}
-        missing -= attempted
-        if not missing:
-            raise RuntimeError(f"MAGI v3 worker still fails after installing: {', '.join(sorted(attempted))}")
         attempted |= missing
         if not _pip_install_into_magi_env(missing):
             raise RuntimeError(f"MAGI v3 worker failed to load: {error_text}")

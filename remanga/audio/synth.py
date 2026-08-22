@@ -17,9 +17,29 @@ from rich.console import Console
 from remanga.config import AudioConfig, TTSConfig
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.models import ModelManager
-from remanga.venvs import get_scripts_dir, get_tool_python
+from remanga.venvs import REPO_ROOT, extract_missing_packages, get_scripts_dir, get_tool_python
 
 console = Console()
+_MAX_AUTO_HEAL_ATTEMPTS = 8
+
+
+def _pip_install_into_indextts_env(packages: set) -> bool:
+    """Installs `packages` into `.venv-indextts`, preferring this repo's own
+    `bin/uv` (that isolated venv has no `pip` module at all)."""
+    names = sorted(packages)
+    console.print(f"[yellow]Installing missing dependency into .venv-indextts: {' '.join(names)}...[/]")
+
+    uv_bin = REPO_ROOT / "bin" / "uv"
+    python = get_tool_python("indextts")
+    cmd = [str(uv_bin), "pip", "install", "--python", str(python), *names] if uv_bin.exists() \
+        else [str(python), "-m", "pip", "install", *names]
+
+    result = subprocess.run(cmd)
+    if result.returncode != 0:
+        console.print(f"[bold red]Failed to install {' '.join(names)} automatically.[/]")
+        return False
+    console.print(f"[bold green]✓ Installed {' '.join(names)}.[/]")
+    return True
 
 
 class IndexTTSSynthesizer:
@@ -34,11 +54,7 @@ class IndexTTSSynthesizer:
         self._proc: Optional[subprocess.Popen] = None
         atexit.register(self.shutdown)
 
-    def _ensure_worker(self) -> subprocess.Popen:
-        if self._proc is not None and self._proc.poll() is None:
-            return self._proc
-
-        model_dir = self.model_manager.ensure_model()
+    def _spawn_worker(self, model_dir: Path) -> subprocess.Popen:
         python = get_tool_python("indextts")
         script = get_scripts_dir("audio") / "indextts_worker.py"
 
@@ -50,23 +66,48 @@ class IndexTTSSynthesizer:
         if self.tts_config.use_bf16:
             cmd.append("--use_bf16")
 
-        console.print(f"[cyan]Starting IndexTTS-2.5 worker ({python})...[/]")
-        proc = subprocess.Popen(
+        return subprocess.Popen(
             cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, bufsize=1,
         )
 
-        ready_line = proc.stdout.readline()
-        if not ready_line:
-            stderr = proc.stderr.read()
-            raise RuntimeError(f"IndexTTS-2.5 worker exited before starting up:\n{stderr}")
-        event = json.loads(ready_line)
-        if event.get("event") != "ready":
-            raise RuntimeError(f"IndexTTS-2.5 worker failed to load: {event.get('error', event)}")
+    def _ensure_worker(self) -> subprocess.Popen:
+        if self._proc is not None and self._proc.poll() is None:
+            return self._proc
 
-        console.print("[bold green]✓ IndexTTS-2.5 worker ready.[/]")
-        self._proc = proc
-        return proc
+        model_dir = self.model_manager.ensure_model()
+        console.print("[cyan]Starting IndexTTS-2.5 worker...[/]")
+
+        # Auto-heal: a missing dependency IndexTTS's own install didn't pin
+        # (bootstrap.sh's fixed package list, or a future IndexTTS revision
+        # that imports something new) gets installed into .venv-indextts and
+        # retried, instead of raising mid-session over something one pip
+        # install would have fixed. See remanga/webui/magi_assist.py for the
+        # same pattern against MAGI v3's own isolated env.
+        attempted: set = set()
+        for _ in range(_MAX_AUTO_HEAL_ATTEMPTS + 1):
+            proc = self._spawn_worker(model_dir)
+            ready_line = proc.stdout.readline()
+            if not ready_line:
+                stderr = proc.stderr.read()
+                raise RuntimeError(f"IndexTTS-2.5 worker exited before starting up:\n{stderr}")
+
+            event = json.loads(ready_line)
+            if event.get("event") == "ready":
+                console.print("[bold green]✓ IndexTTS-2.5 worker ready.[/]")
+                self._proc = proc
+                return proc
+
+            error_text = event.get("error", "")
+            missing = extract_missing_packages(error_text) - attempted
+            if not missing:
+                raise RuntimeError(f"IndexTTS-2.5 worker failed to load: {error_text}")
+            attempted |= missing
+            if not _pip_install_into_indextts_env(missing):
+                raise RuntimeError(f"IndexTTS-2.5 worker failed to load: {error_text}")
+            console.print("[dim]Retrying IndexTTS-2.5 worker startup with the newly installed package(s)...[/]")
+
+        raise RuntimeError(f"IndexTTS-2.5 worker still fails to load after installing: {', '.join(sorted(attempted))}")
 
     def _get_emotion_vector(self, emotion_tag: str) -> List[float]:
         """

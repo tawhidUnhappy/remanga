@@ -8,11 +8,12 @@ echo "=== Initializing 100% Self-Contained remanga Environment ==="
 
 BIN_DIR="$SCRIPT_DIR/bin"
 CACHE_DIR="$SCRIPT_DIR/.cache"
+TOOLS_DIR="$SCRIPT_DIR/.tools"
 VENV_DIR="$SCRIPT_DIR/.venv"
-INDEXTTS_VENV_DIR="$SCRIPT_DIR/.venv-indextts"
-MAGI_VENV_DIR="$SCRIPT_DIR/.venv-magi"
+INDEXTTS_VENV_DIR="$TOOLS_DIR/venv-indextts"
+MAGI_VENV_DIR="$TOOLS_DIR/venv-magi"
 
-mkdir -p "$BIN_DIR" "$CACHE_DIR/uv" "$CACHE_DIR/huggingface" "$CACHE_DIR/torch" assets/voices assets/bgm projects
+mkdir -p "$BIN_DIR" "$CACHE_DIR/uv" "$CACHE_DIR/huggingface" "$CACHE_DIR/torch" "$TOOLS_DIR" assets/voices assets/bgm projects
 
 # Force all caches strictly inside remanga directory
 export PATH="$BIN_DIR:$PATH"
@@ -61,15 +62,17 @@ if [ ! -f "$BIN_DIR/ffmpeg" ] || [ ! -f "$BIN_DIR/ffprobe" ]; then
 fi
 
 # 3. Provision standalone Python 3.11 & create the three isolated virtual
-# environments: the main env (remanga's own lightweight core), plus one per
-# heavy ML dependency so their conflicting requirements never have to share a
+# environments: the main env (remanga's own lightweight core) at the repo
+# root, plus one per heavy ML dependency, tucked under .tools/ for easy
+# management, so their conflicting requirements never have to share a
 # resolution - IndexTTS-2.5 and MAGI v3 each pin their own torch/transformers
 # stack, sometimes incompatibly (MAGI v3 needs transformers<4.52; nothing
 # guarantees IndexTTS or some future tool won't need something newer). The
 # storage trade-off (three venvs instead of one) buys permanent isolation
 # instead of a pin that has to be re-asserted and re-verified by hand every
-# time one tool's install could clobber another's. See remanga/venvs.py for
-# how the main env locates and talks to these two as subprocesses.
+# time one tool's install could clobber another's. Nothing "activates" these -
+# the main env only ever invokes `.tools/venv-<tool>/bin/python` directly as a
+# subprocess (see remanga/venvs.py), which needs no shell activation step at all.
 echo "[+] Provisioning standalone Python 3.11 runtime..."
 "$BIN_DIR/uv" python install 3.11
 
@@ -84,7 +87,11 @@ echo "[+] Creating isolated IndexTTS-2.5 environment ($INDEXTTS_VENV_DIR)..."
 
 echo "[+] Creating isolated MAGI v3 environment ($MAGI_VENV_DIR)..."
 "$BIN_DIR/uv" venv "$MAGI_VENV_DIR" --python 3.11 --allow-existing
-"$BIN_DIR/uv" pip install --python "$MAGI_VENV_DIR" "torch" "transformers<4.52.0" timm shapely pytorch-metric-learning huggingface-hub pillow numpy
+# einops/matplotlib: undeclared imports MAGI v3's remote modeling code needs
+# beyond what its own requirements list - remanga/webui/magi_assist.py will
+# auto-install anything still missing on first load, but listing the ones
+# already known here saves that extra round-trip.
+"$BIN_DIR/uv" pip install --python "$MAGI_VENV_DIR" torch "transformers<4.52.0" timm shapely pytorch-metric-learning huggingface-hub pillow numpy einops matplotlib
 
 # 4. Initialize config.json from config.example.json if missing
 if [ ! -f "config.json" ]; then

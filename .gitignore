@@ -23,7 +23,6 @@ wheels/
 # Isolated tools & virtualenv
 .tools/
 .venv/
-.venv-*/
 env/
 venv/
 ENV/
