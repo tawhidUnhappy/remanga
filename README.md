@@ -197,7 +197,7 @@ Pass a title query, title URL, chapter URL, or UUID:
 *Creates:* `projects/yandere_sister/chapters/chapter_1/pages.zip`
 
 ### 2. Generate and Place `crops.json`
-Upload `pages.zip` and `prompts/crop_prompt.md` to your multimodal LLM (e.g. Claude 3.5 Sonnet, GPT-4o, Gemini 1.5 Pro). Save the resulting JSON to:
+Upload `pages.zip` and `prompts/crop.md` to your multimodal LLM (e.g. Claude 3.5 Sonnet, GPT-4o, Gemini 1.5 Pro). Save the resulting JSON to:
 ```text
 projects/yandere_sister/chapters/chapter_1/crops.json
 ```
@@ -209,7 +209,7 @@ projects/yandere_sister/chapters/chapter_1/crops.json
 *Creates:* `panels/`, `sheets/`, `panels_manifest.json`, and either `sheets.zip` or `panels.zip` (depending on `config.json`).
 
 ### 4. Generate and Place `narration.json`
-Upload your generated vision archive (`sheets.zip` or `panels.zip`) and `prompts/narration_prompt.md` to your LLM. Save the resulting script to:
+Upload your generated vision archive (`sheets.zip` or `panels.zip`) and `prompts/narration.md` to your LLM. Save the resulting script to:
 ```text
 projects/yandere_sister/chapters/chapter_1/narration.json
 ```
@@ -313,8 +313,8 @@ remanga/
 ├── checkpoints/
 │   └── indextts_2.5/           # IndexTTS-2.5 neural model weights
 ├── prompts/
-│   ├── crop_prompt.md       # Master coordinate crop extraction prompt
-│   └── narration_prompt.md  # Master objective scriptwriter prompt
+│   ├── crop.md       # Master coordinate crop extraction prompt
+│   └── narration.md  # Master objective scriptwriter prompt
 ├── projects/
 │   └── <project_name>/
 │       ├── project.json        # Saved MangaDex URL and chapter index

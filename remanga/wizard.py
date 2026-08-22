@@ -73,7 +73,7 @@ def run_interactive_pipeline():
         crops_path.write_text("", encoding="utf-8")
         console.print(Panel(
             f"[bold yellow]Action Required:[/]\n"
-            f"1. Upload [bold]{chap_dir}/pages.zip[/] along with [bold]prompts/crop_prompt.md[/] to your LLM.\n"
+            f"1. Upload [bold]{chap_dir}/pages.zip[/] along with [bold]prompts/crop.md[/] to your LLM.\n"
             f"2. Save the resulting JSON directly into:\n   [bold green]{crops_path.resolve()}[/]",
             title="[bold white]Generate crops.json[/]",
             border_style="yellow"
@@ -98,7 +98,7 @@ def run_interactive_pipeline():
         narration_path.write_text("", encoding="utf-8")
         console.print(Panel(
             f"[bold yellow]Action Required:[/]\n"
-            f"1. Upload [bold]{target_vision_archive.resolve()}[/] along with [bold]prompts/narration_prompt.md[/] to your LLM.\n"
+            f"1. Upload [bold]{target_vision_archive.resolve()}[/] along with [bold]prompts/narration.md[/] to your LLM.\n"
             f"2. Save the resulting narration JSON directly into:\n   [bold green]{narration_path.resolve()}[/]",
             title="[bold white]Generate narration.json[/]",
             border_style="yellow"
