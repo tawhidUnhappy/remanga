@@ -67,12 +67,14 @@ def offer_chapter_restart(project_name: str, chapter_num: str) -> None:
         f"[dim]{len(candidates)} generated item(s) present (crops/panels/narration/audio/video).[/]",
         border_style="yellow"
     ))
+    console.print(f"  [bold]1.[/] Resume Chapter {chapter_num} where it left off")
+    console.print(f"  [bold]2.[/] Restart Chapter {chapter_num} from scratch")
     choice = Prompt.ask(
-        "[bold cyan]Resume Chapter {}[/] where it left off, or [bold red]restart[/] it from scratch?".format(chapter_num),
-        choices=["resume", "restart"],
-        default="resume",
+        "[bold cyan]Choose an option[/]",
+        choices=["1", "2"],
+        default="1",
     )
-    if choice == "resume":
+    if choice == "1":
         console.print(f"[dim]Resuming Chapter {chapter_num} from its current progress.[/]\n")
         return
 
