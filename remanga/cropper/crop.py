@@ -1,25 +1,21 @@
 """Chapter-level crop orchestration: reads crops.json, resolves and crops every
 panel, then packages the vision upload archive. The actual box math lives in
-remanga.cropper.panel_boxes/gutter/seams/dedupe - this module just wires the
-pipeline stages together in order."""
+remanga.cropper.panel_boxes/gutter/seams/dedupe, one page's worth of cropping
+lives in remanga.cropper.crop_page, and manifest/summary/packaging lives in
+remanga.cropper.crop_report - this module just wires the pipeline stages
+together in order."""
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from PIL import Image, ImageOps
+from typing import List, Optional
+
 from rich.console import Console
 
 from remanga.config import CropperConfig
-from remanga.cropper.archive import create_vision_archive
-from remanga.cropper.dedupe import dedupe_panels
-from remanga.cropper.geometry import apply_padding
-from remanga.cropper.gutter import count_adjusted_edges, page_grayscale_array, sample_background_color
-from remanga.cropper.page_locator import locate_page_file
-from remanga.cropper.panel_boxes import resolve_page_panel_boxes
-from remanga.cropper.sheets import PanelSheetGenerator
-from remanga.cropper.trim import trim_panel_margins
-from remanga.json_io import has_real_json_content, read_json, write_json
+from remanga.cropper.crop_page import crop_page
+from remanga.cropper.crop_report import package_outputs, print_crop_summary, write_manifest
+from remanga.json_io import has_real_json_content, read_json
 from remanga.paths import get_chapter_dir
 
 console = Console()
@@ -41,8 +37,6 @@ class CoordinateCropper:
         panels_dir = chapter_dir / "panels"
         sheets_dir = chapter_dir / "sheets"
         manifest_path = chapter_dir / "panels_manifest.json"
-
-        asset_type = getattr(self.config, "vision_asset_type", "sheets").lower()
         expected_zip = chapter_dir / self.config.expected_zip_name
 
         if not has_real_json_content(crops_json_path):
@@ -58,21 +52,20 @@ class CoordinateCropper:
             )
 
         # RESUME CHECK: If panels already exist and force=False, verify and skip
-        existing_panels = sorted(list(panels_dir.glob("panel_*.*")))
+        existing_panels = sorted(panels_dir.glob("panel_*.*"))
         if not force and existing_panels and manifest_path.exists() and expected_zip.exists():
             console.print(f"[bold green]✓ Found {len(existing_panels)} panels already cropped and {expected_zip.name} ready! Skipping re-crop.[/]")
             return existing_panels
 
         # Clear existing panels directory before fresh cropping
         panels_dir.mkdir(parents=True, exist_ok=True)
-        for old_file in list(panels_dir.glob("panel_*.*")):
+        for old_file in panels_dir.glob("panel_*.*"):
             try:
                 old_file.unlink()
             except Exception:
                 pass
 
         crop_data = read_json(crops_json_path)
-
         pages_list = crop_data.get("pages", [])
         if not pages_list:
             raise ValueError(f"Invalid crops.json: No 'pages' array found in {crops_json_path}")
@@ -81,152 +74,30 @@ class CoordinateCropper:
 
         panel_counter = 1
         output_panel_paths: List[Path] = []
-        manifest_data: List[Dict[str, Any]] = []
+        manifest_data = []
         gutter_panels_adjusted = 0
         gutter_edges_adjusted = 0
         duplicate_panels_dropped = 0
         panels_trimmed = 0
 
         for page_entry in pages_list:
-            is_story_page = page_entry.get("is_story_page", True)
-            panels = page_entry.get("panels", [])
-
-            if not is_story_page or not panels:
-                page_desc = page_entry.get("page_filename") or f"page index {page_entry.get('page_index')}"
-                note_str = page_entry.get("notes", "non-story/duplicate")
-                console.print(f"[dim yellow]Skipping non-story page ({page_desc}): {note_str}[/]")
+            result = crop_page(page_entry, pages_dir, panels_dir, panel_counter, self.config)
+            if result is None:
                 continue
 
-            # Safety net for crop-prompt Rule 8: drop any panel entry whose box is a
-            # duplicate/near-duplicate of an earlier one on this page (same bordered
-            # frame re-cropped twice), keeping the earliest occurrence per reading
-            # order. A recurring character across genuinely distinct, non-overlapping
-            # panel boxes is untouched - see remanga/cropper/dedupe.py.
-            if self.config.dedupe_duplicate_panels:
-                page_desc = page_entry.get("page_filename") or f"page index {page_entry.get('page_index')}"
-                panels, dupe_report = dedupe_panels(
-                    panels,
-                    iou_threshold=self.config.duplicate_iou_threshold,
-                    containment_threshold=self.config.duplicate_containment_threshold,
-                )
-                for dupe in dupe_report:
-                    duplicate_panels_dropped += 1
-                    console.print(
-                        f"[bold yellow]⚠ Duplicate crop dropped on {page_desc}:[/] "
-                        f"panel_id {dupe['dropped_panel_id']!r} overlaps panel_id {dupe['kept_panel_id']!r} "
-                        f"(IoU {dupe['iou']:.2f}, containment {dupe['containment']:.2f}) - keeping the earlier crop."
-                    )
+            panel_counter = result.next_panel_counter
+            output_panel_paths.extend(result.panel_paths)
+            manifest_data.extend(result.manifest_entries)
+            gutter_panels_adjusted += result.gutter_panels_adjusted
+            gutter_edges_adjusted += result.gutter_edges_adjusted
+            duplicate_panels_dropped += result.duplicate_panels_dropped
+            panels_trimmed += result.panels_trimmed
 
-            page_filename = page_entry.get("page_filename")
-            page_index = page_entry.get("page_index")
-
-            page_img_path = locate_page_file(pages_dir, page_filename, page_index)
-            if not page_img_path or not page_img_path.exists():
-                console.print(f"[yellow]Warning: Could not locate page image for: {page_entry}. Skipping...[/]")
-                continue
-
-            with Image.open(page_img_path) as img:
-                img = ImageOps.exif_transpose(img)
-                img = img.convert("RGB")
-                img_w, img_h = img.size
-
-                # Computed once per page (not per panel) and reused by panel box
-                # resolution below (remanga/cropper/panel_boxes.py) and by the
-                # final per-panel trim (remanga/cropper/trim.py).
-                needs_page_analysis = self.config.snap_to_gutters or self.config.trim_panel_whitespace
-                gray_arr = page_grayscale_array(img) if needs_page_analysis else None
-                bg_level = (
-                    sample_background_color(gray_arr, self.config.gutter_background_sample_strip_pixels)
-                    if gray_arr is not None else None
-                )
-
-                valid_panels, original_boxes, panel_boxes = resolve_page_panel_boxes(
-                    panels, img_w, img_h, gray_arr, bg_level, self.config
-                )
-
-                for panel, original_box, crop_box in zip(valid_panels, original_boxes, panel_boxes):
-                    if self.config.snap_to_gutters:
-                        adjusted = count_adjusted_edges(original_box, crop_box)
-                        if adjusted:
-                            gutter_panels_adjusted += 1
-                            gutter_edges_adjusted += adjusted
-
-                    if self.config.margin_padding_pixels > 0:
-                        crop_box = apply_padding(crop_box, img_w, img_h, self.config.margin_padding_pixels)
-
-                    cropped_img = img.crop(crop_box)
-
-                    # Last safety net: trim any leftover blank margin still baked
-                    # into the saved image (e.g. a panel with no neighbor to
-                    # reconcile a seam against) - see remanga/cropper/trim.py.
-                    if self.config.trim_panel_whitespace and bg_level is not None:
-                        cl, ct, cr, cb = crop_box
-                        cropped_img, (tl, tt, tr, tb) = trim_panel_margins(
-                            cropped_img, bg_level,
-                            tolerance=self.config.gutter_bg_tolerance,
-                            min_bg_fraction=self.config.trim_min_background_fraction,
-                            max_trim_fraction=self.config.trim_max_margin_fraction,
-                        )
-                        if (tl, tt, tr, tb) != (0, 0, cr - cl, cb - ct):
-                            panels_trimmed += 1
-                            # Keep crop_box's provenance (recorded below) accurate:
-                            # translate the trim's local box back onto the page.
-                            crop_box = (cl + tl, ct + tt, cl + tr, ct + tb)
-
-                    if self.config.auto_contrast_clean:
-                        cropped_img = ImageOps.autocontrast(cropped_img, cutoff=1)
-
-                    out_name = f"panel_{panel_counter:03d}.{self.config.save_format.lower()}"
-                    out_path = panels_dir / out_name
-                    cropped_img.save(out_path, format=self.config.save_format, quality=95)
-                    output_panel_paths.append(out_path)
-
-                    manifest_data.append({
-                        "panel_id": f"panel_{panel_counter:03d}",
-                        "source_page": page_img_path.name,
-                        "crop_bounds": list(crop_box),
-                        "width": cropped_img.width,
-                        "height": cropped_img.height,
-                        "aspect_ratio": round(cropped_img.width / cropped_img.height, 4),
-                        "type": panel.get("type", "standard"),
-                        "notes": panel.get("notes", "")
-                    })
-
-                    panel_counter += 1
-
-        # Save manifest for downstream audio/video synchronization
-        write_json(manifest_path, {
-            "chapter": str(chapter_num),
-            "total_panels": len(output_panel_paths),
-            "panels": manifest_data
-        })
-
-        console.print(f"[bold green]✓ Cropped {len(output_panel_paths)} panels successfully into:[/] {panels_dir}")
-        if self.config.snap_to_gutters:
-            console.print(
-                f"[dim]  ↳ Gutter-snap refined {gutter_panels_adjusted}/{len(output_panel_paths)} panels "
-                f"({gutter_edges_adjusted} edge(s) corrected from the LLM's guess via pixel analysis)[/]"
-            )
-        if self.config.trim_panel_whitespace and panels_trimmed:
-            console.print(
-                f"[dim]  ↳ Trimmed leftover blank margin off {panels_trimmed}/{len(output_panel_paths)} panels[/]"
-            )
-        if self.config.dedupe_duplicate_panels and duplicate_panels_dropped:
-            console.print(
-                f"[dim]  ↳ Dedup removed {duplicate_panels_dropped} duplicate/overlapping panel crop(s) "
-                f"before cropping (see warnings above) - crops.json may be worth reviewing.[/]"
-            )
-
-        # 1. Generate vision contact sheets if enabled or if requested
-        if output_panel_paths and (self.config.create_sheets or asset_type == "sheets"):
-            PanelSheetGenerator.create_panel_sheets(
-                panel_paths=output_panel_paths,
-                output_dir=sheets_dir,
-                panels_per_sheet=self.config.panels_per_sheet
-            )
-
-        # 2. Package into sheets.zip or panels.zip
-        if self.config.create_zip:
-            create_vision_archive(self.config, chapter_dir, panels_dir, sheets_dir)
+        write_manifest(manifest_path, chapter_num, output_panel_paths, manifest_data)
+        print_crop_summary(
+            panels_dir, len(output_panel_paths), self.config,
+            gutter_panels_adjusted, gutter_edges_adjusted, panels_trimmed, duplicate_panels_dropped,
+        )
+        package_outputs(self.config, chapter_dir, panels_dir, sheets_dir, output_panel_paths)
 
         return output_panel_paths

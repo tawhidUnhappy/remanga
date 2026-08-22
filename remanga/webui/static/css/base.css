@@ -1,0 +1,42 @@
+/* Design tokens (colors, shadows) and page-wide resets shared by every
+   other stylesheet in this directory. Load this one first. */
+
+:root {
+  --bg: #15131a;
+  --surface: #1c1922;
+  --surface-2: #26212e;
+  --surface-3: #302a3a;
+  --border: #37303f;
+  --text: #ece7f2;
+  --text-dim: #9c93ac;
+  --text-faint: #6b6479;
+  --accent: #ff5d3a;
+  --accent-ink: #2a120c;
+  --ai: #4fd1c5;
+  --ai-ink: #0c211f;
+  --guide: #7cd4ff;
+  --danger: #ff5d5d;
+  --grid-dot: rgba(255, 255, 255, 0.055);
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Manrope", system-ui, sans-serif;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+::selection { background: var(--accent); color: #fff; }
+.mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 6px; }
+::-webkit-scrollbar-track { background: transparent; }

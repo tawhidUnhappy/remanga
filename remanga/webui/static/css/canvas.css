@@ -1,0 +1,29 @@
+/* The page canvas itself: the scrollable/zoomable viewport, the page stage,
+   and pan-tool cursor states. Mark boxes/handles are in marks.css. */
+
+.body-row { flex: 1; display: flex; min-height: 0; }
+
+.canvas-wrap {
+  flex: 1;
+  position: relative;
+  overflow: auto;
+  background: radial-gradient(var(--grid-dot) 1px, transparent 1px) 0 0/22px 22px, #100e14;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px;
+}
+
+.page-stage {
+  position: relative;
+  flex: none;
+  cursor: crosshair;
+  border-radius: 2px;
+  box-shadow: var(--shadow);
+  background: #efe9e2;
+}
+.page-stage.select-mode { cursor: default; }
+.page-stage img { display: block; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+
+.canvas-wrap.space-pan, .canvas-wrap.space-pan .page-stage { cursor: grab; }
+.canvas-wrap.panning, .canvas-wrap.panning .page-stage { cursor: grabbing; }

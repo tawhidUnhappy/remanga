@@ -1,0 +1,67 @@
+"""Post-crop bookkeeping for a chapter: writing panels_manifest.json, printing
+the summary line, and packaging the vision-upload asset (sheets/zip). Split
+out of crop.py so CoordinateCropper's loop isn't tangled up with reporting."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Dict, List
+
+from rich.console import Console
+
+from remanga.config import CropperConfig
+from remanga.cropper.archive import create_vision_archive
+from remanga.cropper.sheets import PanelSheetGenerator
+from remanga.json_io import write_json
+
+console = Console()
+
+
+def write_manifest(manifest_path: Path, chapter_num: str, panel_paths: List[Path], manifest_entries: List[Dict[str, Any]]) -> None:
+    write_json(manifest_path, {
+        "chapter": str(chapter_num),
+        "total_panels": len(panel_paths),
+        "panels": manifest_entries,
+    })
+
+
+def print_crop_summary(
+    panels_dir: Path,
+    total_panels: int,
+    config: CropperConfig,
+    gutter_panels_adjusted: int,
+    gutter_edges_adjusted: int,
+    panels_trimmed: int,
+    duplicate_panels_dropped: int,
+) -> None:
+    console.print(f"[bold green]✓ Cropped {total_panels} panels successfully into:[/] {panels_dir}")
+    if config.snap_to_gutters:
+        console.print(
+            f"[dim]  ↳ Gutter-snap refined {gutter_panels_adjusted}/{total_panels} panels "
+            f"({gutter_edges_adjusted} edge(s) corrected from the LLM's guess via pixel analysis)[/]"
+        )
+    if config.trim_panel_whitespace and panels_trimmed:
+        console.print(
+            f"[dim]  ↳ Trimmed leftover blank margin off {panels_trimmed}/{total_panels} panels[/]"
+        )
+    if config.dedupe_duplicate_panels and duplicate_panels_dropped:
+        console.print(
+            f"[dim]  ↳ Dedup removed {duplicate_panels_dropped} duplicate/overlapping panel crop(s) "
+            f"before cropping (see warnings above) - crops.json may be worth reviewing.[/]"
+        )
+
+
+def package_outputs(config: CropperConfig, chapter_dir: Path, panels_dir: Path, sheets_dir: Path, panel_paths: List[Path]) -> None:
+    asset_type = getattr(config, "vision_asset_type", "sheets").lower()
+
+    # 1. Generate vision contact sheets if enabled or if requested
+    if panel_paths and (config.create_sheets or asset_type == "sheets"):
+        PanelSheetGenerator.create_panel_sheets(
+            panel_paths=panel_paths,
+            output_dir=sheets_dir,
+            panels_per_sheet=config.panels_per_sheet,
+        )
+
+    # 2. Package into sheets.zip or panels.zip
+    if config.create_zip:
+        create_vision_archive(config, chapter_dir, panels_dir, sheets_dir)
