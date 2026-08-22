@@ -1,6 +1,6 @@
 # remanga
 
-**remanga** is a 100% self-contained, modular, LLM-guided manga recap video production engine. Powered by **IndexTTS-2.5**, it automates manga downloading, precise coordinate-based panel cropping, vision packaging, consistent monotone vocal synthesis, audio mastering with EBU R128 normalization, and GPU-accelerated video rendering.
+**remanga** is a 100% self-contained, modular manga recap video production engine. Powered by **IndexTTS-2.5**, it automates manga downloading, MAGI v3-assisted panel marking via a local web UI, LLM-guided narration writing, vision packaging, consistent monotone vocal synthesis, audio mastering with EBU R128 normalization, and GPU-accelerated video rendering.
 
 Built with strict environment isolation, `remanga` provisions its own tools, manages its own runtimes, and leaves zero files or modifications outside its root workspace directory.
 
@@ -15,6 +15,7 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
 - [Step-by-Step CLI Production Workflow](#step-by-step-cli-production-workflow)
 - [LLM Prompting & Vision Asset Guide](#llm-prompting--vision-asset-guide)
   - [Vision Upload Formats: sheets.zip vs panels.zip](#vision-upload-formats-sheetszip-vs-panelszip)
+  - [Panel Marker Web UI](#panel-marker-web-ui)
   - [Temporal Horizon Prompting (Zero Spoilers)](#temporal-horizon-prompting-zero-spoilers)
 - [Zero-Emotion & Consistent Audio Mastering](#zero-emotion--consistent-audio-mastering)
 - [CLI Command Reference](#cli-command-reference)
@@ -116,10 +117,11 @@ The easiest way to produce a recap video is through the interactive terminal wiz
 │ 2. Verify Reference Voice WAV & BGM                         │
 │ 3. Choose Vision Upload Format (sheets.zip vs panels.zip)   │
 │ 4. Download Chapter Pages from MangaDex                     │
-│ 5. Prompt for crops.json -> Crop panels & compile ZIP       │
-│ 6. Prompt for narration.json -> Synthesize Voice            │
-│ 7. Mix Master Audio with EBU R128 Normalization             │
-│ 8. Render Final 1080p / 2K / 4K MP4 Video                   │
+│ 5. Mark Panels (Panel Marker web UI, MAGI v3-assisted)      │
+│ 6. Crop panels & compile ZIP                                │
+│ 7. Prompt for narration.json -> Synthesize Voice            │
+│ 8. Mix Master Audio with EBU R128 Normalization             │
+│ 9. Render Final 1080p / 2K / 4K MP4 Video                   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -196,11 +198,12 @@ Pass a title query, title URL, chapter URL, or UUID:
 ```
 *Creates:* `projects/yandere_sister/chapters/chapter_1/pages.zip`
 
-### 2. Generate and Place `crops.json`
-Upload `pages.zip` and `prompts/crop.md` to your multimodal LLM (e.g. Claude 3.5 Sonnet, GPT-4o, Gemini 1.5 Pro). Save the resulting JSON to:
-```text
-projects/yandere_sister/chapters/chapter_1/crops.json
+### 2. Mark Panels
+Launches the **Panel Marker** web UI: MAGI v3 pre-fills every page's panel boxes on a GPU, you drag/adjust/delete to correct them, then Save & Continue writes `crops.json`.
+```bash
+./run.sh mark --project "yandere_sister" --chapter "1"
 ```
+*Creates:* `projects/yandere_sister/chapters/chapter_1/crops.json` — see [Panel Marker Web UI](#panel-marker-web-ui) below.
 
 ### 3. Crop Panels & Build Vision Archive
 ```bash
@@ -257,6 +260,23 @@ To switch formats:
 
 ---
 
+## Panel Marker Web UI
+
+Panel cropping is done by hand in a local browser tool instead of an LLM round-trip — `./run.sh mark -p <PROJECT> -c <CHAPTER>` (or step 5 of the interactive wizard) opens it automatically:
+
+- **[MAGI v3](https://github.com/ragavsachdeva/magi)** (a manga-understanding vision model, GPU required) pre-fills every page's panel boxes the moment the tool launches, running in the background while you start adjusting already-detected pages.
+- **Draw:** left-click and drag on a page to mark a panel (drag can start outside the page edge, Canva-style).
+- **Adjust:** click a mark to select it, drag its body to move it or a corner/edge handle to resize it. Dashed guide lines appear when an edge lines up with another panel's — a visual aid, not a hard snap.
+- **Delete:** right-click a mark.
+- **Reorder:** drag a panel's `⠿` grip in the right-hand panel list — that order becomes narration order.
+- **Finish:** `Ctrl+S` (`⌘S` on macOS) or the **Save & Continue** button writes `crops.json` and signals the CLI/wizard to move on to cropping.
+
+Every mark — MAGI's or your own — still goes through the same gutter-snap, seam-reconciliation, duplicate-detection, and whitespace-trim passes described below, so pixel-perfect precision was never the point of drawing carefully by hand.
+
+MAGI v3's weights download automatically the first time you run `bootstrap.sh` / `remanga setup-models` (skipped automatically if no GPU is present). Its model license permits personal, research, and non-commercial use only. To mark every panel manually without it, set `"magi_enabled": false` under `"marker"` in `config.json`.
+
+---
+
 ### Temporal Horizon Prompting (Zero Spoilers)
 
 The included prompt system in `prompts/` enforces strict narrative rules:
@@ -296,6 +316,7 @@ To maintain a consistent, flat, documentary-style recap narration without scream
 
 # Step-by-Step Production Commands
 ./run.sh download -p <PROJECT> -c <CHAPTER> [-u <URL_OR_ID>]
+./run.sh mark      -p <PROJECT> -c <CHAPTER>
 ./run.sh crop     -p <PROJECT> -c <CHAPTER> [-f]
 ./run.sh tts      -p <PROJECT> -c <CHAPTER> [-v <VOICE_WAV>] [-f]
 ./run.sh mix      -p <PROJECT> -c <CHAPTER> [-b <BGM_FILE>]
@@ -311,9 +332,9 @@ To maintain a consistent, flat, documentary-style recap narration without scream
 remanga/
 ├── bin/                        # Isolated standalone binaries (uv, ffmpeg, ffprobe)
 ├── checkpoints/
-│   └── indextts_2.5/           # IndexTTS-2.5 neural model weights
+│   ├── indextts_2.5/           # IndexTTS-2.5 neural model weights
+│   └── magiv3/                 # MAGI v3 panel-detection weights (Panel Marker assist)
 ├── prompts/
-│   ├── crop.md       # Master coordinate crop extraction prompt
 │   └── narration.md  # Master objective scriptwriter prompt
 ├── projects/
 │   └── <project_name>/
@@ -322,8 +343,8 @@ remanga/
 │       └── chapters/
 │           └── chapter_<num>/
 │               ├── pages/              # Raw downloaded chapter pages
-│               ├── pages.zip           # Upload archive for crop generation
-│               ├── crops.json          # Panel crop coordinates from LLM
+│               ├── pages.zip           # Upload archive for narration generation
+│               ├── crops.json          # Panel crop coordinates from the Panel Marker web UI
 │               ├── panels/             # Cropped individual panel images
 │               ├── sheets/             # 2x2 vision contact sheets
 │               ├── sheets.zip          # Contact sheets upload archive
@@ -339,6 +360,7 @@ remanga/
 │   ├── cropper/                # crop.py (coordinate cropper) & sheets.py (contact sheet generator)
 │   ├── downloader/             # mangadex.py (MangaDex client)
 │   ├── models/                 # weights.py (model weight download/verification)
+│   ├── webui/                  # Panel Marker: server.py (Flask backend) & magi_assist.py (MAGI v3)
 │   ├── video/                  # compose.py (frame compositor) & render.py (GPU/CPU renderer)
 │   ├── config.py                # Pydantic configuration schemas (load/save only)
 │   ├── paths.py                 # Project/chapter directory layout & metadata persistence
@@ -374,6 +396,9 @@ remanga/
 ### 4. How do I switch between `sheets.zip` and `panels.zip`?
 - Run `./run.sh setup-config` and select your preference in **Option 2 (Vision Asset Upload Format)**.
 - Or change `"vision_asset_type": "sheets"` to `"panels"` directly in `config.json`.
+
+### 5. Do I need a GPU to mark panels?
+Only for the MAGI v3 auto-detect assist. Marking itself is manual clicking/dragging in the browser and needs no GPU at all — set `"magi_enabled": false` under `"marker"` in `config.json` to skip it and mark every panel by hand.
 
 ---
 

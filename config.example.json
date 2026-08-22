@@ -39,6 +39,15 @@
     "duplicate_iou_threshold": 0.6,
     "duplicate_containment_threshold": 0.85
   },
+  "marker": {
+    "host": "127.0.0.1",
+    "port": 8765,
+    "auto_open_browser": true,
+    "magi_enabled": true,
+    "magi_repo_id": "ragavsachdeva/magiv3",
+    "magi_model_dir": "checkpoints/magiv3",
+    "magi_panel_score_threshold": 0.5
+  },
   "tts": {
     "engine": "indextts-2.5",
     "hf_repo_id": "IndexTeam/IndexTTS-2.5",

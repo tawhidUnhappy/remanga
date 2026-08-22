@@ -126,10 +126,28 @@ class VideoConfig(BaseModel):
     panel_border_color: str = "#222222"
 
 
+class MarkerConfig(BaseModel):
+    """The panel-marking web UI: where crops.json comes from now, in place of the
+    old paste-from-an-LLM step. See remanga/webui/."""
+    host: str = "127.0.0.1"
+    port: int = 8765
+    auto_open_browser: bool = True
+
+    # MAGI v3 (https://github.com/ragavsachdeva/magi) pre-fills every page's panel
+    # boxes on launch so the user only has to adjust, not draw from scratch.
+    # Research/non-commercial license (ragavsachdeva/magiv3 model card) - fine for
+    # personal use, but not something to redistribute commercially as-is.
+    magi_enabled: bool = True
+    magi_repo_id: str = "ragavsachdeva/magiv3"
+    magi_model_dir: str = "checkpoints/magiv3"
+    magi_panel_score_threshold: float = 0.5
+
+
 class RemangaConfig(BaseModel):
     system: SystemConfig = Field(default_factory=SystemConfig)
     downloader: DownloaderConfig = Field(default_factory=DownloaderConfig)
     cropper: CropperConfig = Field(default_factory=CropperConfig)
+    marker: MarkerConfig = Field(default_factory=MarkerConfig)
     tts: TTSConfig = Field(default_factory=TTSConfig)
     audio: AudioConfig = Field(default_factory=AudioConfig)
     video: VideoConfig = Field(default_factory=VideoConfig)

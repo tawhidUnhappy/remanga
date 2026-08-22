@@ -16,6 +16,7 @@ from remanga.models import ModelManager
 from remanga.setup_wizard import run_setup_wizard
 from remanga.status import render_status_panel
 from remanga.video import VideoRenderer
+from remanga.webui import launch_and_wait as launch_panel_marker
 from remanga.wizard import run_interactive_pipeline
 
 console = Console()
@@ -48,6 +49,11 @@ def main():
     p_dl.add_argument("--project", "-p", required=True, help="Project name")
     p_dl.add_argument("--chapter", "-c", required=True, help="Chapter number (e.g. 1 or 01)")
     p_dl.add_argument("--url", "-u", required=False, default=None, help="Manga title or MangaDex URL/UUID (optional if saved)")
+
+    # mark
+    p_mark = subparsers.add_parser("mark", help="Launch the Panel Marker web UI to mark panels (writes crops.json)")
+    p_mark.add_argument("--project", "-p", required=True, help="Project name")
+    p_mark.add_argument("--chapter", "-c", required=True, help="Chapter number")
 
     # crop
     p_crop = subparsers.add_parser("crop", help="Crop panels using coordinates in crops.json and package sheets.zip or panels.zip")
@@ -96,9 +102,13 @@ def main():
         elif args.command == "setup-models":
             mgr = ModelManager(config.tts.model_dir, config.tts.hf_repo_id)
             mgr.ensure_model()
+            from remanga.webui.magi_assist import ensure_weights_downloaded
+            ensure_weights_downloaded(config.marker)
         elif args.command == "download":
             dl = MangaDexDownloader(config.downloader)
             dl.download_chapter(args.url, args.chapter, args.project)
+        elif args.command == "mark":
+            launch_panel_marker(args.project, args.chapter, config.marker)
         elif args.command == "crop":
             cropper = CoordinateCropper(config.cropper)
             cropper.crop_chapter_from_json(args.project, args.chapter, force=args.force)

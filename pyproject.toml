@@ -19,6 +19,9 @@ dependencies = [
     "accelerate>=0.30.0",
     "huggingface-hub>=0.23.0",
     "modelscope>=1.15.0",
+    "flask>=3.0.0",
+    "timm>=1.0.0",
+    "shapely>=2.0.0",
 ]
 
 [project.scripts]

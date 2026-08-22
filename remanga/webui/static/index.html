@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Panel Marker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="mark-icon"></span>Panel Marker</div>
+
+  <div class="page-nav">
+    <button id="prevPage" title="Previous page (←)">‹</button>
+    <span>Page <span class="count mono" id="pageNum">–</span> / <span class="count mono" id="pageTotal">–</span></span>
+    <button id="nextPage" title="Next page (→)">›</button>
+    <span class="story-badge" id="storyBadge">no panels</span>
+  </div>
+
+  <div class="toolbar">
+    <button class="tool-btn active" id="toolDraw">Draw <kbd>D</kbd></button>
+    <button class="tool-btn" id="toolSelect">Select <kbd>V</kbd></button>
+  </div>
+
+  <div class="top-spacer"></div>
+
+  <div class="zoom-group">
+    <button id="zoomOut">–</button>
+    <span class="mono" id="zoomLabel">100%</span>
+    <button id="zoomIn">+</button>
+  </div>
+
+  <button class="save-btn" id="saveBtn">Save &amp; Continue <kbd id="saveKbd">Ctrl+S</kbd></button>
+</div>
+
+<div class="body-row">
+  <div class="canvas-wrap" id="canvasWrap">
+    <div class="page-stage" id="stage">
+      <img id="pageImg" alt="Manga page" draggable="false">
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="assist-card" id="assistCard">
+      <div class="head">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l1.8 5.6L19 9.4l-5.2 1.8L12 17l-1.8-5.8L5 9.4l5.2-1.8z"/></svg>
+        MAGI v3 Assist
+      </div>
+      <p>Auto-detects every panel in this chapter so you only need to adjust, not draw from scratch.</p>
+      <button class="assist-btn" id="assistBtn">Re-run on all pages</button>
+      <div class="assist-progress"><span id="assistProgressBar"></span></div>
+      <div class="assist-status" id="assistStatus">Idle</div>
+    </div>
+
+    <div class="sidebar-section-head">
+      <h3>Panels — reading order</h3>
+      <span class="count-pill" id="panelCount">0</span>
+    </div>
+
+    <div class="panel-list" id="panelList"></div>
+
+    <div class="sidebar-footer">
+      Drag <b>⠿</b> to reorder — this sets narration order.<br>
+      <b style="color:var(--ai)">✦ AI</b> = from MAGI v3 · <b style="color:var(--accent)">manual</b> = drawn or adjusted by you.
+    </div>
+  </div>
+</div>
+
+<div class="hint-toast">
+  <span><b>Drag</b> to mark a panel</span>
+  <span><b>Click</b> a mark to adjust it</span>
+  <span><b>Right-click</b> a mark to delete it</span>
+  <span><kbd id="hintSaveKbd">Ctrl+S</kbd> save &amp; continue</span>
+</div>
+
+<div class="save-overlay" id="saveOverlay">
+  <div class="card">
+    <div class="icon">✓</div>
+    <h2>Saved</h2>
+    <p>crops.json is written and the pipeline will continue in your terminal.<br>You can close this tab now.</p>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -16,6 +16,7 @@ from remanga.json_io import has_real_json_content
 from remanga.paths import get_chapter_dir, load_project_metadata
 from remanga.status import get_chapter_status
 from remanga.video import VideoRenderer
+from remanga.webui import launch_and_wait as launch_panel_marker
 from remanga.wizard_prompts import select_chapter, select_or_create_project
 
 console = Console()
@@ -66,20 +67,20 @@ def run_interactive_pipeline():
     dl.download_chapter(url, chapter, project)
 
     # =========================================================================
-    # Step 2: Crop Instructions (crops.json)
+    # Step 2: Mark Panels (crops.json, via the Panel Marker web UI)
     # =========================================================================
     crops_path = chap_dir / "crops.json"
     if not has_real_json_content(crops_path):
-        crops_path.parent.mkdir(parents=True, exist_ok=True)
-        crops_path.write_text("", encoding="utf-8")
         console.print(Panel(
-            f"[bold yellow]Action Required:[/]\n"
-            f"1. Upload [bold]{chap_dir}/pages.zip[/] along with [bold]prompts/crop.md[/] to your LLM.\n"
-            f"2. Save the resulting JSON directly into:\n   [bold green]{crops_path.resolve()}[/]",
-            title="[bold white]Generate crops.json[/]",
+            f"[bold yellow]Opening the Panel Marker web UI...[/]\n"
+            f"Mark each panel on every story page (MAGI v3 pre-fills what it can find), "
+            f"then press [bold]{'⌘S' if config.marker.auto_open_browser else 'Ctrl+S'}[/] or click "
+            f"[bold]Save & Continue[/] in the browser tab.",
+            title="[bold white]Mark Panels[/]",
             border_style="yellow"
         ))
-        Prompt.ask("[bold cyan]Press Enter once crops.json is saved and ready[/]")
+        launch_panel_marker(project, chapter, config.marker)
+        console.print("[bold green]✓ Panels marked and crops.json saved.[/]")
 
     # =========================================================================
     # Step 3: Cropping Panels & Building Vision Archive (sheets.zip or panels.zip)
