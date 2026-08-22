@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import inspect
+import io
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, List
@@ -127,7 +129,16 @@ class IndexTTSSynthesizer:
                 top_p_val = float(self.tts_config.top_p if self.tts_config.top_p is not None else 0.7)
                 call_kwargs["top_p"] = top_p_val
 
-            model.infer(**call_kwargs)
+            # IndexTTS2.infer() prints several unconditional progress/timing lines
+            # (">> starting inference...", ">> gpt_gen_time: ...", etc.) that aren't
+            # gated by a verbose flag. Left alone, those raw prints land in the
+            # middle of the caller's rich Progress bar's live-render region and
+            # fight it for the terminal - each print pushes the bar's redraw onto
+            # a new line instead of updating in place, which reads as spam. Swallow
+            # them the same way the CLI-fallback path below already discards
+            # IndexTTS's stdout, so the one progress bar we want stays in control.
+            with contextlib.redirect_stdout(io.StringIO()):
+                model.infer(**call_kwargs)
 
             if "duration_factor" not in params and abs(self.tts_config.speed - 1.0) >= 0.02:
                 self._adjust_audio_speed(output_wav, self.tts_config.speed)
