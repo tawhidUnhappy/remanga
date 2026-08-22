@@ -12,6 +12,7 @@ from remanga.cropper.geometry import apply_padding, calculate_pixel_bounds
 from remanga.cropper.gutter import (
     count_adjusted_edges,
     page_grayscale_array,
+    reconcile_adjacent_seams,
     refine_box_to_gutters,
     sample_background_color,
 )
@@ -158,13 +159,25 @@ class CoordinateCropper:
                 img_w, img_h = img.size
 
                 # Computed once per page (not per panel) and reused by the gutter-snap
-                # refinement below - see remanga/cropper/gutter.py.
+                # refinement and seam reconciliation below - see remanga/cropper/gutter.py.
                 gray_arr = page_grayscale_array(img) if self.config.snap_to_gutters else None
                 bg_level = (
                     sample_background_color(gray_arr, self.config.gutter_background_sample_strip_pixels)
                     if gray_arr is not None else None
                 )
+                # A flat pixel radius undershoots on large scans; scale it with the page's
+                # longer side so a big LLM coordinate error is still reachable.
+                gutter_radius = max(
+                    self.config.gutter_search_radius_pixels,
+                    round(max(img_w, img_h) * self.config.gutter_search_radius_fraction),
+                )
 
+                # Pass 1: resolve every panel's crop box (gutter-snapped) before cropping
+                # anything, so seam reconciliation (pass 2 below) can see the whole page's
+                # layout at once instead of one panel at a time.
+                valid_panels: List[Dict[str, Any]] = []
+                original_boxes: List[Any] = []
+                panel_boxes: List[Any] = []
                 for panel in panels:
                     box = panel.get("box_1000") or panel.get("box_pixel") or panel.get("coordinates")
                     if not box or len(box) != 4:
@@ -172,20 +185,43 @@ class CoordinateCropper:
                         continue
 
                     is_normalized = "box_1000" in panel or max(box) <= 1000
-                    crop_box = calculate_pixel_bounds(box, img_w, img_h, is_1000=is_normalized)
+                    original_box = calculate_pixel_bounds(box, img_w, img_h, is_1000=is_normalized)
+                    crop_box = original_box
 
                     # Treat the LLM's box as a best guess: snap each edge onto the real
                     # gutter/panel border nearest to it before applying safety padding.
                     if gray_arr is not None:
-                        llm_box = crop_box
                         crop_box = refine_box_to_gutters(
                             gray_arr, crop_box, bg_level,
-                            search_radius=self.config.gutter_search_radius_pixels,
+                            search_radius=gutter_radius,
                             tolerance=self.config.gutter_bg_tolerance,
                             min_run=self.config.gutter_min_run_pixels,
                             min_bg_fraction=self.config.gutter_min_background_fraction,
                         )
-                        adjusted = count_adjusted_edges(llm_box, crop_box)
+
+                    valid_panels.append(panel)
+                    original_boxes.append(original_box)
+                    panel_boxes.append(crop_box)
+
+                # Pass 2: reconcile shared borders between reading-order-adjacent panels so
+                # neither undershoots (a visible gutter gap) while the other overshoots into
+                # it (bleeding the neighbor's content into its own crop) - see
+                # remanga/cropper/gutter.py:reconcile_adjacent_seams.
+                if gray_arr is not None and self.config.reconcile_panel_seams and len(panel_boxes) > 1:
+                    panel_boxes = reconcile_adjacent_seams(
+                        gray_arr, panel_boxes, bg_level,
+                        search_radius=gutter_radius,
+                        tolerance=self.config.gutter_bg_tolerance,
+                        min_run=self.config.gutter_min_run_pixels,
+                        min_bg_fraction=self.config.gutter_min_background_fraction,
+                        max_seam_gap_fraction=self.config.seam_max_gap_fraction,
+                        min_axis_overlap_fraction=self.config.seam_min_axis_overlap_fraction,
+                    )
+
+                # Pass 3: pad, crop, save, and record each panel.
+                for panel, original_box, crop_box in zip(valid_panels, original_boxes, panel_boxes):
+                    if gray_arr is not None:
+                        adjusted = count_adjusted_edges(original_box, crop_box)
                         if adjusted:
                             gutter_panels_adjusted += 1
                             gutter_edges_adjusted += adjusted

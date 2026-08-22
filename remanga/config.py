@@ -36,12 +36,26 @@ class CropperConfig(BaseModel):
 
     # Gutter-snap refinement: treats the LLM's crops.json box as a best guess and
     # corrects each edge against real pixel evidence (see remanga/cropper/gutter.py)
-    # before margin_padding_pixels is applied.
+    # before margin_padding_pixels is applied. The actual search radius used per page
+    # is adaptive: max(gutter_search_radius_pixels, page's longer side * fraction) -
+    # a flat pixel floor undershoots badly on large scans when the LLM's guess is off
+    # by more than a few dozen pixels, which is common enough to matter.
     snap_to_gutters: bool = True
-    gutter_search_radius_pixels: int = 40       # how far from the LLM's guess to look for a real gutter
-    gutter_bg_tolerance: float = 20.0           # gray-level tolerance for "counts as background"
-    gutter_min_run_pixels: int = 3              # minimum gutter band width to trust as real, not noise
+    gutter_search_radius_pixels: int = 60         # floor: how far to look, even on small pages
+    gutter_search_radius_fraction: float = 0.10   # scales the search radius with page size
+    gutter_bg_tolerance: float = 20.0             # gray-level tolerance for "counts as background"
+    gutter_min_run_pixels: int = 3                # minimum gutter band width to trust as real, not noise
     gutter_min_background_fraction: float = 0.96  # fraction of a row/col that must match bg to call it gutter
+
+    # Seam reconciliation: a second pass over one page's already gutter-snapped
+    # panels that re-derives shared borders between reading-order-adjacent tiles
+    # jointly instead of independently, so neither panel can undershoot (a visible
+    # gutter gap) while the other overshoots into it (bleeding the neighbor's tail
+    # into its own crop) - both symptoms of one wrong seam. See
+    # remanga/cropper/gutter.py:reconcile_adjacent_seams.
+    reconcile_panel_seams: bool = True
+    seam_max_gap_fraction: float = 0.15           # ignore pairs whose facing edges are this far apart (not really adjacent)
+    seam_min_axis_overlap_fraction: float = 0.5   # how much of the shared axis must overlap to count as "stacked/side-by-side"
     gutter_background_sample_strip_pixels: int = 12  # page-margin strip used to sample the background color
 
     # Duplicate-crop safety net: drops any crops.json panel whose box duplicates or
