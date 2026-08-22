@@ -68,6 +68,14 @@ echo "[+] Installing remanga and IndexTTS-2.5 package..."
 "$BIN_DIR/uv" pip install --python "$VENV_DIR" -e .
 "$BIN_DIR/uv" pip install --python "$VENV_DIR" git+https://github.com/index-tts/index-tts.git
 
+# IndexTTS's own install above resolves independently of remanga's pyproject.toml
+# constraints and can silently re-bump a package remanga pinned for a different
+# reason (e.g. transformers, capped below 4.52 for MAGI v3's DaViT encoder -
+# see pyproject.toml). Re-assert remanga's own pins last so whichever install
+# ran most recently, the final environment still satisfies them.
+echo "[+] Re-asserting remanga's own dependency pins after the IndexTTS install..."
+"$BIN_DIR/uv" pip install --python "$VENV_DIR" -e .
+
 # 5. Initialize config.json from config.example.json if missing
 if [ ! -f "config.json" ]; then
     cp config.example.json config.json
