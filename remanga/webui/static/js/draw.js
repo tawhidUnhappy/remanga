@@ -46,4 +46,9 @@ canvasWrap.addEventListener("mousedown", (e) => {
   document.addEventListener("mouseup", onUp);
 });
 
-stage.addEventListener("contextmenu", (e) => e.preventDefault());
+// Covers the whole canvas, not just the page - including the padding/
+// background around it - so right-click never falls through to the
+// browser's native context menu anywhere over the canvas. (Marks have
+// their own contextmenu handler, in render.js, that also deletes them;
+// this one is a catch-all and doesn't interfere with that.)
+canvasWrap.addEventListener("contextmenu", (e) => e.preventDefault());

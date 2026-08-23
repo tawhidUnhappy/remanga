@@ -37,13 +37,23 @@ export function deleteMark(id) {
   render();
 }
 
+// Clips a dragged box to the page - the mark becomes whatever part of the
+// drag actually landed inside the page (the intersection), same as
+// Canva/Illustrator when a drag starts outside the artboard. Computed from
+// the box's actual edges (x+w, y+h), not by clamping the origin and then
+// reusing the original, un-clipped width/height - doing that instead would
+// keep the box's full dragged size but slide its origin to the page edge,
+// so a drag that started above/left of the page would land bigger than
+// what was actually dragged over the page.
 export function clampBoxToPage(x, y, w, h) {
   const page = state.chapter.pages[state.pageIndex];
-  x = Math.max(0, Math.min(x, page.width - 1));
-  y = Math.max(0, Math.min(y, page.height - 1));
-  w = Math.max(4, Math.min(w, page.width - x));
-  h = Math.max(4, Math.min(h, page.height - y));
-  return { x, y, w, h };
+  const left = Math.max(0, x), top = Math.max(0, y);
+  const right = Math.min(page.width, x + w), bottom = Math.min(page.height, y + h);
+  return {
+    x: left, y: top,
+    w: Math.max(4, right - left),
+    h: Math.max(4, bottom - top),
+  };
 }
 
 // Ctrl/Cmd+F: wipe every mark on the current page and replace them with a
