@@ -24,7 +24,13 @@
 .mark.ai .tag { background: var(--ai); }
 .mark.ai .tag::before { content: "✦ "; }
 
-.mark.selected { box-shadow: 0 0 0 3000px rgba(10, 8, 13, 0.34); }
+/* z-index lifts the selected mark above every other mark, regardless of
+   draw order. Without it, a mark drawn later (later in the DOM) could sit
+   visually on top of an earlier-drawn selected mark and its handles - the
+   spotlight dim below would render in the wrong stacking position, and
+   hovering a handle would hit the other mark's body (cursor: move) instead
+   of the actual handle (cursor: *-resize), making it fiddly to grab. */
+.mark.selected { z-index: 20; box-shadow: 0 0 0 3000px rgba(10, 8, 13, 0.34); }
 
 .handle {
   position: absolute;
