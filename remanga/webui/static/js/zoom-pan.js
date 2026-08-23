@@ -172,8 +172,17 @@ document.addEventListener("keydown", (e) => {
     canvasWrap.classList.add("space-pan");
     e.preventDefault();
   }
+  // Firefox binds a lone Alt press/release (with no other key involved) to
+  // toggling its hidden menu bar - a browser-chrome accelerator, unrelated
+  // to our altKey-modifier checks in the wheel handler above, which never
+  // sees this because it only fires during an actual wheel event.
+  // preventDefault on the Alt key itself is the standard way pages (image
+  // editors, canvas tools) suppress it; this page has no text inputs, so
+  // there's no AltGr/dead-key composition to preserve.
+  if (e.key === "Alt") e.preventDefault();
 });
 document.addEventListener("keyup", (e) => {
+  if (e.key === "Alt") e.preventDefault();
   if (e.code === "Space") {
     state.spaceHeld = false;
     canvasWrap.classList.remove("space-pan");
