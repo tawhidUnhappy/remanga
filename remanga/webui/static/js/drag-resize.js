@@ -35,22 +35,42 @@ export function onMarkMouseDown(e, m) {
   function onMove(ev) {
     const dxDisplay = ev.clientX - startX, dyDisplay = ev.clientY - startY;
     const dx = dxDisplay / state.scale, dy = dyDisplay / state.scale;
+    const page = state.chapter.pages[state.pageIndex];
     let { x, y, w, h } = orig;
 
     if (handle) {
-      if (handle.includes("e")) w = Math.max(4, orig.w + dx);
-      if (handle.includes("s")) h = Math.max(4, orig.h + dy);
-      if (handle.includes("w")) { x = orig.x + dx; w = Math.max(4, orig.w - dx); }
-      if (handle.includes("n")) { y = orig.y + dy; h = Math.max(4, orig.h - dy); }
+      // Each side resizes from its FIXED opposite edge (e.g. dragging the
+      // west handle keeps the east edge, orig.x + orig.w, anchored) and
+      // clamps the moving edge between that anchor (minus a 4px floor) and
+      // the page bound. Previously the moving edge and the size were
+      // computed independently - once dragging ran past the opposite edge
+      // (or off the page), the size floored at 4px but the position kept
+      // following the cursor unbounded, so the box appeared to detach and
+      // "expand" off the opposite side instead of just stopping in place.
+      if (handle.includes("e")) {
+        const right = Math.min(page.width, Math.max(orig.x + 4, orig.x + orig.w + dx));
+        w = right - orig.x;
+      }
+      if (handle.includes("w")) {
+        const right = orig.x + orig.w; // fixed
+        x = Math.max(0, Math.min(right - 4, orig.x + dx));
+        w = right - x;
+      }
+      if (handle.includes("s")) {
+        const bottom = Math.min(page.height, Math.max(orig.y + 4, orig.y + orig.h + dy));
+        h = bottom - orig.y;
+      }
+      if (handle.includes("n")) {
+        const bottom = orig.y + orig.h; // fixed
+        y = Math.max(0, Math.min(bottom - 4, orig.y + dy));
+        h = bottom - y;
+      }
     } else {
-      x = orig.x + dx; y = orig.y + dy;
+      // Moving the whole mark keeps its size fixed - just stop translating
+      // at the page edge instead of shrinking it.
+      x = Math.max(0, Math.min(orig.x + dx, page.width - orig.w));
+      y = Math.max(0, Math.min(orig.y + dy, page.height - orig.h));
     }
-
-    const page = state.chapter.pages[state.pageIndex];
-    x = Math.max(0, Math.min(x, page.width - 4));
-    y = Math.max(0, Math.min(y, page.height - 4));
-    w = Math.min(w, page.width - x);
-    h = Math.min(h, page.height - y);
 
     m.x = x; m.y = y; m.w = w; m.h = h;
     if (m.src === "ai") m.src = "manual"; // any manual adjustment promotes it
