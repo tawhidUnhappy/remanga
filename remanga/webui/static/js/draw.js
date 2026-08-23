@@ -9,8 +9,22 @@ import { markDirty, clampBoxToPage } from "./marks.js";
 let drawing = null, ghostEl = null;
 
 canvasWrap.addEventListener("mousedown", (e) => {
-  if (state.mode !== "draw" || e.button !== 0 || state.spaceHeld) return;
   if (e.target.closest(".mark")) return; // let mark-level handler deal with it
+  if (e.button !== 0 || state.spaceHeld) return;
+
+  // Clicking the canvas background - not a mark, whether that's empty
+  // space on the page or outside it entirely - deselects whatever mark
+  // was selected and clears its highlight/handles. This applies in both
+  // Draw and Select mode (in Select mode nothing else would ever clear a
+  // selection), and runs before the draw-mode-only new-box gesture below
+  // so it always takes effect even when the click goes on to draw a new
+  // box (which then selects itself once finished, in onUp).
+  if (state.selectedId !== null) {
+    state.selectedId = null;
+    render();
+  }
+
+  if (state.mode !== "draw") return;
   e.preventDefault();
 
   const rect = stage.getBoundingClientRect();
