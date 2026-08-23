@@ -6,7 +6,7 @@ import { state, currentPage } from "./state.js";
 import { api } from "./api.js";
 import { render } from "./render.js";
 import { flushSave } from "./marks.js";
-import { fitZoomToWrap, applyZoom } from "./zoom-pan.js";
+import { fitZoomToWrap, applyZoom, centerStage } from "./zoom-pan.js";
 import { pollDetectStatus } from "./magi.js";
 
 export async function loadPage(idx) {
@@ -33,6 +33,7 @@ export async function loadPage(idx) {
 
   fitZoomToWrap(page.width, page.height);
   applyZoom();
+  centerStage();
   render();
   state.pageLoaded = true;
 }
@@ -73,5 +74,6 @@ window.addEventListener("resize", () => {
   const page = currentPage();
   fitZoomToWrap(page.width, page.height);
   applyZoom();
+  centerStage();
   render();
 });

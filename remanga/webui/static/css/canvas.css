@@ -1,24 +1,25 @@
-/* The page canvas itself: the scrollable/zoomable viewport, the page stage,
-   and pan-tool cursor states. Mark boxes/handles are in marks.css. */
+/* The page canvas itself: the zoomable/pannable viewport, the page stage,
+   and pan-tool cursor states. Mark boxes/handles are in marks.css.
+
+   Panning is driven entirely by JS (state.panX/panY -> a transform on
+   .page-stage), not native scrolling - see zoom-pan.js. That's what lets
+   the page be dragged/wheeled around freely at any zoom level, including
+   "100%" or "fit" where the page is smaller than the viewport and a native
+   overflow:auto element would have nothing to scroll. */
 
 .body-row { flex: 1; display: flex; min-height: 0; }
 
 .canvas-wrap {
   flex: 1;
   position: relative;
-  overflow: auto;
+  overflow: hidden;
   background: radial-gradient(var(--grid-dot) 1px, transparent 1px) 0 0/22px 22px, #100e14;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  /* Extra bottom padding keeps a fit-to-window page clear of the floating
-     hint-toast (bottom: 22px, ~55px tall) instead of sitting under it. */
-  padding: 56px 56px 100px;
 }
 
 .page-stage {
-  position: relative;
-  flex: none;
+  position: absolute;
+  left: 0;
+  top: 0;
   cursor: crosshair;
   border-radius: 2px;
   box-shadow: var(--shadow);

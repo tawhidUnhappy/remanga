@@ -18,7 +18,9 @@ export const state = {
   magiEnabled: false,
   pageLoaded: false,        // false until the very first loadPage() has completed
   spaceHeld: false,         // hand-tool (pan) key held down
-  panning: null,            // { startX, startY, startScrollLeft, startScrollTop } while dragging to pan
+  panning: null,            // { startX, startY, startPanX, startPanY } while dragging to pan
+  panX: 0,                  // page-stage position in canvasWrap, screen px (top-left corner)
+  panY: 0,
 };
 
 export function currentPage() {
