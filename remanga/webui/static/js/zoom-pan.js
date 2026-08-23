@@ -1,6 +1,7 @@
 // Canva/Illustrator-style zoom and free panning: fit-to-window on page load,
 // the zoom-in/out buttons, Ctrl/Cmd+scroll (and trackpad pinch) to zoom
-// anchored under the cursor, and spacebar+drag / middle-mouse-drag to pan.
+// anchored under the cursor, Alt+scroll to pan horizontally, and
+// spacebar+drag / middle-mouse-drag to pan.
 // Plain wheel/trackpad scroll already pans freely for free since canvasWrap
 // is a native overflow:auto viewport - no code needed for that case.
 
@@ -11,8 +12,11 @@ import { render } from "./render.js";
 const MIN_SCALE = 0.05, MAX_SCALE = 8;
 
 export function fitZoomToWrap(naturalW, naturalH) {
-  const availW = canvasWrap.clientWidth - 80;
-  const availH = canvasWrap.clientHeight - 80;
+  // Mirrors canvas-wrap's CSS padding (56px sides/top, 100px bottom for the
+  // floating hint-toast) so the default fit-to-window view leaves the page
+  // clearly inset instead of touching the viewport edge and floating UI.
+  const availW = canvasWrap.clientWidth - 112;
+  const availH = canvasWrap.clientHeight - 156;
   state.scale = Math.min(1, availW / naturalW, availH / naturalH);
   state.scale = Math.max(0.15, state.scale);
 }
@@ -54,10 +58,29 @@ zoomInBtn.addEventListener("click", () => zoomTo(state.scale + 0.1));
 zoomOutBtn.addEventListener("click", () => zoomTo(state.scale - 0.1));
 
 canvasWrap.addEventListener("wheel", (e) => {
-  if (!e.ctrlKey && !e.metaKey) return; // plain scroll: let native panning happen
-  e.preventDefault();
-  const factor = Math.exp(-e.deltaY * 0.01);
-  zoomTo(state.scale * factor, e.clientX, e.clientY);
+  if (e.ctrlKey || e.metaKey) {
+    // Zoom, anchored under the cursor. Also fires for trackpad pinch, which
+    // browsers report as a synthetic ctrl+wheel with small deltas.
+    e.preventDefault();
+    // A physical mouse wheel reports one notch as a single large deltaY
+    // (often +-100), which used unclamped blew straight past MAX/MIN_SCALE
+    // territory in one tick. Clamp the per-event delta first so a mouse
+    // notch and a trackpad-pinch step both land as one smooth, similarly
+    // sized zoom increment - the calibrated feel Canva/Illustrator have.
+    const delta = Math.max(-50, Math.min(50, e.deltaY));
+    const factor = Math.exp(-delta * 0.003);
+    zoomTo(state.scale * factor, e.clientX, e.clientY);
+    return;
+  }
+  if (e.altKey) {
+    // Alt+scroll pans horizontally (Illustrator/Canva-style), turning
+    // vertical wheel motion sideways so a plain mouse wheel can scrub
+    // through a wide page without a horizontal scroll input.
+    e.preventDefault();
+    canvasWrap.scrollLeft += (e.deltaY !== 0 ? e.deltaY : e.deltaX);
+    return;
+  }
+  // plain scroll: let native panning happen
 }, { passive: false });
 
 // Spacebar-held + drag pans the canvas (hand tool), same as Illustrator/

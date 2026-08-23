@@ -11,7 +11,9 @@
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 40px;
+  /* Extra bottom padding keeps a fit-to-window page clear of the floating
+     hint-toast (bottom: 22px, ~55px tall) instead of sitting under it. */
+  padding: 56px 56px 100px;
 }
 
 .page-stage {
