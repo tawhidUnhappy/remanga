@@ -130,7 +130,7 @@ class ShortcutsConfig(BaseModel):
     """Panel-marker keyboard shortcuts, editable from the webui's own Shortcuts
     menu (Settings gear in the topbar -> saved via POST /api/shortcuts, which
     writes straight back into this section of config.json - see
-    remanga/webui/server.py:_persist_shortcuts). Each action maps to a list of
+    remanga/webui/shortcuts_store.py:persist_shortcuts). Each action maps to a list of
     key combos so more than one chord can trigger it (e.g. Delete AND
     Backspace); the frontend renders/parses these itself.
 
