@@ -101,6 +101,18 @@
   cursor: pointer;
 }
 
+.icon-btn {
+  display: grid; place-items: center;
+  width: 32px; height: 32px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.icon-btn svg { width: 17px; height: 17px; }
+.icon-btn:hover { background: var(--surface-3); color: var(--text); }
+
 .save-btn {
   display: flex; align-items: center; gap: 8px;
   background: var(--accent);

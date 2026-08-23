@@ -4,10 +4,10 @@
 import { pageImg, pageNumEl, pageTotalEl, prevPageBtn, nextPageBtn, assistCard, assistBtn, assistStatus, saveOverlay, saveBtn } from "./dom.js";
 import { state, currentPage } from "./state.js";
 import { api } from "./api.js";
-import { render } from "./render.js";
 import { flushSave } from "./marks.js";
-import { fitZoomToWrap, applyZoom, centerStage } from "./zoom-pan.js";
+import { resetView } from "./zoom-pan.js";
 import { pollDetectStatus } from "./magi.js";
+import { loadShortcuts } from "./shortcuts.js";
 
 export async function loadPage(idx) {
   // On the very first call, pageIndex is already 0 (its initial value), so
@@ -31,14 +31,12 @@ export async function loadPage(idx) {
     pageImg.src = `/api/pages/${page.filename}`;
   });
 
-  fitZoomToWrap(page.width, page.height);
-  applyZoom();
-  centerStage();
-  render();
+  resetView();
   state.pageLoaded = true;
 }
 
 export async function init() {
+  await loadShortcuts();
   state.chapter = await api("/api/chapter");
   state.magiEnabled = state.chapter.magi_enabled;
   pageTotalEl.textContent = state.chapter.pages.length;
@@ -70,10 +68,4 @@ prevPageBtn.addEventListener("click", () => loadPage(state.pageIndex - 1));
 nextPageBtn.addEventListener("click", () => loadPage(state.pageIndex + 1));
 saveBtn.addEventListener("click", saveAndContinue);
 window.addEventListener("beforeunload", () => flushSave(true));
-window.addEventListener("resize", () => {
-  const page = currentPage();
-  fitZoomToWrap(page.width, page.height);
-  applyZoom();
-  centerStage();
-  render();
-});
+window.addEventListener("resize", resetView);

@@ -19,14 +19,36 @@ from PIL import Image
 from rich.console import Console
 from werkzeug.serving import make_server
 
-from remanga.config import MarkerConfig
+from remanga.config import MarkerConfig, ShortcutsConfig
 from remanga.cropper.geometry import pixel_bounds_to_box_1000
-from remanga.json_io import write_json
+from remanga.json_io import read_json_or, write_json
 from remanga.paths import get_chapter_dir
 
 console = Console()
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+# Same cwd-relative file remanga.config.RemangaConfig.load()/.save() already
+# use by default - the panel marker only ever holds config.marker (a
+# MarkerConfig), not the full RemangaConfig or the path it was loaded from,
+# so shortcut edits are persisted by patching this one file directly rather
+# than plumbing the full config object/path through every call site.
+CONFIG_JSON_PATH = Path("config.json")
+CONFIG_EXAMPLE_PATH = Path("config.example.json")
+
+
+def _persist_shortcuts(shortcuts: Dict[str, Any]) -> None:
+    """Writes marker.shortcuts into config.json, read-merge-write style (same
+    pattern as remanga.paths.save_project_metadata) so every other section is
+    left untouched. If config.json doesn't exist yet - the app was running on
+    config.example.json's defaults - seed it from that file first instead of
+    from nothing, so materializing config.json here doesn't silently drop
+    whatever settings were actually in effect."""
+    seed_path = CONFIG_JSON_PATH if CONFIG_JSON_PATH.exists() else CONFIG_EXAMPLE_PATH
+    data = read_json_or(seed_path, {})
+    data.setdefault("marker", {})
+    data["marker"]["shortcuts"] = shortcuts
+    write_json(CONFIG_JSON_PATH, data)
 
 
 class MarkerState:
@@ -147,6 +169,23 @@ def create_app(state: MarkerState, config: MarkerConfig) -> Flask:
         marks = request.get_json(force=True) or []
         state.set_marks(filename, marks)
         return jsonify({"ok": True})
+
+    @app.get("/api/shortcuts")
+    def get_shortcuts():
+        return jsonify({
+            "shortcuts": config.shortcuts.model_dump(),
+            "defaults": ShortcutsConfig().model_dump(),
+        })
+
+    @app.post("/api/shortcuts")
+    def post_shortcuts():
+        try:
+            updated = ShortcutsConfig.model_validate(request.get_json(force=True) or {})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 400
+        config.shortcuts = updated
+        _persist_shortcuts(updated.model_dump())
+        return jsonify({"ok": True, "shortcuts": updated.model_dump()})
 
     @app.post("/api/detect")
     def start_detect():

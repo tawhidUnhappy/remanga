@@ -126,6 +126,35 @@ class VideoConfig(BaseModel):
     panel_border_color: str = "#222222"
 
 
+class ShortcutsConfig(BaseModel):
+    """Panel-marker keyboard shortcuts, editable from the webui's own Shortcuts
+    menu (Settings gear in the topbar -> saved via POST /api/shortcuts, which
+    writes straight back into this section of config.json - see
+    remanga/webui/server.py:_persist_shortcuts). Each action maps to a list of
+    key combos so more than one chord can trigger it (e.g. Delete AND
+    Backspace); the frontend renders/parses these itself.
+
+    Combo syntax (parsed client-side in remanga/webui/static/js/shortcuts.js):
+    '+'-separated tokens, lowercase. 'mod' means Ctrl on Windows/Linux and Cmd
+    on macOS - never hardcode 'ctrl' or 'cmd' directly so a saved binding
+    still makes sense on whichever OS opens it next. The non-modifier token is
+    whatever KeyboardEvent.key lowercases to (e.g. 'arrowleft', 'delete', 's').
+    """
+    save: List[str] = Field(default_factory=lambda: ["mod+s"])
+    mark_full_page: List[str] = Field(default_factory=lambda: ["mod+f"])
+    tool_draw: List[str] = Field(default_factory=lambda: ["d"])
+    tool_select: List[str] = Field(default_factory=lambda: ["v"])
+    prev_page: List[str] = Field(default_factory=lambda: ["arrowleft"])
+    next_page: List[str] = Field(default_factory=lambda: ["arrowright"])
+    delete_mark: List[str] = Field(default_factory=lambda: ["delete", "backspace"])
+    # Ctrl+Tab is reserved by every major browser for switching tabs and can't
+    # be intercepted by a page - it's the requested default anyway so it's one
+    # rebind away from working in an embedded/kiosk webview, but on a normal
+    # browser tab a user will need to open the Shortcuts menu and rebind this
+    # one (e.g. to "mod+0") before it does anything.
+    reset_view: List[str] = Field(default_factory=lambda: ["mod+tab"])
+
+
 class MarkerConfig(BaseModel):
     """The panel-marking web UI: where crops.json comes from now, in place of the
     old paste-from-an-LLM step. See remanga/webui/."""
@@ -141,6 +170,8 @@ class MarkerConfig(BaseModel):
     magi_repo_id: str = "ragavsachdeva/magiv3"
     magi_model_dir: str = "checkpoints/magiv3"
     magi_panel_score_threshold: float = 0.5
+
+    shortcuts: ShortcutsConfig = Field(default_factory=ShortcutsConfig)
 
 
 class RemangaConfig(BaseModel):

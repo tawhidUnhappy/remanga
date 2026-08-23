@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="/static/css/marks.css">
 <link rel="stylesheet" href="/static/css/sidebar.css">
 <link rel="stylesheet" href="/static/css/overlays.css">
+<link rel="stylesheet" href="/static/css/shortcuts.css">
 </head>
 <body>
 
@@ -36,6 +37,10 @@
     <span class="mono" id="zoomLabel">100%</span>
     <button id="zoomIn">+</button>
   </div>
+
+  <button class="icon-btn" id="shortcutsBtn" title="Keyboard shortcuts">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M9 13h6"/></svg>
+  </button>
 
   <button class="save-btn" id="saveBtn">Save &amp; Continue <kbd id="saveKbd">Ctrl+S</kbd></button>
 </div>
@@ -85,6 +90,23 @@
     <div class="icon">✓</div>
     <h2>Saved</h2>
     <p>crops.json is written and the pipeline will continue in your terminal.<br>You can close this tab now.</p>
+  </div>
+</div>
+
+<div class="shortcuts-overlay" id="shortcutsOverlay">
+  <div class="shortcuts-card">
+    <div class="shortcuts-head">
+      <h2>Keyboard shortcuts</h2>
+      <button class="shortcuts-x" id="shortcutsCloseBtn" title="Close">✕</button>
+    </div>
+    <p class="shortcuts-sub">Click <b>+</b> and press a key combo to add a binding, or ✕ on a chip to remove one. Nothing is saved until you click Save - it's written into config.json so it carries over next run.</p>
+    <div class="shortcuts-list" id="shortcutsList"></div>
+    <div class="shortcuts-foot">
+      <button class="shortcuts-btn" id="shortcutsResetBtn">Reset to defaults</button>
+      <div class="shortcuts-foot-spacer"></div>
+      <button class="shortcuts-btn" id="shortcutsCancelBtn">Cancel</button>
+      <button class="shortcuts-btn primary" id="shortcutsSaveBtn">Save</button>
+    </div>
   </div>
 </div>
 

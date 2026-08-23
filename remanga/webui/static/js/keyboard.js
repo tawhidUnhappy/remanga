@@ -1,10 +1,14 @@
 // Global keyboard shortcuts and the Draw/Select tool toggle they (and the
-// toolbar buttons) share.
+// toolbar buttons) share. Which keys trigger which action is configurable -
+// see shortcuts.js (matchAction) and ShortcutsConfig in remanga/config.py -
+// this file just dispatches whatever action comes back.
 
-import { isMac, stage, toolDrawBtn, toolSelectBtn } from "./dom.js";
+import { stage, toolDrawBtn, toolSelectBtn } from "./dom.js";
 import { state } from "./state.js";
 import { deleteMark, markFullPage } from "./marks.js";
 import { loadPage, saveAndContinue } from "./page-nav.js";
+import { resetView } from "./zoom-pan.js";
+import { matchAction } from "./shortcuts.js";
 
 export function setMode(next) {
   state.mode = next;
@@ -15,13 +19,18 @@ export function setMode(next) {
 toolDrawBtn.addEventListener("click", () => setMode("draw"));
 toolSelectBtn.addEventListener("click", () => setMode("select"));
 
+const ACTION_HANDLERS = {
+  save: (e) => { e.preventDefault(); saveAndContinue(); },
+  mark_full_page: (e) => { e.preventDefault(); markFullPage(); },
+  tool_draw: () => setMode("draw"),
+  tool_select: () => setMode("select"),
+  prev_page: () => loadPage(state.pageIndex - 1),
+  next_page: () => loadPage(state.pageIndex + 1),
+  delete_mark: () => { if (state.selectedId !== null) deleteMark(state.selectedId); },
+  reset_view: (e) => { e.preventDefault(); resetView(); },
+};
+
 document.addEventListener("keydown", (e) => {
-  const cmd = isMac ? e.metaKey : e.ctrlKey;
-  if (cmd && e.key.toLowerCase() === "s") { e.preventDefault(); saveAndContinue(); return; }
-  if (cmd && e.key.toLowerCase() === "f") { e.preventDefault(); markFullPage(); return; }
-  if (e.key === "d" || e.key === "D") setMode("draw");
-  if (e.key === "v" || e.key === "V") setMode("select");
-  if (e.key === "ArrowLeft") loadPage(state.pageIndex - 1);
-  if (e.key === "ArrowRight") loadPage(state.pageIndex + 1);
-  if ((e.key === "Delete" || e.key === "Backspace") && state.selectedId !== null) deleteMark(state.selectedId);
+  const action = matchAction(e);
+  if (action) ACTION_HANDLERS[action](e);
 });

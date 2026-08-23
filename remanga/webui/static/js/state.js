@@ -21,6 +21,8 @@ export const state = {
   panning: null,            // { startX, startY, startPanX, startPanY } while dragging to pan
   panX: 0,                  // page-stage position in canvasWrap, screen px (top-left corner)
   panY: 0,
+  shortcutsModalOpen: false, // true while the Shortcuts menu is open, so keyboard.js
+                              // doesn't also act on keys being recorded there
 };
 
 export function currentPage() {

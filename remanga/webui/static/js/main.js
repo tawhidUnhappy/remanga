@@ -5,6 +5,7 @@
 import "./draw.js";
 import "./drag-resize.js";
 import "./zoom-pan.js";
+import "./shortcuts.js";
 import "./keyboard.js";
 import "./magi.js";
 import { init } from "./page-nav.js";
