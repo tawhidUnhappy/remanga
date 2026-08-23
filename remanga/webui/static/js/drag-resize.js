@@ -9,8 +9,25 @@ import { showGuides, clearGuides } from "./guides.js";
 export function onMarkMouseDown(e, m) {
   if (e.button === 2) return;
   e.stopPropagation();
-  state.selectedId = m.id;
+
   const handle = e.target.classList.contains("handle") ? [...e.target.classList].find(c => c !== "handle") : null;
+  const wasSelected = state.selectedId === m.id;
+  state.selectedId = m.id;
+
+  // Clicking a mark that wasn't already selected only selects it - it
+  // doesn't also start moving it in the same gesture. Without this, a
+  // single click-drag both selected AND moved whatever mark happened to be
+  // under the cursor, so on a page with tightly packed/overlapping panels
+  // it was easy to nudge the wrong neighboring mark by accident while
+  // aiming for another one. A second, deliberate drag on the now-selected
+  // mark is what actually adjusts it - one mark at a time. Resize handles
+  // only ever render on the already-selected mark (see render.js), so a
+  // handle-drag is unaffected by this and still works on the first click.
+  if (!handle && !wasSelected) {
+    render();
+    return;
+  }
+
   const startX = e.clientX, startY = e.clientY;
   const orig = { ...m };
   render();
