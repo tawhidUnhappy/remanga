@@ -12,14 +12,14 @@
     "max_retries": 3,
     "retry_delay_seconds": 2,
     "request_delay_seconds": 0.35,
-    "create_zip": true
+    "create_zip": false
   },
   "cropper": {
     "margin_padding_pixels": 8,
     "auto_contrast_clean": false,
     "save_format": "PNG",
     "vision_asset_type": "sheets",
-    "create_sheets": true,
+    "create_sheets": false,
     "panels_per_sheet": 4,
     "create_zip": true,
     "snap_to_gutters": true,
@@ -46,7 +46,8 @@
     "magi_enabled": true,
     "magi_repo_id": "ragavsachdeva/magiv3",
     "magi_model_dir": "checkpoints/magiv3",
-    "magi_panel_score_threshold": 0.5
+    "magi_panel_score_threshold": 0.5,
+    "click_to_select": true
   },
   "tts": {
     "engine": "indextts-2.5",

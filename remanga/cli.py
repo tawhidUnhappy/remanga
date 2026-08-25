@@ -88,6 +88,8 @@ def main():
     p_restart.add_argument("--project", "-p", required=True, help="Project name")
     p_restart.add_argument("--chapter", "-c", required=True, help="Chapter number")
     p_restart.add_argument("--force", "-f", action="store_true", help="Skip the confirmation prompt")
+    p_restart.add_argument("--soft", "-s", action="store_true", help="Soft restart: also keep crops.json, panels/, and narration.json (only sheets/vision-zip/audio/video get wiped)")
+    p_restart.add_argument("--no-reverify", action="store_true", help="Skip re-checking/re-fetching downloaded pages afterward")
 
     args = parser.parse_args()
     config = RemangaConfig.load()
@@ -122,19 +124,22 @@ def main():
         elif args.command == "status":
             console.print(render_status_panel(args.project, args.chapter))
         elif args.command == "restart":
-            candidates = reset.restart_candidates(args.project, args.chapter)
+            candidates = reset.restart_candidates(args.project, args.chapter, soft=args.soft)
+            kind = "Soft restart" if args.soft else "Restart"
             if not candidates:
-                console.print("[dim]Nothing to delete besides the downloaded pages.[/]")
+                console.print(f"[dim]Nothing to delete for a {kind.lower()} - everything it would keep is already all that's here.[/]")
             else:
-                console.print("[bold red]The following will be permanently deleted:[/]")
+                console.print(f"[bold red]{kind}: the following will be permanently deleted:[/]")
                 for c in candidates:
                     console.print(f"  [dim]- {c}[/]")
+                if args.soft:
+                    console.print("[dim]Kept: downloaded pages, crops.json, panels/, and narration.json.[/]")
                 if args.force or Confirm.ask(
                     f"[bold red]Confirm: permanently delete these {len(candidates)} item(s) for Chapter {args.chapter}? This cannot be undone.[/]",
                     default=False,
                 ):
-                    reset.restart_chapter(args.project, args.chapter)
-                    console.print(f"[bold green]✓ Chapter {args.chapter} reset. Downloaded pages kept — ready to reprocess.[/]")
+                    reset.restart_chapter(args.project, args.chapter, soft=args.soft, reverify_downloads=not args.no_reverify)
+                    console.print(f"[bold green]✓ Chapter {args.chapter} {kind.lower()} complete. Downloaded pages kept — ready to reprocess.[/]")
                 else:
                     console.print("[dim]Restart cancelled.[/]")
     except Exception as e:

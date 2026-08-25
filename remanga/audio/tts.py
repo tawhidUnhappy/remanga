@@ -125,10 +125,16 @@ class TTSEngine:
         if needs_synthesis:
             self._synth.ensure_ready()
 
+        # refresh_per_second=4: see downloader/mangadex.py's Progress() for
+        # why - this is the longest-running bar in the whole pipeline (one
+        # tick per synthesized panel, easily tens of minutes for a full
+        # chapter), so it's the most likely place a locked-screen terminal
+        # that isn't draining its pty buffer would actually fill it up.
         with Progress(
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
-            TextColumn("{task.completed}/{task.total} panels")
+            TextColumn("{task.completed}/{task.total} panels"),
+            refresh_per_second=4,
         ) as progress:
             task = progress.add_task("[yellow]Synthesizing vocal tracks...", total=len(narration_entries))
 

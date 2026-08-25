@@ -98,7 +98,8 @@ def _spawn_worker_with_auto_heal(config: MarkerConfig) -> subprocess.Popen:
     attempted: Set[str] = set()
 
     for _ in range(_MAX_AUTO_HEAL_ATTEMPTS + 1):
-        with console.status(f"[bold cyan]Loading MAGI v3 ({config.magi_repo_id})...[/]", spinner="dots"):
+        # refresh_per_second=4: see downloader/mangadex.py's Progress() note.
+        with console.status(f"[bold cyan]Loading MAGI v3 ({config.magi_repo_id})...[/]", spinner="dots", refresh_per_second=4):
             proc = _spawn_worker(config)
             first_line = proc.stdout.readline()
 
@@ -152,7 +153,7 @@ def ensure_weights_downloaded(config: MarkerConfig) -> Optional[Path]:
     model_dir = Path(config.magi_model_dir)
     model_dir.mkdir(parents=True, exist_ok=True)
 
-    with console.status(f"[bold cyan]Fetching MAGI v3 weights ({config.magi_repo_id})...[/]", spinner="dots"):
+    with console.status(f"[bold cyan]Fetching MAGI v3 weights ({config.magi_repo_id})...[/]", spinner="dots", refresh_per_second=4):
         result = subprocess.run([str(python), str(script), str(model_dir.resolve()), config.magi_repo_id], capture_output=True, text=True)
     if result.returncode != 0:
         console.print(f"[bold red]Error downloading MAGI v3 weights:[/] {result.stderr.strip()}")

@@ -9,6 +9,19 @@ import { showGuides, clearGuides } from "./guides.js";
 
 export function onMarkMouseDown(e, m) {
   if (e.button === 2) return;
+
+  // With click_to_select on (MarkerConfig.click_to_select, default on), an
+  // existing mark's body/handles are only interactive in Select mode. While
+  // the Draw tool is active, do nothing here - no stopPropagation, no
+  // selecting, no moving - and let this same mousedown bubble up to
+  // canvasWrap's listener in draw.js, which (also gated on click_to_select +
+  // Draw mode) starts a brand-new box from it instead. Without this, drawing
+  // a new box that happened to start on top of an already-selected mark
+  // would silently move/resize THAT mark instead of drawing anything, since
+  // the "already selected" case below has no idea the user is mid-draw
+  // rather than trying to adjust it.
+  if (state.clickToSelect && state.mode === "draw") return;
+
   e.stopPropagation();
 
   const handle = e.target.classList.contains("handle") ? [...e.target.classList].find(c => c !== "handle") : null;
@@ -24,7 +37,10 @@ export function onMarkMouseDown(e, m) {
   // mark is what actually adjusts it - one mark at a time. Resize handles
   // only ever render on the already-selected mark (see render.js), so a
   // handle-drag is unaffected by this and still works on the first click.
-  if (!handle && !wasSelected) {
+  // With click_to_select off, this whole guard is skipped and any drag
+  // immediately grabs whatever mark is under the cursor, selected or not -
+  // the old behavior, for anyone who explicitly wants it back.
+  if (state.clickToSelect && !handle && !wasSelected) {
     render();
     return;
   }

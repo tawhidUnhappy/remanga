@@ -16,6 +16,7 @@ export const state = {
   nextLocalId: 1,
   saveDebounce: null,
   magiEnabled: false,
+  clickToSelect: true,      // see MarkerConfig.click_to_select; set from /api/chapter in page-nav.js:init()
   pageLoaded: false,        // false until the very first loadPage() has completed
   spaceHeld: false,         // hand-tool (pan) key held down
   panning: null,            // { startX, startY, startPanX, startPanY } while dragging to pan

@@ -36,6 +36,7 @@ def create_app(state: MarkerState, config: MarkerConfig) -> Flask:
             "pages": state.pages,
             "marks": state.marks,
             "magi_enabled": config.magi_enabled,
+            "click_to_select": config.click_to_select,
         })
 
     @app.get("/api/pages/<path:filename>")

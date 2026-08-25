@@ -39,6 +39,7 @@ export async function init() {
   await loadShortcuts();
   state.chapter = await api("/api/chapter");
   state.magiEnabled = state.chapter.magi_enabled;
+  state.clickToSelect = state.chapter.click_to_select;
   pageTotalEl.textContent = state.chapter.pages.length;
   for (const p of state.chapter.pages) state.pageMarksCache[p.filename] = state.chapter.marks[p.filename] || [];
 

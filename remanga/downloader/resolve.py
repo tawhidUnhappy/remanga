@@ -92,7 +92,12 @@ class MangaDexResolver:
         limit = 100
         offset = 0
 
-        with Progress(TextColumn("[progress.description]{task.description}"), BarColumn()) as progress:
+        # refresh_per_second=4: see the note on the same param in
+        # downloader/mangadex.py's Progress() - a long-running spinner/bar
+        # redrawing at Rich's ~10-12.5Hz default is what a stuck-terminal-
+        # after-screen-lock report traced back to; 4Hz is still smooth and
+        # writes a lot less while nothing's actually draining the terminal.
+        with Progress(TextColumn("[progress.description]{task.description}"), BarColumn(), refresh_per_second=4) as progress:
             task = progress.add_task("[cyan]Fetching chapter feed...", total=None)
             while True:
                 res = self.request_with_retry(

@@ -31,7 +31,10 @@ class ModelManager:
         python = get_tool_python("indextts")
         script = get_scripts_dir("models") / "download_indextts.py"
 
-        with console.status(f"[bold cyan]Verifying IndexTTS-2.5 model weights ({self.repo_id})...[/]", spinner="dots"):
+        # refresh_per_second=4 (Rich's console.status() default is ~12.5):
+        # see the Progress() note in downloader/mangadex.py - same rationale,
+        # applied to the spinner form.
+        with console.status(f"[bold cyan]Verifying IndexTTS-2.5 model weights ({self.repo_id})...[/]", spinner="dots", refresh_per_second=4):
             result = subprocess.run(
                 [str(python), str(script), str(self.model_dir.resolve()), self.repo_id],
                 capture_output=True, text=True,

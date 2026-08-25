@@ -99,11 +99,22 @@ class MangaDexDownloader:
 
         downloaded_meta: List[Dict[str, Any]] = []
 
+        # refresh_per_second=4 (Rich's default is ~10): a long-lived Progress
+        # bar redraws itself that many times a second regardless of whether
+        # anything is actually reading the terminal's output - if the
+        # terminal emulator stops draining its side while the screen is
+        # locked for a while, the OS pty buffer fills at whatever rate this
+        # writes, and once it's full the next write blocks until something
+        # drains it, which reads as the whole pipeline "getting stuck" until
+        # unlock. 4Hz is still smooth to watch and cuts that write volume by
+        # more than half; it doesn't make the buffer un-fillable, just a lot
+        # slower to fill for the same locked duration.
         with Progress(
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
             DownloadColumn(),
-            TimeRemainingColumn()
+            TimeRemainingColumn(),
+            refresh_per_second=4,
         ) as progress:
             dl_task = progress.add_task("[yellow]Downloading pages...", total=len(filenames))
 

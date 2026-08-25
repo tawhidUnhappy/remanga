@@ -52,31 +52,42 @@ def select_or_create_project(config: RemangaConfig) -> str:
 
 def offer_chapter_restart(project_name: str, chapter_num: str) -> None:
     """If the chosen chapter already has any generated progress beyond the downloaded pages
-    (partially done or fully complete), asks whether to resume from where it left off or wipe
-    it back to just the downloaded pages and restart from scratch. Restarting still requires a
-    second, explicit confirmation before anything is actually deleted."""
+    (partially done or fully complete), asks whether to resume from where it left off, soft-
+    restart (keep crops.json/panels/narration.json, wipe sheets/vision-zip/audio/video), or
+    hard-restart (wipe everything but the downloaded pages) from scratch. Either restart still
+    requires a second, explicit confirmation before anything is actually deleted, and both
+    re-verify the downloaded pages afterward (see reset.restart_chapter)."""
     status = get_chapter_status(project_name, chapter_num)
-    candidates = reset.restart_candidates(project_name, chapter_num)
-    if not candidates:
+    hard_candidates = reset.restart_candidates(project_name, chapter_num)
+    if not hard_candidates:
         return  # nothing generated yet beyond the downloaded pages - nothing to choose between
+    soft_candidates = reset.restart_candidates(project_name, chapter_num, soft=True)
 
     console.print(Panel(
         f"[bold yellow]Chapter {chapter_num} already has progress:[/] {status['summary']}\n"
-        f"[dim]{len(candidates)} generated item(s) present (crops/panels/narration/audio/video).[/]",
+        f"[dim]{len(hard_candidates)} generated item(s) present (crops/panels/narration/audio/video).[/]",
         border_style="yellow"
     ))
     console.print(f"  [bold]1.[/] Resume Chapter {chapter_num} where it left off")
-    console.print(f"  [bold]2.[/] Restart Chapter {chapter_num} from scratch")
+    console.print(f"  [bold]2.[/] Soft restart - keep crops.json, panels/, and narration.json; redo sheets/audio/video")
+    console.print(f"  [bold]3.[/] Hard restart - wipe everything, keep only the downloaded pages")
     choice = Prompt.ask(
         "[bold cyan]Choose an option[/]",
-        choices=["1", "2"],
+        choices=["1", "2", "3"],
         default="1",
     )
     if choice == "1":
         console.print(f"[dim]Resuming Chapter {chapter_num} from its current progress.[/]\n")
         return
 
-    console.print("[bold red]The following will be permanently deleted:[/]")
+    soft = choice == "2"
+    candidates = soft_candidates if soft else hard_candidates
+    kind = "Soft restart" if soft else "Hard restart"
+    if not candidates:
+        console.print(f"[dim]Nothing to delete for a {kind.lower()} - everything it would keep is already all that's here.[/]\n")
+        return
+
+    console.print(f"[bold red]{kind}: the following will be permanently deleted:[/]")
     for c in candidates:
         console.print(f"  [dim]- {c}[/]")
 
@@ -84,8 +95,8 @@ def offer_chapter_restart(project_name: str, chapter_num: str) -> None:
         f"[bold red]Confirm: permanently delete these {len(candidates)} item(s) for Chapter {chapter_num}? This cannot be undone.[/]",
         default=False,
     ):
-        reset.restart_chapter(project_name, chapter_num)
-        console.print(f"[bold green]✓ Chapter {chapter_num} reset. Downloaded pages kept — ready to reprocess.[/]\n")
+        reset.restart_chapter(project_name, chapter_num, soft=soft)
+        console.print(f"[bold green]✓ Chapter {chapter_num} {kind.lower()} complete. Downloaded pages re-verified and kept — ready to reprocess.[/]\n")
     else:
         console.print(f"[dim]Restart cancelled. Resuming Chapter {chapter_num} from its current progress instead.[/]\n")
 

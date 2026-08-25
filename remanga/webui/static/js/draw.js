@@ -9,7 +9,16 @@ import { markDirty, markTouched, clampBoxToPage } from "./marks.js";
 let drawing = null, ghostEl = null;
 
 canvasWrap.addEventListener("mousedown", (e) => {
-  if (e.target.closest(".mark")) return; // let mark-level handler deal with it
+  // Normally a click landing on an existing mark's DOM is left entirely to
+  // that mark's own handler (drag-resize.js:onMarkMouseDown) - selecting it,
+  // or starting a move/resize. The one exception: click_to_select (default
+  // on) makes onMarkMouseDown a no-op for a mark click while the Draw tool
+  // is active - see its comment - specifically so THIS handler gets the
+  // event instead and can start a brand-new box, even one that starts on
+  // top of an existing mark (overlapping panels), without ever touching
+  // that mark's position.
+  const onExistingMark = e.target.closest(".mark");
+  if (onExistingMark && !(state.clickToSelect && state.mode === "draw")) return;
   if (e.button !== 0 || state.spaceHeld) return;
 
   // Clicking the canvas background - not a mark, whether that's empty

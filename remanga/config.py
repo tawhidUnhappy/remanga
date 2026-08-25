@@ -21,7 +21,13 @@ class DownloaderConfig(BaseModel):
     max_retries: int = 3
     retry_delay_seconds: int = 2
     request_delay_seconds: float = 0.35
-    create_zip: bool = True
+    # pages.zip is a standalone convenience bundle of the raw downloaded page
+    # images - nothing downstream in the pipeline reads it (cropping reads
+    # straight from pages/), it's only useful for manually handing a chapter's
+    # pages to an LLM, which isn't the marking workflow anymore (see
+    # remanga/webui/). Off by default so a normal run doesn't spend time/disk
+    # zipping something nothing needs; flip to true if you still want it.
+    create_zip: bool = False
 
 
 class CropperConfig(BaseModel):
@@ -29,7 +35,13 @@ class CropperConfig(BaseModel):
     auto_contrast_clean: bool = False
     save_format: str = "PNG"
     vision_asset_type: str = "sheets"  # 'sheets' (2x2 contact sheets) or 'panels' (individual panel crops)
-    create_sheets: bool = True
+    # Forcing this on always generates sheet_*.png contact sheets even in
+    # 'panels' mode, which doesn't use them for anything - wasted work/disk.
+    # Off by default; package_outputs() (cropper/crop_report.py) still builds
+    # them automatically whenever vision_asset_type is actually 'sheets', so
+    # that mode keeps working with no extra config needed. Only turn this on
+    # to get sheets alongside 'panels' mode for some other reason.
+    create_sheets: bool = False
     panels_per_sheet: int = 4
     create_zip: bool = True
 
@@ -172,6 +184,15 @@ class MarkerConfig(BaseModel):
     magi_repo_id: str = "ragavsachdeva/magiv3"
     magi_model_dir: str = "checkpoints/magiv3"
     magi_panel_score_threshold: float = 0.5
+
+    # A mark's body/handles only become draggable once it's already selected
+    # (a first click selects; a second, deliberate drag on the now-selected
+    # mark actually moves/resizes it) - and while the Draw tool is active,
+    # existing marks aren't draggable at all, so starting a new box that
+    # happens to overlap one never nudges it by accident. Set False to
+    # restore the old behavior where any drag immediately grabs whatever
+    # mark is under the cursor, selected or not, even in Draw mode.
+    click_to_select: bool = True
 
     shortcuts: ShortcutsConfig = Field(default_factory=ShortcutsConfig)
 
