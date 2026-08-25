@@ -56,7 +56,7 @@ export function centerStage() {
 
 // The full "back to default" sequence - re-fit the zoom to the window and
 // re-center - used on page load/resize and by the reset-view shortcut
-// (Ctrl/Cmd+Tab by default; see ShortcutsConfig.reset_view) so a user who's
+// ("0" by default; see ShortcutsConfig.reset_view) so a user who's
 // zoomed/panned off into nowhere has one keypress back to a sane view.
 export function resetView() {
   const page = currentPage();

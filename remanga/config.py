@@ -147,12 +147,14 @@ class ShortcutsConfig(BaseModel):
     prev_page: List[str] = Field(default_factory=lambda: ["arrowleft"])
     next_page: List[str] = Field(default_factory=lambda: ["arrowright"])
     delete_mark: List[str] = Field(default_factory=lambda: ["delete", "backspace"])
-    # Ctrl+Tab is reserved by every major browser for switching tabs and can't
-    # be intercepted by a page - it's the requested default anyway so it's one
-    # rebind away from working in an embedded/kiosk webview, but on a normal
-    # browser tab a user will need to open the Shortcuts menu and rebind this
-    # one (e.g. to "mod+0") before it does anything.
-    reset_view: List[str] = Field(default_factory=lambda: ["mod+tab"])
+    # A bare, unmodified key on purpose - not "mod+tab" (reserved by every
+    # major browser for switching tabs) or "mod+0" (reserved for resetting
+    # the *browser's* page zoom). Both fire a browser-chrome action a page can
+    # never preventDefault() its way out of, on every mainstream browser, so
+    # either one would have been permanently dead as an actual default. A
+    # bare digit has no such reservation, is easy to reach, and "0" reads
+    # naturally as "reset to zero."
+    reset_view: List[str] = Field(default_factory=lambda: ["0"])
 
 
 class MarkerConfig(BaseModel):
