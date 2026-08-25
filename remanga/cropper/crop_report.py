@@ -7,14 +7,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List
 
-from rich.console import Console
-
 from remanga.config import CropperConfig
+from remanga.console import console
 from remanga.cropper.archive import create_vision_archive
 from remanga.cropper.sheets import PanelSheetGenerator
 from remanga.json_io import write_json
-
-console = Console()
 
 
 def write_manifest(manifest_path: Path, chapter_num: str, panel_paths: List[Path], manifest_entries: List[Dict[str, Any]]) -> None:

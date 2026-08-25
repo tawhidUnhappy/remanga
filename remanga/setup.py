@@ -7,12 +7,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
 from remanga.config import RemangaConfig
-
-console = Console()
+from remanga.console import console
 
 
 def is_valid_file(raw_path: str, min_size: int = 0) -> Optional[Path]:

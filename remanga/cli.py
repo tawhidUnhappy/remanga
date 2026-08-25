@@ -3,13 +3,13 @@ from __future__ import annotations
 import argparse
 import signal
 import sys
-from rich.console import Console
 
 from rich.prompt import Confirm
 
 from remanga import reset
 from remanga.audio import AudioProcessor, TTSEngine
 from remanga.config import RemangaConfig
+from remanga.console import console
 from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
 from remanga.models import ModelManager
@@ -18,8 +18,6 @@ from remanga.status import render_status_panel
 from remanga.video import VideoRenderer
 from remanga.webui import launch_and_wait as launch_panel_marker
 from remanga.wizard import run_interactive_pipeline
-
-console = Console()
 
 
 def graceful_sigint_handler(signum, frame):

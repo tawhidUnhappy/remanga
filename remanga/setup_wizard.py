@@ -5,15 +5,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from remanga.config import RemangaConfig
+from remanga.console import console
 from remanga.setup import ensure_valid_voice_prompt, is_valid_file
-
-console = Console()
 
 
 def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:

@@ -10,15 +10,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List, Optional
 
-from rich.console import Console
-
 from remanga.config import CropperConfig
+from remanga.console import console
 from remanga.cropper.crop_page import crop_page
 from remanga.cropper.crop_report import package_outputs, print_crop_summary, write_manifest
 from remanga.json_io import has_real_json_content, read_json
 from remanga.paths import get_chapter_dir
-
-console = Console()
 
 
 class CoordinateCropper:

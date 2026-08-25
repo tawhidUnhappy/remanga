@@ -6,12 +6,11 @@ import re
 import time
 from typing import Any, Dict, List
 import requests
-from rich.console import Console
 from rich.progress import BarColumn, Progress, TextColumn
 
 from remanga.config import DownloaderConfig
+from remanga.console import console
 
-console = Console()
 
 BASE_URL = "https://api.mangadex.org"
 

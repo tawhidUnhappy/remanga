@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from rich.console import Console
 
+from remanga.console import console
 from remanga.venvs import get_scripts_dir, get_tool_python
-
-console = Console()
 
 
 class ModelManager:

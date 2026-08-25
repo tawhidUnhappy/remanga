@@ -27,12 +27,10 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
-from rich.console import Console
-
 from remanga.config import MarkerConfig
+from remanga.console import console
 from remanga.venvs import REPO_ROOT, extract_missing_packages, get_scripts_dir, get_tool_python
 
-console = Console()
 
 _MAX_AUTO_HEAL_ATTEMPTS = 8
 

@@ -3,18 +3,16 @@ including the resume-vs-restart offer for a chapter that already has generated p
 
 from __future__ import annotations
 
-from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from remanga import reset
 from remanga.config import RemangaConfig
+from remanga.console import console
 from remanga.paths import list_projects
 from remanga.setup_wizard import run_setup_wizard
 from remanga.status import get_chapter_status
-
-console = Console()
 
 
 def select_or_create_project(config: RemangaConfig) -> str:

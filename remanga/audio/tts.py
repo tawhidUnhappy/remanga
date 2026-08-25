@@ -3,16 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from pydub import AudioSegment
-from rich.console import Console
 from rich.progress import BarColumn, Progress, TextColumn
 
 from remanga import setup
 from remanga.audio.synth import IndexTTSSynthesizer
 from remanga.config import AudioConfig, RemangaConfig, TTSConfig
+from remanga.console import console
 from remanga.json_io import read_json, write_json
 from remanga.paths import get_chapter_dir
-
-console = Console()
 
 
 class TTSEngine:
@@ -63,9 +61,28 @@ class TTSEngine:
             f"[dim](Lang: {self.tts_config.lang}, Temp: {self.tts_config.temperature}, Reference Voice: {spk_prompt_path})[/]"
         )
 
+        def is_resumable(panel_id: str) -> bool:
+            """True if a clean WAV from a previous run can be reused for this panel."""
+            clip = audio_dir / f"{panel_id}.wav"
+            return not force and clip.exists() and clip.stat().st_size > 1000
+
         timing_data: List[Dict[str, Any]] = []
         current_timeline_ms = 0
         resumed_count = 0
+
+        # Load the model / spawn the worker (if a fresh load is even needed) BEFORE
+        # opening the Progress bar below. ensure_ready() shows its own status
+        # spinner while the model loads; starting that spinner while the panel-loop
+        # Progress bar is already live on screen is two Rich Live displays fighting
+        # over the same terminal lines at once - the "two progress bars" glitch.
+        # Doing it up front keeps the two phases (load, then synthesize) as two
+        # clean, sequential pieces of output instead.
+        needs_synthesis = any(
+            entry.get("text", "").strip() and not is_resumable(entry.get("panel_id") or f"panel_{idx:03d}")
+            for idx, entry in enumerate(narration_entries, start=1)
+        )
+        if needs_synthesis:
+            self._synth.ensure_ready()
 
         with Progress(
             TextColumn("[progress.description]{task.description}"),
@@ -84,7 +101,7 @@ class TTSEngine:
                 processed_clip_path = audio_dir / f"{panel_id}.wav"
 
                 # RESUME GUARD: Reuse existing clean WAV if present and non-empty
-                if not force and processed_clip_path.exists() and processed_clip_path.stat().st_size > 1000:
+                if is_resumable(panel_id):
                     segment = AudioSegment.from_file(processed_clip_path)
                     duration_ms = len(segment)
                     resumed_count += 1

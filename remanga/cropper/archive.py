@@ -6,11 +6,8 @@ import zipfile
 from pathlib import Path
 from typing import Optional
 
-from rich.console import Console
-
 from remanga.config import CropperConfig
-
-console = Console()
+from remanga.console import console
 
 
 def create_vision_archive(

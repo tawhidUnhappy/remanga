@@ -3,23 +3,21 @@ full download -> crop -> narrate -> synthesize -> mix -> render pipeline, in ord
 
 from __future__ import annotations
 
-from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 
 from remanga import setup
 from remanga.audio import AudioProcessor, TTSEngine
 from remanga.config import RemangaConfig
+from remanga.console import console
 from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
 from remanga.json_io import has_real_json_content
-from remanga.paths import get_chapter_dir, load_project_metadata
+from remanga.paths import ensure_memory_file, get_chapter_dir, load_project_metadata
 from remanga.status import get_chapter_status
 from remanga.video import VideoRenderer
 from remanga.webui import launch_and_wait as launch_panel_marker
 from remanga.wizard_prompts import select_chapter, select_or_create_project
-
-console = Console()
 
 
 def run_interactive_pipeline():
@@ -90,22 +88,28 @@ def run_interactive_pipeline():
     cropper.crop_chapter_from_json(project, chapter)
 
     # =========================================================================
-    # Step 4: Narration Script (narration.json)
+    # Step 4: Narration Script + Continuity Memory (narration.json + memory.json)
     # =========================================================================
     narration_path = chap_dir / "narration.json"
     target_vision_archive = chap_dir / archive_name
+    memory_path = ensure_memory_file(project)
+    memory_has_content = has_real_json_content(memory_path)
 
     if not has_real_json_content(narration_path):
         narration_path.parent.mkdir(parents=True, exist_ok=True)
         narration_path.write_text("", encoding="utf-8")
         console.print(Panel(
             f"[bold yellow]Action Required:[/]\n"
-            f"1. Upload [bold]{target_vision_archive.resolve()}[/] along with [bold]prompts/narration.md[/] to your LLM.\n"
-            f"2. Save the resulting narration JSON directly into:\n   [bold green]{narration_path.resolve()}[/]",
-            title="[bold white]Generate narration.json[/]",
+            f"1. Upload [bold]{target_vision_archive.resolve()}[/] along with [bold]prompts/narration.md[/] to your LLM"
+            + (f", plus the current [bold]{memory_path.resolve()}[/] for story continuity" if memory_has_content else "")
+            + ".\n"
+            f"2. It replies with two JSON blocks - save each one into its own file:\n"
+            f"   [bold green]{narration_path.resolve()}[/]  (narration.json)\n"
+            f"   [bold green]{memory_path.resolve()}[/]  (memory.json)",
+            title="[bold white]Generate narration.json + memory.json[/]",
             border_style="yellow"
         ))
-        Prompt.ask("[bold cyan]Press Enter once narration.json is saved and ready[/]")
+        Prompt.ask("[bold cyan]Press Enter once both files are saved and ready[/]")
 
     # =========================================================================
     # Step 5: Synthesizing Vocal Audio via IndexTTS-2.5

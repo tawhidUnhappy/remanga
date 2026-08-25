@@ -10,15 +10,14 @@ import threading
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
-from rich.console import Console
 
 from remanga.config import MarkerConfig, ShortcutsConfig
+from remanga.console import console
 from remanga.json_io import write_json
 from remanga.webui.detection import run_detection
 from remanga.webui.marker_state import MarkerState
 from remanga.webui.shortcuts_store import persist_shortcuts
 
-console = Console()
 
 STATIC_DIR = Path(__file__).parent / "static"
 

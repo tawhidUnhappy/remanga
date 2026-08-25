@@ -13,14 +13,12 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-from rich.console import Console
 
 from remanga.config import CropperConfig
+from remanga.console import console
 from remanga.cropper.geometry import calculate_pixel_bounds
 from remanga.cropper.gutter import PixelBox, refine_box_to_gutters
 from remanga.cropper.seams import reconcile_adjacent_seams
-
-console = Console()
 
 
 def adaptive_gutter_radius(config: CropperConfig, img_w: int, img_h: int) -> int:

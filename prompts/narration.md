@@ -105,8 +105,27 @@ Every panel must be fully accounted for — do not silently drop content because
 
 ---
 
-## 3. Output Schema Requirements
-Output **EXACTLY TWO** separate JSON blocks. Do not include conversational remarks, pleasantries, or markdown explanations before or after the JSON blocks.
+## 3. Output Schema Requirements — Read Carefully, This Gets Parsed by Code
+A person is going to copy your output verbatim into two files that a Python pipeline
+then reads as JSON (`json.load`). Anything you add outside the two code blocks below,
+or any deviation from valid JSON inside them, breaks that parse and blocks the pipeline.
+
+**Your entire response must be exactly two fenced ` ```json ` code blocks, back to back,
+and nothing else** — no greeting, no "Here is the narration...", no restated
+instructions, no headings like "Block 1"/"Block 2", no bullet list summarizing what you
+did, no text between the two blocks, nothing after the second block. The two headings
+below ("Block 1", "Block 2") are section labels for *this document*, for a human reading
+the prompt — they are not text you output.
+
+Both blocks must each be the **complete, literal content of one file** — not a diff, not
+an excerpt, not truncated with "...". Standard JSON only: double-quoted keys and string
+values, no trailing commas, no `//` or `/* */` comments, no numbers written as strings
+unless the schema below shows them quoted.
+
+`"01"`-style values below (`chapter`, `last_chapter_processed`) are illustrative
+placeholders, not literal text to copy — substitute the actual chapter number you were
+given for this run. If the chapter number was never stated to you, ask for it before
+generating output rather than guessing.
 
 ### Block 1: `narration.json`
 Save to: `projects/<project_name>/chapters/chapter_<num>/narration.json`
@@ -124,6 +143,10 @@ Save to: `projects/<project_name>/chapters/chapter_<num>/narration.json`
   ]
 }
 ```
+`chapter` is a string (zero-padded like the example, or whatever format you were given —
+just be consistent). `total_panels` is an integer and must equal `narration.length`, and
+both must equal the number of panel images actually supplied (Rule 6) — recount before
+you output, not after.
 
 ### Block 2: `memory.json`
 Save to: `projects/<project_name>/memory.json`

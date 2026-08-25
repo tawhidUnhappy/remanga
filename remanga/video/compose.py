@@ -3,12 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional, Tuple
 from PIL import Image, ImageColor, ImageDraw, ImageEnhance, ImageFilter, ImageOps
-from rich.console import Console
 
 from remanga.config import VideoConfig
+from remanga.console import console
 from remanga.paths import get_chapter_dir
-
-console = Console()
 
 
 class FrameCompositor:

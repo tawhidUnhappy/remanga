@@ -5,15 +5,13 @@ import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import requests
-from rich.console import Console
 from rich.progress import BarColumn, DownloadColumn, Progress, TextColumn, TimeRemainingColumn
 
 from remanga.config import DownloaderConfig
+from remanga.console import console
 from remanga.downloader.resolve import BASE_URL, MangaDexResolver
 from remanga.json_io import read_json_or, write_json
 from remanga.paths import get_chapter_dir, load_project_metadata, save_project_metadata
-
-console = Console()
 
 
 class MangaDexDownloader:

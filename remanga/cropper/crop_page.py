@@ -9,17 +9,15 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from PIL import Image, ImageOps
-from rich.console import Console
 
 from remanga.config import CropperConfig
+from remanga.console import console
 from remanga.cropper.dedupe import dedupe_panels
 from remanga.cropper.geometry import apply_padding
 from remanga.cropper.gutter import count_adjusted_edges, page_grayscale_array, sample_background_color
 from remanga.cropper.page_locator import locate_page_file
 from remanga.cropper.panel_boxes import resolve_page_panel_boxes
 from remanga.cropper.trim import trim_panel_margins
-
-console = Console()
 
 
 @dataclass

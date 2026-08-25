@@ -8,12 +8,9 @@ from __future__ import annotations
 
 from typing import List
 
-from rich.console import Console
-
 from remanga.config import MarkerConfig
+from remanga.console import console
 from remanga.webui.marker_state import MarkerState
-
-console = Console()
 
 
 def run_detection(state: MarkerState, config: MarkerConfig) -> None:

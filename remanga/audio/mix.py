@@ -3,15 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 from pydub import AudioSegment
-from rich.console import Console
 
 from remanga import setup
 from remanga.config import AudioConfig, RemangaConfig
+from remanga.console import console
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.json_io import read_json
 from remanga.paths import get_chapter_dir
-
-console = Console()
 
 
 class AudioProcessor:

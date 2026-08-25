@@ -12,14 +12,13 @@ import subprocess
 from pathlib import Path
 from typing import List, Optional
 from pydub import AudioSegment
-from rich.console import Console
 
 from remanga.config import AudioConfig, TTSConfig
+from remanga.console import console
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.models import ModelManager
 from remanga.venvs import REPO_ROOT, extract_missing_packages, get_scripts_dir, get_tool_python
 
-console = Console()
 _MAX_AUTO_HEAL_ATTEMPTS = 8
 
 
@@ -108,6 +107,15 @@ class IndexTTSSynthesizer:
             console.print("[dim]Retrying IndexTTS-2.5 worker startup with the newly installed package(s)...[/]")
 
         raise RuntimeError(f"IndexTTS-2.5 worker still fails to load after installing: {', '.join(sorted(attempted))}")
+
+    def ensure_ready(self) -> None:
+        """Loads the model weights and spawns the worker if that hasn't happened yet.
+        Callers that are about to open their own Rich Live display (a Progress bar,
+        a `console.status()` spinner) should call this first and let it finish -
+        `ensure_model()`/`_ensure_worker()` open their own status spinner while
+        loading, and two Live displays racing to redraw the same terminal lines at
+        once is exactly what produces stacked/garbled progress output."""
+        self._ensure_worker()
 
     def _get_emotion_vector(self, emotion_tag: str) -> List[float]:
         """

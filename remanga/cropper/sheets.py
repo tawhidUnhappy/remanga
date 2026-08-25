@@ -4,9 +4,8 @@ import math
 from pathlib import Path
 from typing import List
 from PIL import Image, ImageDraw, ImageFont
-from rich.console import Console
 
-console = Console()
+from remanga.console import console
 
 
 class PanelSheetGenerator:
