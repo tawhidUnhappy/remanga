@@ -7,8 +7,11 @@ environment. See remanga/venvs.py for how that environment is located."""
 from __future__ import annotations
 
 import atexit
+import collections
 import json
+import select
 import subprocess
+import threading
 from pathlib import Path
 from typing import List, Optional
 from pydub import AudioSegment
@@ -20,6 +23,10 @@ from remanga.models import ModelManager
 from remanga.venvs import REPO_ROOT, extract_missing_packages, get_scripts_dir, get_tool_python
 
 _MAX_AUTO_HEAL_ATTEMPTS = 8
+
+# How many of the worker's most recent stderr lines to keep around for error
+# messages (see _drain_stderr). Everything older just gets dropped.
+_STDERR_TAIL_LINES = 200
 
 
 def _pip_install_into_indextts_env(packages: set) -> bool:
@@ -51,7 +58,40 @@ class IndexTTSSynthesizer:
         self.audio_config = audio_config
         self.model_manager = ModelManager(tts_config.model_dir, tts_config.hf_repo_id)
         self._proc: Optional[subprocess.Popen] = None
+        self._stderr_tail: collections.deque = collections.deque(maxlen=_STDERR_TAIL_LINES)
+        self._stderr_thread: Optional[threading.Thread] = None
         atexit.register(self.shutdown)
+
+    def _drain_stderr(self, proc: subprocess.Popen) -> None:
+        """Runs for the lifetime of one worker process, on its own daemon thread,
+        continuously reading its stderr so the pipe can never fill up and block
+        the worker's next write to it.
+
+        Why this exists: indextts_worker.py only redirects the model's *stdout*
+        (IndexTTS2.infer() prints straight to it - see that script's own
+        comment); anything written to stderr instead - a tqdm progress bar, a
+        warnings.warn(), a logging handler someone set up against sys.stderr -
+        goes straight into this pipe untouched. Nothing used to read it during
+        normal operation, only on an error path via a one-shot proc.stderr.read()
+        - so once enough of that accumulated past the OS pipe's buffer (64KB on
+        Linux), the worker's next write to stderr simply blocked: the whole
+        process sat there mid-write, GPU memory still held, model still loaded,
+        zero forward progress, while this side waited on a stdout response line
+        that was never coming because the worker never got back from that
+        write() call. ("Stuck at 42/135, GPU memory loaded but doing nothing.")
+
+        Only the last _STDERR_TAIL_LINES lines are kept, for error messages;
+        everything older is simply dropped - unlike a one-shot read, this never
+        lets the pipe back up in the first place.
+        """
+        try:
+            for line in proc.stderr:
+                self._stderr_tail.append(line)
+        except (ValueError, OSError):
+            pass  # pipe closed under us (worker exited) - nothing left to drain
+
+    def _stderr_snapshot(self) -> str:
+        return "".join(self._stderr_tail)
 
     def _spawn_worker(self, model_dir: Path) -> subprocess.Popen:
         python = get_tool_python("indextts")
@@ -95,6 +135,9 @@ class IndexTTSSynthesizer:
             if event.get("event") == "ready":
                 console.print("[bold green]✓ IndexTTS-2.5 worker ready.[/]")
                 self._proc = proc
+                self._stderr_tail = collections.deque(maxlen=_STDERR_TAIL_LINES)
+                self._stderr_thread = threading.Thread(target=self._drain_stderr, args=(proc,), daemon=True)
+                self._stderr_thread.start()
                 return proc
 
             error_text = event.get("error", "")
@@ -147,6 +190,30 @@ class IndexTTSSynthesizer:
             if temp_wav.exists() and not wav_path.exists():
                 temp_wav.rename(wav_path)
 
+    def _read_response_line(self, proc: subprocess.Popen, timeout: float) -> str:
+        """proc.stdout.readline(), but bounded: select() waits up to `timeout`
+        seconds for the pipe to actually have data before ever calling
+        readline(), which would otherwise block indefinitely. That turns a
+        wedged worker - the stderr-pipe deadlock _drain_stderr() exists to
+        prevent, or anything else that makes a single panel never come back -
+        into a clear, bounded error instead of an indefinite hang."""
+        ready, _, _ = select.select([proc.stdout], [], [], timeout)
+        if not ready:
+            raise TimeoutError(f"didn't respond within {timeout:.0f}s")
+        return proc.stdout.readline()
+
+    def _kill_stuck_worker(self, proc: subprocess.Popen) -> None:
+        """Forcibly kills a worker that's stopped responding and forgets it, so
+        the next synthesize() call spawns (and reloads the model into) a fresh
+        one instead of trying to talk to the same wedged process again."""
+        if self._proc is proc:
+            self._proc = None
+        try:
+            proc.kill()
+            proc.wait(timeout=5)
+        except Exception:
+            pass
+
     def synthesize(self, text: str, emotion_tag: str, spk_prompt_path: str, output_wav: Path) -> None:
         """Synthesizes speech via the IndexTTS-2.5 worker process. Uses a flat
         zero emotion vector and low temperature/top_p for consistent delivery."""
@@ -168,13 +235,21 @@ class IndexTTSSynthesizer:
         try:
             proc.stdin.write(json.dumps(request) + "\n")
             proc.stdin.flush()
-            response_line = proc.stdout.readline()
+            response_line = self._read_response_line(proc, self.tts_config.synth_timeout_seconds)
+        except TimeoutError as e:
+            stderr = self._stderr_snapshot()
+            self._kill_stuck_worker(proc)
+            raise RuntimeError(
+                f"IndexTTS-2.5 worker {e} on panel text {text[:80]!r} - killed it so the next attempt "
+                f"gets a fresh one. Safe to just re-run; already-synthesized panels are cached and this "
+                f"one regenerates automatically.\n{stderr}"
+            ) from e
         except (BrokenPipeError, OSError) as e:
-            stderr = proc.stderr.read() if proc.stderr else ""
+            stderr = self._stderr_snapshot()
             raise RuntimeError(f"IndexTTS-2.5 worker died mid-synthesis: {e}\n{stderr}") from e
 
         if not response_line:
-            stderr = proc.stderr.read() if proc.stderr else ""
+            stderr = self._stderr_snapshot()
             raise RuntimeError(f"IndexTTS-2.5 worker closed its output unexpectedly:\n{stderr}")
 
         response = json.loads(response_line)

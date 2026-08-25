@@ -102,6 +102,11 @@ class TTSConfig(BaseModel):
     temperature: float = 0.2  # Low temperature prevents stochastic pitch inflections
     top_p: float = 0.7        # Tight nucleus sampling keeps vocal prosody stable
     sample_rate: int = 22050
+    # How long to wait for one panel's synthesize response before treating the
+    # worker as hung and killing it (see audio/synth.py:synthesize). A single
+    # 10-26 word panel normally finishes in well under a minute even on modest
+    # hardware, so this is a generous ceiling, not a tight budget.
+    synth_timeout_seconds: int = 180
     emotion_vectors: Dict[str, List[float]] = Field(
         default_factory=lambda: {
             "neutral": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
