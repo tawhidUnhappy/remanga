@@ -271,18 +271,21 @@ Composites frames onto the chosen background canvas and renders hardware-acceler
 
 ## Resetting/Restarting a Chapter
 
-`remanga restart` wipes a chapter's generated artifacts back to one of three levels, always keeping the downloaded pages (and re-verifying/re-fetching them afterward, so a partially-corrupt download never lingers):
+`remanga restart` wipes a chapter's generated artifacts back to one of four levels, always keeping the downloaded pages (and re-verifying/re-fetching them afterward, so a partially-corrupt download never lingers):
 
 | Mode | Flag | Keeps | Use it when... |
 |---|---|---|---|
 | **Hard** (default) | `--mode hard` | downloaded pages only | starting the chapter completely over |
 | **Marks-only** | `--mode marks_only` | + `crops.json` | your panel marks are good, but you changed a cropper setting (margin, gutter-snap, vision format) or just want a fresh narration script — `narration.json` is emptied, not kept |
+| **Re-mark** | `--mode remark` | + `crops.json` | same deletion as marks-only, but also reopens the Panel Marker web UI afterward with the kept marks pre-loaded, so you can review/adjust them before continuing instead of trusting them blindly |
 | **Soft** | `--mode soft` | + `crops.json`, `panels/`, `narration.json` | you changed voice/BGM/resolution and only need TTS/mix/render redone |
 
 ```bash
 ./run.sh restart --project "yandere_sister" --chapter "1" --mode marks_only
 ```
-Add `-f`/`--force` to skip the confirmation prompt, or `--no-reverify` to skip re-checking the downloaded pages afterward. The interactive wizard offers the same three levels (plus "Resume") whenever you pick a chapter that already has progress.
+Add `-f`/`--force` to skip the confirmation prompt, or `--no-reverify` to skip re-checking the downloaded pages afterward. `remark` still opens the Panel Marker and waits for you to save even with `--force` — that flag only skips the deletion confirmation, not the marking step itself. The interactive wizard offers the same four levels (plus "Resume") whenever you pick a chapter that already has progress.
+
+Reopening the Panel Marker on a chapter that already has marks — via `remark`, or by just running `remanga mark` again — always pre-loads the existing `crops.json` instead of starting blank, and flags every page it loaded marks for as already-reviewed so MAGI's background assist won't overwrite them.
 
 ---
 
