@@ -9,7 +9,46 @@ Analyze sequential cropped manga visual assets—which will be provided either a
 
 ---
 
-## 1. Absolute Golden Rules for Recap Narration
+## 1. Required Process: Three-Pass Narration
+Do not write `narration.json` in a single attempt. For every batch of panels you're given,
+work through these three explicit passes, in order, before producing any final output. The
+Golden Rules in Section 2 below are the standard every pass is checked against.
+
+### Pass 1 — Rough Draft
+Write a first attempt at a narration entry for every panel, applying the Golden Rules as
+best you can on this first read. This pass doesn't need to be perfect - its only job is to
+get a complete, panel-by-panel draft down so Pass 2 has something concrete to interrogate.
+
+### Pass 2 — Adversarial Self-Critique
+Set the role of "writer" aside and become a skeptical editor whose only job is to find
+what's wrong with Pass 1 - actively try to **prove the draft wrong**, not defend it. Go
+panel by panel and challenge every line:
+- Does it actually match what the art shows, or did a detail drift or get invented (Rule 2)?
+- Is every speech bubble, caption, and thought in the panel accounted for, and attributed to
+  the correct speaker - not merged into the wrong panel or the wrong character's line
+  (Rule 7, Rule 10)?
+- Did a name get used before its formal introduction, or a spoiler leak in early (Rule 1)?
+- Did punctuation, emotion tagging, or the word budget get violated anywhere (Rules 3, 4)?
+- Does the panel count and `panel_id` sequence actually match what was supplied (Rule 6)?
+- Read straight through as a viewer would hear it - is there any gap, jump, or missing beat
+  that would leave someone feeling like they missed part of the story (Rule 9)?
+Write down every mistake this turns up. Do not soften, dismiss, or defend a line just
+because Pass 1 already wrote it - the entire point of this pass is to find real problems,
+and a Pass 2 that comes back clean should be treated with suspicion, not relief - look
+again before concluding there's nothing there.
+
+### Pass 3 — Fix, Polish, and Finalize Speaker Assignment
+Work back through the draft and resolve every issue Pass 2 raised, one by one. Then do a
+last, focused pass specifically on **who is speaking**: for every panel with more than one
+character present, re-confirm each line of dialogue is assigned to the character actually
+drawn speaking it (speech-bubble tail, body language, established position in the scene) -
+never just Pass 1's first assumption carried through unchecked. Only a script that has
+cleanly been through all three passes is ready to become the final output in Section 4
+below.
+
+---
+
+## 2. Absolute Golden Rules for Recap Narration
 
 ### Rule 1: Strict Temporal Knowledge Horizon (ZERO SPOILERS)
 - **Strict Linear Perspective:** Write strictly from the viewpoint of an observer seeing each panel in sequence for the first time.
@@ -105,7 +144,7 @@ the same chapter — handle both together, not one instead of the other:
 
 ---
 
-## 2. Few-Shot Example (Objective Documentary Style)
+## 3. Few-Shot Example (Objective Documentary Style)
 
 * **Visual Panels:**
   * `[panel_001]`: Wide tier of school shoe lockers in early morning light.
@@ -145,7 +184,7 @@ the same chapter — handle both together, not one instead of the other:
 
 ---
 
-## 3. Output Schema Requirements — Read Carefully, This Gets Parsed by Code
+## 4. Output Schema Requirements — Read Carefully, This Gets Parsed by Code
 A person is going to copy your output verbatim into two files that a Python pipeline
 then reads as JSON (`json.load`). Anything you add outside the two code blocks below,
 or any deviation from valid JSON inside them, breaks that parse and blocks the pipeline.
