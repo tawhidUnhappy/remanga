@@ -99,8 +99,15 @@ class TTSConfig(BaseModel):
     lang: str = "EN"
     use_bf16: bool = True
     speed: float = 1.0
-    temperature: float = 0.2  # Low temperature prevents stochastic pitch inflections
-    top_p: float = 0.7        # Tight nucleus sampling keeps vocal prosody stable
+    # IndexTTS-2.5's own defaults (indextts/infer_v2_5.py's infer_generator),
+    # for natural-sounding prosody - a much lower temperature/top_p sounds
+    # more "consistent" but trades away natural pitch/pacing variation for a
+    # flatter, more robotic delivery. This is independent of the flat
+    # emotion_vectors below (which stay locked to neutral for narration
+    # consistency) - temperature/top_p control sampling variety within
+    # whatever emotion is requested, not which emotion is requested.
+    temperature: float = 0.8
+    top_p: float = 0.8
     sample_rate: int = 22050
     # How long to wait for one panel's synthesize response before treating the
     # worker as hung and killing it (see audio/synth.py:synthesize). A single

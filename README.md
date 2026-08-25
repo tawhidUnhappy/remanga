@@ -40,8 +40,8 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
   - **Individual Panel Crops (`panels.zip`):** Packages individual high-resolution panel crops for maximum visual fidelity.
   - Configurable interactively and persistent in `config.json`.
 - **Zero-Emotion Consistent Vocal Synthesis (IndexTTS-2.5):**
-  - Autoregressive temperature (`0.2`) and nucleus sampling (`top_p: 0.7`) stabilization.
   - Locked flat 8-dimensional emotion vector (`[0.0]*8`) for uniform, objective, documentary-style narration across all panels.
+  - Temperature/top-p left at IndexTTS-2.5's own recommended defaults (`0.8`/`0.8`) for natural-sounding prosody within that flat emotional tone — see [Zero-Emotion & Consistent Audio Mastering](#zero-emotion--consistent-audio-mastering).
   - Zero-shot speaker cloning from any clean 3–10s reference voice WAV.
 - **Strict Temporal Horizon Prompting (Anti-Spoiler & Anti-Hallucination):**
   - Forbids unintroduced character names, future plot reveals, motives, or hallucinated actions.
@@ -176,8 +176,8 @@ Run the interactive settings wizard anytime to configure vocal reference files, 
     "lang": "EN",
     "use_bf16": true,
     "speed": 1.0,
-    "temperature": 0.2,
-    "top_p": 0.7,
+    "temperature": 0.8,
+    "top_p": 0.8,
     "sample_rate": 22050,
     "synth_timeout_seconds": 180
   },
@@ -345,12 +345,10 @@ The included prompt system in `prompts/` enforces strict narrative rules:
 
 ## Zero-Emotion & Consistent Audio Mastering
 
-To maintain a consistent, flat, documentary-style recap narration without screaming, emotional pitch breaks, or cadence shifts:
+To maintain a consistent, objective, documentary-style recap narration — without screaming, emotional pitch breaks, or wild cadence shifts — while still sounding like a natural human voice rather than a flat robotic monotone:
 
-1. **Flat 8-D Emotion Conditioning:** All 8 emotion vectors in `config.json` are mapped to `[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]`.
-2. **Autoregressive Sampling Stabilization:**
-   - `"temperature": 0.2` (eliminates random pitch excursions).
-   - `"top_p": 0.7` (constrains token sampling to uniform cadence).
+1. **Flat 8-D Emotion Conditioning:** All 8 emotion vectors in `config.json` are mapped to `[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]`, so narration never swings into an emotional register (excited, angry, sad, ...) panel to panel.
+2. **Natural Autoregressive Sampling:** `temperature`/`top_p` are left at IndexTTS-2.5's own recommended defaults (`0.8`/`0.8`, not artificially lowered) — this is what actually governs how natural a single reading *sounds* (pitch/pacing variation within the neutral tone above), independent of which emotion is selected. Lowering these further trades that naturalness away for a flatter, more robotic-sounding delivery; raise them for more variation, at some risk of instability on longer lines.
 3. **Punctuation Cleanliness:** The prompt forbids exclamation marks (`!`), question marks (`?`), ellipses (`...`), and ALL CAPS, preventing neural prosody spikes.
 4. **Reference Voice Sample Criteria:**
    - **Length:** 4–7 seconds.
@@ -469,9 +467,10 @@ remanga/
 - IndexTTS-2.5 runs comfortably on GPUs with 6GB+ VRAM in BF16 mode.
 
 ### 2. Narration tone has emotional spikes or voice breaks
-- Verify that `config.json` has `"temperature": 0.2` and `"top_p": 0.7`.
+- Verify every entry in `config.json`'s `tts.emotion_vectors` is still `[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]` — that's what actually keeps narration emotionally flat, not `temperature`/`top_p` (those govern natural pitch/pacing variation, not which emotion gets used; see [Zero-Emotion & Consistent Audio Mastering](#zero-emotion--consistent-audio-mastering)).
 - Ensure your `narration.json` does not contain exclamation marks (`!`), question marks (`?`), or dramatic punctuation.
 - Inspect your reference speaker WAV (`spk_audio_prompt`). Ensure the speaker speaks in a calm, flat tone without laughter or excitement.
+- If a specific line still breaks even with the above clean, `tts.temperature`/`top_p` default to IndexTTS-2.5's own recommended `0.8`/`0.8` for natural-sounding delivery — nudging them down (e.g. `0.6`) trades some of that naturalness for more stability, as a last resort rather than a first fix.
 
 ### 3. NVENC GPU encoder error during video rendering
 `bootstrap.sh` pins the bundled `bin/ffmpeg` to a specific, tested BtbN build (not the "latest" rolling one) precisely so NVENC works out of the box for a wide range of NVIDIA driver versions — a too-new build otherwise requires a driver version yours may not have yet, and it reports as a generic-looking failure. If GPU encoding still doesn't work:

@@ -58,8 +58,8 @@
     "lang": "EN",
     "use_bf16": true,
     "speed": 1.0,
-    "temperature": 0.2,
-    "top_p": 0.7,
+    "temperature": 0.8,
+    "top_p": 0.8,
     "sample_rate": 22050,
     "emotion_vectors": {
       "neutral": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],

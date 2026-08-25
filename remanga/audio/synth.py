@@ -216,7 +216,8 @@ class IndexTTSSynthesizer:
 
     def synthesize(self, text: str, emotion_tag: str, spk_prompt_path: str, output_wav: Path) -> None:
         """Synthesizes speech via the IndexTTS-2.5 worker process. Uses a flat
-        zero emotion vector and low temperature/top_p for consistent delivery."""
+        zero emotion vector for consistent narration tone, with IndexTTS-2.5's
+        own recommended temperature/top_p (TTSConfig) for natural prosody."""
         proc = self._ensure_worker()
 
         request = {
