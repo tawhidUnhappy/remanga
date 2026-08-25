@@ -13,11 +13,13 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
 - [Quick Start: Master Interactive Wizard](#quick-start-master-interactive-wizard)
 - [Configuration & Settings Wizard](#configuration--settings-wizard)
 - [Step-by-Step CLI Production Workflow](#step-by-step-cli-production-workflow)
+- [Resetting/Restarting a Chapter](#resettingrestarting-a-chapter)
 - [LLM Prompting & Vision Asset Guide](#llm-prompting--vision-asset-guide)
   - [Vision Upload Formats: sheets.zip vs panels.zip](#vision-upload-formats-sheetszip-vs-panelszip)
   - [Panel Marker Web UI](#panel-marker-web-ui)
   - [Temporal Horizon Prompting (Zero Spoilers)](#temporal-horizon-prompting-zero-spoilers)
 - [Zero-Emotion & Consistent Audio Mastering](#zero-emotion--consistent-audio-mastering)
+- [Reliability: Crashes, Interrupts & Resuming](#reliability-crashes-interrupts--resuming)
 - [CLI Command Reference](#cli-command-reference)
 - [Workspace Directory Structure](#workspace-directory-structure)
 - [Troubleshooting & FAQ](#troubleshooting--faq)
@@ -52,6 +54,8 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
   - Presets for **1080p Full HD**, **1440p 2K QHD**, **2160p 4K UHD**, and **720p HD**.
   - Fast Bokeh Canvas Blur (<1.5ms per frame) or Solid Black canvas.
   - Automatic NVIDIA NVENC GPU hardware encoding (`h264_nvenc`) with automatic CPU fallback (`libx264`).
+- **Safe to Interrupt, Safe to Resume:** Ctrl+C (or a crash) mid-synthesis never leaves a corrupt clip behind — panel exports are atomic, and resuming automatically re-synthesizes the panel that was interrupted plus the two just before it, rather than trusting whatever's on disk. A worker that stops responding gets killed and replaced automatically instead of hanging forever. See [Reliability](#reliability-crashes-interrupts--resuming).
+- **Three-Tier Chapter Reset:** hard (keep only downloads), marks-only (also keep your panel marks), or soft (also keep the cropped panels and narration script) — pick how much work to throw away. See [Resetting/Restarting a Chapter](#resettingrestarting-a-chapter).
 
 ---
 
@@ -149,14 +153,22 @@ Run the interactive settings wizard anytime to configure vocal reference files, 
     "fallback_codec": "libx264",
     "threads": 4
   },
+  "downloader": {
+    "create_zip": false
+  },
   "cropper": {
     "margin_padding_pixels": 8,
     "auto_contrast_clean": false,
     "save_format": "PNG",
     "vision_asset_type": "sheets",
-    "create_sheets": true,
+    "create_sheets": false,
     "panels_per_sheet": 4,
     "create_zip": true
+  },
+  "marker": {
+    "auto_open_browser": true,
+    "magi_enabled": true,
+    "click_to_select": true
   },
   "tts": {
     "engine": "indextts-2.5",
@@ -166,7 +178,8 @@ Run the interactive settings wizard anytime to configure vocal reference files, 
     "speed": 1.0,
     "temperature": 0.2,
     "top_p": 0.7,
-    "sample_rate": 22050
+    "sample_rate": 22050,
+    "synth_timeout_seconds": 180
   },
   "audio": {
     "sample_rate": 44100,
@@ -189,6 +202,12 @@ Run the interactive settings wizard anytime to configure vocal reference files, 
 }
 ```
 
+A few worth calling out specifically:
+- **`downloader.create_zip`** (default `false`) — bundles the raw downloaded pages into `pages.zip`. Off by default because nothing downstream reads it; it's only useful if you want to hand a chapter's pages to an LLM by hand.
+- **`cropper.create_sheets`** (default `false`) — generates `sheets/*.png` contact sheets even when `vision_asset_type` is `"panels"` (which doesn't use them). Off by default to skip work nothing needs; it still turns itself on automatically whenever `vision_asset_type` is actually `"sheets"`.
+- **`marker.click_to_select`** (default `true`) — see [Panel Marker Web UI](#panel-marker-web-ui) for what this protects against.
+- **`tts.synth_timeout_seconds`** (default `180`) — see [Reliability](#reliability-crashes-interrupts--resuming).
+
 ---
 
 ## Step-by-Step CLI Production Workflow
@@ -200,7 +219,7 @@ Pass a title query, title URL, chapter URL, or UUID:
 ```bash
 ./run.sh download --project "yandere_sister" --chapter "1" --url "https://mangadex.org/title/..."
 ```
-*Creates:* `projects/yandere_sister/chapters/chapter_1/pages.zip`
+*Creates:* `projects/yandere_sister/chapters/chapter_1/pages/` (plus `pages.zip` if `downloader.create_zip` is enabled — off by default)
 
 ### 2. Mark Panels
 Launches the **Panel Marker** web UI: MAGI v3 pre-fills every page's panel boxes on a GPU, you drag/adjust/delete to correct them, then Save & Continue writes `crops.json`.
@@ -213,14 +232,15 @@ Launches the **Panel Marker** web UI: MAGI v3 pre-fills every page's panel boxes
 ```bash
 ./run.sh crop --project "yandere_sister" --chapter "1"
 ```
-*Creates:* `panels/`, `sheets/`, `panels_manifest.json`, and either `sheets.zip` or `panels.zip` (depending on `config.json`).
+*Creates:* `panels/`, `panels_manifest.json`, and the vision archive matching `cropper.vision_asset_type` (`sheets.zip` + `sheets/`, or `panels.zip`). `sheets/` only gets built when it's actually needed for that archive, or if `cropper.create_sheets` is turned on explicitly.
 
-### 4. Generate and Place `narration.json`
-Upload your generated vision archive (`sheets.zip` or `panels.zip`) and `prompts/narration.md` to your LLM. Save the resulting script to:
+### 4. Generate and Place `narration.json` + `memory.json`
+Upload your generated vision archive (`sheets.zip` or `panels.zip`) and `prompts/narration.md` to your LLM — attaching the project's current `memory.json` too, once it has real content, so continuity carries across chapters. The prompt asks for **exactly two fenced JSON code blocks and nothing else** (no commentary before/after), so the LLM's reply can be copy-pasted straight into each file. The interactive wizard prints both destination paths when it gets to this step:
 ```text
-projects/yandere_sister/chapters/chapter_1/narration.json
+projects/yandere_sister/chapters/chapter_1/narration.json   (Block 1)
+projects/yandere_sister/memory.json                         (Block 2)
 ```
-*(`memory.json` is auto-created as an empty placeholder at `projects/yandere_sister/memory.json` the first time the project is touched — feed its current contents to the LLM alongside the panels so it can update it in place to maintain continuity across chapters).*
+`memory.json` is auto-created as an empty placeholder the first time a project is touched, and updated in place chapter over chapter (carried-forward characters/factions, appended plot points, resolved/opened cliffhangers) — it's how the LLM keeps track of the story without re-reading every prior chapter.
 
 ### 5. Synthesize Vocal Audio (IndexTTS-2.5)
 ```bash
@@ -249,6 +269,23 @@ Composites frames onto the chosen background canvas and renders hardware-acceler
 
 ---
 
+## Resetting/Restarting a Chapter
+
+`remanga restart` wipes a chapter's generated artifacts back to one of three levels, always keeping the downloaded pages (and re-verifying/re-fetching them afterward, so a partially-corrupt download never lingers):
+
+| Mode | Flag | Keeps | Use it when... |
+|---|---|---|---|
+| **Hard** (default) | `--mode hard` | downloaded pages only | starting the chapter completely over |
+| **Marks-only** | `--mode marks_only` | + `crops.json` | your panel marks are good, but you changed a cropper setting (margin, gutter-snap, vision format) or just want a fresh narration script — `narration.json` is emptied, not kept |
+| **Soft** | `--mode soft` | + `crops.json`, `panels/`, `narration.json` | you changed voice/BGM/resolution and only need TTS/mix/render redone |
+
+```bash
+./run.sh restart --project "yandere_sister" --chapter "1" --mode marks_only
+```
+Add `-f`/`--force` to skip the confirmation prompt, or `--no-reverify` to skip re-checking the downloaded pages afterward. The interactive wizard offers the same three levels (plus "Resume") whenever you pick a chapter that already has progress.
+
+---
+
 ## LLM Prompting & Vision Asset Guide
 
 ### Vision Upload Formats: `sheets.zip` vs `panels.zip`
@@ -269,11 +306,26 @@ To switch formats:
 Panel cropping is done by hand in a local browser tool instead of an LLM round-trip — `./run.sh mark -p <PROJECT> -c <CHAPTER>` (or step 5 of the interactive wizard) opens it automatically:
 
 - **[MAGI v3](https://github.com/ragavsachdeva/magi)** (a manga-understanding vision model, GPU required) pre-fills every page's panel boxes the moment the tool launches, running in the background while you start adjusting already-detected pages.
-- **Draw:** left-click and drag on a page to mark a panel (drag can start outside the page edge, Canva-style).
-- **Adjust:** click a mark to select it, drag its body to move it or a corner/edge handle to resize it. Dashed guide lines appear when an edge lines up with another panel's — a visual aid, not a hard snap.
+- **Draw tool (`D`):** left-click and drag on a page to mark a panel (drag can start outside the page edge, Canva-style, and can start on top of an existing mark to draw an overlapping one without disturbing it — see click-to-select below).
+- **Select tool (`V`):** click a mark to select it, then drag its body to move it or a corner/edge handle to resize it. Dashed guide lines appear when an edge lines up with another panel's — a visual aid, not a hard snap.
 - **Delete:** right-click a mark.
 - **Reorder:** drag a panel's `⠿` grip in the right-hand panel list — that order becomes narration order.
+- **Zoom & pan:** Ctrl/Cmd+scroll to zoom (anchored under the cursor), plain scroll or Alt+scroll to pan, spacebar+drag or middle-mouse-drag for the hand tool, `0` to reset the view.
 - **Finish:** `Ctrl+S` (`⌘S` on macOS) or the **Save & Continue** button writes `crops.json` and signals the CLI/wizard to move on to cropping.
+
+**Click-to-select (`marker.click_to_select`, default on):** a mark only becomes draggable once it's already selected — a first click just selects it, a second, deliberate drag actually moves/resizes it. This means one accidental click-drag can never nudge the wrong mark on a page with tightly packed panels. It also means the Draw tool never moves an existing mark: starting a new box on top of one (even one you'd already selected) just draws, full stop. Set `"click_to_select": false` in `config.json`'s `"marker"` section to go back to the old any-drag-moves-it behavior.
+
+**Keyboard shortcuts** are fully customizable from the gear icon in the topbar (saved straight into `config.json`'s `marker.shortcuts`, so they persist across runs). Defaults:
+
+| Action | Default key |
+|---|---|
+| Save & continue | `Ctrl`/`Cmd` + `S` |
+| Mark whole page as one panel | `Ctrl`/`Cmd` + `F` |
+| Draw tool | `D` |
+| Select tool | `V` |
+| Previous / next page | `←` / `→` |
+| Delete selected mark | `Delete` or `Backspace` |
+| Reset zoom & position | `0` |
 
 Every mark — MAGI's or your own — still goes through the same gutter-snap, seam-reconciliation, duplicate-detection, and whitespace-trim passes described below, so pixel-perfect precision was never the point of drawing carefully by hand.
 
@@ -307,6 +359,19 @@ To maintain a consistent, flat, documentary-style recap narration without scream
 
 ---
 
+## Reliability: Crashes, Interrupts & Resuming
+
+TTS synthesis is the longest-running, most interruption-prone stage of the pipeline (one IndexTTS-2.5 call per panel, easily tens of minutes for a full chapter), so it's built to be safely stopped and resumed at any point:
+
+- **Ctrl+C is safe.** It's caught gracefully, the IndexTTS-2.5 worker is asked to shut down cleanly (a few seconds), and a second Ctrl+C during that wait force-kills it instead of leaving it orphaned holding GPU memory.
+- **Panel exports are atomic.** Each panel's WAV is written to a temp file and only renamed into place once fully written, so a kill mid-export can never leave a truncated clip that looks finished.
+- **Resuming is conservative, not just fast.** `remanga tts` re-synthesizes the panel that was interrupted *and the two immediately before it*, instead of trusting whatever's already on disk near the resume point — cheap insurance against a truncated clip from an older run slipping through.
+- **A wedged worker gets replaced automatically.** If IndexTTS-2.5 stops responding for longer than `tts.synth_timeout_seconds` (default 180s), the worker is killed and the next attempt spawns a fresh one, instead of the whole run hanging indefinitely with the model still loaded and the GPU sitting idle.
+
+In short: if a chapter's TTS run gets interrupted or a worker locks up, just re-run the same command. Nothing needs to be cleaned up by hand.
+
+---
+
 ## CLI Command Reference
 
 ```bash
@@ -326,6 +391,7 @@ To maintain a consistent, flat, documentary-style recap narration without scream
 ./run.sh mix      -p <PROJECT> -c <CHAPTER> [-b <BGM_FILE>]
 ./run.sh render   -p <PROJECT> -c <CHAPTER> [-f]
 ./run.sh status   -p <PROJECT> -c <CHAPTER>
+./run.sh restart  -p <PROJECT> -c <CHAPTER> [-m hard|marks_only|soft] [-f] [--no-reverify]
 ```
 
 ---
@@ -351,7 +417,7 @@ remanga/
 │       └── chapters/
 │           └── chapter_<num>/
 │               ├── pages/              # Raw downloaded chapter pages
-│               ├── pages.zip           # Upload archive for narration generation
+│               ├── pages.zip           # (Optional - off by default) raw pages bundled for manual LLM upload
 │               ├── crops.json          # Panel crop coordinates from the Panel Marker web UI
 │               ├── panels/             # Cropped individual panel images
 │               ├── sheets/             # 2x2 vision contact sheets
@@ -370,17 +436,23 @@ remanga/
 │   ├── downloader/             # mangadex.py (MangaDex client)
 │   ├── models/                 # weights.py (talks to .tools/venv-indextts to fetch/verify weights)
 │   │   └── scripts/             # download_indextts.py - runs inside .tools/venv-indextts
-│   ├── webui/                  # Panel Marker: server.py (Flask backend) & magi_assist.py (talks to .tools/venv-magi)
+│   ├── webui/                  # Panel Marker: server.py (entry point/lifecycle), routes.py (Flask app/API),
+│   │   │                       # marker_state.py (session state), detection.py + magi_assist.py (MAGI v3),
+│   │   │                       # shortcuts_store.py (Shortcuts menu persistence)
+│   │   ├── static/js/           # Frontend: render/drag-resize/draw/zoom-pan/shortcuts/magi/page-nav modules
 │   │   └── scripts/             # magi_worker.py, download_magi.py - run inside .tools/venv-magi
 │   ├── video/                  # compose.py (frame compositor) & render.py (GPU/CPU renderer)
 │   ├── venvs.py                 # Locates the .tools/venv-indextts / .tools/venv-magi isolated environments
+│   ├── console.py               # The one shared Rich Console every module prints through
 │   ├── config.py                # Pydantic configuration schemas (load/save only)
 │   ├── paths.py                 # Project/chapter directory layout & metadata persistence
 │   ├── status.py                # Chapter production-status computation & display
+│   ├── reset.py                 # Chapter restart/reset (hard / marks_only / soft)
 │   ├── setup.py                 # Interactive Rich setup-wizard prompts
 │   ├── json_io.py               # Shared JSON read/write helpers
 │   ├── ffmpeg_io.py             # Shared ffmpeg subprocess helper
 │   ├── wizard.py                # Interactive step-by-step production wizard
+│   ├── wizard_prompts.py        # Project/chapter picker & resume-vs-restart prompts
 │   └── cli.py                   # CLI command dispatcher
 ├── config.json                 # Active user production settings
 ├── bootstrap.sh                # Zero-dependency sandbox environment installer
@@ -411,6 +483,12 @@ remanga/
 
 ### 5. Do I need a GPU to mark panels?
 Only for the MAGI v3 auto-detect assist. Marking itself is manual clicking/dragging in the browser and needs no GPU at all — set `"magi_enabled": false` under `"marker"` in `config.json` to skip it and mark every panel by hand.
+
+### 6. TTS synthesis seems frozen — GPU memory is loaded but nothing's happening
+The worker now kills and replaces itself automatically after `tts.synth_timeout_seconds` (default 180s) of no response, so this should self-resolve on its own. If you're on an older run without that fix, or want to recover immediately: check `nvidia-smi` — a genuinely stuck worker shows near-idle GPU clocks/power draw despite holding VRAM. Kill the `indextts_worker.py` process (and the `remanga` process above it, or just Ctrl+C twice) and re-run the same command; see [Reliability](#reliability-crashes-interrupts--resuming) for why that's always safe to do.
+
+### 7. A mark keeps snapping back to a different position while I'm dragging it
+This was a real bug (fixed): a background MAGI detection poll could overwrite a page's marks mid-drag if that page's very first edit hadn't finished yet. Make sure you're on a current `remanga` checkout — it no longer happens. It's unrelated to the alignment guide lines, which are purely visual and never move a mark on their own.
 
 ---
 
