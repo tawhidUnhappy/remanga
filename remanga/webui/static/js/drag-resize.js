@@ -1,6 +1,7 @@
 // Moving or resizing an *existing* mark by dragging its body or one of its
 // eight resize handles (drawing a brand-new mark lives in draw.js).
 
+import { stage } from "./dom.js";
 import { state } from "./state.js";
 import { render } from "./render.js";
 import { markDirty } from "./marks.js";
@@ -31,6 +32,22 @@ export function onMarkMouseDown(e, m) {
   const startX = e.clientX, startY = e.clientY;
   const orig = { ...m };
   render();
+
+  // render() above just tore down and rebuilt every mark div (needed so a
+  // freshly-selected mark grows its handles before the drag starts), which
+  // means the element the mousedown actually landed on (e.currentTarget) no
+  // longer exists in the DOM - it's been replaced by an equivalent new node.
+  // Re-find that node once, up front, and mutate *only it* for the rest of
+  // the gesture instead of calling render() again on every mousemove. A full
+  // render() rebuilds every mark AND the entire sidebar list from scratch;
+  // doing that 60+ times a second during a drag is enough DOM churn that
+  // fast or sustained drags visibly stutter and can drop/desync from the
+  // mouse mid-gesture. Updating this one element's inline style per move is
+  // the event-driven equivalent: react to what actually changed (this
+  // mark's box) instead of re-scanning and repainting the whole page on
+  // every tick.
+  const el = stage.querySelector(`.mark[data-mark-id="${CSS.escape(String(m.id))}"]`);
+  const dimEl = el?.querySelector(".dim-readout");
 
   function onMove(ev) {
     const dxDisplay = ev.clientX - startX, dyDisplay = ev.clientY - startY;
@@ -80,13 +97,24 @@ export function onMarkMouseDown(e, m) {
       x: o.x * state.scale, y: o.y * state.scale, w: o.w * state.scale, h: o.h * state.scale,
     }));
     showGuides(activeDisplay, othersDisplay);
-    render();
+
+    if (el) {
+      el.style.left = activeDisplay.x + "px";
+      el.style.top = activeDisplay.y + "px";
+      el.style.width = activeDisplay.w + "px";
+      el.style.height = activeDisplay.h + "px";
+    }
+    if (dimEl) dimEl.textContent = Math.round(m.w) + " × " + Math.round(m.h) + " px";
   }
   function onUp() {
     document.removeEventListener("mousemove", onMove);
     document.removeEventListener("mouseup", onUp);
     clearGuides();
     markDirty();
+    // The one full re-render for this gesture: syncs the sidebar list (its
+    // dimensions text, panel order) and re-derives everything from state
+    // now that the drag is over, rather than on every intermediate move.
+    render();
   }
   document.addEventListener("mousemove", onMove);
   document.addEventListener("mouseup", onUp);

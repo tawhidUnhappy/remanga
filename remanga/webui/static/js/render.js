@@ -12,6 +12,7 @@ export function render() {
   state.marks.forEach((m, i) => {
     const el = document.createElement("div");
     el.className = "mark" + (m.src === "ai" ? " ai" : "") + (m.id === state.selectedId ? " selected" : "");
+    el.dataset.markId = m.id;
     Object.assign(el.style, {
       left: (m.x * state.scale) + "px", top: (m.y * state.scale) + "px",
       width: (m.w * state.scale) + "px", height: (m.h * state.scale) + "px",
