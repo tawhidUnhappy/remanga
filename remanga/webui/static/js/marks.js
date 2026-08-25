@@ -7,9 +7,28 @@ import { state, currentFilename } from "./state.js";
 import { api } from "./api.js";
 import { render } from "./render.js";
 
+// Flags the current page as user-touched, synchronously, with none of
+// markDirty()'s other side effects (caching, debounced autosave). Call this
+// the instant an edit GESTURE STARTS - a mark's mousedown, not its mouseup -
+// so there's no window for a MAGI detection poll to land mid-gesture and
+// still think the page is fair game to overwrite.
+//
+// magi.js's pollDetectStatus() runs every ~1.2s and merges freshly-detected
+// AI boxes into state.marks for any page not yet in touchedPages. If that
+// flag isn't set until markDirty() fires on mouseup (the old behavior), a
+// poll landing during the drag itself - between mousedown and mouseup, on a
+// page's very first edit - replaces state.marks (and re-renders) out from
+// under the drag: the mark div drag-resize.js is holding a reference to gets
+// torn down and rebuilt, so the rest of that drag's mousemoves silently stop
+// doing anything visible, and the mark appears to snap back to its last AI
+// position mid-gesture.
+export function markTouched() {
+  state.touchedPages.add(currentFilename());
+}
+
 export function markDirty() {
   state.pageMarksCache[currentFilename()] = state.marks;
-  state.touchedPages.add(currentFilename());
+  markTouched();
   clearTimeout(state.saveDebounce);
   state.saveDebounce = setTimeout(() => flushSave(false), 400);
 }

@@ -4,7 +4,7 @@
 import { stage } from "./dom.js";
 import { state } from "./state.js";
 import { render } from "./render.js";
-import { markDirty } from "./marks.js";
+import { markDirty, markTouched } from "./marks.js";
 import { showGuides, clearGuides } from "./guides.js";
 
 export function onMarkMouseDown(e, m) {
@@ -28,6 +28,10 @@ export function onMarkMouseDown(e, m) {
     render();
     return;
   }
+
+  // Flag the page touched right now, before the drag even starts moving -
+  // see markTouched()'s own comment for why this can't wait until mouseup.
+  markTouched();
 
   const startX = e.clientX, startY = e.clientY;
   const orig = { ...m };

@@ -4,7 +4,7 @@
 import { stage, canvasWrap } from "./dom.js";
 import { state } from "./state.js";
 import { render } from "./render.js";
-import { markDirty, clampBoxToPage } from "./marks.js";
+import { markDirty, markTouched, clampBoxToPage } from "./marks.js";
 
 let drawing = null, ghostEl = null;
 
@@ -26,6 +26,12 @@ canvasWrap.addEventListener("mousedown", (e) => {
 
   if (state.mode !== "draw") return;
   e.preventDefault();
+
+  // Same reasoning as drag-resize.js: flag the page touched the instant the
+  // gesture starts, not when it finishes, so a MAGI poll landing mid-draw
+  // can't merge a batch of freshly-detected AI boxes onto this page out from
+  // under the box the user is still dragging out.
+  markTouched();
 
   const rect = stage.getBoundingClientRect();
   const anchorX = e.clientX - rect.left;   // may be negative or beyond stage size - that's fine
