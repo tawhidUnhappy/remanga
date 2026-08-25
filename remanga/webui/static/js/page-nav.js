@@ -8,6 +8,7 @@ import { flushSave } from "./marks.js";
 import { resetView } from "./zoom-pan.js";
 import { pollDetectStatus } from "./magi.js";
 import { loadShortcuts } from "./shortcuts.js";
+import { setMode } from "./keyboard.js";
 
 export async function loadPage(idx) {
   // On the very first call, pageIndex is already 0 (its initial value), so
@@ -48,6 +49,18 @@ export async function init() {
     assistBtn.disabled = true;
     assistStatus.textContent = "Disabled in config.json";
   }
+
+  // Start in Select mode instead of the usual Draw default whenever this
+  // chapter already has marks (crops.json was pre-loaded server-side - see
+  // marker_state.py:_load_existing_crops, used by a "remark" restart and by
+  // simply reopening the marker on an already-marked chapter). With
+  // click_to_select on, Draw mode makes every existing mark non-interactive
+  // on purpose (so drawing over one never nudges it - see drag-resize.js) -
+  // exactly wrong when there's nothing left to draw and the whole point of
+  // the session is adjusting what's already there. A genuinely fresh
+  // chapter has no marks yet, so it's unaffected and still starts in Draw.
+  const hasExistingMarks = Object.values(state.pageMarksCache).some(marks => marks.length > 0);
+  if (hasExistingMarks) setMode("select");
 
   await loadPage(0);
   pollDetectStatus();
