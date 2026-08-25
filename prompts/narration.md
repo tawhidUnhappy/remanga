@@ -81,6 +81,28 @@ panel-by-panel in isolation.
 - If this pass finds **any** issue, fix it and re-run the pass — do not output a script that
   hasn't cleanly passed this final check.
 
+### Rule 10: Handling a Correction + Continuation Follow-Up
+A later message in the same conversation may look like: *"Ok, this revision was good, but
+some panels' dialogue got a bit mismatched, so fix them, and here are new panels."* That's
+two requests in one — a correction to already-generated panels, and more panels continuing
+the same chapter — handle both together, not one instead of the other:
+- **Fix, don't rewrite blind:** Re-check the flagged panel(s) against their art (Rule 2) and
+  correct only the genuine mismatch(es) you find there — a dialogue line attributed to the
+  wrong panel, a detail that drifted, reading order broken across panels (Rule 7). Leave
+  every panel that wasn't flagged and still checks out fine exactly as it was; a correction
+  request is not a license to rewrite the whole script from scratch.
+- **Keep the sequence continuous:** New panels attached in the same message continue this
+  chapter's existing `panel_id` numbering (e.g., if the last batch ended at `panel_047`, the
+  new ones start at `panel_048`) — never restart at `panel_001` unless you're told this is a
+  new chapter.
+- **Output one complete, corrected script, not a patch:** Per the Output Schema Requirements
+  below, `narration.json` is always the complete file — so your reply here is the entire
+  chapter's narration array so far (previously-correct entries unchanged, flagged entries
+  fixed, new panels appended), with `total_panels` recounted to match. Never reply with only
+  the lines that changed.
+- **Re-run Rule 9's full-script verification pass** over that whole updated script —
+  including the newly-fixed and newly-added panels — before responding.
+
 ---
 
 ## 2. Few-Shot Example (Objective Documentary Style)
