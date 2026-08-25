@@ -88,7 +88,11 @@ def main():
     p_restart.add_argument("--project", "-p", required=True, help="Project name")
     p_restart.add_argument("--chapter", "-c", required=True, help="Chapter number")
     p_restart.add_argument("--force", "-f", action="store_true", help="Skip the confirmation prompt")
-    p_restart.add_argument("--soft", "-s", action="store_true", help="Soft restart: also keep crops.json, panels/, and narration.json (only sheets/vision-zip/audio/video get wiped)")
+    p_restart.add_argument(
+        "--mode", "-m", choices=["hard", "marks_only", "soft"], default="hard",
+        help="hard (default): keep only downloaded pages. marks_only: also keep crops.json, "
+             "narration.json still gets wiped/emptied. soft: also keep crops.json, panels/, and narration.json.",
+    )
     p_restart.add_argument("--no-reverify", action="store_true", help="Skip re-checking/re-fetching downloaded pages afterward")
 
     args = parser.parse_args()
@@ -124,21 +128,25 @@ def main():
         elif args.command == "status":
             console.print(render_status_panel(args.project, args.chapter))
         elif args.command == "restart":
-            candidates = reset.restart_candidates(args.project, args.chapter, soft=args.soft)
-            kind = "Soft restart" if args.soft else "Restart"
+            candidates = reset.restart_candidates(args.project, args.chapter, mode=args.mode)
+            kind = {"hard": "Restart", "marks_only": "Marks-only restart", "soft": "Soft restart"}[args.mode]
+            kept = {
+                "hard": "downloaded pages",
+                "marks_only": "downloaded pages and crops.json (narration.json gets emptied, not kept)",
+                "soft": "downloaded pages, crops.json, panels/, and narration.json",
+            }[args.mode]
             if not candidates:
                 console.print(f"[dim]Nothing to delete for a {kind.lower()} - everything it would keep is already all that's here.[/]")
             else:
                 console.print(f"[bold red]{kind}: the following will be permanently deleted:[/]")
                 for c in candidates:
                     console.print(f"  [dim]- {c}[/]")
-                if args.soft:
-                    console.print("[dim]Kept: downloaded pages, crops.json, panels/, and narration.json.[/]")
+                console.print(f"[dim]Kept: {kept}.[/]")
                 if args.force or Confirm.ask(
                     f"[bold red]Confirm: permanently delete these {len(candidates)} item(s) for Chapter {args.chapter}? This cannot be undone.[/]",
                     default=False,
                 ):
-                    reset.restart_chapter(args.project, args.chapter, soft=args.soft, reverify_downloads=not args.no_reverify)
+                    reset.restart_chapter(args.project, args.chapter, mode=args.mode, reverify_downloads=not args.no_reverify)
                     console.print(f"[bold green]✓ Chapter {args.chapter} {kind.lower()} complete. Downloaded pages kept — ready to reprocess.[/]")
                 else:
                     console.print("[dim]Restart cancelled.[/]")
