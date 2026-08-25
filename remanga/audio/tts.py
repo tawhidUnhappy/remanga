@@ -44,6 +44,13 @@ class TTSEngine:
         audio_dir = chapter_dir / "audio"
         audio_dir.mkdir(parents=True, exist_ok=True)
 
+        # Debris from an atomic_export() that was itself interrupted before its
+        # rename-into-place (a kill exactly mid-write) - harmless leftovers, never
+        # mistaken for a finished clip since is_cached_complete() only looks at the
+        # real ".wav" path, but worth sweeping so they don't just accumulate.
+        for stray_tmp in audio_dir.glob("*.wav.tmp"):
+            stray_tmp.unlink(missing_ok=True)
+
         if not narration_path.exists():
             raise FileNotFoundError(
                 f"Missing narration script: {narration_path}\n"
@@ -61,10 +68,44 @@ class TTSEngine:
             f"[dim](Lang: {self.tts_config.lang}, Temp: {self.tts_config.temperature}, Reference Voice: {spk_prompt_path})[/]"
         )
 
+        def is_cached_complete(panel_id: str) -> bool:
+            clip = audio_dir / f"{panel_id}.wav"
+            return clip.exists() and clip.stat().st_size > 1000
+
+        panel_ids = [entry.get("panel_id") or f"panel_{i:03d}" for i, entry in enumerate(narration_entries, start=1)]
+
+        # Where the previous run actually left off: the first panel, in sequence,
+        # with no complete cached clip. Exports are atomic now (see atomic_export
+        # below) so a kill mid-write can no longer leave a truncated file sitting
+        # at the final path looking "done" - but a clip written by an *older* run,
+        # from before that fix, still could be. Rather than trust the last couple
+        # of clips right at the resume point, force them (and the actual resume
+        # point itself) to regenerate - the two panels either side of a Ctrl+C are
+        # exactly the ones a corrupt-but-present WAV would hide in.
+        force_regen_ids: set = set()
+        if not force:
+            resume_at = next((i for i, pid in enumerate(panel_ids) if not is_cached_complete(pid)), len(panel_ids))
+            if 0 < resume_at < len(panel_ids):
+                force_regen_ids = set(panel_ids[max(0, resume_at - 2):resume_at + 1])
+                console.print(
+                    f"[dim cyan](Resuming - re-generating the {len(force_regen_ids)} panel(s) around the previous "
+                    f"run's stopping point instead of trusting them, in case that run was interrupted mid-write: "
+                    f"{', '.join(sorted(force_regen_ids))})[/]"
+                )
+
         def is_resumable(panel_id: str) -> bool:
             """True if a clean WAV from a previous run can be reused for this panel."""
-            clip = audio_dir / f"{panel_id}.wav"
-            return not force and clip.exists() and clip.stat().st_size > 1000
+            return not force and panel_id not in force_regen_ids and is_cached_complete(panel_id)
+
+        def atomic_export(segment: AudioSegment, final_path: Path) -> None:
+            """Exports to a temp file alongside `final_path`, then atomically renames
+            it into place, so a process killed mid-export (Ctrl+C, OOM-kill, crash)
+            never leaves a truncated file sitting at `final_path` looking finished -
+            is_cached_complete() only ever sees either the complete previous file or
+            nothing there at all."""
+            tmp_path = final_path.with_name(final_path.name + ".tmp")
+            segment.export(tmp_path, format="wav")
+            tmp_path.replace(final_path)
 
         timing_data: List[Dict[str, Any]] = []
         current_timeline_ms = 0
@@ -78,8 +119,8 @@ class TTSEngine:
         # Doing it up front keeps the two phases (load, then synthesize) as two
         # clean, sequential pieces of output instead.
         needs_synthesis = any(
-            entry.get("text", "").strip() and not is_resumable(entry.get("panel_id") or f"panel_{idx:03d}")
-            for idx, entry in enumerate(narration_entries, start=1)
+            entry.get("text", "").strip() and not is_resumable(panel_ids[idx])
+            for idx, entry in enumerate(narration_entries)
         )
         if needs_synthesis:
             self._synth.ensure_ready()
@@ -92,7 +133,7 @@ class TTSEngine:
             task = progress.add_task("[yellow]Synthesizing vocal tracks...", total=len(narration_entries))
 
             for idx, entry in enumerate(narration_entries, start=1):
-                panel_id = entry.get("panel_id") or f"panel_{idx:03d}"
+                panel_id = panel_ids[idx - 1]
                 text = entry.get("text", "").strip()
                 emotion = entry.get("emotion", "neutral")
                 pause_after_ms = entry.get("pause_after_ms", self.audio_config.pause_between_panels_ms)
@@ -120,7 +161,7 @@ class TTSEngine:
                         if self.audio_config.edge_fade_ms > 0 and len(segment) > (self.audio_config.edge_fade_ms * 2):
                             segment = segment.fade_in(self.audio_config.edge_fade_ms).fade_out(self.audio_config.edge_fade_ms)
 
-                        segment.export(processed_clip_path, format="wav")
+                        atomic_export(segment, processed_clip_path)
 
                         if raw_clip_path.exists():
                             raw_clip_path.unlink()
@@ -129,7 +170,7 @@ class TTSEngine:
                     else:
                         duration_ms = max(pause_after_ms, 500)
                         silence = AudioSegment.silent(duration=duration_ms, frame_rate=self.audio_config.sample_rate)
-                        silence.export(processed_clip_path, format="wav")
+                        atomic_export(silence, processed_clip_path)
 
                 start_ms = current_timeline_ms
                 end_ms = start_ms + duration_ms
