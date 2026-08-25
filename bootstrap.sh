@@ -32,9 +32,38 @@ fi
 echo "[+] Using local uv: $("$BIN_DIR/uv" --version)"
 
 # 2. Download standalone static FFmpeg and FFprobe from BtbN GitHub into remanga/bin
+#
+# Deliberately pinned to a specific dated build, NOT the "latest" rolling tag.
+# BtbN only ever publishes master-branch snapshots (there's no separate stable
+# channel), each compiled against whatever NVIDIA NVENC SDK/driver-API version
+# was current on build day - and NVENC's minimum required driver only ever
+# goes UP over time. "latest" therefore silently raises the minimum driver
+# GPU rendering needs every single day it's rebuilt, with no warning: a user
+# whose driver was perfectly current a few months ago can suddenly get a
+# bundled ffmpeg whose NVENC refuses to open ("Driver does not support the
+# required nvenc API version") on a perfectly real, working GPU. NVENC is
+# backward-compatible in the other direction though - a build pinned to an
+# OLDER, known-good snapshot keeps working fine on NEWER drivers too - so
+# pinning trades a few months of ffmpeg changelog (nothing this project's
+# actual usage - concat demux, h264_nvenc/libx264, aac - needs) for GPU
+# encoding that just works out of the box for a much wider range of driver
+# versions. remanga/video/render.py additionally falls back to a system
+# ffmpeg for GPU encoding specifically if even this pinned build's NVENC
+# doesn't work - see its _resolve_gpu_ffmpeg() - as a last-resort safety net,
+# not the primary way GPU rendering is meant to work.
+#
+# To bump this pin (e.g. to pick up newer codec/bugfix work), pick a recent
+# tag from https://github.com/BtbN/FFmpeg-Builds/releases, find its actual
+# linux64-gpl asset filename (NOT "master-latest" - that name only exists on
+# the "latest" alias) via:
+#   curl -s https://github.com/BtbN/FFmpeg-Builds/releases/expanded_assets/<tag> \
+#     | grep -oE 'ffmpeg-[^"]*linux64-gpl\.tar\.xz' | grep -v shared
+# and test its h264_nvenc against your own driver before trusting it further.
 if [ ! -f "$BIN_DIR/ffmpeg" ] || [ ! -f "$BIN_DIR/ffprobe" ]; then
     echo "[+] Downloading isolated static FFmpeg into $BIN_DIR..."
-    FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz"
+    FFMPEG_TAG="autobuild-2026-03-31-13-11"
+    FFMPEG_ASSET="ffmpeg-N-123777-g53537f6cf5-linux64-gpl.tar.xz"
+    FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/$FFMPEG_TAG/$FFMPEG_ASSET"
     FFMPEG_TMP="$CACHE_DIR/ffmpeg.tar.xz"
 
     if curl -fL -A "Mozilla/5.0" "$FFMPEG_URL" -o "$FFMPEG_TMP" 2>/dev/null; then

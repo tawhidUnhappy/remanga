@@ -97,7 +97,7 @@ bash bootstrap.sh
 ```
 
 **What `bootstrap.sh` does automatically:**
-1. Downloads and provisions static `bin/uv`, `bin/ffmpeg`, and `bin/ffprobe`.
+1. Downloads and provisions static `bin/uv`, `bin/ffmpeg`, and `bin/ffprobe` — `ffmpeg` is pinned to a specific tested build rather than always the newest one, so its NVENC GPU encoder keeps working across a wide range of NVIDIA driver versions instead of silently requiring whatever driver was newest the day it was compiled (see [Troubleshooting #3](#troubleshooting--faq)).
 2. Provisions **three** isolated Python 3.11 virtual environments instead of one:
    - `.venv/` — remanga's own lightweight core (Pillow, Pydantic, requests, rich, pydub, Flask). No ML libraries at all.
    - `.tools/venv-indextts/` — PyTorch + IndexTTS-2.5's own pinned dependencies.
@@ -474,7 +474,10 @@ remanga/
 - Inspect your reference speaker WAV (`spk_audio_prompt`). Ensure the speaker speaks in a calm, flat tone without laughter or excitement.
 
 ### 3. NVENC GPU encoder error during video rendering
-- If your GPU does not support NVENC or if drivers are missing, `remanga` automatically falls back to CPU encoding (`libx264`).
+`bootstrap.sh` pins the bundled `bin/ffmpeg` to a specific, tested BtbN build (not the "latest" rolling one) precisely so NVENC works out of the box for a wide range of NVIDIA driver versions — a too-new build otherwise requires a driver version yours may not have yet, and it reports as a generic-looking failure. If GPU encoding still doesn't work:
+- Rendering prints the actual encoder error instead of a silent fallback, e.g. `Driver does not support the required nvenc API version` — that tells you whether it's a real driver-too-old problem or something else.
+- If it is a driver mismatch, `remanga` automatically tries a system-installed `ffmpeg` next (if one exists) before giving up on GPU entirely — nothing is installed for you, it only checks what's already on your machine.
+- If your GPU genuinely doesn't support NVENC, or no working ffmpeg/driver combination is found anywhere, it falls back to CPU encoding (`libx264`) automatically.
 - You can manually force CPU encoding by setting `"prefer_gpu": false` in `config.json`.
 
 ### 4. How do I switch between `sheets.zip` and `panels.zip`?
