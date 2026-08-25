@@ -51,16 +51,29 @@ def select_or_create_project(config: RemangaConfig) -> str:
 
 
 # Restart menu choices below "1. Resume", in order from least to most destructive.
-# label: what the wizard prints for that menu line. kept: what survives, for the
-# "Kept: ..." confirmation line once a mode is picked.
+# mode: what this is called and how it's dispatched below. deletion_mode: the
+# reset.py mode that actually determines what gets deleted - "remark" isn't a
+# real reset.py mode, it deletes exactly like "marks_only" and then additionally
+# reopens the Panel Marker (see the dispatch below). label: what the wizard
+# prints for that menu line. kept: what survives, for the "Kept: ..."
+# confirmation line once a mode is picked.
 _RESTART_MENU = [
-    ("soft", "Soft restart - keep crops.json, panels/, and narration.json; redo sheets/audio/video",
+    ("soft", "soft", "Soft restart - keep crops.json, panels/, and narration.json; redo sheets/audio/video",
      "downloaded pages, crops.json, panels/, and narration.json"),
-    ("marks_only", "Marks-only restart - keep crops.json; empty narration.json and redo everything after it",
+    ("remark", "marks_only", "Re-mark - keep crops.json; wipe everything else, then reopen the Panel Marker to adjust marks",
      "downloaded pages and crops.json (narration.json is emptied, not kept)"),
-    ("hard", "Hard restart - wipe everything, keep only the downloaded pages",
+    ("marks_only", "marks_only", "Marks-only restart - keep crops.json; empty narration.json and redo everything after it",
+     "downloaded pages and crops.json (narration.json is emptied, not kept)"),
+    ("hard", "hard", "Hard restart - wipe everything, keep only the downloaded pages",
      "downloaded pages"),
 ]
+
+_RESTART_KIND_LABELS = {
+    "soft": "Soft restart",
+    "remark": "Re-mark restart",
+    "marks_only": "Marks-only restart",
+    "hard": "Hard restart",
+}
 
 
 def offer_chapter_restart(project_name: str, chapter_num: str) -> None:
@@ -80,7 +93,7 @@ def offer_chapter_restart(project_name: str, chapter_num: str) -> None:
         border_style="yellow"
     ))
     console.print(f"  [bold]1.[/] Resume Chapter {chapter_num} where it left off")
-    for i, (_, label, _) in enumerate(_RESTART_MENU, start=2):
+    for i, (_, _, label, _) in enumerate(_RESTART_MENU, start=2):
         console.print(f"  [bold]{i}.[/] {label}")
     choices = [str(i) for i in range(1, len(_RESTART_MENU) + 2)]
     choice = Prompt.ask("[bold cyan]Choose an option[/]", choices=choices, default="1")
@@ -88,9 +101,9 @@ def offer_chapter_restart(project_name: str, chapter_num: str) -> None:
         console.print(f"[dim]Resuming Chapter {chapter_num} from its current progress.[/]\n")
         return
 
-    mode, _, kept = _RESTART_MENU[int(choice) - 2]
-    kind = {"soft": "Soft restart", "marks_only": "Marks-only restart", "hard": "Hard restart"}[mode]
-    candidates = reset.restart_candidates(project_name, chapter_num, mode=mode)
+    mode, deletion_mode, _, kept = _RESTART_MENU[int(choice) - 2]
+    kind = _RESTART_KIND_LABELS[mode]
+    candidates = reset.restart_candidates(project_name, chapter_num, mode=deletion_mode)
     if not candidates:
         console.print(f"[dim]Nothing to delete for a {kind.lower()} - everything it would keep is already all that's here.[/]\n")
         return
@@ -104,8 +117,28 @@ def offer_chapter_restart(project_name: str, chapter_num: str) -> None:
         f"[bold red]Confirm: permanently delete these {len(candidates)} item(s) for Chapter {chapter_num}? This cannot be undone.[/]",
         default=False,
     ):
-        reset.restart_chapter(project_name, chapter_num, mode=mode)
+        reset.restart_chapter(project_name, chapter_num, mode=deletion_mode)
         console.print(f"[bold green]✓ Chapter {chapter_num} {kind.lower()} complete. Downloaded pages re-verified and kept — ready to reprocess.[/]\n")
+
+        if mode == "remark":
+            # Deferred imports: this module is loaded very early (project/
+            # chapter selection), well before wizard.py normally needs
+            # Flask/the marker's own deps - keep that cost paid only when
+            # this path is actually taken.
+            from remanga.config import RemangaConfig
+            from remanga.webui import launch_and_wait as launch_panel_marker
+
+            marker_config = RemangaConfig.load().marker
+            console.print(Panel(
+                f"[bold yellow]Reopening the Panel Marker for Chapter {chapter_num}...[/]\n"
+                f"Your existing marks are pre-loaded (MAGI won't touch them) - adjust anything, then "
+                f"press [bold]{'⌘S' if marker_config.auto_open_browser else 'Ctrl+S'}[/] or click "
+                f"[bold]Save & Continue[/] in the browser tab.",
+                title="[bold white]Re-mark Panels[/]",
+                border_style="yellow"
+            ))
+            launch_panel_marker(project_name, chapter_num, marker_config)
+            console.print(f"[bold green]✓ Marks for Chapter {chapter_num} updated and saved.[/]\n")
     else:
         console.print(f"[dim]Restart cancelled. Resuming Chapter {chapter_num} from its current progress instead.[/]\n")
 

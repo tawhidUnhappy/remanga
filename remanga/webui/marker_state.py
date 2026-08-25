@@ -13,7 +13,8 @@ from typing import Any, Dict, List, Optional
 
 from PIL import Image
 
-from remanga.cropper.geometry import pixel_bounds_to_box_1000
+from remanga.cropper.geometry import calculate_pixel_bounds, pixel_bounds_to_box_1000
+from remanga.json_io import has_real_json_content, read_json
 
 
 class MarkerState:
@@ -41,6 +42,50 @@ class MarkerState:
                 w, h = img.size
             self.pages.append({"index": i, "filename": path.name, "width": w, "height": h})
             self.marks.setdefault(path.name, [])
+        self._load_existing_crops()
+
+    def _load_existing_crops(self) -> None:
+        """If crops.json already has real content - e.g. a marks_only/"remark"
+        restart (see reset.py) deliberately kept it, or the marker is just
+        being reopened on an already-marked chapter - load it as this
+        session's starting marks instead of the blank slate MAGI would
+        otherwise fill in. Every page that gets marks this way is immediately
+        flagged touched, so MAGI's background detection (if enabled) can
+        never clobber marks that were already there when the session opened.
+        A no-op whenever crops.json is empty/missing, which is the normal
+        case for a fresh chapter - existing behavior is unchanged."""
+        crops_path = self.chapter_dir / "crops.json"
+        if not has_real_json_content(crops_path):
+            return
+        try:
+            crop_data = read_json(crops_path)
+        except Exception:
+            return
+
+        pages_by_filename = {p["filename"]: p for p in self.pages}
+        for page_entry in crop_data.get("pages", []):
+            filename = page_entry.get("page_filename")
+            page = pages_by_filename.get(filename)
+            panels = page_entry.get("panels")
+            if not page or not panels:
+                continue
+
+            marks = []
+            for i, panel in enumerate(panels, start=1):
+                box = panel.get("box_1000") or panel.get("box_pixel") or panel.get("coordinates")
+                if not box:
+                    continue
+                is_normalized = "box_1000" in panel or max(box) <= 1000
+                left, top, right, bottom = calculate_pixel_bounds(box, page["width"], page["height"], is_1000=is_normalized)
+                panel_id = panel.get("panel_id")
+                marks.append({
+                    "id": str(panel_id) if panel_id is not None else f"loaded-{i}",
+                    "x": left, "y": top, "w": right - left, "h": bottom - top,
+                    "src": "manual",
+                })
+            if marks:
+                self.marks[filename] = marks
+                self.touched.add(filename)
 
     def set_marks(self, filename: str, marks: List[Dict[str, Any]]) -> None:
         self.marks[filename] = marks
