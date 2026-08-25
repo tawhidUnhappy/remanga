@@ -63,6 +63,24 @@ Every panel must be fully accounted for — do not silently drop content because
 ### Rule 8: Phonetic Clarity
 - Spell out abbreviations, ranks, and chapter numbers phonetically (e.g., "Class One-One", "Chapter One", "Room Three-B").
 
+### Rule 9: Final Full-Script Verification Pass (Do This Last, As Its Own Read-Through)
+Rules 6 and 7 already have you checking panel count and per-panel dialogue/action coverage
+while you draft. Before you output anything, do a **second, separate pass**: read the
+**entire finished script start to finish**, the way a viewer will actually hear it, not
+panel-by-panel in isolation.
+- **Re-verify accuracy:** every line still matches its panel's art (Rule 2) — no detail
+  drifted or got paraphrased into something the panel doesn't actually show.
+- **Re-verify nothing was dropped:** every piece of dialogue, caption, and visible detail
+  survived somewhere in the script — a line that's individually accurate can still leave a
+  **gap** in the story if something an adjacent panel needed for context got cut elsewhere.
+- **Re-verify the story reads as complete:** listened to straight through, the script must
+  tell the whole chapter's story with no unexplained jumps, missing beats, or gaps a viewer
+  would notice — the recap should never require already knowing the chapter to follow it.
+  If a viewer would come away feeling like they missed something, that's a failure of this
+  pass, even if every individual panel entry looked fine on its own.
+- If this pass finds **any** issue, fix it and re-run the pass — do not output a script that
+  hasn't cleanly passed this final check.
+
 ---
 
 ## 2. Few-Shot Example (Objective Documentary Style)
