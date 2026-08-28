@@ -1,13 +1,26 @@
-"""Packages cropped panel/sheet assets into the chapter's vision-upload zip archive."""
+"""Packages cropped panel/sheet assets into the chapter's primary vision-upload
+zip archive (sheets.zip/panels.zip) - the "legacy" single-archive method
+prompts/narration.md documents alongside the size-capped LLM bundles
+(remanga.cropper.llm_zip/llm_pdf). Every image written in gets the same
+lossless shrink those bundles use (remanga.cropper.image_codec) - one
+implementation of "smaller without losing anything" for every zip this
+project builds, not a separate copy here."""
 
 from __future__ import annotations
 
 import zipfile
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from remanga.config import CropperConfig
 from remanga.console import console
+from remanga.cropper.image_codec import smallest_lossless_encoding
+
+
+def _write_images(zf: zipfile.ZipFile, image_paths: List[Path]) -> None:
+    for path in image_paths:
+        data, ext = smallest_lossless_encoding(path)
+        zf.writestr(path.stem + ext, data)
 
 
 def create_vision_archive(
@@ -22,17 +35,11 @@ def create_vision_archive(
     if zip_path.exists():
         zip_path.unlink()
 
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        if asset_type == "sheets":
-            if sheets_dir and sheets_dir.exists() and list(sheets_dir.glob("sheet_*.*")):
-                for s in sorted(list(sheets_dir.glob("sheet_*.*"))):
-                    zf.write(s, arcname=s.name)
-            else:
-                for p in sorted(list(panels_dir.glob("panel_*.*"))):
-                    zf.write(p, arcname=p.name)
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+        if asset_type == "sheets" and sheets_dir and sheets_dir.exists() and list(sheets_dir.glob("sheet_*.*")):
+            _write_images(zf, sorted(sheets_dir.glob("sheet_*.*")))
         else:
-            for p in sorted(list(panels_dir.glob("panel_*.*"))):
-                zf.write(p, arcname=p.name)
+            _write_images(zf, sorted(panels_dir.glob("panel_*.*")))
 
         manifest = chapter_dir / "panels_manifest.json"
         if manifest.exists():

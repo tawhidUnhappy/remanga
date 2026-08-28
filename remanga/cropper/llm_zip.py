@@ -8,17 +8,14 @@ add up to (a single chapter easily runs 50-100+ MB). Completely separate from:
 - the primary vision archive (remanga.cropper.archive's sheets.zip/panels.zip),
   which keeps working exactly as it did before this module existed - the
   "previous legacy method" prompts/narration.md still documents alongside this
-  one (and alongside remanga.cropper.llm_pdf, the PDF equivalent).
+  one (and alongside remanga.cropper.llm_pdf, the PDF equivalent). It now
+  shares this module's own lossless-shrink step (image_codec.py), just packed
+  into a single, unsplit zip instead of size-capped parts.
 
 Strategy, in order:
-1. Shrink each panel losslessly - no pixel is altered, ever. Tries re-encoding
-   as an optimized PNG and as a lossless WEBP (usually the bigger win for
-   manga line art/halftones) and keeps whichever comes out smaller, but only
-   after decoding it back and verifying it's pixel-for-pixel identical to the
-   source via remanga.cropper.image_codec.pixel_identical. Any candidate that
-   doesn't round-trip exactly - or any decode/encode error at all - is
-   discarded in favor of the original file bytes. See
-   `_smallest_lossless_encoding`.
+1. Shrink each panel losslessly via remanga.cropper.image_codec's
+   smallest_lossless_encoding - no pixel is altered, ever; see that module for
+   how the "lossless" claim is actually verified rather than assumed.
 2. Pack the (still full-quality) shrunk images into as many zip parts as
    needed to keep each part at or under `CropperConfig.llm_bundle_max_mb`
    (remanga.cropper.size_pack.pack_by_size), splitting only on panel
@@ -33,59 +30,16 @@ how many others to expect without depending on the filename at all.
 
 from __future__ import annotations
 
-import io
 import json
 import zipfile
 from pathlib import Path
 from typing import List, Tuple
 
-from PIL import Image
-
 from remanga.config import CropperConfig
 from remanga.console import console
-from remanga.cropper.image_codec import pixel_identical
+from remanga.cropper.image_codec import smallest_lossless_encoding
 from remanga.cropper.size_pack import pack_by_size
 from remanga.paths import chapter_identity_fields
-
-
-def _smallest_lossless_encoding(path: Path) -> Tuple[bytes, str]:
-    """Returns (bytes, extension) for whichever lossless encoding of this panel
-    image comes out smallest: the original file as-is, a re-optimized PNG, or a
-    lossless WEBP - each of the latter two only wins if `pixel_identical`
-    actually confirms it decodes back to the exact same image. Never touches
-    `path` itself; the caller decides where (or whether) the result gets
-    written."""
-    original_bytes = path.read_bytes()
-    best_bytes, best_ext = original_bytes, (path.suffix.lower() or ".png")
-
-    try:
-        with Image.open(path) as img:
-            img.load()
-            src = img if img.mode in ("RGB", "RGBA") else img.convert("RGB")
-
-            png_buf = io.BytesIO()
-            src.save(png_buf, "PNG", optimize=True, compress_level=9)
-            png_bytes = png_buf.getvalue()
-            if len(png_bytes) < len(best_bytes) and pixel_identical(src, png_bytes):
-                best_bytes, best_ext = png_bytes, ".png"
-
-            # method=6 (max effort) was benchmarked at ~25x method=4's encode
-            # time for only ~3% extra size reduction on manga panel art -
-            # nowhere near worth it when this runs on every panel of every
-            # chapter cropped. method=4 gets nearly all of the size win at a
-            # small fraction of the cost; lossless=True is what guarantees no
-            # quality loss either way, not the method number.
-            webp_buf = io.BytesIO()
-            src.save(webp_buf, "WEBP", lossless=True, quality=100, method=4)
-            webp_bytes = webp_buf.getvalue()
-            if len(webp_bytes) < len(best_bytes) and pixel_identical(src, webp_bytes):
-                best_bytes, best_ext = webp_bytes, ".webp"
-    except Exception:
-        # Any decode/encode hiccup on this one panel: ship the original file
-        # untouched rather than let an optimization attempt block the batch.
-        return original_bytes, (path.suffix.lower() or ".png")
-
-    return best_bytes, best_ext
 
 
 def build_llm_zip_bundle(
@@ -115,7 +69,7 @@ def build_llm_zip_bundle(
     encoded: List[Tuple[str, str, bytes]] = []  # (panel_id, arcname, data)
     original_total = 0
     for path in sorted(panel_paths):
-        data, ext = _smallest_lossless_encoding(path)
+        data, ext = smallest_lossless_encoding(path)
         original_total += path.stat().st_size
         encoded.append((path.stem, f"{path.stem}{ext}", data))
 

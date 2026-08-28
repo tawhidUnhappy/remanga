@@ -302,17 +302,19 @@ Reopening the Panel Marker on a chapter that already has marks — via `remark`,
 | **Contact Sheets** | `sheets.zip` | 2x2 labeled grid images (`sheet_001.png`, etc.) | **Low vision token cost & fast LLM inference** (75% fewer images uploaded) |
 | **Individual Panels** | `panels.zip` | Standalone cropped images (`panel_001.png`, etc.) | **Maximum resolution & fine detail examination** |
 
+Every image packed into either archive goes through the same lossless re-encoding the LLM upload bundles below use (see [LLM Upload Bundles](#llm-upload-bundles-panels_zip--panels_pdf) for exactly how) before being zipped — typically ~40-50% smaller than the raw cropped files, at no quality cost, with no separate setting to turn on.
+
 To switch formats:
 1. Run `./run.sh setup-config` and choose option 2, **OR**
 2. Set `"vision_asset_type": "sheets"` (or `"panels"`) in `config.json`.
 
 ### LLM Upload Bundles (`panels_zip` / `panels_pdf`)
 
-A full chapter's `panels.zip`/`sheets.zip` easily runs 50-100+ MB — well past what a lot of LLM chat interfaces accept as a single upload. Rather than shrink that by degrading image quality, the crop step can also build one or both of two separate, size-capped bundles purely for uploading — `panels_zip/panels_1.zip`, `panels_2.zip`, ... and/or `panels_pdf/panels_1.pdf`, `panels_2.pdf`, ... (one panel per page) in the chapter folder. **Both are off by default** — turn on whichever your LLM interface handles more gracefully (a PDF is usually the more universally-accepted single-file upload). Neither ever touches `panels/` itself (still full quality, still what video rendering reads) or the primary archive above — these are additional artifacts, not replacements.
+Even after the primary archive's own lossless re-encoding (above), a full chapter's `panels.zip`/`sheets.zip` can still land well past what a lot of LLM chat interfaces accept as a single upload — there's only so much size a lossless re-encode alone can reclaim. Rather than shrink further by degrading image quality, the crop step can also build one or both of two separate, size-capped bundles purely for uploading — `panels_zip/panels_1.zip`, `panels_2.zip`, ... and/or `panels_pdf/panels_1.pdf`, `panels_2.pdf`, ... (one panel per page) in the chapter folder. **Both are off by default** — turn on whichever your LLM interface handles more gracefully (a PDF is usually the more universally-accepted single-file upload). Neither ever touches `panels/` itself (still full quality, still what video rendering reads) or the primary archive above — these are additional artifacts, not replacements.
 
 How each stays under the cap without losing quality:
 1. **Lossless re-encoding first, in whichever way suits the container:**
-   - **Zip:** every panel is re-encoded as an optimized PNG and as a lossless WEBP, keeping whichever comes out smaller. Manga line art/halftones typically shrink 30-50% this way.
+   - **Zip:** the same re-encoding the primary archive above uses — every panel re-encoded as an optimized PNG and as a lossless WEBP, keeping whichever comes out smaller. Manga line art/halftones typically shrink 30-50% this way.
    - **PDF:** every panel is embedded as a `FlateDecode`-compressed raw bitmap (PDF's own native lossless image representation — the same class of compression a PNG uses internally, just packaged the way PDF expects), optionally TIFF-Predictor-2-filtered first for a better ratio. Pillow's own PDF writer re-encodes RGB images as lossy JPEG with no way to turn that off short of quantizing colors, which is why this is built directly rather than through Pillow's `Image.save(..., "PDF")`.
    - Either way, a candidate re-encoding only ever gets used after decoding it back and verifying it's pixel-for-pixel identical to the original — anything that doesn't round-trip exactly is discarded in favor of a safer encoding (or the original file, for the zip).
 2. **Split by panel, not by degrading further.** If the losslessly-shrunk panels still add up to more than the size cap, they're packed into as many parts as needed (in reading order), each part staying at or under the cap. A single panel larger than the cap on its own still gets a (oversized) part rather than being split or quality-reduced.
