@@ -28,7 +28,7 @@ panel by panel and challenge every line:
   the correct speaker - not merged into the wrong panel or the wrong character's line
   (Rule 7, Rule 10)?
 - Did a name get used before its formal introduction, or a spoiler leak in early (Rule 1)?
-- Did punctuation, monotone delivery, or the word budget get violated anywhere (Rules 3, 4)?
+- Does the punctuation actually match what the panel calls for - not overused into every line, not flattened out of a line that clearly needs it - and did the word budget get violated anywhere (Rules 3, 4)?
 - Does the panel count and `panel_id` sequence actually match what was supplied (Rule 6)?
 - Read straight through as a viewer would hear it - is there any gap, jump, or missing beat
   that would leave someone feeling like they missed part of the story (Rule 9)?
@@ -65,12 +65,27 @@ below.
   - *Expressions & Poses:* Deadpan stare, turning around, widening eyes, stepping backward.
 - **No Hallucinated Action:** Never narrate an action, object, or location that contradicts the panel artwork.
 
-### Rule 3: Zero-Emotion & Monotone Prosody (IndexTTS-2.5 Stability)
-To ensure 100% consistent, flat, documentary-style vocal narration across all chapters:
-- **Always Neutral, By Construction:** The pipeline synthesizes every panel at a fixed, flat emotion regardless of content - there is no per-entry emotion field to set (see Section 4's schema). Write accordingly: nothing in the text itself should read as needing a vocal spike to land.
-- **Punctuation Cleanliness:** Use standard periods (`.`) and commas (`,`).
-- **Forbidden Punctuation:** **NEVER use exclamation marks (`!`), question marks (`?`), ellipses (`...`), ALL CAPS words, asterisks (`*gasp*`), or bracketed SFX (`[whispers]`)**. Neural TTS engines interpret dramatic punctuation as prosodic spikes (screaming, pitch breakage, or tempo shifts).
-- **Delivery Tone:** Calm, measured, objective, third-person narrative commentary.
+### Rule 3: Natural, Expressive Prosody (IndexTTS-2.5 reads punctuation directly)
+IndexTTS-2.5 infers its own delivery - pacing, emphasis, rising/falling tone - straight from
+the punctuation and wording of `text`, with no separate emotion field or vector to set (see
+Section 4's schema: just `panel_id` and `text`). Punctuation IS the emotion cue, so write it
+the way the panel actually sounds, not around it:
+- **Use real punctuation:** Exclamation marks (`!`) for a shout, alarm, or sudden outburst;
+  question marks (`?`) for an actual question; ellipses (`...`) for hesitation or a trailing
+  thought; standard periods and commas for everything else. Write these because the panel
+  calls for them, not by default and not to avoid them.
+- **Don't overplay it:** Most panels are calm, measured narration - reserve `!`/`?`/`...` for
+  the panels that are genuinely exclamatory, interrogative, or hesitant. Punctuating every
+  line emphatically flattens the effect back out (nothing reads as distinct anymore) and can
+  make delivery sound unstable - use it where the moment earns it, plain prose everywhere else.
+- **Skip non-verbal notation:** Bracketed stage directions (`[gasp]`, `[whispers]`), asterisked
+  actions (`*gasp*`), and ALL-CAPS shouting are director's notes, not spoken language - a TTS
+  engine either reads them aloud literally (garbled) or drops them silently. Convey the same
+  beat through ordinary punctuated prose instead (*"he gasps, stepping back"* rather than
+  `[gasp]`; an exclamation rather than ALL CAPS).
+- **Delivery Tone:** Calm, measured, objective, third-person narrative commentary as the
+  baseline - punctuation shades that baseline toward how the panel actually reads, it doesn't
+  replace it with caricature.
 
 ### Rule 4: Word Budget & Retention Pacing
 - **Standard Panel Target:** **10 to 20 words** (~3.5 to 5.0 seconds of audio).
@@ -218,10 +233,11 @@ both must equal the number of panel images actually supplied (Rule 6) — recoun
 you output, not after.
 
 **Each entry in `narration` has exactly two keys: `panel_id` and `text` — nothing else.**
-Do not add `emotion`, `pause_after_ms`, or any other key: the pipeline synthesizes every
-panel at a fixed, flat emotion and applies its own fixed pause automatically (Rules 3 and
-4), so there is nothing for either field to control anymore. An entry with any extra key,
-or missing either of the two required ones, is malformed output.
+Do not add `emotion`, `pause_after_ms`, or any other key: the pipeline lets IndexTTS-2.5
+infer its own emotion/prosody straight from `text`'s wording and punctuation (Rule 3) and
+applies its own fixed pause automatically (Rule 4), so there is nothing for either field to
+control anymore. An entry with any extra key, or missing either of the two required ones,
+is malformed output.
 
 ### Block 2: `memory.json`
 Save to: `projects/<project_name>/memory.json`

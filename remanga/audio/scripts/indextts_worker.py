@@ -13,8 +13,13 @@ once per `remanga tts` run and handles every panel in that run.
 
 Protocol (newline-delimited JSON, one message per line):
   Parent -> worker: {"cmd": "synthesize", "spk_audio_prompt": ..., "text": ...,
-                     "lang": ..., "output_path": ..., "emo_vector": [...],
-                     "temperature": ..., "top_p": ..., "duration_factor": ...}
+                     "lang": ..., "output_path": ..., "temperature": ...,
+                     "top_p": ..., "duration_factor": ...}
+  `emo_vector` is still accepted (see below) if a future caller ever wants to
+  force a specific emotion again, but remanga/audio/synth.py deliberately
+  never sends one - with none supplied, IndexTTS-2.5 infers its own emotion
+  and prosody straight from `text`'s wording and punctuation, which is what
+  makes narration sound naturally expressive.
   Worker -> parent (once ready): {"event": "ready"}
   Worker -> parent (per request): {"ok": true} or {"ok": false, "error": "..."}
   Parent -> worker: {"cmd": "shutdown"}  (or just close stdin)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 from pydantic import BaseModel, Field
 
 from remanga.json_io import read_json, write_json
@@ -102,10 +102,11 @@ class TTSConfig(BaseModel):
     # IndexTTS-2.5's own defaults (indextts/infer_v2_5.py's infer_generator),
     # for natural-sounding prosody - a much lower temperature/top_p sounds
     # more "consistent" but trades away natural pitch/pacing variation for a
-    # flatter, more robotic delivery. This is independent of the flat
-    # emotion_vectors below (which stay locked to neutral for narration
-    # consistency) - temperature/top_p control sampling variety within
-    # whatever emotion is requested, not which emotion is requested.
+    # flatter, more robotic delivery. Emotion itself isn't configured here at
+    # all: audio/synth.py sends no emo_vector, so IndexTTS-2.5 infers its own
+    # emotion straight from each panel's text and punctuation (see
+    # prompts/narration.md Rule 3) - temperature/top_p just control sampling
+    # variety within whatever emotion that inference lands on.
     temperature: float = 0.8
     top_p: float = 0.8
     sample_rate: int = 22050
@@ -114,17 +115,6 @@ class TTSConfig(BaseModel):
     # 10-26 word panel normally finishes in well under a minute even on modest
     # hardware, so this is a generous ceiling, not a tight budget.
     synth_timeout_seconds: int = 180
-    emotion_vectors: Dict[str, List[float]] = Field(
-        default_factory=lambda: {
-            "neutral": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            "hype": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            "tense": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            "serious": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            "shock": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            "emotional": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            "mysterious": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-        }
-    )
 
 
 class AudioConfig(BaseModel):

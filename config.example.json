@@ -24,7 +24,7 @@
     "create_zip": true,
     "snap_to_gutters": true,
     "gutter_search_radius_pixels": 60,
-    "gutter_search_radius_fraction": 0.10,
+    "gutter_search_radius_fraction": 0.1,
     "gutter_bg_tolerance": 20.0,
     "gutter_min_run_pixels": 3,
     "gutter_min_background_fraction": 0.96,
@@ -60,16 +60,7 @@
     "speed": 1.0,
     "temperature": 0.8,
     "top_p": 0.8,
-    "sample_rate": 22050,
-    "emotion_vectors": {
-      "neutral": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-      "hype": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-      "tense": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-      "serious": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-      "shock": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-      "emotional": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-      "mysterious": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    }
+    "sample_rate": 22050
   },
   "audio": {
     "sample_rate": 44100,

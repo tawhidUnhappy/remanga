@@ -139,14 +139,14 @@ class TTSEngine:
             task = progress.add_task("[yellow]Synthesizing vocal tracks...", total=len(narration_entries))
 
             # narration.json entries only ever carry `panel_id` and `text` now
-            # (see prompts/narration.md) - emotion and per-panel pause tuning
-            # aren't part of that schema. Emotion is fixed to "neutral" for
-            # every panel regardless (IndexTTSSynthesizer._get_emotion_vector
-            # always returns a flat zero vector no matter what tag it's given -
-            # this was never anything but a label), and pausing uses the one
-            # configured gap (AudioConfig.pause_between_panels_ms) for every
-            # panel instead of a per-panel override.
-            emotion = "neutral"
+            # (see prompts/narration.md) - there's no per-panel emotion or
+            # pause field in that schema. Emotion isn't set here at all:
+            # IndexTTSSynthesizer.synthesize() sends no emo_vector, so
+            # IndexTTS-2.5 infers its own natural emotion/prosody straight from
+            # each panel's `text` (its wording and punctuation) instead of a
+            # forced tag. Pausing uses the one configured gap
+            # (AudioConfig.pause_between_panels_ms) for every panel instead of
+            # a per-panel override.
             pause_after_ms = self.audio_config.pause_between_panels_ms
             for idx, entry in enumerate(narration_entries, start=1):
                 panel_id = panel_ids[idx - 1]
@@ -164,7 +164,6 @@ class TTSEngine:
                     if text:
                         self._synth.synthesize(
                             text=text,
-                            emotion_tag=emotion,
                             spk_prompt_path=spk_prompt_path,
                             output_wav=raw_clip_path,
                         )
@@ -194,7 +193,6 @@ class TTSEngine:
                     "index": idx,
                     "panel_id": panel_id,
                     "text": text,
-                    "emotion": emotion,
                     "audio_file": processed_clip_path.name,
                     "start_time_ms": start_ms,
                     "end_time_ms": end_ms,

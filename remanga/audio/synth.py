@@ -160,14 +160,6 @@ class IndexTTSSynthesizer:
         once is exactly what produces stacked/garbled progress output."""
         self._ensure_worker()
 
-    def _get_emotion_vector(self, emotion_tag: str) -> List[float]:
-        """
-        Always returns a flat 8-dimensional zero vector [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0].
-        This completely eliminates emotional fluctuations, screams, shock spikes, and vocal strain,
-        ensuring uniform, objective, and consistent documentary-style narration across all panels.
-        """
-        return [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-
     def _adjust_audio_speed(self, wav_path: Path, speed: float) -> None:
         """Adjusts speaking tempo using pitch-preserving FFmpeg atempo filter."""
         if abs(speed - 1.0) < 0.02 or not wav_path.exists():
@@ -214,10 +206,15 @@ class IndexTTSSynthesizer:
         except Exception:
             pass
 
-    def synthesize(self, text: str, emotion_tag: str, spk_prompt_path: str, output_wav: Path) -> None:
-        """Synthesizes speech via the IndexTTS-2.5 worker process. Uses a flat
-        zero emotion vector for consistent narration tone, with IndexTTS-2.5's
-        own recommended temperature/top_p (TTSConfig) for natural prosody."""
+    def synthesize(self, text: str, spk_prompt_path: str, output_wav: Path) -> None:
+        """Synthesizes speech via the IndexTTS-2.5 worker process. Deliberately
+        sends no emo_vector: IndexTTS-2.5 infers its own emotion/prosody
+        straight from `text`'s own wording and punctuation ("!"/"?"/"..." etc -
+        see prompts/narration.md Rule 3) when none is supplied, which is what
+        makes narration sound naturally expressive instead of a forced-flat
+        reading of whatever the text actually says. Temperature/top_p (TTSConfig)
+        are left at IndexTTS-2.5's own recommended defaults for natural prosody
+        within that inferred emotion."""
         proc = self._ensure_worker()
 
         request = {
@@ -226,7 +223,6 @@ class IndexTTSSynthesizer:
             "text": text,
             "lang": (self.tts_config.lang or "EN").strip().upper(),
             "output_path": str(output_wav.resolve()),
-            "emo_vector": self._get_emotion_vector(emotion_tag),
             "temperature": self.tts_config.temperature,
             "top_p": self.tts_config.top_p,
         }

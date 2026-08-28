@@ -1,6 +1,6 @@
 # remanga
 
-**remanga** is a 100% self-contained, modular manga recap video production engine. Powered by **IndexTTS-2.5**, it automates manga downloading, MAGI v3-assisted panel marking via a local web UI, LLM-guided narration writing, vision packaging, consistent monotone vocal synthesis, audio mastering with EBU R128 normalization, and GPU-accelerated video rendering.
+**remanga** is a 100% self-contained, modular manga recap video production engine. Powered by **IndexTTS-2.5**, it automates manga downloading, MAGI v3-assisted panel marking via a local web UI, LLM-guided narration writing, vision packaging, naturally expressive vocal synthesis, audio mastering with EBU R128 normalization, and GPU-accelerated video rendering.
 
 Built with strict environment isolation, `remanga` provisions its own tools, manages its own runtimes, and leaves zero files or modifications outside its root workspace directory.
 
@@ -18,7 +18,7 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
   - [Vision Upload Formats: sheets.zip vs panels.zip](#vision-upload-formats-sheetszip-vs-panelszip)
   - [Panel Marker Web UI](#panel-marker-web-ui)
   - [Temporal Horizon Prompting (Zero Spoilers)](#temporal-horizon-prompting-zero-spoilers)
-- [Zero-Emotion & Consistent Audio Mastering](#zero-emotion--consistent-audio-mastering)
+- [Natural, Expressive Narration](#natural-expressive-narration)
 - [Reliability: Crashes, Interrupts & Resuming](#reliability-crashes-interrupts--resuming)
 - [CLI Command Reference](#cli-command-reference)
 - [Workspace Directory Structure](#workspace-directory-structure)
@@ -39,9 +39,9 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
   - **Vision Contact Sheets (`sheets.zip`):** Consolidates cropped panels into 2x2 labeled grid sheets to drastically reduce LLM vision token consumption.
   - **Individual Panel Crops (`panels.zip`):** Packages individual high-resolution panel crops for maximum visual fidelity.
   - Configurable interactively and persistent in `config.json`.
-- **Zero-Emotion Consistent Vocal Synthesis (IndexTTS-2.5):**
-  - Locked flat 8-dimensional emotion vector (`[0.0]*8`) for uniform, objective, documentary-style narration across all panels.
-  - Temperature/top-p left at IndexTTS-2.5's own recommended defaults (`0.8`/`0.8`) for natural-sounding prosody within that flat emotional tone — see [Zero-Emotion & Consistent Audio Mastering](#zero-emotion--consistent-audio-mastering).
+- **Natural, Expressive Vocal Synthesis (IndexTTS-2.5):**
+  - No forced emotion vector — IndexTTS-2.5 infers its own emotion/prosody straight from each panel's narration text and punctuation, so delivery matches what the panel actually calls for instead of one flat register for every panel.
+  - Temperature/top-p left at IndexTTS-2.5's own recommended defaults (`0.8`/`0.8`) for natural-sounding prosody — see [Natural, Expressive Narration](#natural-expressive-narration).
   - Zero-shot speaker cloning from any clean 3–10s reference voice WAV.
 - **Strict Temporal Horizon Prompting (Anti-Spoiler & Anti-Hallucination):**
   - Forbids unintroduced character names, future plot reveals, motives, or hallucinated actions.
@@ -346,17 +346,17 @@ The included prompt system in `prompts/` enforces strict narrative rules:
 
 ---
 
-## Zero-Emotion & Consistent Audio Mastering
+## Natural, Expressive Narration
 
-To maintain a consistent, objective, documentary-style recap narration — without screaming, emotional pitch breaks, or wild cadence shifts — while still sounding like a natural human voice rather than a flat robotic monotone:
+The narration audio is meant to sound like an actual person reading the script, not a flat robotic monotone — so the pipeline lets IndexTTS-2.5 infer its own emotion and prosody directly from each panel's text, instead of forcing every panel into the same fixed emotional register:
 
-1. **Flat 8-D Emotion Conditioning:** All 8 emotion vectors in `config.json` are mapped to `[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]`, so narration never swings into an emotional register (excited, angry, sad, ...) panel to panel.
-2. **Natural Autoregressive Sampling:** `temperature`/`top_p` are left at IndexTTS-2.5's own recommended defaults (`0.8`/`0.8`, not artificially lowered) — this is what actually governs how natural a single reading *sounds* (pitch/pacing variation within the neutral tone above), independent of which emotion is selected. Lowering these further trades that naturalness away for a flatter, more robotic-sounding delivery; raise them for more variation, at some risk of instability on longer lines.
-3. **Punctuation Cleanliness:** The prompt forbids exclamation marks (`!`), question marks (`?`), ellipses (`...`), and ALL CAPS, preventing neural prosody spikes.
+1. **No Forced Emotion Vector:** `audio/synth.py` sends no `emo_vector` to IndexTTS-2.5 at all. With none supplied, the model reads the pacing, emphasis, and rising/falling tone straight out of `narration.json`'s `text` and its own punctuation — an exclamation mark lands as a shout or outburst, a question mark as an actual question, an ellipsis as hesitation — so the delivery matches what the panel actually calls for instead of one flat register for every panel.
+2. **Punctuate For It:** `prompts/narration.md` (Rule 3) has the LLM write real punctuation — `!`, `?`, `...` — wherever the panel genuinely is exclamatory, interrogative, or hesitant, and plain measured prose everywhere else. That punctuation *is* the emotion cue now; there's no separate emotion field in `narration.json` — each entry is just `panel_id` + `text`.
+3. **Natural Autoregressive Sampling:** `temperature`/`top_p` are left at IndexTTS-2.5's own recommended defaults (`0.8`/`0.8`, not artificially lowered) — this governs how natural a single reading *sounds* (pitch/pacing variation), on top of whatever emotion the text itself inferred. Lowering these trades that naturalness away for a flatter, more robotic-sounding delivery; raising them adds more variation, at some risk of instability on longer lines.
 4. **Reference Voice Sample Criteria:**
    - **Length:** 4–7 seconds.
    - **Quality:** Studio clean (zero background noise, room reverb, or vocal fry).
-   - **Delivery:** Calm, steady, monotone reading.
+   - **Delivery:** Calm, steady reading — this is the base voice being cloned, not the narration's final emotional range, which comes from the text itself (point 1 above).
 
 ---
 
@@ -469,11 +469,11 @@ remanga/
 - In `config.json`, verify `"use_bf16": true`.
 - IndexTTS-2.5 runs comfortably on GPUs with 6GB+ VRAM in BF16 mode.
 
-### 2. Narration tone has emotional spikes or voice breaks
-- Verify every entry in `config.json`'s `tts.emotion_vectors` is still `[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]` — that's what actually keeps narration emotionally flat, not `temperature`/`top_p` (those govern natural pitch/pacing variation, not which emotion gets used; see [Zero-Emotion & Consistent Audio Mastering](#zero-emotion--consistent-audio-mastering)).
-- Ensure your `narration.json` does not contain exclamation marks (`!`), question marks (`?`), or dramatic punctuation.
-- Inspect your reference speaker WAV (`spk_audio_prompt`). Ensure the speaker speaks in a calm, flat tone without laughter or excitement.
-- If a specific line still breaks even with the above clean, `tts.temperature`/`top_p` default to IndexTTS-2.5's own recommended `0.8`/`0.8` for natural-sounding delivery — nudging them down (e.g. `0.6`) trades some of that naturalness for more stability, as a last resort rather than a first fix.
+### 2. A specific narration line sounds unstable, or too dramatic
+Emotion/prosody is inferred straight from each panel's `text` and its punctuation now (see [Natural, Expressive Narration](#natural-expressive-narration)), so an over-the-top or unstable-sounding line usually traces back to what's actually written for that panel, not a synthesis bug:
+- Check whether that panel's `narration.json` text over-punctuates — a line stacking multiple `!`/`?`/`...` reads as more dramatic than intended. `prompts/narration.md` Rule 3 asks the LLM to reserve emphatic punctuation for panels that genuinely call for it; if it slipped through anyway, trim the line's punctuation back to plain prose and re-run.
+- Inspect your reference speaker WAV (`spk_audio_prompt`). A cleaner, steadier reference sample (see the criteria above) makes every inferred emotion sound more natural, not just calm ones.
+- If a specific line still sounds unstable even with clean text and a clean reference, `tts.temperature`/`top_p` default to IndexTTS-2.5's own recommended `0.8`/`0.8` for natural-sounding delivery — nudging them down (e.g. `0.6`) trades some of that naturalness for more stability, as a last resort rather than a first fix.
 
 ### 3. NVENC GPU encoder error during video rendering
 `bootstrap.sh` pins the bundled `bin/ffmpeg` to a specific, tested BtbN build (not the "latest" rolling one) precisely so NVENC works out of the box for a wide range of NVIDIA driver versions — a too-new build otherwise requires a driver version yours may not have yet, and it reports as a generic-looking failure. If GPU encoding still doesn't work:
