@@ -28,7 +28,7 @@ panel by panel and challenge every line:
   the correct speaker - not merged into the wrong panel or the wrong character's line
   (Rule 7, Rule 10)?
 - Did a name get used before its formal introduction, or a spoiler leak in early (Rule 1)?
-- Did punctuation, emotion tagging, or the word budget get violated anywhere (Rules 3, 4)?
+- Did punctuation, monotone delivery, or the word budget get violated anywhere (Rules 3, 4)?
 - Does the panel count and `panel_id` sequence actually match what was supplied (Rule 6)?
 - Read straight through as a viewer would hear it - is there any gap, jump, or missing beat
   that would leave someone feeling like they missed part of the story (Rule 9)?
@@ -67,7 +67,7 @@ below.
 
 ### Rule 3: Zero-Emotion & Monotone Prosody (IndexTTS-2.5 Stability)
 To ensure 100% consistent, flat, documentary-style vocal narration across all chapters:
-- **Always Tag Neutral:** Set `"emotion": "neutral"` on **every single entry** without exception.
+- **Always Neutral, By Construction:** The pipeline synthesizes every panel at a fixed, flat emotion regardless of content - there is no per-entry emotion field to set (see Section 4's schema). Write accordingly: nothing in the text itself should read as needing a vocal spike to land.
 - **Punctuation Cleanliness:** Use standard periods (`.`) and commas (`,`).
 - **Forbidden Punctuation:** **NEVER use exclamation marks (`!`), question marks (`?`), ellipses (`...`), ALL CAPS words, asterisks (`*gasp*`), or bracketed SFX (`[whispers]`)**. Neural TTS engines interpret dramatic punctuation as prosodic spikes (screaming, pitch breakage, or tempo shifts).
 - **Delivery Tone:** Calm, measured, objective, third-person narrative commentary.
@@ -78,7 +78,7 @@ To ensure 100% consistent, flat, documentary-style vocal narration across all ch
 - **Silent & Reaction Impact Beats:**
   - For silent stare downs, shock reveals, or massive environmental splash panels where dialogue is unnecessary:
   - Set `"text": ""` (empty string).
-  - Set `"pause_after_ms": 500` to `800`.
+  - The pipeline applies its own fixed pause automatically for these - there is no per-entry pause field to set (see Section 4's schema). Do not try to signal a longer beat through the text itself (no dashes, no repeated punctuation); an empty `"text"` is the whole signal.
 
 ### Rule 5: "Show-and-Synthesize" Active Storytelling
 - **Active Present Tense Only:** Always write in active present tense (*"He slides open the locker..."*).
@@ -157,27 +157,19 @@ the same chapter — handle both together, not one instead of the other:
 [
   {
     "panel_id": "panel_001",
-    "text": "The morning begins quietly in the central locker area of the school.",
-    "emotion": "neutral",
-    "pause_after_ms": 300
+    "text": "The morning begins quietly in the central locker area of the school."
   },
   {
     "panel_id": "panel_002",
-    "text": "Arriving before the morning bell, a solitary student walks toward his assigned locker.",
-    "emotion": "neutral",
-    "pause_after_ms": 300
+    "text": "Arriving before the morning bell, a solitary student walks toward his assigned locker."
   },
   {
     "panel_id": "panel_003",
-    "text": "Sliding open the compartment door, he discovers an unexpected envelope tucked beside his shoes.",
-    "emotion": "neutral",
-    "pause_after_ms": 300
+    "text": "Sliding open the compartment door, he discovers an unexpected envelope tucked beside his shoes."
   },
   {
     "panel_id": "panel_004",
-    "text": "",
-    "emotion": "neutral",
-    "pause_after_ms": 600
+    "text": ""
   }
 ]
 ```
@@ -215,9 +207,7 @@ Save to: `projects/<project_name>/chapters/chapter_<num>/narration.json`
   "narration": [
     {
       "panel_id": "panel_001",
-      "text": "Objective narration under twenty-six words written in active present tense grounded in visible art.",
-      "emotion": "neutral",
-      "pause_after_ms": 300
+      "text": "Objective narration under twenty-six words written in active present tense grounded in visible art."
     }
   ]
 }
@@ -226,6 +216,12 @@ Save to: `projects/<project_name>/chapters/chapter_<num>/narration.json`
 just be consistent). `total_panels` is an integer and must equal `narration.length`, and
 both must equal the number of panel images actually supplied (Rule 6) — recount before
 you output, not after.
+
+**Each entry in `narration` has exactly two keys: `panel_id` and `text` — nothing else.**
+Do not add `emotion`, `pause_after_ms`, or any other key: the pipeline synthesizes every
+panel at a fixed, flat emotion and applies its own fixed pause automatically (Rules 3 and
+4), so there is nothing for either field to control anymore. An entry with any extra key,
+or missing either of the two required ones, is malformed output.
 
 ### Block 2: `memory.json`
 Save to: `projects/<project_name>/memory.json`

@@ -10,17 +10,23 @@ import { showGuides, clearGuides } from "./guides.js";
 export function onMarkMouseDown(e, m) {
   if (e.button === 2) return;
 
-  // With click_to_select on (MarkerConfig.click_to_select, default on), an
-  // existing mark's body/handles are only interactive in Select mode. While
-  // the Draw tool is active, do nothing here - no stopPropagation, no
-  // selecting, no moving - and let this same mousedown bubble up to
-  // canvasWrap's listener in draw.js, which (also gated on click_to_select +
-  // Draw mode) starts a brand-new box from it instead. Without this, drawing
-  // a new box that happened to start on top of an already-selected mark
-  // would silently move/resize THAT mark instead of drawing anything, since
-  // the "already selected" case below has no idea the user is mid-draw
-  // rather than trying to adjust it.
-  if (state.clickToSelect && state.mode === "draw") return;
+  // With click_to_select on (MarkerConfig.click_to_select, default on),
+  // every OTHER mark's body/handles are frozen while the Draw tool is
+  // active - do nothing here for them - no stopPropagation, no selecting,
+  // no moving - and let this same mousedown bubble up to canvasWrap's
+  // listener in draw.js, which (also gated on click_to_select + Draw mode)
+  // starts a brand-new box from it instead. Without this, drawing a new box
+  // that happened to start on top of an unrelated mark would silently
+  // move/resize THAT mark instead of drawing anything.
+  //
+  // The one mark this does NOT freeze is whichever one is currently
+  // selected - i.e. the mark the user just drew and is still mid-adjustment
+  // on. That one stays fully draggable/resizable in Draw mode too, so a
+  // freshly-drawn box can be nudged into place without switching tools; it
+  // stops being adjustable the instant anything else gets selected (a new
+  // box drawn, or the selection cleared by clicking outside the page - see
+  // draw.js).
+  if (state.clickToSelect && state.mode === "draw" && m.id !== state.selectedId) return;
 
   e.stopPropagation();
 

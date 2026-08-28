@@ -13,27 +13,31 @@ canvasWrap.addEventListener("mousedown", (e) => {
   // that mark's own handler (drag-resize.js:onMarkMouseDown) - selecting it,
   // or starting a move/resize. The one exception: click_to_select (default
   // on) makes onMarkMouseDown a no-op for a mark click while the Draw tool
-  // is active - see its comment - specifically so THIS handler gets the
-  // event instead and can start a brand-new box, even one that starts on
-  // top of an existing mark (overlapping panels), without ever touching
-  // that mark's position.
+  // is active, other than the one mark currently selected (see its comment)
+  // - specifically so THIS handler gets the event instead and can start a
+  // brand-new box, even one that starts on top of an existing (frozen) mark
+  // (overlapping panels), without ever touching that mark's position.
   const onExistingMark = e.target.closest(".mark");
   if (onExistingMark && !(state.clickToSelect && state.mode === "draw")) return;
   if (e.button !== 0 || state.spaceHeld) return;
 
   // Clicking the canvas background - not a mark, whether that's empty
   // space on the page or outside it entirely - deselects whatever mark
-  // was selected and clears its highlight/handles. This applies in both
-  // Draw and Select mode (in Select mode nothing else would ever clear a
-  // selection), and runs before the draw-mode-only new-box gesture below
-  // so it always takes effect even when the click goes on to draw a new
-  // box (which then selects itself once finished, in onUp).
+  // was selected and clears its highlight/handles, before anything below
+  // gets a chance to start a new box. This is what makes the mark the user
+  // was just adjusting in Draw mode go back to unselected/non-editable the
+  // moment they click outside the page or start the next box (see
+  // drag-resize.js for the other half of that: only the selected mark is
+  // adjustable while Draw is active).
   if (state.selectedId !== null) {
     state.selectedId = null;
     render();
   }
 
-  if (state.mode !== "draw") return;
+  // Starting a brand-new box by dragging on empty canvas works in both
+  // tools now - Draw, obviously, but also Adjust, since Adjust is meant to
+  // allow every kind of change (select/move/resize/delete AND draw), not
+  // just adjustments to marks that already exist.
   e.preventDefault();
 
   // Same reasoning as drag-resize.js: flag the page touched the instant the

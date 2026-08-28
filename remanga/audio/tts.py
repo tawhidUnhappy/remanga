@@ -138,11 +138,19 @@ class TTSEngine:
         ) as progress:
             task = progress.add_task("[yellow]Synthesizing vocal tracks...", total=len(narration_entries))
 
+            # narration.json entries only ever carry `panel_id` and `text` now
+            # (see prompts/narration.md) - emotion and per-panel pause tuning
+            # aren't part of that schema. Emotion is fixed to "neutral" for
+            # every panel regardless (IndexTTSSynthesizer._get_emotion_vector
+            # always returns a flat zero vector no matter what tag it's given -
+            # this was never anything but a label), and pausing uses the one
+            # configured gap (AudioConfig.pause_between_panels_ms) for every
+            # panel instead of a per-panel override.
+            emotion = "neutral"
+            pause_after_ms = self.audio_config.pause_between_panels_ms
             for idx, entry in enumerate(narration_entries, start=1):
                 panel_id = panel_ids[idx - 1]
                 text = entry.get("text", "").strip()
-                emotion = entry.get("emotion", "neutral")
-                pause_after_ms = entry.get("pause_after_ms", self.audio_config.pause_between_panels_ms)
 
                 raw_clip_path = audio_dir / f"{panel_id}_raw.wav"
                 processed_clip_path = audio_dir / f"{panel_id}.wav"

@@ -13,7 +13,7 @@
 import {
   isMac, shortcutsBtn, shortcutsOverlay, shortcutsList,
   shortcutsCloseBtn, shortcutsCancelBtn, shortcutsResetBtn, shortcutsSaveBtn,
-  saveKbd, hintSaveKbd, toolDrawBtn, toolSelectBtn,
+  saveKbd, hintSaveKbd, toolDrawBtn, toolAdjustBtn,
 } from "./dom.js";
 import { api } from "./api.js";
 import { state } from "./state.js";
@@ -22,7 +22,7 @@ export const ACTIONS = [
   { id: "save", label: "Save & continue" },
   { id: "mark_full_page", label: "Mark whole page as one panel" },
   { id: "tool_draw", label: "Draw tool" },
-  { id: "tool_select", label: "Select tool" },
+  { id: "tool_adjust", label: "Adjust tool" },
   { id: "prev_page", label: "Previous page" },
   { id: "next_page", label: "Next page" },
   { id: "delete_mark", label: "Delete selected mark" },
@@ -64,9 +64,9 @@ function updateHints() {
   const drawCombo = (bindings.tool_draw || [])[0];
   const drawKbd = toolDrawBtn?.querySelector("kbd");
   if (drawCombo && drawKbd) drawKbd.textContent = prettyCombo(drawCombo);
-  const selectCombo = (bindings.tool_select || [])[0];
-  const selectKbd = toolSelectBtn?.querySelector("kbd");
-  if (selectCombo && selectKbd) selectKbd.textContent = prettyCombo(selectCombo);
+  const adjustCombo = (bindings.tool_adjust || [])[0];
+  const adjustKbd = toolAdjustBtn?.querySelector("kbd");
+  if (adjustCombo && adjustKbd) adjustKbd.textContent = prettyCombo(adjustCombo);
 }
 
 // Turns a keydown event into the same token format combos are stored in, or

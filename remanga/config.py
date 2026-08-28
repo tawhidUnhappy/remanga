@@ -167,7 +167,7 @@ class ShortcutsConfig(BaseModel):
     save: List[str] = Field(default_factory=lambda: ["mod+s"])
     mark_full_page: List[str] = Field(default_factory=lambda: ["mod+f"])
     tool_draw: List[str] = Field(default_factory=lambda: ["d"])
-    tool_select: List[str] = Field(default_factory=lambda: ["v"])
+    tool_adjust: List[str] = Field(default_factory=lambda: ["v"])
     prev_page: List[str] = Field(default_factory=lambda: ["arrowleft"])
     next_page: List[str] = Field(default_factory=lambda: ["arrowright"])
     delete_mark: List[str] = Field(default_factory=lambda: ["delete", "backspace"])
@@ -200,8 +200,13 @@ class MarkerConfig(BaseModel):
     # A mark's body/handles only become draggable once it's already selected
     # (a first click selects; a second, deliberate drag on the now-selected
     # mark actually moves/resizes it) - and while the Draw tool is active,
-    # existing marks aren't draggable at all, so starting a new box that
-    # happens to overlap one never nudges it by accident. Set False to
+    # every OTHER mark is frozen (not selectable or draggable at all), so
+    # starting a new box that happens to overlap one never nudges it by
+    # accident. The mark currently selected - i.e. the one just drawn - stays
+    # adjustable in Draw mode too, and loses that status the moment a new box
+    # is drawn or the selection is cleared by clicking outside the page. The
+    # Adjust tool has none of these restrictions: every mark is always
+    # selectable/draggable, and it can still draw new boxes too. Set False to
     # restore the old behavior where any drag immediately grabs whatever
     # mark is under the cursor, selected or not, even in Draw mode.
     click_to_select: bool = True

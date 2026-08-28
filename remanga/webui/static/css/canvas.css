@@ -25,7 +25,7 @@
   box-shadow: var(--shadow);
   background: #efe9e2;
 }
-.page-stage.select-mode { cursor: default; }
+.page-stage.adjust-mode { cursor: default; }
 .page-stage img { display: block; user-select: none; -webkit-user-drag: none; pointer-events: none; }
 
 .canvas-wrap.space-pan, .canvas-wrap.space-pan .page-stage { cursor: grab; }

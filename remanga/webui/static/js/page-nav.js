@@ -50,17 +50,18 @@ export async function init() {
     assistStatus.textContent = "Disabled in config.json";
   }
 
-  // Start in Select mode instead of the usual Draw default whenever this
+  // Start in Adjust mode instead of the usual Draw default whenever this
   // chapter already has marks (crops.json was pre-loaded server-side - see
   // marker_state.py:_load_existing_crops, used by a "remark" restart and by
   // simply reopening the marker on an already-marked chapter). With
-  // click_to_select on, Draw mode makes every existing mark non-interactive
-  // on purpose (so drawing over one never nudges it - see drag-resize.js) -
-  // exactly wrong when there's nothing left to draw and the whole point of
-  // the session is adjusting what's already there. A genuinely fresh
-  // chapter has no marks yet, so it's unaffected and still starts in Draw.
+  // click_to_select on, Draw mode freezes every mark except the one
+  // currently being drawn (so drawing over another one never nudges it -
+  // see drag-resize.js) - exactly wrong when there's nothing left to draw
+  // and the whole point of the session is adjusting what's already there. A
+  // genuinely fresh chapter has no marks yet, so it's unaffected and still
+  // starts in Draw.
   const hasExistingMarks = Object.values(state.pageMarksCache).some(marks => marks.length > 0);
-  if (hasExistingMarks) setMode("select");
+  if (hasExistingMarks) setMode("adjust");
 
   await loadPage(0);
   pollDetectStatus();
