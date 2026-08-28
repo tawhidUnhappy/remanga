@@ -49,11 +49,18 @@ class MarkerState:
         restart (see reset.py) deliberately kept it, or the marker is just
         being reopened on an already-marked chapter - load it as this
         session's starting marks instead of the blank slate MAGI would
-        otherwise fill in. Every page that gets marks this way is immediately
-        flagged touched, so MAGI's background detection (if enabled) can
-        never clobber marks that were already there when the session opened.
-        A no-op whenever crops.json is empty/missing, which is the normal
-        case for a fresh chapter - existing behavior is unchanged."""
+        otherwise fill in. Every page that has an entry in crops.json's `pages`
+        is immediately flagged touched - INCLUDING a page the user deliberately
+        marked as having zero panels (is_story_page: false / an empty `panels`
+        list, per build_crops_json below) - so MAGI's background detection (if
+        enabled) can never clobber marks, or a deliberate "no panels here"
+        decision, that were already there when the session opened. Without this,
+        an explicitly-excluded page looks indistinguishable from a page that was
+        simply never reached yet, and a "remark" restart's fresh MAGI pass would
+        silently re-populate it with an AI-guessed panel the next time the
+        marker opens - overriding a decision the user already made. A no-op
+        whenever crops.json is empty/missing, which is the normal case for a
+        fresh chapter - existing behavior is unchanged."""
         crops_path = self.chapter_dir / "crops.json"
         if not has_real_json_content(crops_path):
             return
@@ -66,8 +73,16 @@ class MarkerState:
         for page_entry in crop_data.get("pages", []):
             filename = page_entry.get("page_filename")
             page = pages_by_filename.get(filename)
-            panels = page_entry.get("panels")
-            if not page or not panels:
+            if not page:
+                continue
+
+            panels = page_entry.get("panels") or []
+            if not panels:
+                # Explicitly marked as having no panels in a previous session -
+                # preserve that as touched (see the docstring above) rather
+                # than leaving it looking untouched.
+                self.marks[filename] = []
+                self.touched.add(filename)
                 continue
 
             marks = []

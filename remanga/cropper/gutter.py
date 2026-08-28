@@ -25,7 +25,7 @@ this runs inline in the crop pipeline for every panel of every page).
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Optional, Sequence, Tuple
 
 import numpy as np
 from PIL import Image
@@ -134,6 +134,51 @@ def locate_gutter_band(
     return int(lo + (start + end - 1) // 2)
 
 
+def _max_radius_before_neighbor(
+    coord: int,
+    direction: int,
+    perp_lo: int,
+    perp_hi: int,
+    other_boxes: Sequence[PixelBox],
+    axis: str,
+    requested_radius: int,
+) -> int:
+    """Shrinks `requested_radius` so an edge search can never walk into, or past,
+    another panel's own already-known box - even one whose interior happens to
+    read as background-colored (manga panels routinely have large blank/negative-
+    space regions). Without this, a panel with a lot of internal whitespace can
+    get mistaken for a gutter *through* it, and the searching edge snaps deep
+    inside - or past - that neighbor instead of stopping at its actual border.
+
+    `axis` is 'x' for a left/right edge search, 'y' for a top/bottom edge search.
+    `direction` is +1 to search outward in the increasing direction (right or
+    down), -1 for decreasing (left or up). Only a box whose perpendicular span
+    overlaps [perp_lo, perp_hi) is even a candidate - a panel elsewhere on the
+    page, outside this edge's own row/column band, can't be "in the way".
+
+    The cap is applied unconditionally, even if `coord` already sits past the
+    neighbor's near edge (a small overlap from ordinary marking imprecision,
+    exactly what gutter-snap normally straightens out) - `max(0, ...)` at the
+    end then floors that case to a radius of 0, i.e. this edge is left exactly
+    where it was marked rather than refined at all. That's a deliberate
+    fallback: better to leave a small, already-present overlap untouched than
+    let the search keep looking and risk resolving to a spurious background run
+    deeper inside (or past) the neighbor - which is the actual failure this
+    function exists to prevent."""
+    radius = requested_radius
+    for (l, t, r, b) in other_boxes:
+        other_lo, other_hi = (t, b) if axis == "x" else (l, r)
+        if other_hi <= perp_lo or other_lo >= perp_hi:
+            continue  # no perpendicular overlap - this box isn't in this edge's path
+
+        near, far = (l, r) if axis == "x" else (t, b)
+        if direction > 0:
+            radius = min(radius, near - coord - 1)
+        else:
+            radius = min(radius, coord - far - 1)
+    return max(0, radius)
+
+
 def _refine_edge(
     gray: np.ndarray,
     axis_len: int,
@@ -163,26 +208,38 @@ def refine_box_to_gutters(
     gray: np.ndarray,
     box: PixelBox,
     bg: float,
+    other_boxes: Sequence[PixelBox] = (),
     search_radius: int = 40,
     tolerance: float = 20.0,
     min_run: int = 3,
     min_bg_fraction: float = 0.96,
 ) -> PixelBox:
-    """Takes the LLM's best-guess pixel box and independently snaps each of its
-    four edges to the true gutter band nearest to it, falling back to the original
-    LLM coordinate for any edge where no confident gutter band is found (e.g.
+    """Takes the marked pixel box and independently snaps each of its four edges
+    to the true gutter band nearest to it, falling back to the original marked
+    coordinate for any edge where no confident gutter band is found (e.g.
     frame-breaking character/speech-bubble bleed, or a genuine full-bleed page
     edge). Each edge is scored against the box's *original*, un-refined
     perpendicular span, so the four edges refine independently rather than
     compounding each other's corrections.
+
+    `other_boxes` are every other panel already marked on this page (their
+    original, un-refined boxes) - each edge's search radius is shrunk so it can
+    never cross into one of them (see `_max_radius_before_neighbor`), which is
+    what stops a low-content neighbor's own interior whitespace from ever being
+    mistaken for a gutter running through - or past - it.
     """
     h, w = gray.shape
     left, top, right, bottom = box
 
-    top_r = _refine_edge(gray, h, top, left, right, True, bg, tolerance, search_radius, min_run, min_bg_fraction)
-    bottom_r = _refine_edge(gray, h, bottom, left, right, True, bg, tolerance, search_radius, min_run, min_bg_fraction)
-    left_r = _refine_edge(gray, w, left, top, bottom, False, bg, tolerance, search_radius, min_run, min_bg_fraction)
-    right_r = _refine_edge(gray, w, right, top, bottom, False, bg, tolerance, search_radius, min_run, min_bg_fraction)
+    top_radius = _max_radius_before_neighbor(top, -1, left, right, other_boxes, "y", search_radius)
+    bottom_radius = _max_radius_before_neighbor(bottom, 1, left, right, other_boxes, "y", search_radius)
+    left_radius = _max_radius_before_neighbor(left, -1, top, bottom, other_boxes, "x", search_radius)
+    right_radius = _max_radius_before_neighbor(right, 1, top, bottom, other_boxes, "x", search_radius)
+
+    top_r = _refine_edge(gray, h, top, left, right, True, bg, tolerance, top_radius, min_run, min_bg_fraction)
+    bottom_r = _refine_edge(gray, h, bottom, left, right, True, bg, tolerance, bottom_radius, min_run, min_bg_fraction)
+    left_r = _refine_edge(gray, w, left, top, bottom, False, bg, tolerance, left_radius, min_run, min_bg_fraction)
+    right_r = _refine_edge(gray, w, right, top, bottom, False, bg, tolerance, right_radius, min_run, min_bg_fraction)
 
     # Safety net: if a snap ever collapsed or inverted an axis (can happen in busy,
     # low-contrast art with no clean gutter), discard that axis's refinement and
