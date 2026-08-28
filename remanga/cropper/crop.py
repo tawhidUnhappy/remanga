@@ -14,7 +14,7 @@ from remanga.config import CropperConfig
 from remanga.console import console
 from remanga.cropper.crop_page import crop_page
 from remanga.cropper.crop_report import package_outputs, print_crop_summary, write_chapter_info, write_manifest
-from remanga.cropper.llm_zip import build_llm_zip_bundle
+from remanga.cropper.llm_bundles import build_llm_bundles, is_up_to_date
 from remanga.json_io import has_real_json_content, read_json
 from remanga.paths import get_chapter_dir
 
@@ -37,7 +37,6 @@ class CoordinateCropper:
         manifest_path = chapter_dir / "panels_manifest.json"
         chapter_info_path = chapter_dir / "chapter_info.json"
         expected_zip = chapter_dir / self.config.expected_zip_name
-        llm_zip_dir = chapter_dir / "panels_zip"
 
         if not has_real_json_content(crops_json_path):
             raise FileNotFoundError(
@@ -52,16 +51,16 @@ class CoordinateCropper:
             )
 
         # RESUME CHECK: If panels already exist and force=False, verify and skip
-        # the (expensive) re-crop. Still tops up the LLM zip bundle if it's
-        # missing (a lightweight re-encode of already-cropped panels, not a
-        # full re-crop) - so a chapter cropped before that feature existed, or
-        # with it previously disabled, gets the bundle built once on its next
-        # run instead of never.
+        # the (expensive) re-crop. Still tops up any enabled LLM bundle
+        # format that's missing (a lightweight re-encode of already-cropped
+        # panels, not a full re-crop) - so a chapter cropped before that
+        # format existed, or with it previously disabled, gets it built once
+        # on its next run instead of never.
         existing_panels = sorted(panels_dir.glob("panel_*.*"))
         if not force and existing_panels and manifest_path.exists() and expected_zip.exists():
             console.print(f"[bold green]✓ Found {len(existing_panels)} panels already cropped and {expected_zip.name} ready! Skipping re-crop.[/]")
-            if self.config.llm_zip_enabled and not any(llm_zip_dir.glob("panels_*.zip")):
-                build_llm_zip_bundle(self.config, chapter_dir, project_name, chapter_num, existing_panels)
+            if not is_up_to_date(self.config, chapter_dir):
+                build_llm_bundles(self.config, chapter_dir, project_name, chapter_num, existing_panels)
             return existing_panels
 
         # Clear existing panels directory before fresh cropping

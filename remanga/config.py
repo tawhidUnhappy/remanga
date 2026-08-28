@@ -45,23 +45,26 @@ class CropperConfig(BaseModel):
     panels_per_sheet: int = 4
     create_zip: bool = True
 
-    # A second, size-capped vision archive built purely for uploading to an LLM
+    # Extra, size-capped vision archives built purely for uploading to an LLM
     # chat interface - many of which cap uploads well under what a full
-    # chapter's full-resolution panels add up to. On by default: unlike
-    # create_zip (the primary sheets.zip/panels.zip, unaffected by this), most
-    # chapters will hit a typical upload cap before they run out of quality
-    # headroom to reclaim losslessly, so there's little reason to leave this
-    # off. Written to panels_zip/panels_1.zip, panels_2.zip, ... in the chapter
-    # folder - never touches panels/ itself (still the full-quality source
-    # video rendering reads from) or the primary archive. See
-    # remanga/cropper/llm_zip.py.
-    llm_zip_enabled: bool = True
-    # Each part is kept at or under this size by splitting on panel boundaries,
-    # after every panel has already been losslessly re-encoded as small as it
-    # can go (see llm_zip.py) - never by degrading image quality. A single
-    # panel larger than this on its own still gets its own (oversized) part
-    # rather than being split or dropped.
-    llm_zip_max_mb: float = 50.0
+    # chapter's full-resolution panels add up to. Off by default (a fresh
+    # install/other users) - flip either on to get one; this project's own
+    # local config.json keeps both on. Neither ever touches panels/ itself
+    # (still the full-quality source video rendering reads from) or the
+    # primary sheets.zip/panels.zip above - both are purely additional.
+    # Written to panels_zip/panels_1.zip, panels_2.zip, ... (llm_zip.py) and/or
+    # panels_pdf/panels_1.pdf, panels_2.pdf, ... (llm_pdf.py) in the chapter
+    # folder - see remanga/cropper/llm_bundles.py for how the two are wired
+    # together.
+    llm_zip_enabled: bool = False
+    llm_pdf_enabled: bool = False
+    # Shared by both formats above: each part is kept at or under this size by
+    # splitting on panel boundaries, after every panel has already been
+    # losslessly re-encoded as small as it can go (remanga/cropper/
+    # image_codec.py, remanga/cropper/pdf_writer.py) - never by degrading
+    # image quality. A single panel larger than this on its own still gets its
+    # own (oversized) part rather than being split or dropped.
+    llm_bundle_max_mb: float = 50.0
 
     @property
     def expected_zip_name(self) -> str:

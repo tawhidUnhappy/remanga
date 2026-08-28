@@ -10,7 +10,7 @@ from typing import Any, Dict, List
 from remanga.config import CropperConfig
 from remanga.console import console
 from remanga.cropper.archive import create_vision_archive
-from remanga.cropper.llm_zip import build_llm_zip_bundle
+from remanga.cropper.llm_bundles import build_llm_bundles
 from remanga.cropper.sheets import PanelSheetGenerator
 from remanga.json_io import write_json
 from remanga.paths import chapter_identity_fields
@@ -84,8 +84,9 @@ def package_outputs(
     if config.create_zip:
         create_vision_archive(config, chapter_dir, panels_dir, sheets_dir)
 
-    # 3. Package the size-capped LLM upload bundle (panels_zip/panels_N.zip) -
-    # see remanga.cropper.llm_zip. Independent of `config.create_zip`: this is
-    # meant to be the easier thing to actually upload, so it's built even if
-    # the primary archive is disabled.
-    build_llm_zip_bundle(config, chapter_dir, project_name, chapter_num, panel_paths)
+    # 3. Package whichever size-capped LLM upload bundle format(s) are
+    # enabled (panels_zip/panels_N.zip and/or panels_pdf/panels_N.pdf) - see
+    # remanga.cropper.llm_bundles. Independent of `config.create_zip`: these
+    # are meant to be the easier thing to actually upload, so they're built
+    # even if the primary archive is disabled.
+    build_llm_bundles(config, chapter_dir, project_name, chapter_num, panel_paths)

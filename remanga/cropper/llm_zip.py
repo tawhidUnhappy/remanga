@@ -1,28 +1,29 @@
-"""Builds a second, size-capped vision archive purely for uploading to an LLM
-chat interface - many of which cap file uploads well under what a full
-chapter's full-resolution panel PNGs add up to (a single chapter easily runs
-50-100+ MB). Completely separate from:
+"""Builds the zip variant of the size-capped LLM upload bundle - a second
+vision archive purely for uploading to an LLM chat interface, many of which
+cap file uploads well under what a full chapter's full-resolution panel PNGs
+add up to (a single chapter easily runs 50-100+ MB). Completely separate from:
 - panels/ itself, which is untouched and stays the full-quality source video
   rendering reads from (remanga.video.compose) - this module only ever READS
   those files, never writes into that folder.
 - the primary vision archive (remanga.cropper.archive's sheets.zip/panels.zip),
   which keeps working exactly as it did before this module existed - the
   "previous legacy method" prompts/narration.md still documents alongside this
-  one.
+  one (and alongside remanga.cropper.llm_pdf, the PDF equivalent).
 
 Strategy, in order:
 1. Shrink each panel losslessly - no pixel is altered, ever. Tries re-encoding
    as an optimized PNG and as a lossless WEBP (usually the bigger win for
    manga line art/halftones) and keeps whichever comes out smaller, but only
    after decoding it back and verifying it's pixel-for-pixel identical to the
-   source. Any candidate that doesn't round-trip exactly - or any decode/encode
-   error at all - is discarded in favor of the original file bytes. See
+   source via remanga.cropper.image_codec.pixel_identical. Any candidate that
+   doesn't round-trip exactly - or any decode/encode error at all - is
+   discarded in favor of the original file bytes. See
    `_smallest_lossless_encoding`.
 2. Pack the (still full-quality) shrunk images into as many zip parts as
-   needed to keep each part at or under `CropperConfig.llm_zip_max_mb`,
-   splitting only on panel boundaries (in original reading order) so a part
-   is never larger than the cap unless a single panel alone already exceeds
-   it. See `build_llm_zip_bundle`.
+   needed to keep each part at or under `CropperConfig.llm_bundle_max_mb`
+   (remanga.cropper.size_pack.pack_by_size), splitting only on panel
+   boundaries (in original reading order) so a part is never larger than the
+   cap unless a single panel alone already exceeds it.
 
 Each part gets its own chapter_info.json (same identity fields as the primary
 archive's - see remanga.paths.chapter_identity_fields - plus part_index/
@@ -42,30 +43,15 @@ from PIL import Image
 
 from remanga.config import CropperConfig
 from remanga.console import console
+from remanga.cropper.image_codec import pixel_identical
+from remanga.cropper.size_pack import pack_by_size
 from remanga.paths import chapter_identity_fields
-
-
-def _pixel_identical(reference: Image.Image, candidate_bytes: bytes) -> bool:
-    """True if decoding `candidate_bytes` gives back exactly `reference`'s pixels
-    (same size, same mode once aligned, same bytes) - the only thing that makes
-    a re-encode "lossless" in a way worth trusting, rather than just trusting a
-    codec's lossless flag blindly."""
-    try:
-        with Image.open(io.BytesIO(candidate_bytes)) as decoded:
-            decoded.load()
-            if decoded.size != reference.size:
-                return False
-            if decoded.mode != reference.mode:
-                decoded = decoded.convert(reference.mode)
-            return decoded.tobytes() == reference.tobytes()
-    except Exception:
-        return False
 
 
 def _smallest_lossless_encoding(path: Path) -> Tuple[bytes, str]:
     """Returns (bytes, extension) for whichever lossless encoding of this panel
     image comes out smallest: the original file as-is, a re-optimized PNG, or a
-    lossless WEBP - each of the latter two only wins if `_pixel_identical`
+    lossless WEBP - each of the latter two only wins if `pixel_identical`
     actually confirms it decodes back to the exact same image. Never touches
     `path` itself; the caller decides where (or whether) the result gets
     written."""
@@ -80,7 +66,7 @@ def _smallest_lossless_encoding(path: Path) -> Tuple[bytes, str]:
             png_buf = io.BytesIO()
             src.save(png_buf, "PNG", optimize=True, compress_level=9)
             png_bytes = png_buf.getvalue()
-            if len(png_bytes) < len(best_bytes) and _pixel_identical(src, png_bytes):
+            if len(png_bytes) < len(best_bytes) and pixel_identical(src, png_bytes):
                 best_bytes, best_ext = png_bytes, ".png"
 
             # method=6 (max effort) was benchmarked at ~25x method=4's encode
@@ -92,7 +78,7 @@ def _smallest_lossless_encoding(path: Path) -> Tuple[bytes, str]:
             webp_buf = io.BytesIO()
             src.save(webp_buf, "WEBP", lossless=True, quality=100, method=4)
             webp_bytes = webp_buf.getvalue()
-            if len(webp_bytes) < len(best_bytes) and _pixel_identical(src, webp_bytes):
+            if len(webp_bytes) < len(best_bytes) and pixel_identical(src, webp_bytes):
                 best_bytes, best_ext = webp_bytes, ".webp"
     except Exception:
         # Any decode/encode hiccup on this one panel: ship the original file
@@ -124,7 +110,7 @@ def build_llm_zip_bundle(
     for stale in out_dir.glob("panels_*.zip"):
         stale.unlink()
 
-    max_bytes = max(1, int(config.llm_zip_max_mb * 1024 * 1024))
+    max_bytes = max(1, int(config.llm_bundle_max_mb * 1024 * 1024))
 
     encoded: List[Tuple[str, str, bytes]] = []  # (panel_id, arcname, data)
     original_total = 0
@@ -133,19 +119,7 @@ def build_llm_zip_bundle(
         original_total += path.stat().st_size
         encoded.append((path.stem, f"{path.stem}{ext}", data))
 
-    # Greedily fill each part up to max_bytes, in panel order - a new part
-    # only starts once the current one is non-empty AND the next panel
-    # wouldn't fit, so a single oversized panel still gets a (solo) part
-    # instead of being split or dropped.
-    parts: List[List[Tuple[str, str, bytes]]] = [[]]
-    part_sizes = [0]
-    for panel_id, arcname, data in encoded:
-        size = len(data)
-        if part_sizes[-1] > 0 and part_sizes[-1] + size > max_bytes:
-            parts.append([])
-            part_sizes.append(0)
-        parts[-1].append((panel_id, arcname, data))
-        part_sizes[-1] += size
+    parts = pack_by_size(encoded, lambda item: len(item[2]), max_bytes)
 
     total_parts = len(parts)
     identity = chapter_identity_fields(project_name, chapter_num)
@@ -166,8 +140,8 @@ def build_llm_zip_bundle(
     encoded_total = sum(len(data) for _, _, data in encoded)
     saved_mb = max(0, original_total - encoded_total) / (1024 * 1024)
     console.print(
-        f"[bold green]✓ Built LLM upload bundle ({total_parts} part(s), "
-        f"≤{config.llm_zip_max_mb:g}MB each) in:[/] {out_dir} "
+        f"[bold green]✓ Built LLM upload bundle - ZIP ({total_parts} part(s), "
+        f"≤{config.llm_bundle_max_mb:g}MB each) in:[/] {out_dir} "
         f"[dim](losslessly saved {saved_mb:.1f}MB re-encoding panels)[/]"
     )
     return written

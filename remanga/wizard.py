@@ -92,6 +92,7 @@ def run_interactive_pipeline():
     # =========================================================================
     narration_path = chap_dir / "narration.json"
     target_vision_archive = chap_dir / archive_name
+    llm_pdf_parts = sorted((chap_dir / "panels_pdf").glob("panels_*.pdf")) if config.cropper.llm_pdf_enabled else []
     llm_zip_parts = sorted((chap_dir / "panels_zip").glob("panels_*.zip")) if config.cropper.llm_zip_enabled else []
     memory_path = ensure_memory_file(project)
     memory_has_content = has_real_json_content(memory_path)
@@ -99,13 +100,19 @@ def run_interactive_pipeline():
     if not has_real_json_content(narration_path):
         narration_path.parent.mkdir(parents=True, exist_ok=True)
         narration_path.write_text("", encoding="utf-8")
-        if llm_zip_parts:
+        # Prefer the PDF bundle when both are enabled - a single PDF is the
+        # most universally-accepted upload shape across LLM chat interfaces,
+        # more so than a zip of individual images. Either is a same-quality,
+        # smaller-or-equal-sized alternative to the primary archive; upload
+        # only one, never a mix (see prompts/narration.md's Chapter Identity).
+        bundle_parts, bundle_kind = (llm_pdf_parts, "PDF") if llm_pdf_parts else (llm_zip_parts, "zip")
+        if bundle_parts:
             upload_line = (
-                f"1. Upload [bold]{', '.join(p.name for p in llm_zip_parts)}[/] "
-                f"(in {llm_zip_parts[0].parent.resolve()}) along with [bold]prompts/narration.md[/] to your LLM "
-                f"[dim](a {config.cropper.llm_zip_max_mb:g}MB-per-part bundle, same panels losslessly "
-                f"re-encoded smaller - upload every part together; {target_vision_archive.resolve()} is the "
-                f"same panels as one full-quality archive if you'd rather use that instead)[/]"
+                f"1. Upload [bold]{', '.join(p.name for p in bundle_parts)}[/] "
+                f"(in {bundle_parts[0].parent.resolve()}) along with [bold]prompts/narration.md[/] to your LLM "
+                f"[dim](a {config.cropper.llm_bundle_max_mb:g}MB-per-part {bundle_kind} bundle, same panels "
+                f"losslessly re-encoded smaller - upload every part together; {target_vision_archive.resolve()} "
+                f"is the same panels as one full-quality archive if you'd rather use that instead)[/]"
             )
         else:
             upload_line = f"1. Upload [bold]{target_vision_archive.resolve()}[/] along with [bold]prompts/narration.md[/] to your LLM"
@@ -113,8 +120,9 @@ def run_interactive_pipeline():
             f"[bold yellow]Action Required:[/]\n"
             f"{upload_line}"
             + (f", plus the current [bold]{memory_path.resolve()}[/] for story continuity" if memory_has_content else "")
-            + f" [dim](each bundles a chapter_info.json with the project name, manga name/URL, and chapter "
-            f"number, so the LLM reads those itself - no need to state them in chat)[/].\n"
+            + f" [dim](each carries the project name, manga name/URL, and chapter number itself - as a "
+            f"chapter_info.json in a zip, or as page 1 in a PDF - so the LLM reads those itself, no need to "
+            f"state them in chat)[/].\n"
             f"2. It replies with two JSON blocks - save each one into its own file:\n"
             f"   [bold green]{narration_path.resolve()}[/]  (narration.json)\n"
             f"   [bold green]{memory_path.resolve()}[/]  (memory.json)",
