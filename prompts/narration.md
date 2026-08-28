@@ -14,7 +14,7 @@ Every `sheets.zip`/`panels.zip` you're given also contains one `chapter_info.jso
 alongside the panel images:
 ```json
 {
-  "project_name": "reincarnatedAsTheLeaderOfAVillainParty",
+  "project_name": "project-name-here",
   "manga_name": "Series Title",
   "manga_url": "https://mangadex.org/title/...",
   "chapter": "01"
