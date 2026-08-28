@@ -38,15 +38,44 @@ panels:
 
 ---
 
+## Maximum Deliberation, Every Single Panel, No Exceptions
+Wrong narration almost never comes from a hard panel - it comes from a rushed one: skimming
+past a panel, pattern-matching to what a "typical" panel like it usually says, or carrying an
+assumption forward from an earlier panel without actually re-checking it against this one.
+Before writing a single word for *any* panel, work through it explicitly and in full:
+- **Who is present**, and has anyone entered, left, or changed position since the last panel?
+- **What is physically drawn** - setting, props, actions, expressions, poses (Rule 2)?
+- **What does every speech bubble, thought bubble, and caption say**, in reading order, and
+  who is actually drawn speaking or thinking each one (Rule 7, Rule 10)?
+- **What has this chapter already established** that this panel depends on or continues?
+
+Do this for every panel at full effort - including the ones that look quiet, repetitive, or
+"obviously" simple. A transitional beat or a panel that looks like ones already covered is
+exactly where a rushed assumption slips a wrong detail through uncaught, because it never got
+looked at closely enough to be checked. "This one's easy, I don't need to think as hard" is
+the failure mode this section exists to rule out - there is no panel this doesn't apply to,
+and chapter length doesn't change that: panel 150 gets the same scrutiny as panel 1.
+
+If your interface exposes extended thinking/reasoning, spend it at maximum effort on every
+panel in the batch, not just the ones that look hard - don't ration it to save time or
+tokens. If a speaker, an object, or an action isn't immediately clear from the art, that's a
+reason to look again (bubble tails, body position, what surrounding panels already
+established) before committing to an interpretation, never a reason to guess at whatever
+reads smoothly. The three-pass process below is a second and third check on top of this, not
+a substitute for thinking carefully the first time through.
+
+---
+
 ## 1. Required Process: Three-Pass Narration
 Do not write `narration.json` in a single attempt. For every batch of panels you're given,
 work through these three explicit passes, in order, before producing any final output. The
 Golden Rules in Section 2 below are the standard every pass is checked against.
 
 ### Pass 1 — Rough Draft
-Write a first attempt at a narration entry for every panel, applying the Golden Rules as
-best you can on this first read. This pass doesn't need to be perfect - its only job is to
-get a complete, panel-by-panel draft down so Pass 2 has something concrete to interrogate.
+Write a first attempt at a narration entry for every panel, applying the full per-panel
+deliberation above and the Golden Rules to each one - not a quick skim. This pass doesn't
+need to be *polished* prose yet - its job is to get a complete, carefully-reasoned,
+panel-by-panel draft down so Pass 2 has something solid to interrogate, not a first guess.
 
 ### Pass 2 — Adversarial Self-Critique
 Set the role of "writer" aside and become a skeptical editor whose only job is to find
@@ -61,6 +90,10 @@ panel by panel and challenge every line:
 - Does the panel count and `panel_id` sequence actually match what was supplied (Rule 6)?
 - Read straight through as a viewer would hear it - is there any gap, jump, or missing beat
   that would leave someone feeling like they missed part of the story (Rule 9)?
+- Does any line read like it was pattern-matched from a "typical" panel like this one instead
+  of actually checked against *this* panel's own art - a quiet or repetitive-looking panel
+  that got less scrutiny than a dramatic one, when it should have gotten exactly the same
+  (see Maximum Deliberation, above)?
 Write down every mistake this turns up. Do not soften, dismiss, or defend a line just
 because Pass 1 already wrote it - the entire point of this pass is to find real problems,
 and a Pass 2 that comes back clean should be treated with suspicion, not relief - look
