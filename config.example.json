@@ -36,8 +36,7 @@
     "trim_min_background_fraction": 0.985,
     "trim_max_margin_fraction": 0.04,
     "dedupe_duplicate_panels": true,
-    "duplicate_iou_threshold": 0.6,
-    "duplicate_containment_threshold": 0.85
+    "duplicate_iou_threshold": 0.6
   },
   "marker": {
     "host": "127.0.0.1",

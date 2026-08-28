@@ -40,7 +40,7 @@ class CoordinateCropper:
         if not has_real_json_content(crops_json_path):
             raise FileNotFoundError(
                 f"Missing or empty crop instructions file: {crops_json_path}\n"
-                f"Please paste your LLM-generated JSON into this placeholder file."
+                f"Please mark this chapter's panels in the Panel Marker web UI first."
             )
 
         if not pages_dir.exists() or not list(pages_dir.glob("page_*.*")):

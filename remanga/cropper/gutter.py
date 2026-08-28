@@ -1,18 +1,19 @@
-"""Classical computer-vision refinement for LLM-guessed crop boxes.
+"""Classical computer-vision refinement for the crop boxes in `crops.json`.
 
-The vision LLM that produces `crops.json` is good at *finding* panels but, per the
-crop prompt's own "Pixel-Precision Mandate", is prone to eyeballing edges off by a
-wide margin — enough to slice a panel edge, a speech bubble, or leave a strip of
-the wrong panel in the crop.
+Every box in `crops.json` comes from the Panel Marker web UI (remanga/webui/) -
+either dragged out by hand or pre-filled by MAGI v3's detector and then left
+as-is or nudged by hand - and either source is good at *finding* panels but
+prone to being off by a few pixels at the actual edge: enough to slice a panel
+border, a speech bubble, or leave a strip of the wrong panel in the crop.
 
-This module treats the LLM's box as a best guess, not ground truth, and snaps each
-of its four edges onto the real boundary it was aiming for: it looks for the band
-of near-uniform background/paper color that separates panels (the "gutter") near
-each guessed edge, and centers the edge in the middle of that band — exactly the
-manual procedure the crop prompt asks a human to follow ("use the gutter as your
-ruler"). If no confident gutter band exists near an edge (frame-breaking bleed art,
-or the true physical edge of the page), that edge is left untouched rather than
-forced to snap somewhere wrong.
+This module treats the marked box as a best guess, not ground truth, and snaps
+each of its four edges onto the real boundary it was aiming for: it looks for
+the band of near-uniform background/paper color that separates panels (the
+"gutter") near each marked edge, and centers the edge in the middle of that
+band - the same thing a human would do eyeballing the gutter as a ruler, done
+per pixel instead. If no confident gutter band exists near an edge
+(frame-breaking bleed art, or the true physical edge of the page), that edge is
+left untouched rather than forced to snap somewhere wrong.
 
 See also: `remanga.cropper.seams` (a second pass that reconciles the shared edge
 between two adjacent panels instead of refining each independently) and
@@ -148,7 +149,7 @@ def _refine_edge(
 ) -> int:
     """Refines one edge coordinate (a y for a horizontal edge, an x for a vertical
     edge) by snapping it to the middle of the nearest real gutter band found within
-    `search_radius` pixels of the LLM's guess."""
+    `search_radius` pixels of the marked edge."""
     if coord <= 0 or coord >= axis_len:
         return coord  # true page edge - nothing to snap to, this is full bleed
 

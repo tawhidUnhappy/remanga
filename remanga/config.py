@@ -83,12 +83,15 @@ class CropperConfig(BaseModel):
     trim_min_background_fraction: float = 0.985   # stricter than gutter detection - only trims near-pure blank bands
     trim_max_margin_fraction: float = 0.04        # never trims more than this fraction of a panel's width/height per side
 
-    # Duplicate-crop safety net: drops any crops.json panel whose box duplicates or
-    # heavily overlaps an earlier one on the same page (same frame cropped twice),
-    # keeping the earlier crop. See remanga/cropper/dedupe.py and crop prompt Rule 8.
+    # Duplicate-crop safety net: drops any crops.json panel whose box is
+    # near-identical in both position and size to an earlier one on the same
+    # page (same frame marked twice), keeping the earlier crop. Deliberately
+    # IoU-only - a small panel nested inside/heavily overlapping a much larger
+    # one is a normal manga layout, not a duplicate, and must never be
+    # silently dropped just because it sits mostly inside another panel's
+    # box. See remanga/cropper/dedupe.py.
     dedupe_duplicate_panels: bool = True
-    duplicate_iou_threshold: float = 0.6          # intersection-over-union that counts as a duplicate
-    duplicate_containment_threshold: float = 0.85  # or: this fraction of the smaller box swallowed by the other
+    duplicate_iou_threshold: float = 0.6  # intersection-over-union that counts as a duplicate
 
 class TTSConfig(BaseModel):
     engine: str = "indextts-2.5"

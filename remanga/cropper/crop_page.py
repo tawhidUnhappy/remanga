@@ -55,24 +55,24 @@ def crop_page(
 
     result = PageCropResult(next_panel_counter=panel_counter)
 
-    # Safety net for crop-prompt Rule 8: drop any panel entry whose box is a
-    # duplicate/near-duplicate of an earlier one on this page (same bordered
-    # frame re-cropped twice), keeping the earliest occurrence per reading
-    # order. A recurring character across genuinely distinct, non-overlapping
-    # panel boxes is untouched - see remanga/cropper/dedupe.py.
+    # Safety net for an accidental double-mark: drop any panel entry whose box
+    # is near-identical in both position and size to an earlier one on this
+    # page (same bordered frame marked twice), keeping the earliest occurrence
+    # per reading order. A small panel deliberately nested inside or heavily
+    # overlapping a larger one - a normal manga layout, not a duplicate - is
+    # untouched; see remanga/cropper/dedupe.py.
     if config.dedupe_duplicate_panels:
         page_desc = page_entry.get("page_filename") or f"page index {page_entry.get('page_index')}"
         panels, dupe_report = dedupe_panels(
             panels,
             iou_threshold=config.duplicate_iou_threshold,
-            containment_threshold=config.duplicate_containment_threshold,
         )
         result.duplicate_panels_dropped = len(dupe_report)
         for dupe in dupe_report:
             console.print(
                 f"[bold yellow]⚠ Duplicate crop dropped on {page_desc}:[/] "
                 f"panel_id {dupe['dropped_panel_id']!r} overlaps panel_id {dupe['kept_panel_id']!r} "
-                f"(IoU {dupe['iou']:.2f}, containment {dupe['containment']:.2f}) - keeping the earlier crop."
+                f"(IoU {dupe['iou']:.2f}) - keeping the earlier crop."
             )
 
     page_filename = page_entry.get("page_filename")

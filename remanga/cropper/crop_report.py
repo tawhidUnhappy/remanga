@@ -51,7 +51,7 @@ def print_crop_summary(
     if config.snap_to_gutters:
         console.print(
             f"[dim]  ↳ Gutter-snap refined {gutter_panels_adjusted}/{total_panels} panels "
-            f"({gutter_edges_adjusted} edge(s) corrected from the LLM's guess via pixel analysis)[/]"
+            f"({gutter_edges_adjusted} edge(s) corrected from the marked box via pixel analysis)[/]"
         )
     if config.trim_panel_whitespace and panels_trimmed:
         console.print(
