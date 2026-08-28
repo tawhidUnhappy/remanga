@@ -9,6 +9,35 @@ Analyze sequential cropped manga visual assets—which will be provided either a
 
 ---
 
+## Chapter Identity: `chapter_info.json`
+Every `sheets.zip`/`panels.zip` you're given also contains one `chapter_info.json` file
+alongside the panel images:
+```json
+{
+  "project_name": "reincarnatedAsTheLeaderOfAVillainParty",
+  "manga_name": "Series Title",
+  "manga_url": "https://mangadex.org/title/...",
+  "chapter": "01"
+}
+```
+This is always present and authoritative - read `project_name` and `chapter` straight from
+it for every path/value in Section 4 below (`projects/<project_name>/...`, `"chapter"` in
+Block 1, `last_chapter_processed` in Block 2). **Never ask the user what chapter or project
+this is, and never guess it from the chat context** - it's already in the zip.
+
+**Determining whether this is the first chapter to process for this project:** don't infer
+this from the chapter number alone (a series can start at a chapter other than "1"). Go by
+whether you were also handed the current contents of `memory.json` alongside this chapter's
+panels:
+- **Given non-empty `memory.json` content:** this is a continuation - update that file in
+  place per Block 2's instructions, never discard it.
+- **Given nothing, or an empty/placeholder file:** treat this as the first chapter being
+  processed for this project - build both output files fresh from the schemas in Section 4.
+  **Do not ask the user whether a `memory.json` exists or request one** - if it wasn't handed
+  to you, there isn't one yet; proceed without it.
+
+---
+
 ## 1. Required Process: Three-Pass Narration
 Do not write `narration.json` in a single attempt. For every batch of panels you're given,
 work through these three explicit passes, in order, before producing any final output. The
@@ -209,9 +238,9 @@ values, no trailing commas, no `//` or `/* */` comments, no numbers written as s
 unless the schema below shows them quoted.
 
 `"01"`-style values below (`chapter`, `last_chapter_processed`) are illustrative
-placeholders, not literal text to copy — substitute the actual chapter number you were
-given for this run. If the chapter number was never stated to you, ask for it before
-generating output rather than guessing.
+placeholders, not literal text to copy — substitute the real `chapter` value from this
+run's `chapter_info.json` (see above). It's always present in the zip, so there is never a
+reason to ask the user for it or guess.
 
 ### Block 1: `narration.json`
 Save to: `projects/<project_name>/chapters/chapter_<num>/narration.json`
@@ -242,12 +271,13 @@ is malformed output.
 ### Block 2: `memory.json`
 Save to: `projects/<project_name>/memory.json`
 
-`memory.json` is auto-created as an **empty placeholder file** at the manga project root the first time the project is touched. On chapter 1 you are effectively starting from nothing — populate every field from what this chapter establishes. On chapter 2 onward, you will typically be given the **current contents of `memory.json`** (the state left by the previous chapter) alongside the new panels — **update it in place, do not discard it**:
+`memory.json` is auto-created as an **empty placeholder file** at the manga project root the first time the project is touched. As covered above under **Chapter Identity**: if you weren't given any prior `memory.json` content, that means there isn't one yet - build every field fresh from what this chapter establishes, and don't ask the user for one. Otherwise, you'll be given the **current contents of `memory.json`** (the state left by the previous chapter) alongside the new panels — **update it in place, do not discard it**:
 - Carry forward every existing character, faction, and unresolved cliffhanger untouched unless this chapter changes their status.
 - Append new `key_plot_points` from this chapter; do not delete prior chapters' entries.
 - Resolve any `unresolved_cliffhangers` this chapter pays off (remove them) and add any new ones this chapter opens.
-- Bump `last_chapter_processed` to the chapter you just processed.
-- If no prior `memory.json` content was provided to you at all, treat this as the first chapter and build the file fresh from the schema below.
+- Bump `last_chapter_processed` to the chapter you just processed (from `chapter_info.json`).
+- On a fresh `memory.json`, seed `series_title` from `chapter_info.json`'s `manga_name`
+  rather than inventing or guessing a title.
 
 ```json
 {

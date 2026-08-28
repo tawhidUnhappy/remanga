@@ -102,7 +102,9 @@ def run_interactive_pipeline():
             f"[bold yellow]Action Required:[/]\n"
             f"1. Upload [bold]{target_vision_archive.resolve()}[/] along with [bold]prompts/narration.md[/] to your LLM"
             + (f", plus the current [bold]{memory_path.resolve()}[/] for story continuity" if memory_has_content else "")
-            + ".\n"
+            + f" [dim]({archive_name} already bundles a chapter_info.json with the project name, "
+            f"manga name/URL, and chapter number, so the LLM reads those itself - no need to state them "
+            f"in chat)[/].\n"
             f"2. It replies with two JSON blocks - save each one into its own file:\n"
             f"   [bold green]{narration_path.resolve()}[/]  (narration.json)\n"
             f"   [bold green]{memory_path.resolve()}[/]  (memory.json)",
@@ -114,7 +116,7 @@ def run_interactive_pipeline():
     # =========================================================================
     # Step 5: Synthesizing Vocal Audio via IndexTTS-2.5
     # =========================================================================
-    console.print(f"\n[bold blue]=== Step 3: Synthesizing Vocal Audio via IndexTTS-2.5 (Monotone / Zero-Emotion) ===[/]")
+    console.print(f"\n[bold blue]=== Step 3: Synthesizing Vocal Audio via IndexTTS-2.5 ===[/]")
     tts = TTSEngine(config.tts, config.audio)
     tts.generate_narration_audio(project, chapter, interactive=True)
 

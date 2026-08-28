@@ -38,5 +38,12 @@ def create_vision_archive(
         if manifest.exists():
             zf.write(manifest, arcname="panels_manifest.json")
 
+        # Project/manga/chapter identity for the LLM narrating this chapter -
+        # see cropper/crop_report.py:write_chapter_info and
+        # prompts/narration.md's "Chapter Identity" section.
+        chapter_info = chapter_dir / "chapter_info.json"
+        if chapter_info.exists():
+            zf.write(chapter_info, arcname="chapter_info.json")
+
     console.print(f"[bold green]✓ Created Vision Archive ({zip_filename} - Mode: {asset_type.upper()}):[/] {zip_path}")
     return zip_path

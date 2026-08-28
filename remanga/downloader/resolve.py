@@ -67,6 +67,12 @@ class MangaDexResolver:
         # 4. Search by title
         return self.search_manga_by_title(raw_id)
 
+    @staticmethod
+    def _pick_title(title_map: Dict[str, str]) -> str:
+        """MangaDex's `attributes.title` is a locale -> title map (`{"en": ..., "ja": ...}`);
+        prefer English, otherwise whatever locale happens to be present."""
+        return title_map.get("en") or (list(title_map.values())[0] if title_map else "Unknown Title")
+
     def search_manga_by_title(self, title: str) -> str:
         """Search MangaDex for a manga title and return the top matching ID."""
         console.print(f"[cyan]Searching MangaDex for manga:[/] [bold]{title}[/]")
@@ -80,11 +86,19 @@ class MangaDexResolver:
             raise ValueError(f"No manga found on MangaDex matching query: '{title}'")
 
         manga_id = data[0]["id"]
-        attrs = data[0].get("attributes", {})
-        title_map = attrs.get("title", {})
-        found_title = title_map.get("en") or (list(title_map.values())[0] if title_map else "Unknown Title")
+        found_title = self._pick_title(data[0].get("attributes", {}).get("title", {}))
         console.print(f"[green]Found:[/] {found_title} [dim]({manga_id})[/]")
         return manga_id
+
+    def get_manga_title(self, manga_id: str) -> str:
+        """Fetch a manga's display title straight from its MangaDex ID. Resolving an
+        ID/URL directly (parse_manga_id's title-URL/UUID branches) never otherwise learns
+        the manga's actual title along the way - only a title *search* does - so this is
+        what lets downloader/mangadex.py persist a human-readable `manga_title` in
+        project.json regardless of which form the user originally gave it in."""
+        res = self.request_with_retry("GET", f"{BASE_URL}/manga/{manga_id}")
+        attrs = res.json().get("data", {}).get("attributes", {})
+        return self._pick_title(attrs.get("title", {}))
 
     def list_chapters(self, manga_id: str) -> List[Dict[str, Any]]:
         """Fetch all chapters for a manga filtered by language with pagination and polite pacing."""

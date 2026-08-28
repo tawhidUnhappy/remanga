@@ -52,10 +52,24 @@ class MangaDexDownloader:
 
         manga_id = self.resolver.parse_manga_id(manga_id_or_url)
 
+        # Resolving an ID/URL directly (as opposed to a title search - see
+        # MangaDexResolver.parse_manga_id) never otherwise learns the manga's
+        # actual title along the way, but cropper/crop_report.py's
+        # chapter_info.json (bundled into the vision zip - see
+        # prompts/narration.md) needs a human-readable name for the LLM, so
+        # fetch and cache it here. Only re-fetched when missing or the manga
+        # ID changed, to avoid an extra API call on every re-run of an
+        # already-downloaded chapter.
+        existing_meta = load_project_metadata(project_name)
+        manga_title = existing_meta.get("manga_title", "")
+        if not manga_title or existing_meta.get("manga_id") != manga_id:
+            manga_title = self.resolver.get_manga_title(manga_id)
+
         save_project_metadata(project_name, {
             "project_name": project_name,
             "manga_url": manga_id_or_url,
             "manga_id": manga_id,
+            "manga_title": manga_title,
             "last_chapter": str(chapter_num)
         })
 

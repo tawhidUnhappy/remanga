@@ -12,6 +12,7 @@ from remanga.console import console
 from remanga.cropper.archive import create_vision_archive
 from remanga.cropper.sheets import PanelSheetGenerator
 from remanga.json_io import write_json
+from remanga.paths import load_project_metadata
 
 
 def write_manifest(manifest_path: Path, chapter_num: str, panel_paths: List[Path], manifest_entries: List[Dict[str, Any]]) -> None:
@@ -19,6 +20,21 @@ def write_manifest(manifest_path: Path, chapter_num: str, panel_paths: List[Path
         "chapter": str(chapter_num),
         "total_panels": len(panel_paths),
         "panels": manifest_entries,
+    })
+
+
+def write_chapter_info(chapter_info_path: Path, project_name: str, chapter_num: str) -> None:
+    """Writes chapter_info.json - bundled into the vision zip alongside the panel
+    images (see archive.py) so the LLM narrating this chapter always has authoritative
+    project/manga/chapter identity straight from the upload, instead of depending on
+    whatever the human happens to type in the chat (see prompts/narration.md's
+    "Chapter Identity" section, which reads this file for exactly that)."""
+    meta = load_project_metadata(project_name)
+    write_json(chapter_info_path, {
+        "project_name": project_name,
+        "manga_name": meta.get("manga_title", ""),
+        "manga_url": meta.get("manga_url", ""),
+        "chapter": str(chapter_num),
     })
 
 

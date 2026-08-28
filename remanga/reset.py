@@ -22,13 +22,14 @@ KEEP_ON_MARKS_ONLY_RESTART = KEEP_ON_RESTART | {"crops.json"}
 
 # A "soft" restart additionally keeps everything upstream of TTS: crops.json
 # (the marked panel coordinates), panels/ (the actual cropped panel image
-# files), panels_manifest.json (crop.py's own bookkeeping for that folder),
+# files), panels_manifest.json and chapter_info.json (crop.py's own
+# bookkeeping/identity metadata for that folder - see cropper/crop_report.py),
 # and narration.json (the LLM-written script). That's the expensive-to-redo
 # work — marking every panel by hand and writing a whole chapter's narration
 # — so it lets voice/BGM/resolution/vision-format settings change and
 # TTS/mix/render redo cleanly without re-marking or re-narrating anything.
 # Sheets/the vision zip/audio/video still get wiped, same as a hard restart.
-KEEP_ON_SOFT_RESTART = KEEP_ON_RESTART | {"crops.json", "panels", "panels_manifest.json", "narration.json"}
+KEEP_ON_SOFT_RESTART = KEEP_ON_RESTART | {"crops.json", "panels", "panels_manifest.json", "chapter_info.json", "narration.json"}
 
 RESTART_MODES = ("hard", "marks_only", "soft")
 
@@ -74,9 +75,9 @@ def restart_chapter(
       recreates it as an empty placeholder (the same blank-file state it's in
       before any LLM has ever touched it - see json_io.has_real_json_content),
       so it reads as "not yet generated" rather than just missing.
-    - "soft": also keeps crops.json, panels/, panels_manifest.json, and
-      narration.json (see KEEP_ON_SOFT_RESTART) - only sheets/the vision
-      zip/audio/video get wiped.
+    - "soft": also keeps crops.json, panels/, panels_manifest.json,
+      chapter_info.json, and narration.json (see KEEP_ON_SOFT_RESTART) - only
+      sheets/the vision zip/audio/video get wiped.
 
     reverify_downloads (on by default, every mode) re-runs the normal download
     step's own presence/integrity check against pages/ afterward — re-fetching

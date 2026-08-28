@@ -120,7 +120,7 @@ def render_status_panel(project: str, chapter: str) -> Panel:
   5. Panel Contact Sheets: {'[green]✓ Yes (' + str(st['sheets_count']) + ' sheets)[/]' if st['sheets_count'] > 0 else '[dim yellow]✗ Not generated (Mode: ' + asset_mode + ')[/]'}
   6. Vision ZIP Archive  : {'[green]✓ Ready (' + str(st['chap_dir'] / target_zip_name) + ')[/]' if target_zip_ready else '[dim yellow]✗ Not generated[/]'}
   7. Narration Script    : {'[green]✓ Present (' + str(st['chap_dir'] / 'narration.json') + ')[/]' if st['narration_exist'] else '[yellow]✗ Missing/Empty placeholder[/]'}
-  8. Master Audio Track  : {'[green]✓ Generated (IndexTTS-2.5 Monotone)[/]' if st['master_audio_exist'] else '[red]✗ Not built (' + str(st['audio_clips_count']) + '/' + str(st['total_narration_entries']) + ' clips)[/]'}
+  8. Master Audio Track  : {'[green]✓ Generated (IndexTTS-2.5)[/]' if st['master_audio_exist'] else '[red]✗ Not built (' + str(st['audio_clips_count']) + '/' + str(st['total_narration_entries']) + ' clips)[/]'}
   9. Final Recap Video   : {'[green]✓ Ready (' + str(st['video_path']) + ')[/]' if st['video_exist'] else '[red]✗ Not rendered[/]'}
 """
     return Panel(status_str.strip(), title="[bold white]remanga Chapter Production Status[/]", border_style="blue")

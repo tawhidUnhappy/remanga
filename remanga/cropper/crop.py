@@ -13,7 +13,7 @@ from typing import List, Optional
 from remanga.config import CropperConfig
 from remanga.console import console
 from remanga.cropper.crop_page import crop_page
-from remanga.cropper.crop_report import package_outputs, print_crop_summary, write_manifest
+from remanga.cropper.crop_report import package_outputs, print_crop_summary, write_chapter_info, write_manifest
 from remanga.json_io import has_real_json_content, read_json
 from remanga.paths import get_chapter_dir
 
@@ -34,6 +34,7 @@ class CoordinateCropper:
         panels_dir = chapter_dir / "panels"
         sheets_dir = chapter_dir / "sheets"
         manifest_path = chapter_dir / "panels_manifest.json"
+        chapter_info_path = chapter_dir / "chapter_info.json"
         expected_zip = chapter_dir / self.config.expected_zip_name
 
         if not has_real_json_content(crops_json_path):
@@ -91,6 +92,7 @@ class CoordinateCropper:
             panels_trimmed += result.panels_trimmed
 
         write_manifest(manifest_path, chapter_num, output_panel_paths, manifest_data)
+        write_chapter_info(chapter_info_path, project_name, chapter_num)
         print_crop_summary(
             panels_dir, len(output_panel_paths), self.config,
             gutter_panels_adjusted, gutter_edges_adjusted, panels_trimmed, duplicate_panels_dropped,
