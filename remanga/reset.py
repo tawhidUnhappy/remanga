@@ -28,7 +28,9 @@ KEEP_ON_MARKS_ONLY_RESTART = KEEP_ON_RESTART | {"crops.json"}
 # work — marking every panel by hand and writing a whole chapter's narration
 # — so it lets voice/BGM/resolution/vision-format settings change and
 # TTS/mix/render redo cleanly without re-marking or re-narrating anything.
-# Sheets/the vision zip/audio/video still get wiped, same as a hard restart.
+# Sheets/the primary vision zip/the panels_zip LLM upload bundle/audio/video
+# still get wiped, same as a hard restart - all cheap to rebuild from the
+# panels/ this mode does keep.
 KEEP_ON_SOFT_RESTART = KEEP_ON_RESTART | {"crops.json", "panels", "panels_manifest.json", "chapter_info.json", "narration.json"}
 
 RESTART_MODES = ("hard", "marks_only", "soft")

@@ -46,6 +46,22 @@ def load_project_metadata(project_name: str) -> Dict[str, Any]:
     return read_json_or(get_project_metadata_path(project_name), {})
 
 
+def chapter_identity_fields(project_name: str, chapter_num: str) -> Dict[str, Any]:
+    """The project/manga/chapter identity fields every chapter_info.json starts
+    from - shared by the primary vision archive (cropper/crop_report.py's
+    write_chapter_info) and the size-capped LLM zip bundle (cropper/llm_zip.py),
+    which adds its own part_index/total_parts per part on top of this same
+    dict. See prompts/narration.md's "Chapter Identity" section for how the
+    LLM is expected to read whichever of those it's handed."""
+    meta = load_project_metadata(project_name)
+    return {
+        "project_name": project_name,
+        "manga_name": meta.get("manga_title", ""),
+        "manga_url": meta.get("manga_url", ""),
+        "chapter": str(chapter_num),
+    }
+
+
 def save_project_metadata(project_name: str, data: Dict[str, Any]) -> None:
     meta_path = get_project_metadata_path(project_name)
     existing = load_project_metadata(project_name)

@@ -92,19 +92,29 @@ def run_interactive_pipeline():
     # =========================================================================
     narration_path = chap_dir / "narration.json"
     target_vision_archive = chap_dir / archive_name
+    llm_zip_parts = sorted((chap_dir / "panels_zip").glob("panels_*.zip")) if config.cropper.llm_zip_enabled else []
     memory_path = ensure_memory_file(project)
     memory_has_content = has_real_json_content(memory_path)
 
     if not has_real_json_content(narration_path):
         narration_path.parent.mkdir(parents=True, exist_ok=True)
         narration_path.write_text("", encoding="utf-8")
+        if llm_zip_parts:
+            upload_line = (
+                f"1. Upload [bold]{', '.join(p.name for p in llm_zip_parts)}[/] "
+                f"(in {llm_zip_parts[0].parent.resolve()}) along with [bold]prompts/narration.md[/] to your LLM "
+                f"[dim](a {config.cropper.llm_zip_max_mb:g}MB-per-part bundle, same panels losslessly "
+                f"re-encoded smaller - upload every part together; {target_vision_archive.resolve()} is the "
+                f"same panels as one full-quality archive if you'd rather use that instead)[/]"
+            )
+        else:
+            upload_line = f"1. Upload [bold]{target_vision_archive.resolve()}[/] along with [bold]prompts/narration.md[/] to your LLM"
         console.print(Panel(
             f"[bold yellow]Action Required:[/]\n"
-            f"1. Upload [bold]{target_vision_archive.resolve()}[/] along with [bold]prompts/narration.md[/] to your LLM"
+            f"{upload_line}"
             + (f", plus the current [bold]{memory_path.resolve()}[/] for story continuity" if memory_has_content else "")
-            + f" [dim]({archive_name} already bundles a chapter_info.json with the project name, "
-            f"manga name/URL, and chapter number, so the LLM reads those itself - no need to state them "
-            f"in chat)[/].\n"
+            + f" [dim](each bundles a chapter_info.json with the project name, manga name/URL, and chapter "
+            f"number, so the LLM reads those itself - no need to state them in chat)[/].\n"
             f"2. It replies with two JSON blocks - save each one into its own file:\n"
             f"   [bold green]{narration_path.resolve()}[/]  (narration.json)\n"
             f"   [bold green]{memory_path.resolve()}[/]  (memory.json)",

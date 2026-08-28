@@ -10,9 +10,10 @@ from typing import Any, Dict, List
 from remanga.config import CropperConfig
 from remanga.console import console
 from remanga.cropper.archive import create_vision_archive
+from remanga.cropper.llm_zip import build_llm_zip_bundle
 from remanga.cropper.sheets import PanelSheetGenerator
 from remanga.json_io import write_json
-from remanga.paths import load_project_metadata
+from remanga.paths import chapter_identity_fields
 
 
 def write_manifest(manifest_path: Path, chapter_num: str, panel_paths: List[Path], manifest_entries: List[Dict[str, Any]]) -> None:
@@ -29,13 +30,7 @@ def write_chapter_info(chapter_info_path: Path, project_name: str, chapter_num: 
     project/manga/chapter identity straight from the upload, instead of depending on
     whatever the human happens to type in the chat (see prompts/narration.md's
     "Chapter Identity" section, which reads this file for exactly that)."""
-    meta = load_project_metadata(project_name)
-    write_json(chapter_info_path, {
-        "project_name": project_name,
-        "manga_name": meta.get("manga_title", ""),
-        "manga_url": meta.get("manga_url", ""),
-        "chapter": str(chapter_num),
-    })
+    write_json(chapter_info_path, chapter_identity_fields(project_name, chapter_num))
 
 
 def print_crop_summary(
@@ -64,7 +59,15 @@ def print_crop_summary(
         )
 
 
-def package_outputs(config: CropperConfig, chapter_dir: Path, panels_dir: Path, sheets_dir: Path, panel_paths: List[Path]) -> None:
+def package_outputs(
+    config: CropperConfig,
+    chapter_dir: Path,
+    panels_dir: Path,
+    sheets_dir: Path,
+    panel_paths: List[Path],
+    project_name: str,
+    chapter_num: str,
+) -> None:
     asset_type = getattr(config, "vision_asset_type", "sheets").lower()
 
     # 1. Generate vision contact sheets if enabled or if requested
@@ -75,6 +78,14 @@ def package_outputs(config: CropperConfig, chapter_dir: Path, panels_dir: Path, 
             panels_per_sheet=config.panels_per_sheet,
         )
 
-    # 2. Package into sheets.zip or panels.zip
+    # 2. Package into sheets.zip or panels.zip - the original, unaffected by
+    # anything below (still the "previous legacy method" prompts/narration.md
+    # documents alongside the LLM zip bundle).
     if config.create_zip:
         create_vision_archive(config, chapter_dir, panels_dir, sheets_dir)
+
+    # 3. Package the size-capped LLM upload bundle (panels_zip/panels_N.zip) -
+    # see remanga.cropper.llm_zip. Independent of `config.create_zip`: this is
+    # meant to be the easier thing to actually upload, so it's built even if
+    # the primary archive is disabled.
+    build_llm_zip_bundle(config, chapter_dir, project_name, chapter_num, panel_paths)

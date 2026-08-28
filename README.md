@@ -16,6 +16,7 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
 - [Resetting/Restarting a Chapter](#resettingrestarting-a-chapter)
 - [LLM Prompting & Vision Asset Guide](#llm-prompting--vision-asset-guide)
   - [Vision Upload Formats: sheets.zip vs panels.zip](#vision-upload-formats-sheetszip-vs-panelszip)
+  - [LLM Upload Bundle (panels_zip)](#llm-upload-bundle-panels_zip)
   - [Panel Marker Web UI](#panel-marker-web-ui)
   - [Temporal Horizon Prompting (Zero Spoilers)](#temporal-horizon-prompting-zero-spoilers)
 - [Natural, Expressive Narration](#natural-expressive-narration)
@@ -163,7 +164,9 @@ Run the interactive settings wizard anytime to configure vocal reference files, 
     "vision_asset_type": "sheets",
     "create_sheets": false,
     "panels_per_sheet": 4,
-    "create_zip": true
+    "create_zip": true,
+    "llm_zip_enabled": true,
+    "llm_zip_max_mb": 50.0
   },
   "marker": {
     "auto_open_browser": true,
@@ -232,10 +235,10 @@ Launches the **Panel Marker** web UI: MAGI v3 pre-fills every page's panel boxes
 ```bash
 ./run.sh crop --project "yandere_sister" --chapter "1"
 ```
-*Creates:* `panels/`, `panels_manifest.json`, and the vision archive matching `cropper.vision_asset_type` (`sheets.zip` + `sheets/`, or `panels.zip`). `sheets/` only gets built when it's actually needed for that archive, or if `cropper.create_sheets` is turned on explicitly.
+*Creates:* `panels/`, `panels_manifest.json`, the vision archive matching `cropper.vision_asset_type` (`sheets.zip` + `sheets/`, or `panels.zip`), and — since `cropper.llm_zip_enabled` defaults to on — `panels_zip/panels_1.zip` (see [LLM Upload Bundle](#llm-upload-bundle-panels_zip) below). `sheets/` only gets built when it's actually needed for that archive, or if `cropper.create_sheets` is turned on explicitly.
 
 ### 4. Generate and Place `narration.json` + `memory.json`
-Upload your generated vision archive (`sheets.zip` or `panels.zip`) and `prompts/narration.md` to your LLM — attaching the project's current `memory.json` too, once it has real content, so continuity carries across chapters. The prompt asks for **exactly two fenced JSON code blocks and nothing else** (no commentary before/after), so the LLM's reply can be copy-pasted straight into each file. The interactive wizard prints both destination paths when it gets to this step:
+Upload your generated vision archive — `panels_zip/panels_1.zip` (and any further parts) if `cropper.llm_zip_enabled` is on, otherwise `sheets.zip`/`panels.zip` — and `prompts/narration.md` to your LLM, attaching the project's current `memory.json` too, once it has real content, so continuity carries across chapters. The prompt asks for **exactly two fenced JSON code blocks and nothing else** (no commentary before/after), so the LLM's reply can be copy-pasted straight into each file. The interactive wizard prints exactly which archive to upload and both destination paths when it gets to this step:
 ```text
 projects/yandere_sister/chapters/chapter_1/narration.json   (Block 1)
 projects/yandere_sister/memory.json                         (Block 2)
@@ -301,6 +304,21 @@ Reopening the Panel Marker on a chapter that already has marks — via `remark`,
 To switch formats:
 1. Run `./run.sh setup-config` and choose option 2, **OR**
 2. Set `"vision_asset_type": "sheets"` (or `"panels"`) in `config.json`.
+
+### LLM Upload Bundle (`panels_zip`)
+
+A full chapter's `panels.zip`/`sheets.zip` easily runs 50-100+ MB — well past what a lot of LLM chat interfaces accept as a single upload. Rather than shrink that by degrading image quality, the crop step also builds a separate, size-capped bundle purely for uploading: `panels_zip/panels_1.zip`, `panels_2.zip`, ... in the chapter folder. It never touches `panels/` itself (still full quality, still what video rendering reads) or the primary archive above — this is a third, additional artifact.
+
+How it stays under the cap without losing quality:
+1. **Lossless re-encoding first.** Every panel is re-encoded as an optimized PNG and as a lossless WEBP, keeping whichever comes out smaller — but only after decoding the candidate back and verifying it's pixel-for-pixel identical to the original. Anything that doesn't round-trip exactly is discarded in favor of the original file. Manga line art/halftones typically shrink 30-50% this way with zero quality loss.
+2. **Split by panel, not by degrading further.** If the losslessly-shrunk panels still add up to more than the size cap, they're packed into as many `panels_N.zip` parts as needed (in reading order), each part staying at or under the cap. A single panel larger than the cap on its own still gets a (oversized) part rather than being split or quality-reduced.
+
+Each part carries its own `chapter_info.json` (project/manga/chapter identity, plus which part it is, how many parts total, and that part's panel range) — see the "Chapter Identity" section of [`prompts/narration.md`](prompts/narration.md) for how the LLM is expected to read it and wait for every part before writing output. Config (`cropper` section):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `llm_zip_enabled` | `true` | Build the bundle every crop run. Independent of `create_zip` above. |
+| `llm_zip_max_mb` | `50.0` | Size cap per part, in MB. |
 
 ---
 
@@ -420,10 +438,13 @@ remanga/
 │               ├── pages/              # Raw downloaded chapter pages
 │               ├── pages.zip           # (Optional - off by default) raw pages bundled for manual LLM upload
 │               ├── crops.json          # Panel crop coordinates from the Panel Marker web UI
-│               ├── panels/             # Cropped individual panel images
+│               ├── panels/             # Cropped individual panel images (full quality - video reads these)
+│               ├── panels_manifest.json  # Per-panel crop bookkeeping (crop.py)
+│               ├── chapter_info.json   # Project/manga/chapter identity, bundled into the archives below
 │               ├── sheets/             # 2x2 vision contact sheets
 │               ├── sheets.zip          # Contact sheets upload archive
 │               ├── panels.zip          # (Alternative) individual panels archive
+│               ├── panels_zip/         # Size-capped LLM upload bundle (panels_1.zip, ... - see above)
 │               ├── narration.json      # Synchronized narration script
 │               ├── audio/              # Synthesized vocal WAV files per panel
 │               ├── audio_timing.json   # Panel timeline synchronization map
@@ -485,6 +506,9 @@ Emotion/prosody is inferred straight from each panel's `text` and its punctuatio
 ### 4. How do I switch between `sheets.zip` and `panels.zip`?
 - Run `./run.sh setup-config` and select your preference in **Option 2 (Vision Asset Upload Format)**.
 - Or change `"vision_asset_type": "sheets"` to `"panels"` directly in `config.json`.
+
+### 4b. What's the `panels_zip/` folder, and can I turn it off?
+It's the size-capped LLM upload bundle (see [LLM Upload Bundle](#llm-upload-bundle-panels_zip)) — on by default because most chapters exceed common LLM upload caps well before running out of losslessly-reclaimable size. It doesn't replace `panels/` or the primary archive, and building it doesn't cost quality anywhere. To turn it off, set `"llm_zip_enabled": false` under `"cropper"` in `config.json`; to change the size cap, set `"llm_zip_max_mb"` there too (default `50.0`).
 
 ### 5. Do I need a GPU to mark panels?
 Only for the MAGI v3 auto-detect assist. Marking itself is manual clicking/dragging in the browser and needs no GPU at all — set `"magi_enabled": false` under `"marker"` in `config.json` to skip it and mark every panel by hand.
