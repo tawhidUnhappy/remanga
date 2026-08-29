@@ -54,20 +54,20 @@ class LLMBundleConfig(BaseModel):
       `CropperConfig.vision_asset_type`, so this can be built even while the
       primary archive is packaging plain panels.zip.
 
-    Each format is controlled by a pair of flags (`<format>_enabled`/
-    `<format>_split_enabled`) that together pick one of three states, not
-    two independent on/off switches:
-    - Both false: format not built at all.
-    - `_enabled` true, `_split_enabled` false: build it as **one single
-      file** holding every image, regardless of size.
-    - `_split_enabled` true (`_enabled` doesn't need to also be true - either
-      flag activates the format, see the `*_active` properties below): build
-      it **split into multiple size-capped parts** (`..._1.zip`/`.pdf`,
-      `..._2.___`, ...) instead, each kept at or under `max_mb`.
+    Each format is a checklist of two independent things to generate, not a
+    mode to pick - check either, both, or neither:
+    - `<format>_enabled`: generate it as **one single file** holding every
+      image, regardless of size.
+    - `<format>_split_enabled`: generate it **split into multiple
+      size-capped parts** instead (`..._1.zip`/`.pdf`, `..._2.___`, ...),
+      each kept at or under `max_mb`. Only check this if your LLM interface
+      actually enforces an upload size cap you're hitting - the plain
+      single-file default is simpler and works everywhere else.
 
-    Only turn splitting on for any format if your LLM interface actually
-    enforces an upload size cap you're hitting - the plain single-file
-    default is simpler and works everywhere else.
+    Checking `_split_enabled` builds the split version regardless of
+    `_enabled` (see the `*_active` properties below - either one is enough
+    to generate something for that format); checking both together still
+    only produces the split version, not two separate outputs.
 
     Written to panels_zip/panels_1.zip, ... and/or panels_pdf/panels_1.pdf,
     ... and/or sheets_zip/sheets_1.zip, ... in the chapter folder -
@@ -89,9 +89,10 @@ class LLMBundleConfig(BaseModel):
 
     @property
     def zip_active(self) -> bool:
-        """Whether the zip bundle should be built at all - either flag turns
-        it on; `zip_split_enabled` also picks split-into-parts mode over the
-        single-file default (see class docstring)."""
+        """Whether the zip bundle should be built at all - checking either
+        `zip_enabled` or `zip_split_enabled` is enough (see class docstring);
+        `zip_split_enabled` also picks the split-into-parts form over the
+        single-file default."""
         return self.zip_enabled or self.zip_split_enabled
 
     @property

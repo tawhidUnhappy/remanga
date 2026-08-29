@@ -325,10 +325,11 @@ Extra vision archives built purely for uploading to an LLM chat interface, along
 | `pdf` | The same individual panels, one per PDF page | PDF | Off |
 | `sheets` | 2x2 contact sheet composites instead - fewer, denser images, lower LLM vision-token cost at some per-panel resolution cost | zip | Off |
 
-Each format is a 3-way choice via a pair of flags (`<format>_enabled` / `<format>_split_enabled`), not two independent switches - **either flag on activates the format**:
-1. **Both off:** not built.
-2. **`_enabled` on, `_split_enabled` off:** one single file holding every image, regardless of size.
-3. **`_split_enabled` on** (regardless of `_enabled`): split into multiple size-capped parts instead - `..._1.zip`/`.pdf`, `..._2.___`, ... packed in reading order, each staying at or under `max_mb`, so a part is never larger than the cap unless a single image alone already exceeds it.
+Each format is a **checklist of two independent things to generate**, not a mode to pick — check either, both, or neither:
+- `<format>_enabled`: generate it as **one single file** holding every image, regardless of size.
+- `<format>_split_enabled`: generate it **split into multiple size-capped parts** instead - `..._1.zip`/`.pdf`, `..._2.___`, ... packed in reading order, each staying at or under `max_mb`, so a part is never larger than the cap unless a single image alone already exceeds it.
+
+Checking `_split_enabled` builds the split version regardless of `_enabled` (either one is enough to generate something for that format); checking both together still only produces the split version, not two separate outputs.
 
 How each format stays lossless:
 - **Zip / sheets zip:** the same re-encoding the primary archive above uses — every image re-encoded as an optimized PNG and as a lossless WEBP, keeping whichever comes out smaller. Manga line art/halftones typically shrink 30-50% this way.

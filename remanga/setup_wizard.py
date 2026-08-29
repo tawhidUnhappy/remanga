@@ -60,31 +60,30 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     )
     bundle = config.cropper.llm_bundle
 
-    def _ask_bundle_mode(label: str, filename_hint: str, enabled: bool, split_enabled: bool) -> tuple[bool, bool]:
-        """Each format is really a 3-way choice, not two independent yes/no
-        questions - see LLMBundleConfig's docstring. `enabled` alone means one
-        single file; `split_enabled` means split into size-capped parts
-        instead (and implies the format is built regardless of `enabled`)."""
+    def _ask_bundle_checklist(label: str, single_hint: str, split_hint: str, enabled: bool, split_enabled: bool) -> tuple[bool, bool]:
+        """Each format is a checklist of two independent things to generate,
+        not a mode to pick - see LLMBundleConfig's docstring. Both questions
+        are always asked, regardless of how the other was answered, so
+        checking or unchecking one never silently loses the other's setting."""
         console.print(f"\n[bold]{label}[/]")
-        current = "3" if split_enabled else "2" if enabled else "1"
-        choice = Prompt.ask(
-            f"  1) Off   2) Single file ({filename_hint})   3) Split into size-capped parts",
-            choices=["1", "2", "3"],
-            default=current,
-        ).strip()
-        return choice == "2", choice == "3"
+        enabled = Confirm.ask(f"  Generate a single file ({single_hint})?", default=enabled)
+        split_enabled = Confirm.ask(f"  Generate it split into size-capped parts ({split_hint})?", default=split_enabled)
+        return enabled, split_enabled
 
-    bundle.zip_enabled, bundle.zip_split_enabled = _ask_bundle_mode(
+    bundle.zip_enabled, bundle.zip_split_enabled = _ask_bundle_checklist(
         "ZIP bundle [dim](single file on by default - individual panels, a safe, no-downside win for LLM upload)[/]",
-        "panels_zip/panels_1.zip", bundle.zip_enabled, bundle.zip_split_enabled,
+        "panels_zip/panels_1.zip", "panels_zip/panels_1.zip, panels_2.zip, ...",
+        bundle.zip_enabled, bundle.zip_split_enabled,
     )
-    bundle.pdf_enabled, bundle.pdf_split_enabled = _ask_bundle_mode(
+    bundle.pdf_enabled, bundle.pdf_split_enabled = _ask_bundle_checklist(
         "PDF bundle [dim](off by default - individual panels, one per page)[/]",
-        "panels_pdf/panels_1.pdf", bundle.pdf_enabled, bundle.pdf_split_enabled,
+        "panels_pdf/panels_1.pdf", "panels_pdf/panels_1.pdf, panels_2.pdf, ...",
+        bundle.pdf_enabled, bundle.pdf_split_enabled,
     )
-    bundle.sheets_enabled, bundle.sheets_split_enabled = _ask_bundle_mode(
+    bundle.sheets_enabled, bundle.sheets_split_enabled = _ask_bundle_checklist(
         "SHEETS ZIP bundle [dim](off by default - 2x2 contact sheet composites, not individual panels)[/]",
-        "sheets_zip/sheets_1.zip", bundle.sheets_enabled, bundle.sheets_split_enabled,
+        "sheets_zip/sheets_1.zip", "sheets_zip/sheets_1.zip, sheets_2.zip, ...",
+        bundle.sheets_enabled, bundle.sheets_split_enabled,
     )
 
     if bundle.zip_split_enabled or bundle.pdf_split_enabled or bundle.sheets_split_enabled:
