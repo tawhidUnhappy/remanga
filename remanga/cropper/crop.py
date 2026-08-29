@@ -13,7 +13,7 @@ from typing import List, Optional
 from remanga.config import CropperConfig
 from remanga.console import console
 from remanga.cropper.crop_page import crop_page
-from remanga.cropper.crop_report import package_outputs, print_crop_summary, write_chapter_info, write_manifest
+from remanga.cropper.crop_report import ensure_sheets_generated, package_outputs, print_crop_summary, write_chapter_info, write_manifest
 from remanga.cropper.llm_bundles import build_llm_bundles, is_up_to_date
 from remanga.json_io import has_real_json_content, read_json
 from remanga.paths import get_chapter_dir
@@ -60,7 +60,8 @@ class CoordinateCropper:
         if not force and existing_panels and manifest_path.exists() and expected_zip.exists():
             console.print(f"[bold green]✓ Found {len(existing_panels)} panels already cropped and {expected_zip.name} ready! Skipping re-crop.[/]")
             if not is_up_to_date(self.config, chapter_dir):
-                build_llm_bundles(self.config, chapter_dir, project_name, chapter_num, existing_panels)
+                sheet_paths = ensure_sheets_generated(self.config, existing_panels, sheets_dir)
+                build_llm_bundles(self.config, chapter_dir, project_name, chapter_num, existing_panels, sheet_paths)
             return existing_panels
 
         # Clear existing panels directory before fresh cropping

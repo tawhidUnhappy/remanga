@@ -83,7 +83,7 @@ def build_llm_pdf_bundle(
     worse than no PDF at all, and the primary archive/zip bundle remain
     available regardless."""
     out_dir = chapter_dir / "panels_pdf"
-    if not config.llm_bundle.pdf_enabled or not panel_paths:
+    if not config.llm_bundle.pdf_active or not panel_paths:
         if out_dir.exists():
             for stale in out_dir.glob("panels_*.pdf"):
                 stale.unlink()

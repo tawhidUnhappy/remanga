@@ -27,6 +27,8 @@
       "zip_split_enabled": false,
       "pdf_enabled": false,
       "pdf_split_enabled": false,
+      "sheets_enabled": false,
+      "sheets_split_enabled": false,
       "max_mb": 50.0
     },
     "snap_to_gutters": true,

@@ -34,41 +34,75 @@ class LLMBundleConfig(BaseModel):
     """Vision archives built purely for uploading to an LLM chat interface,
     losslessly re-encoded smaller than the raw cropped files either way (see
     remanga/cropper/image_codec.py, remanga/cropper/pdf_writer.py) - never by
-    degrading image quality. Neither format ever touches panels/ (still the
+    degrading image quality. No format ever touches panels/ (still the
     full-quality source video rendering reads from) or the primary
-    sheets.zip/panels.zip (CropperConfig.create_zip) - both are purely
+    sheets.zip/panels.zip (CropperConfig.create_zip) - all three are purely
     additional, on top of whatever that's already doing.
 
-    Each format is really two independent choices, and they default
-    differently on purpose:
-    - `zip_enabled`/`pdf_enabled` - build this format at all. The zip is on
-      by default (a losslessly-shrunk zip is a safe, no-downside win over the
-      primary archive for LLM upload); the PDF is off by default (a less
-      universally-supported format, and PDF has no dedicated lossless image
-      codec of its own to lean on - see llm_pdf.py).
-    - `zip_split_enabled`/`pdf_split_enabled` - once a format is enabled,
-      whether it's also allowed to split into multiple size-capped parts
-      (panels_1.zip/panels_1.pdf, panels_2.___, ...) when the whole chapter
-      doesn't fit under `max_mb` in one file. Off by default for both: the
-      plain, predictable behavior is one file holding every panel, no matter
-      how large. Only turn splitting on if your LLM interface actually
-      enforces an upload size cap you're hitting.
+    Three independent formats, differing in *what* they package:
+    - `zip` - individual panel crops, one file per panel (remanga/cropper/
+      llm_zip.py). On by default - a losslessly-shrunk zip is a safe,
+      no-downside win over the primary archive for LLM upload.
+    - `pdf` - the same individual panel crops, one per PDF page (remanga/
+      cropper/llm_pdf.py). Off by default - a less universally-supported
+      format, and PDF has no dedicated lossless image codec of its own to
+      lean on (see that module).
+    - `sheets` - 2x2 contact sheet composites instead of individual panels,
+      still packaged as a zip (remanga/cropper/llm_sheets.py) - fewer,
+      denser images, for lower LLM vision-token cost at some loss of
+      per-panel resolution. Off by default; independent of
+      `CropperConfig.vision_asset_type`, so this can be built even while the
+      primary archive is packaging plain panels.zip.
 
-    Written to panels_zip/panels_1.zip, ... (remanga/cropper/llm_zip.py)
-    and/or panels_pdf/panels_1.pdf, ... (remanga/cropper/llm_pdf.py) in the
-    chapter folder - remanga/cropper/llm_bundles.py coordinates whichever
-    are enabled behind one call, so the rest of the crop pipeline never
-    needs to know about either format individually."""
+    Each format is controlled by a pair of flags (`<format>_enabled`/
+    `<format>_split_enabled`) that together pick one of three states, not
+    two independent on/off switches:
+    - Both false: format not built at all.
+    - `_enabled` true, `_split_enabled` false: build it as **one single
+      file** holding every image, regardless of size.
+    - `_split_enabled` true (`_enabled` doesn't need to also be true - either
+      flag activates the format, see the `*_active` properties below): build
+      it **split into multiple size-capped parts** (`..._1.zip`/`.pdf`,
+      `..._2.___`, ...) instead, each kept at or under `max_mb`.
+
+    Only turn splitting on for any format if your LLM interface actually
+    enforces an upload size cap you're hitting - the plain single-file
+    default is simpler and works everywhere else.
+
+    Written to panels_zip/panels_1.zip, ... and/or panels_pdf/panels_1.pdf,
+    ... and/or sheets_zip/sheets_1.zip, ... in the chapter folder -
+    remanga/cropper/llm_bundles.py coordinates whichever are active behind
+    one call, so the rest of the crop pipeline never needs to know about any
+    format individually."""
 
     zip_enabled: bool = True
     zip_split_enabled: bool = False
     pdf_enabled: bool = False
     pdf_split_enabled: bool = False
+    sheets_enabled: bool = False
+    sheets_split_enabled: bool = False
     # Only consulted when the matching *_split_enabled above is on: each part
-    # is kept at or under this size by splitting on panel boundaries. A
-    # single panel larger than this on its own still gets its own (oversized)
-    # part rather than being split or dropped. Shared by both formats.
+    # is kept at or under this size by splitting on image boundaries. A
+    # single image larger than this on its own still gets its own (oversized)
+    # part rather than being split or dropped. Shared by all three formats.
     max_mb: float = 50.0
+
+    @property
+    def zip_active(self) -> bool:
+        """Whether the zip bundle should be built at all - either flag turns
+        it on; `zip_split_enabled` also picks split-into-parts mode over the
+        single-file default (see class docstring)."""
+        return self.zip_enabled or self.zip_split_enabled
+
+    @property
+    def pdf_active(self) -> bool:
+        """Same as zip_active, for the PDF bundle."""
+        return self.pdf_enabled or self.pdf_split_enabled
+
+    @property
+    def sheets_active(self) -> bool:
+        """Same as zip_active, for the contact-sheets zip bundle."""
+        return self.sheets_enabled or self.sheets_split_enabled
 
 
 class CropperConfig(BaseModel):

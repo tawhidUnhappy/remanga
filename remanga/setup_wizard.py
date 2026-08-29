@@ -60,23 +60,34 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     )
     bundle = config.cropper.llm_bundle
 
-    console.print("\n[bold]ZIP bundle[/] [dim](on by default - a safe, no-downside win for LLM upload)[/]")
-    bundle.zip_enabled = Confirm.ask("Build it (panels_zip/panels_1.zip)?", default=bundle.zip_enabled)
-    if bundle.zip_enabled:
-        bundle.zip_split_enabled = Confirm.ask(
-            "  Split into multiple size-capped parts if it's too big for your LLM's upload limit?",
-            default=bundle.zip_split_enabled,
-        )
+    def _ask_bundle_mode(label: str, filename_hint: str, enabled: bool, split_enabled: bool) -> tuple[bool, bool]:
+        """Each format is really a 3-way choice, not two independent yes/no
+        questions - see LLMBundleConfig's docstring. `enabled` alone means one
+        single file; `split_enabled` means split into size-capped parts
+        instead (and implies the format is built regardless of `enabled`)."""
+        console.print(f"\n[bold]{label}[/]")
+        current = "3" if split_enabled else "2" if enabled else "1"
+        choice = Prompt.ask(
+            f"  1) Off   2) Single file ({filename_hint})   3) Split into size-capped parts",
+            choices=["1", "2", "3"],
+            default=current,
+        ).strip()
+        return choice == "2", choice == "3"
 
-    console.print("\n[bold]PDF bundle[/] [dim](off by default - one panel per page)[/]")
-    bundle.pdf_enabled = Confirm.ask("Build it (panels_pdf/panels_1.pdf)?", default=bundle.pdf_enabled)
-    if bundle.pdf_enabled:
-        bundle.pdf_split_enabled = Confirm.ask(
-            "  Split into multiple size-capped parts if it's too big for your LLM's upload limit?",
-            default=bundle.pdf_split_enabled,
-        )
+    bundle.zip_enabled, bundle.zip_split_enabled = _ask_bundle_mode(
+        "ZIP bundle [dim](single file on by default - individual panels, a safe, no-downside win for LLM upload)[/]",
+        "panels_zip/panels_1.zip", bundle.zip_enabled, bundle.zip_split_enabled,
+    )
+    bundle.pdf_enabled, bundle.pdf_split_enabled = _ask_bundle_mode(
+        "PDF bundle [dim](off by default - individual panels, one per page)[/]",
+        "panels_pdf/panels_1.pdf", bundle.pdf_enabled, bundle.pdf_split_enabled,
+    )
+    bundle.sheets_enabled, bundle.sheets_split_enabled = _ask_bundle_mode(
+        "SHEETS ZIP bundle [dim](off by default - 2x2 contact sheet composites, not individual panels)[/]",
+        "sheets_zip/sheets_1.zip", bundle.sheets_enabled, bundle.sheets_split_enabled,
+    )
 
-    if bundle.zip_split_enabled or bundle.pdf_split_enabled:
+    if bundle.zip_split_enabled or bundle.pdf_split_enabled or bundle.sheets_split_enabled:
         max_mb_str = Prompt.ask("[bold cyan]Size cap per part, in MB[/]", default=str(bundle.max_mb))
         try:
             bundle.max_mb = float(max_mb_str)
@@ -84,14 +95,15 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
             console.print(f"[yellow]Not a number, keeping {bundle.max_mb:g}MB.[/]")
 
     def _bundle_state(enabled: bool, split_enabled: bool) -> str:
-        if not enabled:
-            return "off"
-        return f"on, split at {bundle.max_mb:g}MB" if split_enabled else "on, unsplit"
+        if split_enabled:
+            return f"on, split at {bundle.max_mb:g}MB"
+        return "on, unsplit" if enabled else "off"
 
     console.print(
         f"[green]✓ LLM upload bundles:[/] "
         f"ZIP {_bundle_state(bundle.zip_enabled, bundle.zip_split_enabled)} | "
-        f"PDF {_bundle_state(bundle.pdf_enabled, bundle.pdf_split_enabled)}"
+        f"PDF {_bundle_state(bundle.pdf_enabled, bundle.pdf_split_enabled)} | "
+        f"SHEETS ZIP {_bundle_state(bundle.sheets_enabled, bundle.sheets_split_enabled)}"
     )
 
     # 4. Voice Language Selection
@@ -224,7 +236,8 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     summary_table.add_row(
         "LLM Upload Bundles",
         f"ZIP {_bundle_state(bundle.zip_enabled, bundle.zip_split_enabled)}, "
-        f"PDF {_bundle_state(bundle.pdf_enabled, bundle.pdf_split_enabled)}",
+        f"PDF {_bundle_state(bundle.pdf_enabled, bundle.pdf_split_enabled)}, "
+        f"SHEETS ZIP {_bundle_state(bundle.sheets_enabled, bundle.sheets_split_enabled)}",
     )
     summary_table.add_row("Resolution", f"{config.video.width}x{config.video.height} @ {config.video.fps}fps")
     summary_table.add_row("Background Style", f"{config.video.background_style.title()} Blur" if config.video.background_style == "blur" else "Solid Black")

@@ -16,7 +16,7 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
 - [Resetting/Restarting a Chapter](#resettingrestarting-a-chapter)
 - [LLM Prompting & Vision Asset Guide](#llm-prompting--vision-asset-guide)
   - [Vision Upload Formats: sheets.zip vs panels.zip](#vision-upload-formats-sheetszip-vs-panelszip)
-  - [LLM Upload Bundles (panels_zip / panels_pdf)](#llm-upload-bundles-panels_zip--panels_pdf)
+  - [LLM Upload Bundles (panels_zip / panels_pdf / sheets_zip)](#llm-upload-bundles-panels_zip--panels_pdf--sheets_zip)
   - [Panel Marker Web UI](#panel-marker-web-ui)
   - [Temporal Horizon Prompting (Zero Spoilers)](#temporal-horizon-prompting-zero-spoilers)
 - [Natural, Expressive Narration](#natural-expressive-narration)
@@ -40,7 +40,7 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
   - **Vision Contact Sheets (`sheets.zip`):** Consolidates cropped panels into 2x2 labeled grid sheets to drastically reduce LLM vision token consumption.
   - **Individual Panel Crops (`panels.zip`, default):** Packages individual high-resolution panel crops for maximum visual fidelity.
   - Configurable interactively and persistent in `config.json`.
-- **LLM Upload Bundles (`panels_zip` on by default, `panels_pdf` off):** losslessly re-encoded, smaller-than-source archives built purely for uploading — see [LLM Upload Bundles](#llm-upload-bundles-panels_zip--panels_pdf).
+- **LLM Upload Bundles (`panels_zip` on by default, `panels_pdf`/`sheets_zip` off):** losslessly re-encoded, smaller-than-source archives built purely for uploading, each independently a single file or split into size-capped parts — see [LLM Upload Bundles](#llm-upload-bundles-panels_zip--panels_pdf--sheets_zip).
 - **Natural, Expressive Vocal Synthesis (IndexTTS-2.5):**
   - No forced emotion vector — IndexTTS-2.5 infers its own emotion/prosody straight from each panel's narration text and punctuation, so delivery matches what the panel actually calls for instead of one flat register for every panel.
   - Temperature/top-p left at IndexTTS-2.5's own recommended defaults (`0.8`/`0.8`) for natural-sounding prosody — see [Natural, Expressive Narration](#natural-expressive-narration).
@@ -171,6 +171,8 @@ Run the interactive settings wizard anytime to configure vocal reference files, 
       "zip_split_enabled": false,
       "pdf_enabled": false,
       "pdf_split_enabled": false,
+      "sheets_enabled": false,
+      "sheets_split_enabled": false,
       "max_mb": 50.0
     }
   },
@@ -241,7 +243,7 @@ Launches the **Panel Marker** web UI: MAGI v3 pre-fills every page's panel boxes
 ```bash
 ./run.sh crop --project "yandere_sister" --chapter "1"
 ```
-*Creates:* `panels/`, `panels_manifest.json`, and the vision archive matching `cropper.vision_asset_type` (`sheets.zip` + `sheets/`, or `panels.zip`) — plus `panels_zip/panels_1.zip` (on by default) and/or `panels_pdf/panels_1.pdf` (off by default) per `cropper.llm_bundle.zip_enabled`/`pdf_enabled` (see [LLM Upload Bundles](#llm-upload-bundles-panels_zip--panels_pdf) below). `sheets/` only gets built when it's actually needed for that archive, or if `cropper.create_sheets` is turned on explicitly.
+*Creates:* `panels/`, `panels_manifest.json`, and the vision archive matching `cropper.vision_asset_type` (`sheets.zip` + `sheets/`, or `panels.zip`) — plus whichever of `panels_zip/panels_1.zip` (on by default), `panels_pdf/panels_1.pdf`, and `sheets_zip/sheets_1.zip` (both off by default) are active per `cropper.llm_bundle` (see [LLM Upload Bundles](#llm-upload-bundles-panels_zip--panels_pdf--sheets_zip) below). `sheets/` gets built whenever it's actually needed - for `vision_asset_type: "sheets"`, `create_sheets`, or the sheets zip bundle, whichever's on.
 
 ### 4. Generate and Place `narration.json` + `memory.json`
 Upload your generated vision archive — the PDF bundle if `cropper.llm_bundle.pdf_enabled` is on, else the zip bundle if `cropper.llm_bundle.zip_enabled` is on, else `sheets.zip`/`panels.zip` — and `prompts/narration.md` to your LLM, attaching the project's current `memory.json` too, once it has real content, so continuity carries across chapters. The prompt asks for **exactly two fenced JSON code blocks and nothing else** (no commentary before/after), so the LLM's reply can be copy-pasted straight into each file. The interactive wizard prints exactly which archive to upload and both destination paths when it gets to this step:
@@ -307,35 +309,45 @@ Reopening the Panel Marker on a chapter that already has marks — via `remark`,
 | **Individual Panels** (default) | `panels.zip` | Standalone cropped images (`panel_001.png`, etc.) | **Maximum resolution & fine detail examination** |
 | **Contact Sheets** | `sheets.zip` | 2x2 labeled grid images (`sheet_001.png`, etc.) | **Low vision token cost & fast LLM inference** (75% fewer images uploaded) |
 
-Every image packed into either archive goes through the same lossless re-encoding the LLM upload bundles below use (see [LLM Upload Bundles](#llm-upload-bundles-panels_zip--panels_pdf) for exactly how) before being zipped — typically ~40-50% smaller than the raw cropped files, at no quality cost, with no separate setting to turn on.
+Every image packed into either archive goes through the same lossless re-encoding the LLM upload bundles below use (see [LLM Upload Bundles](#llm-upload-bundles-panels_zip--panels_pdf--sheets_zip) for exactly how) before being zipped — typically ~40-50% smaller than the raw cropped files, at no quality cost, with no separate setting to turn on.
 
 To switch formats:
 1. Run `./run.sh setup-config` and choose option 2, **OR**
 2. Set `"vision_asset_type": "sheets"` (or `"panels"`, the default) in `config.json`.
 
-### LLM Upload Bundles (`panels_zip` / `panels_pdf`)
+### LLM Upload Bundles (`panels_zip` / `panels_pdf` / `sheets_zip`)
 
-Extra vision archives built purely for uploading to an LLM chat interface, alongside the primary archive above (never replacing it, and never touching `panels/` - still full quality, still what video rendering reads). Two independent formats, and for each one, two independent choices:
+Extra vision archives built purely for uploading to an LLM chat interface, alongside the primary archive above (never replacing it, and never touching `panels/` - still full quality, still what video rendering reads). Three independent formats, differing in *what* they package:
 
-- **Build it at all** (`zip_enabled` / `pdf_enabled`). The **zip is on by default** - a losslessly-shrunk zip is a safe, no-downside win over the primary archive for LLM upload, built into `panels_zip/panels_1.zip`. The **PDF is off by default** - a less universally-supported format, and PDF has no dedicated lossless image codec of its own to lean on (see below) - `panels_pdf/panels_1.pdf` if turned on.
-- **Split into multiple size-capped parts** (`zip_split_enabled` / `pdf_split_enabled`), **off by default for both**. The plain default is one file holding every panel, regardless of size. Only turn splitting on if your LLM interface actually enforces an upload cap you're hitting - then `panels_1.zip`/`.pdf`, `panels_2.___`, ... get packed in reading order, each staying at or under `max_mb`, so a part is never larger than the cap unless a single panel alone already exceeds it.
+| Format | Packages | Container | Default |
+|---|---|---|---|
+| `zip` | Individual panel crops, one file per panel | zip | **On** |
+| `pdf` | The same individual panels, one per PDF page | PDF | Off |
+| `sheets` | 2x2 contact sheet composites instead - fewer, denser images, lower LLM vision-token cost at some per-panel resolution cost | zip | Off |
 
-How either format stays lossless:
-- **Zip:** the same re-encoding the primary archive above uses — every panel re-encoded as an optimized PNG and as a lossless WEBP, keeping whichever comes out smaller. Manga line art/halftones typically shrink 30-50% this way.
-- **PDF:** every panel is embedded as a `FlateDecode`-compressed raw bitmap (PDF's own native lossless image representation — the same class of compression a PNG uses internally, just packaged the way PDF expects), optionally TIFF-Predictor-2-filtered first for a better ratio. Pillow's own PDF writer re-encodes RGB images as lossy JPEG with no way to turn that off short of quantizing colors, which is why this is built directly rather than through Pillow's `Image.save(..., "PDF")`.
-- Either way, a candidate re-encoding only ever gets used after decoding it back and verifying it's pixel-for-pixel identical to the original — anything that doesn't round-trip exactly is discarded in favor of a safer encoding (or the original file, for the zip).
+Each format is a 3-way choice via a pair of flags (`<format>_enabled` / `<format>_split_enabled`), not two independent switches - **either flag on activates the format**:
+1. **Both off:** not built.
+2. **`_enabled` on, `_split_enabled` off:** one single file holding every image, regardless of size.
+3. **`_split_enabled` on** (regardless of `_enabled`): split into multiple size-capped parts instead - `..._1.zip`/`.pdf`, `..._2.___`, ... packed in reading order, each staying at or under `max_mb`, so a part is never larger than the cap unless a single image alone already exceeds it.
 
-Each part carries the same project/manga/chapter identity, plus which part it is, how many parts total, and that part's panel range — as a `chapter_info.json` file for a zip part, or as page 1 of a PDF part (rendered as plain, readable text, since a PDF can't hold a separate loose file the way a zip can) - true even with splitting off and a single part, so an LLM given only one part never has to guess whether more exist. See the "Chapter Identity" section of [`prompts/narration.md`](prompts/narration.md) for how the LLM is expected to read it.
+How each format stays lossless:
+- **Zip / sheets zip:** the same re-encoding the primary archive above uses — every image re-encoded as an optimized PNG and as a lossless WEBP, keeping whichever comes out smaller. Manga line art/halftones typically shrink 30-50% this way.
+- **PDF:** every image is embedded as a `FlateDecode`-compressed raw bitmap (PDF's own native lossless image representation — the same class of compression a PNG uses internally, just packaged the way PDF expects), optionally TIFF-Predictor-2-filtered first for a better ratio. Pillow's own PDF writer re-encodes RGB images as lossy JPEG with no way to turn that off short of quantizing colors, which is why this is built directly rather than through Pillow's `Image.save(..., "PDF")`.
+- Either way, a candidate re-encoding only ever gets used after decoding it back and verifying it's pixel-for-pixel identical to the original — anything that doesn't round-trip exactly is discarded in favor of a safer encoding (or the original file, for the zip formats).
+
+Each part carries the same project/manga/chapter identity, plus which part it is, how many parts total, and that part's image range — as a `chapter_info.json` file for a zip/sheets-zip part, or as page 1 of a PDF part (rendered as plain, readable text, since a PDF can't hold a separate loose file the way a zip can) - true even with splitting off and a single part, so an LLM given only one part never has to guess whether more exist. See the "Chapter Identity" section of [`prompts/narration.md`](prompts/narration.md) for how the LLM is expected to read it.
 
 Every LLM-bundle setting lives together under one `cropper.llm_bundle` object, so there's exactly one place to look — set it interactively via `./run.sh setup-config` (step 3), or by hand in `config.json`:
 
 | Key (under `cropper.llm_bundle`) | Default | Meaning |
 |---|---|---|
-| `zip_enabled` | `true` | Build the zip bundle every crop run. Independent of `create_zip` above. |
+| `zip_enabled` | `true` | Build the zip bundle (individual panels) every crop run. Independent of `create_zip` above. |
 | `zip_split_enabled` | `false` | Allow the zip bundle to split into multiple size-capped parts. |
-| `pdf_enabled` | `false` | Build the PDF bundle every crop run. |
+| `pdf_enabled` | `false` | Build the PDF bundle (individual panels) every crop run. |
 | `pdf_split_enabled` | `false` | Allow the PDF bundle to split into multiple size-capped parts. |
-| `max_mb` | `50.0` | Size cap per part, in MB — shared by both formats, only used when their `*_split_enabled` is on. |
+| `sheets_enabled` | `false` | Build the sheets zip bundle (2x2 composites) every crop run. Independent of `vision_asset_type` above - `sheets/` gets generated for this even in `"panels"` mode. |
+| `sheets_split_enabled` | `false` | Allow the sheets zip bundle to split into multiple size-capped parts. |
+| `max_mb` | `50.0` | Size cap per part, in MB — shared by all three formats, only used when their `*_split_enabled` is on. |
 
 ---
 
@@ -461,8 +473,9 @@ remanga/
 │               ├── sheets/             # 2x2 vision contact sheets
 │               ├── sheets.zip          # Contact sheets upload archive
 │               ├── panels.zip          # (Alternative) individual panels archive
-│               ├── panels_zip/         # (Off by default) size-capped LLM upload bundle - panels_1.zip, ...
-│               ├── panels_pdf/         # (Off by default) size-capped LLM upload bundle - panels_1.pdf, ...
+│               ├── panels_zip/         # (On by default) LLM upload bundle - individual panels - panels_1.zip, ...
+│               ├── panels_pdf/         # (Off by default) LLM upload bundle - individual panels - panels_1.pdf, ...
+│               ├── sheets_zip/         # (Off by default) LLM upload bundle - 2x2 sheet composites - sheets_1.zip, ...
 │               ├── narration.json      # Synchronized narration script
 │               ├── audio/              # Synthesized vocal WAV files per panel
 │               ├── audio_timing.json   # Panel timeline synchronization map
@@ -526,13 +539,14 @@ Emotion/prosody is inferred straight from each panel's `text` and its punctuatio
 - Run `./run.sh setup-config` and select your preference in **Option 2 (Vision Asset Upload Format)**.
 - Or set `"vision_asset_type": "sheets"` directly in `config.json`.
 
-### 4b. What are the `panels_zip/`/`panels_pdf/` folders, and how do I configure them?
-They're the LLM upload bundles (see [LLM Upload Bundles](#llm-upload-bundles-panels_zip--panels_pdf)). The **zip is on by default** (one unsplit `panels_1.zip`); the **PDF is off**. Neither replaces `panels/` or the primary archive, and building either doesn't cost quality anywhere. Easiest way to change either: `./run.sh setup-config`, step 3 (LLM Upload Bundles) — asks yes/no for each format, yes/no for splitting into size-capped parts, and the size cap, no manual editing needed. Or edit `config.json` directly — every setting for both lives under one `"llm_bundle"` object in the `"cropper"` section:
+### 4b. What are the `panels_zip/`/`panels_pdf/`/`sheets_zip/` folders, and how do I configure them?
+They're the LLM upload bundles (see [LLM Upload Bundles](#llm-upload-bundles-panels_zip--panels_pdf--sheets_zip)). The **zip is on by default** (one unsplit `panels_1.zip`); **PDF and sheets zip are off**. None replace `panels/` or the primary archive, and building any of them doesn't cost quality anywhere. Easiest way to change any of them: `./run.sh setup-config`, step 3 (LLM Upload Bundles) — asks yes/no for each format, yes/no for splitting into size-capped parts, and the size cap, no manual editing needed. Or edit `config.json` directly — every setting for all three lives under one `"llm_bundle"` object in the `"cropper"` section:
 ```json
 "cropper": {
   "llm_bundle": {
     "zip_enabled": true, "zip_split_enabled": false,
     "pdf_enabled": false, "pdf_split_enabled": false,
+    "sheets_enabled": false, "sheets_split_enabled": false,
     "max_mb": 50.0
   }
 }

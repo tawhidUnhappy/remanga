@@ -92,20 +92,28 @@ def run_interactive_pipeline():
     # =========================================================================
     narration_path = chap_dir / "narration.json"
     target_vision_archive = chap_dir / archive_name
-    llm_pdf_parts = sorted((chap_dir / "panels_pdf").glob("panels_*.pdf")) if config.cropper.llm_bundle.pdf_enabled else []
-    llm_zip_parts = sorted((chap_dir / "panels_zip").glob("panels_*.zip")) if config.cropper.llm_bundle.zip_enabled else []
+    llm_pdf_parts = sorted((chap_dir / "panels_pdf").glob("panels_*.pdf")) if config.cropper.llm_bundle.pdf_active else []
+    llm_zip_parts = sorted((chap_dir / "panels_zip").glob("panels_*.zip")) if config.cropper.llm_bundle.zip_active else []
+    llm_sheets_parts = sorted((chap_dir / "sheets_zip").glob("sheets_*.zip")) if config.cropper.llm_bundle.sheets_active else []
     memory_path = ensure_memory_file(project)
     memory_has_content = has_real_json_content(memory_path)
 
     if not has_real_json_content(narration_path):
         narration_path.parent.mkdir(parents=True, exist_ok=True)
         narration_path.write_text("", encoding="utf-8")
-        # Prefer the PDF bundle when both are enabled - a single PDF is the
-        # most universally-accepted upload shape across LLM chat interfaces,
-        # more so than a zip of individual images. Either is a same-quality,
-        # smaller-or-equal-sized alternative to the primary archive; upload
-        # only one, never a mix (see prompts/narration.md's Chapter Identity).
-        bundle_parts, bundle_kind = (llm_pdf_parts, "PDF") if llm_pdf_parts else (llm_zip_parts, "zip")
+        # Prefer whichever bundle is active in this order: PDF (the most
+        # universally-accepted single-file upload shape) > zip of individual
+        # panels (max detail) > sheets zip (2x2 composites, fewer/denser
+        # images - lower vision-token cost at some per-panel resolution
+        # cost). Any of these is a same-quality-or-smaller alternative to the
+        # primary archive; upload only one, never a mix (see
+        # prompts/narration.md's Chapter Identity).
+        if llm_pdf_parts:
+            bundle_parts, bundle_kind = llm_pdf_parts, "PDF"
+        elif llm_zip_parts:
+            bundle_parts, bundle_kind = llm_zip_parts, "zip"
+        else:
+            bundle_parts, bundle_kind = llm_sheets_parts, "sheets zip"
         if bundle_parts:
             size_note = (
                 f"split into {len(bundle_parts)} parts, each ≤{config.cropper.llm_bundle.max_mb:g}MB - upload every "
@@ -114,8 +122,8 @@ def run_interactive_pipeline():
             upload_line = (
                 f"1. Upload [bold]{', '.join(p.name for p in bundle_parts)}[/] "
                 f"(in {bundle_parts[0].parent.resolve()}) along with [bold]prompts/narration.md[/] to your LLM "
-                f"[dim](a {bundle_kind} bundle, same panels losslessly re-encoded smaller, {size_note}; "
-                f"{target_vision_archive.resolve()} is the same panels as one full-quality archive if you'd "
+                f"[dim](a {bundle_kind} bundle, losslessly re-encoded smaller, {size_note}; "
+                f"{target_vision_archive.resolve()} is the same content as one full-quality archive if you'd "
                 f"rather use that instead)[/]"
             )
         else:

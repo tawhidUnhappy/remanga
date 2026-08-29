@@ -33,6 +33,29 @@ def write_chapter_info(chapter_info_path: Path, project_name: str, chapter_num: 
     write_json(chapter_info_path, chapter_identity_fields(project_name, chapter_num))
 
 
+def ensure_sheets_generated(config: CropperConfig, panel_paths: List[Path], sheets_dir: Path) -> List[Path]:
+    """Generates sheet_*.png contact sheet composites into `sheets_dir` if
+    anything actually needs them right now: the primary archive is in
+    "sheets" mode, `create_sheets` is forced on, or the sheets LLM bundle
+    (LLMBundleConfig.sheets_active) is - the last one independent of
+    `vision_asset_type`, so this format can be built even while the primary
+    archive is packaging plain panels.zip. Shared by package_outputs (every
+    fresh crop) and crop.py's resume-check top-up path (an already-cropped
+    chapter that just had the sheets bundle turned on, so sheets/ doesn't
+    exist yet). Returns whatever's on disk in `sheets_dir` either way, so a
+    caller that doesn't need to regenerate anything can still use what's
+    already there."""
+    asset_type = getattr(config, "vision_asset_type", "panels").lower()
+    needs_sheets = config.create_sheets or asset_type == "sheets" or config.llm_bundle.sheets_active
+    if panel_paths and needs_sheets:
+        return PanelSheetGenerator.create_panel_sheets(
+            panel_paths=panel_paths,
+            output_dir=sheets_dir,
+            panels_per_sheet=config.panels_per_sheet,
+        )
+    return sorted(sheets_dir.glob("sheet_*.*")) if sheets_dir.exists() else []
+
+
 def print_crop_summary(
     panels_dir: Path,
     total_panels: int,
@@ -68,25 +91,18 @@ def package_outputs(
     project_name: str,
     chapter_num: str,
 ) -> None:
-    asset_type = getattr(config, "vision_asset_type", "panels").lower()
-
-    # 1. Generate vision contact sheets if enabled or if requested
-    if panel_paths and (config.create_sheets or asset_type == "sheets"):
-        PanelSheetGenerator.create_panel_sheets(
-            panel_paths=panel_paths,
-            output_dir=sheets_dir,
-            panels_per_sheet=config.panels_per_sheet,
-        )
+    # 1. Generate vision contact sheets if anything needs them right now.
+    sheet_paths = ensure_sheets_generated(config, panel_paths, sheets_dir)
 
     # 2. Package into sheets.zip or panels.zip - the original, unaffected by
     # anything below (still the "previous legacy method" prompts/narration.md
-    # documents alongside the LLM zip bundle).
+    # documents alongside the LLM upload bundles).
     if config.create_zip:
         create_vision_archive(config, chapter_dir, panels_dir, sheets_dir)
 
     # 3. Package whichever size-capped LLM upload bundle format(s) are
-    # enabled (panels_zip/panels_N.zip and/or panels_pdf/panels_N.pdf) - see
+    # active (panels_zip/, panels_pdf/, and/or sheets_zip/) - see
     # remanga.cropper.llm_bundles. Independent of `config.create_zip`: these
     # are meant to be the easier thing to actually upload, so they're built
     # even if the primary archive is disabled.
-    build_llm_bundles(config, chapter_dir, project_name, chapter_num, panel_paths)
+    build_llm_bundles(config, chapter_dir, project_name, chapter_num, panel_paths, sheet_paths)
