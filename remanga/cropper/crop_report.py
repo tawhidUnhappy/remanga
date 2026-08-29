@@ -96,9 +96,15 @@ def package_outputs(
 
     # 2. Package into sheets.zip or panels.zip - the original, unaffected by
     # anything below (still the "previous legacy method" prompts/narration.md
-    # documents alongside the LLM upload bundles).
+    # documents alongside the LLM upload bundles). Cleared out when turned
+    # off, same as every LLM bundle format already does when disabled - so a
+    # stale archive from a previous run with create_zip on doesn't linger
+    # around looking current once it's off.
     if config.create_zip:
         create_vision_archive(config, chapter_dir, panels_dir, sheets_dir)
+    else:
+        stale_archive = chapter_dir / config.expected_zip_name
+        stale_archive.unlink(missing_ok=True)
 
     # 3. Package whichever size-capped LLM upload bundle format(s) are
     # active (panels_zip/, panels_pdf/, and/or sheets_zip/) - see

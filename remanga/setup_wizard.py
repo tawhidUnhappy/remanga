@@ -49,14 +49,31 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     curr_pref = "1" if config.cropper.vision_asset_type == "sheets" else "2"
     pack_choice = Prompt.ask("[bold cyan]Select vision upload format[/]", choices=["1", "2"], default=curr_pref).strip()
     config.cropper.vision_asset_type = "panels" if pack_choice == "2" else "sheets"
-    console.print(f"[green]✓ Vision upload format set to:[/] {config.cropper.vision_asset_type.title()} ({config.cropper.expected_zip_name})")
+
+    # Whether to actually build that archive at chapter root at all
+    # (cropper.create_zip) - separate from every LLM Upload Bundle format
+    # below, and previously only settable by hand-editing config.json, which
+    # is exactly the kind of hidden setting that makes "just the bundles I
+    # picked" not actually happen. Asked here, in the same breath as the
+    # format choice it applies to, instead of being invisible.
+    config.cropper.create_zip = Confirm.ask(
+        f"[bold cyan]Also build this as a single {config.cropper.expected_zip_name} at chapter root "
+        f"(on top of anything in the next step)?[/]",
+        default=config.cropper.create_zip,
+    )
+    console.print(
+        f"[green]✓ Vision upload format set to:[/] {config.cropper.vision_asset_type.title()} "
+        f"({config.cropper.expected_zip_name}{' - building it' if config.cropper.create_zip else ' - not building it'})"
+    )
 
     # 3. LLM Upload Bundles (extra archives just for uploading - see LLMBundleConfig)
     console.print("\n[bold yellow]3. LLM Upload Bundles[/]")
     console.print(
         "[dim]Extra archives just for uploading to an LLM chat interface, losslessly re-encoded "
-        "smaller - built alongside the primary archive above, never replacing it or panels/ (still "
-        "full quality, still what video rendering reads).[/]"
+        "smaller - independent of the primary archive above (which just got its own on/off "
+        "question), never replacing it or panels/ (still full quality, still what video "
+        "rendering reads). If you turned the primary archive off and only want what you check "
+        "here, that's exactly what happens - nothing extra gets built.[/]"
     )
     bundle = config.cropper.llm_bundle
 
@@ -231,7 +248,11 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     summary_table.add_column("Setting", style="bold white")
     summary_table.add_column("Value", style="cyan")
 
-    summary_table.add_row("Vision Upload Format", f"{config.cropper.vision_asset_type.title()} ({config.cropper.expected_zip_name})")
+    summary_table.add_row(
+        "Vision Upload Format",
+        f"{config.cropper.vision_asset_type.title()} "
+        f"({config.cropper.expected_zip_name if config.cropper.create_zip else 'not built'})",
+    )
     summary_table.add_row(
         "LLM Upload Bundles",
         f"ZIP {_bundle_state(bundle.zip_enabled, bundle.zip_split_enabled)}, "

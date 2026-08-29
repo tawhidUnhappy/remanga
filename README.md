@@ -215,7 +215,8 @@ Run the interactive settings wizard anytime to configure vocal reference files, 
 
 A few worth calling out specifically:
 - **`downloader.create_zip`** (default `false`) — bundles the raw downloaded pages into `pages.zip`. Off by default because nothing downstream reads it; it's only useful if you want to hand a chapter's pages to an LLM by hand.
-- **`cropper.create_sheets`** (default `false`) — generates `sheets/*.png` contact sheets even when `vision_asset_type` is `"panels"` (which doesn't use them). Off by default to skip work nothing needs; it still turns itself on automatically whenever `vision_asset_type` is actually `"sheets"`.
+- **`cropper.create_zip`** (default `true`) — a *different* setting from anything under `cropper.llm_bundle` below: this is whether to build the primary archive (`sheets.zip`/`panels.zip`) at chapter root at all. If you only want the LLM upload bundles and nothing else, turn this off too — `./run.sh setup-config` step 2 now asks about it right alongside the format choice, so it's no longer a setting you'd only find by editing `config.json`.
+- **`cropper.create_sheets`** (default `false`) — generates `sheets/*.png` contact sheets even when `vision_asset_type` is `"panels"` (which doesn't use them). Off by default to skip work nothing needs; it still turns itself on automatically whenever `vision_asset_type` is actually `"sheets"` or the sheets zip bundle is active.
 - **`marker.click_to_select`** (default `true`) — see [Panel Marker Web UI](#panel-marker-web-ui) for what this protects against.
 - **`tts.synth_timeout_seconds`** (default `180`) — see [Reliability](#reliability-crashes-interrupts--resuming).
 
