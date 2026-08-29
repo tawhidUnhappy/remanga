@@ -1,6 +1,6 @@
 """Builds the PDF variant of the size-capped LLM upload bundle - see
 remanga.cropper.llm_zip's module docstring for the zip variant this mirrors
-closely (same CropperConfig.llm_bundle_max_mb size cap, same lossless-or-
+closely (same LLMBundleConfig.max_mb size cap, same lossless-or-
 nothing guarantee, same per-part chapter identity, same panel-boundary
 splitting); this is the PDF equivalent for chat interfaces that handle a
 single PDF upload more gracefully than a zip of individual images. Written to
@@ -81,7 +81,7 @@ def build_llm_pdf_bundle(
     worse than no PDF at all, and the primary archive/zip bundle remain
     available regardless."""
     out_dir = chapter_dir / "panels_pdf"
-    if not config.llm_pdf_enabled or not panel_paths:
+    if not config.llm_bundle.pdf_enabled or not panel_paths:
         if out_dir.exists():
             for stale in out_dir.glob("panels_*.pdf"):
                 stale.unlink()
@@ -91,7 +91,7 @@ def build_llm_pdf_bundle(
     for stale in out_dir.glob("panels_*.pdf"):
         stale.unlink()
 
-    max_bytes = max(1, int(config.llm_bundle_max_mb * 1024 * 1024))
+    max_bytes = max(1, int(config.llm_bundle.max_mb * 1024 * 1024))
 
     encoded: List[Tuple[str, ImagePage]] = []
     for path in sorted(panel_paths):
@@ -133,6 +133,6 @@ def build_llm_pdf_bundle(
     total_mb = sum(p.stat().st_size for p in written) / (1024 * 1024)
     console.print(
         f"[bold green]✓ Built LLM upload bundle - PDF ({total_parts} part(s), "
-        f"≤{config.llm_bundle_max_mb:g}MB each, {total_mb:.1f}MB total) in:[/] {out_dir}"
+        f"≤{config.llm_bundle.max_mb:g}MB each, {total_mb:.1f}MB total) in:[/] {out_dir}"
     )
     return written

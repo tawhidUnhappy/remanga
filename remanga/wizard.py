@@ -92,8 +92,8 @@ def run_interactive_pipeline():
     # =========================================================================
     narration_path = chap_dir / "narration.json"
     target_vision_archive = chap_dir / archive_name
-    llm_pdf_parts = sorted((chap_dir / "panels_pdf").glob("panels_*.pdf")) if config.cropper.llm_pdf_enabled else []
-    llm_zip_parts = sorted((chap_dir / "panels_zip").glob("panels_*.zip")) if config.cropper.llm_zip_enabled else []
+    llm_pdf_parts = sorted((chap_dir / "panels_pdf").glob("panels_*.pdf")) if config.cropper.llm_bundle.pdf_enabled else []
+    llm_zip_parts = sorted((chap_dir / "panels_zip").glob("panels_*.zip")) if config.cropper.llm_bundle.zip_enabled else []
     memory_path = ensure_memory_file(project)
     memory_has_content = has_real_json_content(memory_path)
 
@@ -110,7 +110,7 @@ def run_interactive_pipeline():
             upload_line = (
                 f"1. Upload [bold]{', '.join(p.name for p in bundle_parts)}[/] "
                 f"(in {bundle_parts[0].parent.resolve()}) along with [bold]prompts/narration.md[/] to your LLM "
-                f"[dim](a {config.cropper.llm_bundle_max_mb:g}MB-per-part {bundle_kind} bundle, same panels "
+                f"[dim](a {config.cropper.llm_bundle.max_mb:g}MB-per-part {bundle_kind} bundle, same panels "
                 f"losslessly re-encoded smaller - upload every part together; {target_vision_archive.resolve()} "
                 f"is the same panels as one full-quality archive if you'd rather use that instead)[/]"
             )

@@ -17,7 +17,7 @@ Strategy, in order:
    smallest_lossless_encoding - no pixel is altered, ever; see that module for
    how the "lossless" claim is actually verified rather than assumed.
 2. Pack the (still full-quality) shrunk images into as many zip parts as
-   needed to keep each part at or under `CropperConfig.llm_bundle_max_mb`
+   needed to keep each part at or under `LLMBundleConfig.max_mb`
    (remanga.cropper.size_pack.pack_by_size), splitting only on panel
    boundaries (in original reading order) so a part is never larger than the
    cap unless a single panel alone already exceeds it.
@@ -54,7 +54,7 @@ def build_llm_zip_bundle(
     stale parts from a previous run before writing the current ones, so a
     chapter that now needs fewer parts doesn't leave old extras behind."""
     out_dir = chapter_dir / "panels_zip"
-    if not config.llm_zip_enabled or not panel_paths:
+    if not config.llm_bundle.zip_enabled or not panel_paths:
         if out_dir.exists():
             for stale in out_dir.glob("panels_*.zip"):
                 stale.unlink()
@@ -64,7 +64,7 @@ def build_llm_zip_bundle(
     for stale in out_dir.glob("panels_*.zip"):
         stale.unlink()
 
-    max_bytes = max(1, int(config.llm_bundle_max_mb * 1024 * 1024))
+    max_bytes = max(1, int(config.llm_bundle.max_mb * 1024 * 1024))
 
     encoded: List[Tuple[str, str, bytes]] = []  # (panel_id, arcname, data)
     original_total = 0
@@ -95,7 +95,7 @@ def build_llm_zip_bundle(
     saved_mb = max(0, original_total - encoded_total) / (1024 * 1024)
     console.print(
         f"[bold green]✓ Built LLM upload bundle - ZIP ({total_parts} part(s), "
-        f"≤{config.llm_bundle_max_mb:g}MB each) in:[/] {out_dir} "
+        f"≤{config.llm_bundle.max_mb:g}MB each) in:[/] {out_dir} "
         f"[dim](losslessly saved {saved_mb:.1f}MB re-encoding panels)[/]"
     )
     return written

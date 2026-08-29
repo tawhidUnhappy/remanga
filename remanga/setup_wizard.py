@@ -1,5 +1,6 @@
-"""The full interactive settings walkthrough (voice, vision format, language, BGM,
-resolution, background style, GPU) — `remanga setup-config` / the wizard's 's' option."""
+"""The full interactive settings walkthrough (voice, vision format, LLM upload
+bundles, language, BGM, resolution, background style, GPU) — `remanga
+setup-config` / the wizard's 's' option."""
 
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     """Interactive step-by-step configuration wizard."""
     console.print(Panel(
         "[bold cyan]⚙️  remanga Production Settings Setup Wizard[/]\n"
-        "[dim]Configure vocal reference, vision upload formats, BGM, video resolution, and canvas background style.[/]",
+        "[dim]Configure vocal reference, vision upload formats, LLM upload bundles, BGM, video resolution, and canvas background style.[/]",
         border_style="cyan"
     ))
 
@@ -50,8 +51,37 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     config.cropper.vision_asset_type = "panels" if pack_choice == "2" else "sheets"
     console.print(f"[green]✓ Vision upload format set to:[/] {config.cropper.vision_asset_type.title()} ({config.cropper.expected_zip_name})")
 
-    # 3. Voice Language Selection
-    console.print("\n[bold yellow]3. Voice Language[/]")
+    # 3. LLM Upload Bundles (optional, size-capped zip and/or PDF - see LLMBundleConfig)
+    console.print("\n[bold yellow]3. LLM Upload Bundles (Optional)[/]")
+    console.print(
+        "[dim]Extra, size-capped archives just for uploading to an LLM chat interface - built "
+        "alongside the primary archive above, never replacing it or panels/ (still full quality, "
+        "still what video rendering reads). Handy when a chapter's full archive is too big for "
+        "your LLM's upload limit.[/]"
+    )
+    bundle = config.cropper.llm_bundle
+    bundle.zip_enabled = Confirm.ask(
+        "Build a size-capped ZIP bundle (panels_zip/panels_N.zip)?", default=bundle.zip_enabled
+    )
+    bundle.pdf_enabled = Confirm.ask(
+        "Build a size-capped PDF bundle (panels_pdf/panels_N.pdf - one panel per page)?",
+        default=bundle.pdf_enabled,
+    )
+    if bundle.zip_enabled or bundle.pdf_enabled:
+        max_mb_str = Prompt.ask("[bold cyan]Size cap per part, in MB[/]", default=str(bundle.max_mb))
+        try:
+            bundle.max_mb = float(max_mb_str)
+        except ValueError:
+            console.print(f"[yellow]Not a number, keeping {bundle.max_mb:g}MB.[/]")
+        console.print(
+            f"[green]✓ LLM upload bundles:[/] ZIP {'on' if bundle.zip_enabled else 'off'}, "
+            f"PDF {'on' if bundle.pdf_enabled else 'off'}, cap {bundle.max_mb:g}MB per part"
+        )
+    else:
+        console.print("[dim]LLM upload bundles disabled - only the primary archive above will be built.[/]")
+
+    # 4. Voice Language Selection
+    console.print("\n[bold yellow]4. Voice Language[/]")
     lang_table = Table(border_style="blue", show_header=True)
     lang_table.add_column("#", style="bold yellow", width=4)
     lang_table.add_column("Language", style="bold white")
@@ -75,8 +105,8 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     config.tts.lang = matched_lang
     console.print(f"[green]✓ Language set to:[/] {matched_lang}")
 
-    # 4. Background Music (BGM)
-    console.print("\n[bold yellow]4. Background Music (BGM)[/]")
+    # 5. Background Music (BGM)
+    console.print("\n[bold yellow]5. Background Music (BGM)[/]")
     enable_bgm = Confirm.ask("Enable background music track for recaps?", default=config.audio.bgm_enabled)
     config.audio.bgm_enabled = enable_bgm
     if enable_bgm:
@@ -103,8 +133,8 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
             except ValueError:
                 config.audio.bgm_volume_db = -22.0
 
-    # 5. YouTube Quality / Video Resolution Presets
-    console.print("\n[bold yellow]5. Video Resolution Presets[/]")
+    # 6. YouTube Quality / Video Resolution Presets
+    console.print("\n[bold yellow]6. Video Resolution Presets[/]")
     res_table = Table(title="Available Resolution Presets", border_style="blue")
     res_table.add_column("#", style="bold yellow", width=4)
     res_table.add_column("Preset Quality", style="bold white")
@@ -141,8 +171,8 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
 
     console.print(f"[green]✓ Resolution configured:[/] {config.video.width}x{config.video.height}")
 
-    # 6. Canvas Background Style
-    console.print("\n[bold yellow]6. Canvas Background Style[/]")
+    # 7. Canvas Background Style
+    console.print("\n[bold yellow]7. Canvas Background Style[/]")
     bg_table = Table(border_style="blue")
     bg_table.add_column("#", style="bold yellow", width=4)
     bg_table.add_column("Background Style", style="bold white")
@@ -165,8 +195,8 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
         config.video.background_style = "blur"
         console.print("[green]✓ Background set to:[/] Fast Bokeh Canvas Blur")
 
-    # 7. Hardware Acceleration
-    console.print("\n[bold yellow]7. Hardware Acceleration[/]")
+    # 8. Hardware Acceleration
+    console.print("\n[bold yellow]8. Hardware Acceleration[/]")
     config.system.prefer_gpu = Confirm.ask("Prefer NVIDIA GPU Hardware Acceleration (NVENC)?", default=config.system.prefer_gpu)
 
     # Save Configuration
@@ -177,6 +207,11 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     summary_table.add_column("Value", style="cyan")
 
     summary_table.add_row("Vision Upload Format", f"{config.cropper.vision_asset_type.title()} ({config.cropper.expected_zip_name})")
+    llm_bundle_summary = (
+        f"ZIP {'on' if bundle.zip_enabled else 'off'}, PDF {'on' if bundle.pdf_enabled else 'off'}"
+        + (f", ≤{bundle.max_mb:g}MB/part" if bundle.zip_enabled or bundle.pdf_enabled else "")
+    )
+    summary_table.add_row("LLM Upload Bundles", llm_bundle_summary)
     summary_table.add_row("Resolution", f"{config.video.width}x{config.video.height} @ {config.video.fps}fps")
     summary_table.add_row("Background Style", f"{config.video.background_style.title()} Blur" if config.video.background_style == "blur" else "Solid Black")
     summary_table.add_row("Narration Language", config.tts.lang.upper())

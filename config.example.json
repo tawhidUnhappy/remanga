@@ -22,9 +22,11 @@
     "create_sheets": false,
     "panels_per_sheet": 4,
     "create_zip": true,
-    "llm_zip_enabled": false,
-    "llm_pdf_enabled": false,
-    "llm_bundle_max_mb": 50.0,
+    "llm_bundle": {
+      "zip_enabled": false,
+      "pdf_enabled": false,
+      "max_mb": 50.0
+    },
     "snap_to_gutters": true,
     "gutter_search_radius_pixels": 60,
     "gutter_search_radius_fraction": 0.1,

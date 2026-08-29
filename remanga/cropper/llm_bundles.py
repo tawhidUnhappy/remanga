@@ -2,8 +2,8 @@
 crop.py/crop_report.py don't need to know about each format individually -
 currently the zip (remanga.cropper.llm_zip) and the PDF
 (remanga.cropper.llm_pdf), both independently toggled
-(CropperConfig.llm_zip_enabled/llm_pdf_enabled) but sharing one size cap
-(CropperConfig.llm_bundle_max_mb). Adding a third format later only means
+(LLMBundleConfig.zip_enabled/pdf_enabled) but sharing one size cap
+(LLMBundleConfig.max_mb). Adding a third format later only means
 wiring it in here."""
 
 from __future__ import annotations
@@ -32,6 +32,6 @@ def is_up_to_date(config: CropperConfig, chapter_dir: Path) -> bool:
     disk (a disabled format never blocks this). Used by crop.py's resume-check
     to decide whether a chapter that's already fully cropped still needs its
     LLM bundle(s) topped up, without forcing a full re-crop just for that."""
-    zip_ok = not config.llm_zip_enabled or any((chapter_dir / "panels_zip").glob("panels_*.zip"))
-    pdf_ok = not config.llm_pdf_enabled or any((chapter_dir / "panels_pdf").glob("panels_*.pdf"))
+    zip_ok = not config.llm_bundle.zip_enabled or any((chapter_dir / "panels_zip").glob("panels_*.zip"))
+    pdf_ok = not config.llm_bundle.pdf_enabled or any((chapter_dir / "panels_pdf").glob("panels_*.pdf"))
     return zip_ok and pdf_ok
