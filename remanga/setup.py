@@ -31,17 +31,17 @@ def ensure_valid_vision_asset_preference(config: RemangaConfig, interactive: boo
         return current
 
     if not interactive:
-        config.cropper.vision_asset_type = "sheets"
-        return "sheets"
+        config.cropper.vision_asset_type = "panels"
+        return "panels"
 
     console.print(
         "\n[bold yellow]🖼️  LLM Vision Asset Upload Format[/]\n"
         "Choose how cropped manga artwork is packaged for your LLM:\n"
-        "  1. [bold cyan]Contact Sheets (sheets.zip)[/] — 2x2 labeled grid sheets (Recommended, lowest vision token cost)\n"
-        "  2. [bold cyan]Individual Panels (panels.zip)[/] — Individual high-resolution cropped panel files\n"
+        "  1. [bold cyan]Individual Panels (panels.zip)[/] — Individual high-resolution cropped panel files (Default)\n"
+        "  2. [bold cyan]Contact Sheets (sheets.zip)[/] — 2x2 labeled grid sheets (lowest vision token cost)\n"
     )
     choice = Prompt.ask("[bold cyan]Choose vision packaging format[/]", choices=["1", "2"], default="1").strip()
-    config.cropper.vision_asset_type = "panels" if choice == "2" else "sheets"
+    config.cropper.vision_asset_type = "sheets" if choice == "2" else "panels"
 
     config.save()
     console.print(f"[bold green]✓ Vision asset format set to '{config.cropper.vision_asset_type}' ({config.cropper.expected_zip_name}) and saved to config.json![/]\n")

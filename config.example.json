@@ -18,7 +18,7 @@
     "margin_padding_pixels": 8,
     "auto_contrast_clean": false,
     "save_format": "PNG",
-    "vision_asset_type": "sheets",
+    "vision_asset_type": "panels",
     "create_sheets": false,
     "panels_per_sheet": 4,
     "create_zip": true,

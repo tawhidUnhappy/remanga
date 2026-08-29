@@ -28,7 +28,7 @@ def create_vision_archive(
 ) -> Path:
     """Packages cropped assets into either sheets.zip (2x2 contact sheets) or
     panels.zip (individual crops) based on the user's configured vision_asset_type."""
-    asset_type = getattr(config, "vision_asset_type", "sheets").lower()
+    asset_type = getattr(config, "vision_asset_type", "panels").lower()
     zip_filename = config.expected_zip_name
     zip_path = chapter_dir / zip_filename
 

@@ -38,7 +38,7 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
   - **Deleting the `remanga/` folder leaves ZERO leftover files or tool modifications on your system.**
 - **Dual Vision Asset Packaging (`sheets.zip` vs `panels.zip`):**
   - **Vision Contact Sheets (`sheets.zip`):** Consolidates cropped panels into 2x2 labeled grid sheets to drastically reduce LLM vision token consumption.
-  - **Individual Panel Crops (`panels.zip`):** Packages individual high-resolution panel crops for maximum visual fidelity.
+  - **Individual Panel Crops (`panels.zip`, default):** Packages individual high-resolution panel crops for maximum visual fidelity.
   - Configurable interactively and persistent in `config.json`.
 - **LLM Upload Bundles (`panels_zip` on by default, `panels_pdf` off):** losslessly re-encoded, smaller-than-source archives built purely for uploading — see [LLM Upload Bundles](#llm-upload-bundles-panels_zip--panels_pdf).
 - **Natural, Expressive Vocal Synthesis (IndexTTS-2.5):**
@@ -162,7 +162,7 @@ Run the interactive settings wizard anytime to configure vocal reference files, 
     "margin_padding_pixels": 8,
     "auto_contrast_clean": false,
     "save_format": "PNG",
-    "vision_asset_type": "sheets",
+    "vision_asset_type": "panels",
     "create_sheets": false,
     "panels_per_sheet": 4,
     "create_zip": true,
@@ -304,14 +304,14 @@ Reopening the Panel Marker on a chapter that already has marks — via `remark`,
 
 | Asset Type | Archive File | Structure | Best For |
 |---|---|---|---|
+| **Individual Panels** (default) | `panels.zip` | Standalone cropped images (`panel_001.png`, etc.) | **Maximum resolution & fine detail examination** |
 | **Contact Sheets** | `sheets.zip` | 2x2 labeled grid images (`sheet_001.png`, etc.) | **Low vision token cost & fast LLM inference** (75% fewer images uploaded) |
-| **Individual Panels** | `panels.zip` | Standalone cropped images (`panel_001.png`, etc.) | **Maximum resolution & fine detail examination** |
 
 Every image packed into either archive goes through the same lossless re-encoding the LLM upload bundles below use (see [LLM Upload Bundles](#llm-upload-bundles-panels_zip--panels_pdf) for exactly how) before being zipped — typically ~40-50% smaller than the raw cropped files, at no quality cost, with no separate setting to turn on.
 
 To switch formats:
 1. Run `./run.sh setup-config` and choose option 2, **OR**
-2. Set `"vision_asset_type": "sheets"` (or `"panels"`) in `config.json`.
+2. Set `"vision_asset_type": "sheets"` (or `"panels"`, the default) in `config.json`.
 
 ### LLM Upload Bundles (`panels_zip` / `panels_pdf`)
 
@@ -522,8 +522,9 @@ Emotion/prosody is inferred straight from each panel's `text` and its punctuatio
 - You can manually force CPU encoding by setting `"prefer_gpu": false` in `config.json`.
 
 ### 4. How do I switch between `sheets.zip` and `panels.zip`?
+`panels.zip` is the default. To switch to contact sheets:
 - Run `./run.sh setup-config` and select your preference in **Option 2 (Vision Asset Upload Format)**.
-- Or change `"vision_asset_type": "sheets"` to `"panels"` directly in `config.json`.
+- Or set `"vision_asset_type": "sheets"` directly in `config.json`.
 
 ### 4b. What are the `panels_zip/`/`panels_pdf/` folders, and how do I configure them?
 They're the LLM upload bundles (see [LLM Upload Bundles](#llm-upload-bundles-panels_zip--panels_pdf)). The **zip is on by default** (one unsplit `panels_1.zip`); the **PDF is off**. Neither replaces `panels/` or the primary archive, and building either doesn't cost quality anywhere. Easiest way to change either: `./run.sh setup-config`, step 3 (LLM Upload Bundles) — asks yes/no for each format, yes/no for splitting into size-capped parts, and the size cap, no manual editing needed. Or edit `config.json` directly — every setting for both lives under one `"llm_bundle"` object in the `"cropper"` section:

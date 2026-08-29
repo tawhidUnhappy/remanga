@@ -68,7 +68,7 @@ def package_outputs(
     project_name: str,
     chapter_num: str,
 ) -> None:
-    asset_type = getattr(config, "vision_asset_type", "sheets").lower()
+    asset_type = getattr(config, "vision_asset_type", "panels").lower()
 
     # 1. Generate vision contact sheets if enabled or if requested
     if panel_paths and (config.create_sheets or asset_type == "sheets"):

@@ -75,7 +75,7 @@ class CropperConfig(BaseModel):
     margin_padding_pixels: int = 8
     auto_contrast_clean: bool = False
     save_format: str = "PNG"
-    vision_asset_type: str = "sheets"  # 'sheets' (2x2 contact sheets) or 'panels' (individual panel crops)
+    vision_asset_type: str = "panels"  # 'sheets' (2x2 contact sheets) or 'panels' (individual panel crops) - sheets off by default
     # Forcing this on always generates sheet_*.png contact sheets even in
     # 'panels' mode, which doesn't use them for anything - wasted work/disk.
     # Off by default; package_outputs() (cropper/crop_report.py) still builds

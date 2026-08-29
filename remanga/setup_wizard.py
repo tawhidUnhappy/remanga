@@ -43,7 +43,7 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     pack_table.add_column("Description", style="dim")
 
     pack_table.add_row("1", "Vision Contact Sheets", "sheets.zip", "2x2 labeled grid sheets [Recommended for token efficiency]")
-    pack_table.add_row("2", "Individual Panels", "panels.zip", "Direct standalone high-res crops for each panel")
+    pack_table.add_row("2", "Individual Panels", "panels.zip", "Direct standalone high-res crops for each panel [Default]")
     console.print(pack_table)
 
     curr_pref = "1" if config.cropper.vision_asset_type == "sheets" else "2"
