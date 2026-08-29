@@ -107,12 +107,16 @@ def run_interactive_pipeline():
         # only one, never a mix (see prompts/narration.md's Chapter Identity).
         bundle_parts, bundle_kind = (llm_pdf_parts, "PDF") if llm_pdf_parts else (llm_zip_parts, "zip")
         if bundle_parts:
+            size_note = (
+                f"split into {len(bundle_parts)} parts, each ≤{config.cropper.llm_bundle.max_mb:g}MB - upload every "
+                f"part together" if len(bundle_parts) > 1 else "one file"
+            )
             upload_line = (
                 f"1. Upload [bold]{', '.join(p.name for p in bundle_parts)}[/] "
                 f"(in {bundle_parts[0].parent.resolve()}) along with [bold]prompts/narration.md[/] to your LLM "
-                f"[dim](a {config.cropper.llm_bundle.max_mb:g}MB-per-part {bundle_kind} bundle, same panels "
-                f"losslessly re-encoded smaller - upload every part together; {target_vision_archive.resolve()} "
-                f"is the same panels as one full-quality archive if you'd rather use that instead)[/]"
+                f"[dim](a {bundle_kind} bundle, same panels losslessly re-encoded smaller, {size_note}; "
+                f"{target_vision_archive.resolve()} is the same panels as one full-quality archive if you'd "
+                f"rather use that instead)[/]"
             )
         else:
             upload_line = f"1. Upload [bold]{target_vision_archive.resolve()}[/] along with [bold]prompts/narration.md[/] to your LLM"

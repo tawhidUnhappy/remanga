@@ -51,34 +51,48 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     config.cropper.vision_asset_type = "panels" if pack_choice == "2" else "sheets"
     console.print(f"[green]✓ Vision upload format set to:[/] {config.cropper.vision_asset_type.title()} ({config.cropper.expected_zip_name})")
 
-    # 3. LLM Upload Bundles (optional, size-capped zip and/or PDF - see LLMBundleConfig)
-    console.print("\n[bold yellow]3. LLM Upload Bundles (Optional)[/]")
+    # 3. LLM Upload Bundles (extra archives just for uploading - see LLMBundleConfig)
+    console.print("\n[bold yellow]3. LLM Upload Bundles[/]")
     console.print(
-        "[dim]Extra, size-capped archives just for uploading to an LLM chat interface - built "
-        "alongside the primary archive above, never replacing it or panels/ (still full quality, "
-        "still what video rendering reads). Handy when a chapter's full archive is too big for "
-        "your LLM's upload limit.[/]"
+        "[dim]Extra archives just for uploading to an LLM chat interface, losslessly re-encoded "
+        "smaller - built alongside the primary archive above, never replacing it or panels/ (still "
+        "full quality, still what video rendering reads).[/]"
     )
     bundle = config.cropper.llm_bundle
-    bundle.zip_enabled = Confirm.ask(
-        "Build a size-capped ZIP bundle (panels_zip/panels_N.zip)?", default=bundle.zip_enabled
-    )
-    bundle.pdf_enabled = Confirm.ask(
-        "Build a size-capped PDF bundle (panels_pdf/panels_N.pdf - one panel per page)?",
-        default=bundle.pdf_enabled,
-    )
-    if bundle.zip_enabled or bundle.pdf_enabled:
+
+    console.print("\n[bold]ZIP bundle[/] [dim](on by default - a safe, no-downside win for LLM upload)[/]")
+    bundle.zip_enabled = Confirm.ask("Build it (panels_zip/panels_1.zip)?", default=bundle.zip_enabled)
+    if bundle.zip_enabled:
+        bundle.zip_split_enabled = Confirm.ask(
+            "  Split into multiple size-capped parts if it's too big for your LLM's upload limit?",
+            default=bundle.zip_split_enabled,
+        )
+
+    console.print("\n[bold]PDF bundle[/] [dim](off by default - one panel per page)[/]")
+    bundle.pdf_enabled = Confirm.ask("Build it (panels_pdf/panels_1.pdf)?", default=bundle.pdf_enabled)
+    if bundle.pdf_enabled:
+        bundle.pdf_split_enabled = Confirm.ask(
+            "  Split into multiple size-capped parts if it's too big for your LLM's upload limit?",
+            default=bundle.pdf_split_enabled,
+        )
+
+    if bundle.zip_split_enabled or bundle.pdf_split_enabled:
         max_mb_str = Prompt.ask("[bold cyan]Size cap per part, in MB[/]", default=str(bundle.max_mb))
         try:
             bundle.max_mb = float(max_mb_str)
         except ValueError:
             console.print(f"[yellow]Not a number, keeping {bundle.max_mb:g}MB.[/]")
-        console.print(
-            f"[green]✓ LLM upload bundles:[/] ZIP {'on' if bundle.zip_enabled else 'off'}, "
-            f"PDF {'on' if bundle.pdf_enabled else 'off'}, cap {bundle.max_mb:g}MB per part"
-        )
-    else:
-        console.print("[dim]LLM upload bundles disabled - only the primary archive above will be built.[/]")
+
+    def _bundle_state(enabled: bool, split_enabled: bool) -> str:
+        if not enabled:
+            return "off"
+        return f"on, split at {bundle.max_mb:g}MB" if split_enabled else "on, unsplit"
+
+    console.print(
+        f"[green]✓ LLM upload bundles:[/] "
+        f"ZIP {_bundle_state(bundle.zip_enabled, bundle.zip_split_enabled)} | "
+        f"PDF {_bundle_state(bundle.pdf_enabled, bundle.pdf_split_enabled)}"
+    )
 
     # 4. Voice Language Selection
     console.print("\n[bold yellow]4. Voice Language[/]")
@@ -207,11 +221,11 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     summary_table.add_column("Value", style="cyan")
 
     summary_table.add_row("Vision Upload Format", f"{config.cropper.vision_asset_type.title()} ({config.cropper.expected_zip_name})")
-    llm_bundle_summary = (
-        f"ZIP {'on' if bundle.zip_enabled else 'off'}, PDF {'on' if bundle.pdf_enabled else 'off'}"
-        + (f", ≤{bundle.max_mb:g}MB/part" if bundle.zip_enabled or bundle.pdf_enabled else "")
+    summary_table.add_row(
+        "LLM Upload Bundles",
+        f"ZIP {_bundle_state(bundle.zip_enabled, bundle.zip_split_enabled)}, "
+        f"PDF {_bundle_state(bundle.pdf_enabled, bundle.pdf_split_enabled)}",
     )
-    summary_table.add_row("LLM Upload Bundles", llm_bundle_summary)
     summary_table.add_row("Resolution", f"{config.video.width}x{config.video.height} @ {config.video.fps}fps")
     summary_table.add_row("Background Style", f"{config.video.background_style.title()} Blur" if config.video.background_style == "blur" else "Solid Black")
     summary_table.add_row("Narration Language", config.tts.lang.upper())

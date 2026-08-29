@@ -23,8 +23,10 @@
     "panels_per_sheet": 4,
     "create_zip": true,
     "llm_bundle": {
-      "zip_enabled": false,
+      "zip_enabled": true,
+      "zip_split_enabled": false,
       "pdf_enabled": false,
+      "pdf_split_enabled": false,
       "max_mb": 50.0
     },
     "snap_to_gutters": true,

@@ -1,7 +1,7 @@
-"""Builds the zip variant of the size-capped LLM upload bundle - a second
-vision archive purely for uploading to an LLM chat interface, many of which
-cap file uploads well under what a full chapter's full-resolution panel PNGs
-add up to (a single chapter easily runs 50-100+ MB). Completely separate from:
+"""Builds the zip variant of the LLM upload bundle - a second vision archive
+purely for uploading to an LLM chat interface. On by default (see
+LLMBundleConfig), since the lossless re-encode below is a safe, no-downside
+win over the primary archive for this purpose. Completely separate from:
 - panels/ itself, which is untouched and stays the full-quality source video
   rendering reads from (remanga.video.compose) - this module only ever READS
   those files, never writes into that folder.
@@ -9,15 +9,16 @@ add up to (a single chapter easily runs 50-100+ MB). Completely separate from:
   which keeps working exactly as it did before this module existed - the
   "previous legacy method" prompts/narration.md still documents alongside this
   one (and alongside remanga.cropper.llm_pdf, the PDF equivalent). It now
-  shares this module's own lossless-shrink step (image_codec.py), just packed
-  into a single, unsplit zip instead of size-capped parts.
+  shares this module's own lossless-shrink step (image_codec.py).
 
 Strategy, in order:
 1. Shrink each panel losslessly via remanga.cropper.image_codec's
    smallest_lossless_encoding - no pixel is altered, ever; see that module for
    how the "lossless" claim is actually verified rather than assumed.
-2. Pack the (still full-quality) shrunk images into as many zip parts as
-   needed to keep each part at or under `LLMBundleConfig.max_mb`
+2. By default, pack every shrunk panel into one single zip regardless of
+   size - the plain, predictable behavior. Only if `LLMBundleConfig.
+   zip_split_enabled` is turned on does this instead split into as many parts
+   as needed to keep each one at or under `LLMBundleConfig.max_mb`
    (remanga.cropper.size_pack.pack_by_size), splitting only on panel
    boundaries (in original reading order) so a part is never larger than the
    cap unless a single panel alone already exceeds it.
@@ -25,7 +26,9 @@ Strategy, in order:
 Each part gets its own chapter_info.json (same identity fields as the primary
 archive's - see remanga.paths.chapter_identity_fields - plus part_index/
 total_parts/panel_id_start/panel_id_end) so the LLM can place a part and know
-how many others to expect without depending on the filename at all.
+how many others to expect without depending on the filename at all - true
+even with splitting off and a single part, so an LLM given only one part
+never has to guess whether more exist.
 """
 
 from __future__ import annotations
@@ -73,7 +76,7 @@ def build_llm_zip_bundle(
         original_total += path.stat().st_size
         encoded.append((path.stem, f"{path.stem}{ext}", data))
 
-    parts = pack_by_size(encoded, lambda item: len(item[2]), max_bytes)
+    parts = pack_by_size(encoded, lambda item: len(item[2]), max_bytes, config.llm_bundle.zip_split_enabled)
 
     total_parts = len(parts)
     identity = chapter_identity_fields(project_name, chapter_num)
@@ -93,9 +96,10 @@ def build_llm_zip_bundle(
 
     encoded_total = sum(len(data) for _, _, data in encoded)
     saved_mb = max(0, original_total - encoded_total) / (1024 * 1024)
+    size_note = f"{total_parts} part(s), ≤{config.llm_bundle.max_mb:g}MB each" if config.llm_bundle.zip_split_enabled \
+        else f"1 part, {encoded_total / (1024 * 1024):.1f}MB, splitting off"
     console.print(
-        f"[bold green]✓ Built LLM upload bundle - ZIP ({total_parts} part(s), "
-        f"≤{config.llm_bundle.max_mb:g}MB each) in:[/] {out_dir} "
+        f"[bold green]✓ Built LLM upload bundle - ZIP ({size_note}) in:[/] {out_dir} "
         f"[dim](losslessly saved {saved_mb:.1f}MB re-encoding panels)[/]"
     )
     return written

@@ -31,31 +31,43 @@ class DownloaderConfig(BaseModel):
 
 
 class LLMBundleConfig(BaseModel):
-    """Size-capped vision archives built purely for uploading to an LLM chat
-    interface - many of which cap uploads well under what a full chapter's
-    full-resolution panels add up to. **Both formats are off by default** -
-    flip on whichever your LLM interface handles more gracefully (a PDF is
-    usually the more universally-accepted single-file upload; a zip keeps
-    each panel as its own file). Neither ever touches panels/ (still the
+    """Vision archives built purely for uploading to an LLM chat interface,
+    losslessly re-encoded smaller than the raw cropped files either way (see
+    remanga/cropper/image_codec.py, remanga/cropper/pdf_writer.py) - never by
+    degrading image quality. Neither format ever touches panels/ (still the
     full-quality source video rendering reads from) or the primary
     sheets.zip/panels.zip (CropperConfig.create_zip) - both are purely
     additional, on top of whatever that's already doing.
 
-    Written to panels_zip/panels_1.zip, panels_2.zip, ... (see
-    remanga/cropper/llm_zip.py) and/or panels_pdf/panels_1.pdf,
-    panels_2.pdf, ... (remanga/cropper/llm_pdf.py) in the chapter folder -
-    remanga/cropper/llm_bundles.py coordinates whichever of the two are
-    enabled behind one call, so the rest of the crop pipeline never needs to
-    know about either format individually."""
+    Each format is really two independent choices, and they default
+    differently on purpose:
+    - `zip_enabled`/`pdf_enabled` - build this format at all. The zip is on
+      by default (a losslessly-shrunk zip is a safe, no-downside win over the
+      primary archive for LLM upload); the PDF is off by default (a less
+      universally-supported format, and PDF has no dedicated lossless image
+      codec of its own to lean on - see llm_pdf.py).
+    - `zip_split_enabled`/`pdf_split_enabled` - once a format is enabled,
+      whether it's also allowed to split into multiple size-capped parts
+      (panels_1.zip/panels_1.pdf, panels_2.___, ...) when the whole chapter
+      doesn't fit under `max_mb` in one file. Off by default for both: the
+      plain, predictable behavior is one file holding every panel, no matter
+      how large. Only turn splitting on if your LLM interface actually
+      enforces an upload size cap you're hitting.
 
-    zip_enabled: bool = False
+    Written to panels_zip/panels_1.zip, ... (remanga/cropper/llm_zip.py)
+    and/or panels_pdf/panels_1.pdf, ... (remanga/cropper/llm_pdf.py) in the
+    chapter folder - remanga/cropper/llm_bundles.py coordinates whichever
+    are enabled behind one call, so the rest of the crop pipeline never
+    needs to know about either format individually."""
+
+    zip_enabled: bool = True
+    zip_split_enabled: bool = False
     pdf_enabled: bool = False
-    # Shared by both formats above: each part is kept at or under this size by
-    # splitting on panel boundaries, after every panel has already been
-    # losslessly re-encoded as small as it can go (remanga/cropper/
-    # image_codec.py, remanga/cropper/pdf_writer.py) - never by degrading
-    # image quality. A single panel larger than this on its own still gets its
-    # own (oversized) part rather than being split or dropped.
+    pdf_split_enabled: bool = False
+    # Only consulted when the matching *_split_enabled above is on: each part
+    # is kept at or under this size by splitting on panel boundaries. A
+    # single panel larger than this on its own still gets its own (oversized)
+    # part rather than being split or dropped. Shared by both formats.
     max_mb: float = 50.0
 
 
