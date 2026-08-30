@@ -129,17 +129,36 @@ def run_interactive_pipeline():
         if llm_sheets_parts:
             upload_groups.append(("sheets zip bundle", llm_sheets_parts))
 
-        # No package format is active at all - nothing was built for this
-        # chapter to upload. Tell the user exactly how to fix it (the same
-        # menu shown at the top of this run) instead of silently printing an
-        # empty upload list.
+        # No zip/PDF format is active - that's a deliberate, valid config
+        # for LLMs whose upload interface won't accept a zip or PDF
+        # attachment at all, not an error. Fall back to whatever raw,
+        # unpackaged images are already sitting on disk: the unzipped
+        # sheets/ directory first (denser, fewer files, cheaper on vision
+        # tokens), then the always-generated panels/ directory as a last
+        # resort.
+        if not upload_groups:
+            raw_sheets_parts = sorted(
+                p for p in (chap_dir / "sheets").glob("*") if p.is_file()
+            ) if package.sheets else []
+            if raw_sheets_parts:
+                upload_groups.append(("sheets (unzipped)", raw_sheets_parts))
+
+        if not upload_groups:
+            raw_panels_parts = sorted(
+                p for p in (chap_dir / "panels").glob("*") if p.is_file()
+            )
+            if raw_panels_parts:
+                upload_groups.append(("panels (unzipped)", raw_panels_parts))
+
+        # Truly nothing was built for this chapter at all (crop step must
+        # have failed or produced no output) - tell the user exactly how to
+        # fix it instead of silently printing an empty upload list.
         if not upload_groups:
             console.print(Panel(
-                "[bold red]Nothing to upload:[/] every package format (panels_zip, pdf, "
-                "sheets_zip) is off in cropper.package, so no vision archive was built for this "
-                "chapter.\nRe-run the wizard and answer [bold]yes[/] to \"Adjust what gets "
+                "[bold red]Nothing to upload:[/] no panels, sheets, or zip/PDF bundle exist for "
+                "this chapter.\nRe-run the wizard and answer [bold]yes[/] to \"Adjust what gets "
                 "generated/zipped for this chapter?\", or run [bold]./run.sh setup-config[/] "
-                "(step 2), and turn at least one on.",
+                "(step 2), and turn at least [bold]sheets[/] on.",
                 title="[bold white]No Vision Archive Available[/]",
                 border_style="red"
             ))
