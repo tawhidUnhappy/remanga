@@ -56,7 +56,17 @@
     "magi_repo_id": "ragavsachdeva/magiv3",
     "magi_model_dir": "checkpoints/magiv3",
     "magi_panel_score_threshold": 0.5,
-    "click_to_select": true
+    "click_to_select": true,
+    "shortcuts": {
+      "save": ["mod+s"],
+      "mark_full_page": ["mod+f"],
+      "tool_draw": ["d"],
+      "tool_adjust": ["v"],
+      "prev_page": ["arrowleft"],
+      "next_page": ["arrowright"],
+      "delete_mark": ["delete", "backspace"],
+      "reset_view": ["0"]
+    }
   },
   "tts": {
     "engine": "indextts-2.5",
@@ -69,7 +79,8 @@
     "speed": 1.0,
     "temperature": 0.8,
     "top_p": 0.8,
-    "sample_rate": 22050
+    "sample_rate": 22050,
+    "synth_timeout_seconds": 180
   },
   "audio": {
     "sample_rate": 44100,
