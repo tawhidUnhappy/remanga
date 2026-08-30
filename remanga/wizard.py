@@ -9,7 +9,7 @@ from rich.prompt import Confirm, Prompt
 from remanga import setup
 from remanga.audio import AudioProcessor, TTSEngine
 from remanga.config import RemangaConfig
-from remanga.console import console
+from remanga.console import console, display_path, wrap_at_slashes
 from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
 from remanga.json_io import has_real_json_content
@@ -32,7 +32,7 @@ def run_interactive_pipeline():
     saved_url = meta.get("manga_url", "")
 
     if saved_url:
-        console.print(f"[green]Found saved MangaDex URL:[/] {saved_url}")
+        console.print(f"[green]Found saved MangaDex URL:[/] {wrap_at_slashes(saved_url)}")
         use_saved = Confirm.ask("Use saved MangaDex URL?", default=True)
         url = saved_url if use_saved else Prompt.ask("[bold cyan]Enter MangaDex title URL/ID[/]").strip()
     else:
@@ -53,7 +53,7 @@ def run_interactive_pipeline():
     archive_name = config.cropper.expected_zip_name
 
     archive_status = archive_name if config.cropper.create_zip else "not built - create_zip is off"
-    console.print(f"\n[bold]Current Chapter Workspace:[/] {chap_dir.resolve()}")
+    console.print(f"\n[bold]Current Chapter Workspace:[/] {display_path(chap_dir)}")
     console.print(f"[bold]Current Chapter Status:[/] [{'green' if 'Ready' in status['summary'] else 'yellow'}]{status['summary']}[/]")
     console.print(f"[bold]Vision Packaging Format:[/] {asset_mode.title()} ({archive_status})")
     console.print(f"[bold]Render Output:[/] {config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)\n")
@@ -132,7 +132,7 @@ def run_interactive_pipeline():
             upload_options.append(f"  • [bold]{target_vision_archive.name}[/]")
 
         console.print(Panel(
-            f"[bold]Chapter folder:[/] {chap_dir.resolve()}\n\n"
+            f"[bold]Chapter folder:[/] {display_path(chap_dir)}\n\n"
             f"[bold yellow]Action Required:[/]\n"
             f"1. Upload [bold]any one[/] of these to your LLM, along with [bold]prompts/narration.md[/]"
             + (" and the current memory.json below (story continuity)" if memory_has_content else "") + ":\n"
@@ -141,7 +141,7 @@ def run_interactive_pipeline():
             f"chat)[/]\n\n"
             f"2. Save its reply into:\n"
             f"  • [bold green]narration.json[/]  (in the chapter folder above)\n"
-            f"  • [bold green]memory.json[/]  ({memory_path.resolve()})",
+            f"  • [bold green]memory.json[/]  ({display_path(memory_path)})",
             title="[bold white]Generate narration.json + memory.json[/]",
             border_style="yellow"
         ))
@@ -170,7 +170,7 @@ def run_interactive_pipeline():
 
     console.print(Panel(
         f"[bold green]🎉 Recap Video Production Complete![/]\n\n"
-        f"[bold white]Output File:[/] {final_video.resolve()}\n"
+        f"[bold white]Output File:[/] {display_path(final_video)}\n"
         f"[bold white]Resolution:[/] {config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)\n"
         f"[bold white]Vision Format:[/] {asset_mode.title()} ({archive_name})",
         title="[bold green]Success[/]",

@@ -10,7 +10,7 @@ from typing import Optional
 from rich.prompt import Confirm, Prompt
 
 from remanga.config import RemangaConfig
-from remanga.console import console
+from remanga.console import console, display_path
 
 
 def is_valid_file(raw_path: str, min_size: int = 0) -> Optional[Path]:
@@ -72,7 +72,7 @@ def ensure_valid_voice_prompt(config: RemangaConfig, interactive: bool = True) -
         if valid:
             config.tts.spk_audio_prompt = str(valid)
             config.save()
-            console.print(f"[bold green]✓ Reference voice verified and saved to config.json:[/] {valid.resolve()}\n")
+            console.print(f"[bold green]✓ Reference voice verified and saved to config.json:[/] {display_path(valid)}\n")
             return str(valid.resolve())
         elif not user_input:
             console.print("[red]Path cannot be empty. Please enter a valid path.[/]")
@@ -118,7 +118,7 @@ def ensure_valid_bgm(config: RemangaConfig, interactive: bool = True) -> Optiona
             config.audio.bgm_path = str(valid)
             config.audio.bgm_enabled = True
             config.save()
-            console.print(f"[bold green]✓ BGM verified and saved to config.json:[/] {valid.resolve()}\n")
+            console.print(f"[bold green]✓ BGM verified and saved to config.json:[/] {display_path(valid)}\n")
             return str(valid.resolve())
         else:
             console.print(f"[bold red]✗ Audio file not found:[/] {Path(user_input).expanduser()}. Please try again.")
