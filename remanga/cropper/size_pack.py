@@ -2,7 +2,7 @@
 (llm_zip.py) and the PDF bundle (llm_pdf.py) to split a chapter's panels into
 as many size-capped parts as needed, in original order, splitting only on
 panel boundaries - or, when splitting is turned off (the default for both
-formats - see LLMBundleConfig), to keep them all in one part regardless of
+formats - see PackageConfig), to keep them all in one part regardless of
 size."""
 
 from __future__ import annotations

@@ -1,9 +1,9 @@
 """Chapter-level crop orchestration: reads crops.json, resolves and crops every
-panel, then packages the vision upload archive. The actual box math lives in
-remanga.cropper.panel_boxes/gutter/seams/dedupe, one page's worth of cropping
-lives in remanga.cropper.crop_page, and manifest/summary/packaging lives in
-remanga.cropper.crop_report - this module just wires the pipeline stages
-together in order."""
+panel, then packages whichever LLM upload formats are active. The actual box
+math lives in remanga.cropper.panel_boxes/gutter/seams/dedupe, one page's
+worth of cropping lives in remanga.cropper.crop_page, and
+manifest/summary/packaging lives in remanga.cropper.crop_report - this module
+just wires the pipeline stages together in order."""
 
 from __future__ import annotations
 
@@ -36,7 +36,6 @@ class CoordinateCropper:
         sheets_dir = chapter_dir / "sheets"
         manifest_path = chapter_dir / "panels_manifest.json"
         chapter_info_path = chapter_dir / "chapter_info.json"
-        expected_zip = chapter_dir / self.config.expected_zip_name
 
         if not has_real_json_content(crops_json_path):
             raise FileNotFoundError(
@@ -51,22 +50,14 @@ class CoordinateCropper:
             )
 
         # RESUME CHECK: If panels already exist and force=False, verify and skip
-        # the (expensive) re-crop. Still tops up any enabled LLM bundle
-        # format that's missing (a lightweight re-encode of already-cropped
-        # panels, not a full re-crop) - so a chapter cropped before that
-        # format existed, or with it previously disabled, gets it built once
-        # on its next run instead of never.
-        #
-        # The primary archive only has to exist if config.primary_archive_enabled
-        # is actually on - otherwise it never gets built at all (see
-        # crop_report.py's package_outputs), and requiring it here would mean
-        # a chapter with primary_archive_enabled off could never take this
-        # fast path, forcing a full re-crop on every single run for no reason.
+        # the (expensive) re-crop. Still tops up any enabled package format
+        # that's missing (a lightweight re-encode of already-cropped panels,
+        # not a full re-crop) - so a chapter cropped before that format
+        # existed, or with it previously disabled, gets it built once on its
+        # next run instead of never.
         existing_panels = sorted(panels_dir.glob("panel_*.*"))
-        primary_archive_ready = not self.config.primary_archive_enabled or expected_zip.exists()
-        if not force and existing_panels and manifest_path.exists() and primary_archive_ready:
-            status = expected_zip.name if self.config.primary_archive_enabled else "no primary archive (primary_archive_enabled is off)"
-            console.print(f"[bold green]✓ Found {len(existing_panels)} panels already cropped and {status} ready! Skipping re-crop.[/]")
+        if not force and existing_panels and manifest_path.exists():
+            console.print(f"[bold green]✓ Found {len(existing_panels)} panels already cropped! Skipping re-crop.[/]")
             if not is_up_to_date(self.config, chapter_dir):
                 sheet_paths = ensure_sheets_generated(self.config, existing_panels, sheets_dir)
                 build_llm_bundles(self.config, chapter_dir, project_name, chapter_num, existing_panels, sheet_paths)
@@ -114,6 +105,6 @@ class CoordinateCropper:
             panels_dir, len(output_panel_paths), self.config,
             gutter_panels_adjusted, gutter_edges_adjusted, panels_trimmed, duplicate_panels_dropped,
         )
-        package_outputs(self.config, chapter_dir, panels_dir, sheets_dir, output_panel_paths, project_name, chapter_num)
+        package_outputs(self.config, chapter_dir, sheets_dir, output_panel_paths, project_name, chapter_num)
 
         return output_panel_paths

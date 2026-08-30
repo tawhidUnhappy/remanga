@@ -42,35 +42,32 @@ def run_interactive_pipeline():
     chapter = select_chapter(project)
     chap_dir = get_chapter_dir(project, chapter)
 
-    # 3. Reference Voice, BGM, and Vision Packaging Preference Validation
-    setup.ensure_valid_vision_asset_preference(config, interactive=True)
+    # 3. Reference Voice and BGM Validation
     setup.ensure_valid_voice_prompt(config, interactive=True)
     setup.ensure_valid_bgm(config, interactive=True)
 
     # 4. Status Overview
     status = get_chapter_status(project, chapter)
-    asset_mode = config.cropper.primary_archive_format
-    archive_name = config.cropper.expected_zip_name
-    bundle = config.cropper.llm_bundle
+    package = config.cropper.package
 
-    archive_status = archive_name if config.cropper.primary_archive_enabled else "not built - primary_archive_enabled is off"
     console.print()
     print_path(f"[bold]Current Chapter Workspace:[/] {display_path(chap_dir, wrap=False)}")
     console.print(f"[bold]Current Chapter Status:[/] [{'green' if 'Ready' in status['summary'] else 'yellow'}]{status['summary']}[/]")
-    console.print(f"[bold]Vision Packaging Format:[/] {asset_mode.title()} ({archive_status})")
+    console.print(f"[bold]Generate:[/] panels (always) + sheets {'on' if config.cropper.generate.sheets else 'off'}")
     console.print(
-        f"[bold]LLM Upload Bundles:[/] "
-        f"ZIP {setup.bundle_state_str(bundle, bundle.panels_zip_enabled, bundle.panels_zip_split_enabled)} | "
-        f"PDF {setup.bundle_state_str(bundle, bundle.panels_pdf_enabled, bundle.panels_pdf_split_enabled)} | "
-        f"SHEETS ZIP {setup.bundle_state_str(bundle, bundle.sheets_zip_enabled, bundle.sheets_zip_split_enabled)}"
+        f"[bold]Package (zip/PDF for upload):[/] "
+        f"panels_zip {setup.bundle_state_str(package, package.panels_zip, package.panels_zip_split)} | "
+        f"panels_pdf {setup.bundle_state_str(package, package.panels_pdf, package.panels_pdf_split)} | "
+        f"sheets_zip {setup.bundle_state_str(package, package.sheets_zip, package.sheets_zip_split)}"
     )
     console.print(f"[bold]Render Output:[/] {config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)\n")
 
-    # What actually gets zipped/PDF'd/sheeted is controllable right here, not
-    # just via the separate `setup-config` command - defaults to No so a
-    # normal run isn't interrupted by 6 extra questions every time.
-    if Confirm.ask("[bold cyan]Adjust which LLM upload bundles (zip/PDF/sheets) get built?[/]", default=False):
-        setup.configure_llm_bundle_formats(config)
+    # What actually gets generated/zipped/PDF'd is controllable right here,
+    # not just via the separate `setup-config` command - defaults to No so a
+    # normal run isn't interrupted by extra questions every time.
+    if Confirm.ask("[bold cyan]Adjust what gets generated/zipped for this chapter?[/]", default=False):
+        setup.configure_vision_outputs(config)
+        package = config.cropper.package
 
     # =========================================================================
     # Step 1: Download Pages
@@ -96,10 +93,9 @@ def run_interactive_pipeline():
         console.print("[bold green]✓ Panels marked and crops.json saved.[/]")
 
     # =========================================================================
-    # Step 3: Cropping Panels & Building Vision Archive (sheets.zip or panels.zip)
+    # Step 3: Cropping Panels & Packaging Vision Uploads
     # =========================================================================
-    crop_step_title = f"Cropping Panels & Compiling {archive_name}" if config.cropper.primary_archive_enabled else "Cropping Panels"
-    console.print(f"\n[bold blue]=== Step 2: {crop_step_title} ===[/]")
+    console.print("\n[bold blue]=== Step 2: Cropping Panels & Packaging Vision Uploads ===[/]")
     cropper = CoordinateCropper(config.cropper)
     cropper.crop_chapter_from_json(project, chapter)
 
@@ -107,10 +103,9 @@ def run_interactive_pipeline():
     # Step 4: Narration Script + Continuity Memory (narration.json + memory.json)
     # =========================================================================
     narration_path = chap_dir / "narration.json"
-    target_vision_archive = chap_dir / archive_name
-    llm_pdf_parts = sorted((chap_dir / "panels_pdf").glob("panels_*.pdf")) if config.cropper.llm_bundle.panels_pdf_active else []
-    llm_zip_parts = sorted((chap_dir / "panels_zip").glob("panels_*.zip")) if config.cropper.llm_bundle.panels_zip_active else []
-    llm_sheets_parts = sorted((chap_dir / "sheets_zip").glob("sheets_*.zip")) if config.cropper.llm_bundle.sheets_zip_active else []
+    llm_pdf_parts = sorted((chap_dir / "panels_pdf").glob("panels_*.pdf")) if package.panels_pdf_active else []
+    llm_zip_parts = sorted((chap_dir / "panels_zip").glob("panels_*.zip")) if package.panels_zip_active else []
+    llm_sheets_parts = sorted((chap_dir / "sheets_zip").glob("sheets_*.zip")) if package.sheets_zip_active else []
     memory_path = ensure_memory_file(project)
     memory_has_content = has_real_json_content(memory_path)
 
@@ -128,6 +123,22 @@ def run_interactive_pipeline():
             upload_groups.append(("zip bundle", llm_zip_parts))
         if llm_sheets_parts:
             upload_groups.append(("sheets zip bundle", llm_sheets_parts))
+
+        # No package format is active at all - nothing was built for this
+        # chapter to upload. Tell the user exactly how to fix it (the same
+        # menu shown at the top of this run) instead of silently printing an
+        # empty upload list.
+        if not upload_groups:
+            console.print(Panel(
+                "[bold red]Nothing to upload:[/] every package format (panels_zip, panels_pdf, "
+                "sheets_zip) is off in cropper.package, so no vision archive was built for this "
+                "chapter.\nRe-run the wizard and answer [bold]yes[/] to \"Adjust what gets "
+                "generated/zipped for this chapter?\", or run [bold]./run.sh setup-config[/] "
+                "(step 2), and turn at least one on.",
+                title="[bold white]No Vision Archive Available[/]",
+                border_style="red"
+            ))
+            raise SystemExit(1)
 
         # Instructions live in the Panel; every actual path is printed after
         # it via print_path, one per line, never inside the Panel's border.
@@ -154,17 +165,12 @@ def run_interactive_pipeline():
         console.print("\n[bold]Upload any [underline]one[/] of:[/]")
         for kind, parts in upload_groups:
             note = (
-                f"split into {len(parts)} parts, ≤{config.cropper.llm_bundle.max_mb:g}MB each - upload all parts "
+                f"split into {len(parts)} parts, ≤{package.max_mb:g}MB each - upload all parts "
                 f"together" if len(parts) > 1 else "one file"
             )
             console.print(f"  [dim]{kind}, {note}:[/]")
             for part in parts:
                 print_path(f"    {display_path(part, wrap=False)}")
-        if config.cropper.primary_archive_enabled:
-            console.print("  [dim]full-quality primary archive:[/]")
-            print_path(f"    {display_path(target_vision_archive, wrap=False)}")
-        if not upload_groups and not config.cropper.primary_archive_enabled:
-            print_path(f"    {display_path(target_vision_archive, wrap=False)}")
 
         console.print("\n[bold]Save its reply into:[/]")
         console.print("  [bold green]narration.json[/]")
@@ -197,8 +203,7 @@ def run_interactive_pipeline():
 
     console.print(Panel(
         f"[bold green]🎉 Recap Video Production Complete![/]\n\n"
-        f"[bold white]Resolution:[/] {config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)\n"
-        f"[bold white]Vision Format:[/] {asset_mode.title()} ({archive_name})",
+        f"[bold white]Resolution:[/] {config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)",
         title="[bold green]Success[/]",
         border_style="green"
     ))

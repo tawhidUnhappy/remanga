@@ -28,54 +28,66 @@ class DownloaderConfig(BaseModel):
     # remanga/webui/). Off by default so a normal run doesn't spend time/disk
     # zipping something nothing needs; flip to true if you still want it.
     # Named for exactly what it does (zips the downloaded pages) so it's
-    # never confused with cropper.primary_archive_enabled below, which zips
-    # something completely different (the cropped panels/sheets).
+    # never confused with cropper.package below, which zips something
+    # completely different (the cropped panels/sheets).
     zip_pages_enabled: bool = False
 
 
-class LLMBundleConfig(BaseModel):
-    """Vision archives built purely for uploading to an LLM chat interface,
-    losslessly re-encoded smaller than the raw cropped files either way (see
-    remanga/cropper/image_codec.py, remanga/cropper/pdf_writer.py) - never by
-    degrading image quality. No format ever touches panels/ (still the
-    full-quality source video rendering reads from) or the primary
-    sheets.zip/panels.zip (CropperConfig.primary_archive_enabled) - all three
-    are purely additional, on top of whatever that's already doing.
+class GenerateConfig(BaseModel):
+    """Section 1: what visual content to produce out of a chapter's marked
+    panels - separate from Section 2 (`PackageConfig` below), which decides
+    what to actually zip/PDF up for upload. Individual panel crops
+    (`panels/panel_001.png`, ...) are always produced - that's what cropping
+    a chapter means - so there's nothing to toggle for them here; the only
+    optional content type today is contact sheets."""
+
+    # 2x2 labeled grid composites merged from the panels' full original
+    # resolution (never downscaled - see remanga/cropper/sheets.py),
+    # written to sheets/sheet_001.___, sheet_002.___, .... Off by default:
+    # skips work nothing needs until something asks for it. Turning this on
+    # is only needed to inspect sheets/ yourself; package.sheets_zip below
+    # generates them automatically the moment it's checked, whether or not
+    # this is also on.
+    sheets: bool = False
+
+
+class PackageConfig(BaseModel):
+    """Section 2: what to zip/PDF up for LLM upload, from whatever Section 1
+    (`GenerateConfig` above) produced - losslessly re-encoded smaller than
+    the raw files either way (see remanga/cropper/image_codec.py, remanga/
+    cropper/pdf_writer.py), never by degrading image quality. Never touches
+    panels/ itself - still the full-quality source video rendering reads
+    from.
 
     Three independent formats, each named for exactly what it packages and
-    the folder it lands in - no field here is ever just "zip" on its own,
-    specifically so it can't be confused with cropper.primary_archive_enabled
-    (a completely different zip):
+    the folder it lands in:
     - `panels_zip` - individual panel crops, one file per panel (remanga/
       cropper/llm_zip.py), in panels_zip/. On by default - a
-      losslessly-shrunk zip is a safe, no-downside win over the primary
-      archive for LLM upload.
+      losslessly-shrunk zip of the panels is a safe, no-downside default
+      upload format.
     - `panels_pdf` - the same individual panel crops, one per PDF page
       (remanga/cropper/llm_pdf.py), in panels_pdf/. Off by default - a less
       universally-supported format, and PDF has no dedicated lossless image
       codec of its own to lean on (see that module).
-    - `sheets_zip` - 2x2 contact sheet composites instead of individual
-      panels, still packaged as a zip (remanga/cropper/llm_sheets.py), in
-      sheets_zip/ - fewer, denser images, for lower LLM vision-token cost.
-      Every composite is merged from the panels' full original resolution,
-      never downscaled (see remanga/cropper/sheets.py) - only smart lossless
-      re-encoding is used to keep the file size down, the same guarantee
-      every other format here makes. Off by default; independent of
-      `CropperConfig.primary_archive_format`, so this can be built even
-      while the primary archive is packaging plain panels.zip.
+    - `sheets_zip` - contact sheet composites instead of individual panels
+      (GenerateConfig.sheets' content, generated automatically the moment
+      this is checked even if that flag itself is off), still packaged as a
+      zip (remanga/cropper/llm_sheets.py), in sheets_zip/ - fewer, denser,
+      full-resolution images, for lower LLM vision-token cost. Off by
+      default.
 
     Each format is a checklist of two independent things to generate, not a
     mode to pick - check either, both, or neither:
-    - `<format>_enabled`: generate it as **one single file** holding every
-      image, regardless of size.
-    - `<format>_split_enabled`: generate it **split into multiple
-      size-capped parts** instead (`..._1.zip`/`.pdf`, `..._2.___`, ...),
-      each kept at or under `max_mb`. Only check this if your LLM interface
-      actually enforces an upload size cap you're hitting - the plain
-      single-file default is simpler and works everywhere else.
+    - `<format>`: generate it as **one single file** holding every image,
+      regardless of size.
+    - `<format>_split`: generate it **split into multiple size-capped
+      parts** instead (`..._1.zip`/`.pdf`, `..._2.___`, ...), each kept at
+      or under `max_mb`. Only check this if your LLM interface actually
+      enforces an upload size cap you're hitting - the plain single-file
+      default is simpler and works everywhere else.
 
-    Checking `_split_enabled` builds the split version regardless of
-    `_enabled` (see the `*_active` properties below - either one is enough
+    Checking `<format>_split` builds the split version regardless of
+    `<format>` (see the `*_active` properties below - either one is enough
     to generate something for that format); checking both together still
     only produces the split version, not two separate outputs.
 
@@ -86,18 +98,18 @@ class LLMBundleConfig(BaseModel):
     format individually.
 
     Interactively editable as a checklist any time, not just during initial
-    setup - `remanga setup-config` (step 3) and the "adjust LLM upload
-    bundles" prompt in the main interactive wizard both call
-    remanga.setup.configure_llm_bundle_formats for this."""
+    setup - `remanga setup-config` (step 3) and the "adjust what gets
+    generated/zipped" prompt in the main interactive wizard both call
+    remanga.setup.configure_vision_outputs for this."""
 
-    panels_zip_enabled: bool = True
-    panels_zip_split_enabled: bool = False
-    panels_pdf_enabled: bool = False
-    panels_pdf_split_enabled: bool = False
-    sheets_zip_enabled: bool = False
-    sheets_zip_split_enabled: bool = False
-    # Only consulted when the matching *_split_enabled above is on: each part
-    # is kept at or under this size by splitting on image boundaries. A
+    panels_zip: bool = True
+    panels_zip_split: bool = False
+    panels_pdf: bool = False
+    panels_pdf_split: bool = False
+    sheets_zip: bool = False
+    sheets_zip_split: bool = False
+    # Only consulted when the matching `<format>_split` above is on: each
+    # part is kept at or under this size by splitting on image boundaries. A
     # single image larger than this on its own still gets its own (oversized)
     # part rather than being split or dropped. Shared by all three formats.
     max_mb: float = 50.0
@@ -105,57 +117,35 @@ class LLMBundleConfig(BaseModel):
     @property
     def panels_zip_active(self) -> bool:
         """Whether the panels_zip bundle should be built at all - checking
-        either `panels_zip_enabled` or `panels_zip_split_enabled` is enough
-        (see class docstring); `panels_zip_split_enabled` also picks the
-        split-into-parts form over the single-file default."""
-        return self.panels_zip_enabled or self.panels_zip_split_enabled
+        either `panels_zip` or `panels_zip_split` is enough (see class
+        docstring); `panels_zip_split` also picks the split-into-parts form
+        over the single-file default."""
+        return self.panels_zip or self.panels_zip_split
 
     @property
     def panels_pdf_active(self) -> bool:
         """Same as panels_zip_active, for the panels_pdf bundle."""
-        return self.panels_pdf_enabled or self.panels_pdf_split_enabled
+        return self.panels_pdf or self.panels_pdf_split
 
     @property
     def sheets_zip_active(self) -> bool:
         """Same as panels_zip_active, for the sheets_zip bundle."""
-        return self.sheets_zip_enabled or self.sheets_zip_split_enabled
+        return self.sheets_zip or self.sheets_zip_split
 
 
 class CropperConfig(BaseModel):
     margin_padding_pixels: int = 8
     auto_contrast_clean: bool = False
     save_format: str = "PNG"
-    # 'sheets' (2x2 contact sheets) or 'panels' (individual panel crops) -
-    # which one primary_archive_enabled below actually builds. Sheets off by
-    # default (i.e. this is 'panels').
-    primary_archive_format: str = "panels"
-    # Forcing this on always generates sheet_* contact sheet composites even when
-    # primary_archive_format is 'panels', which doesn't use them for
-    # anything - wasted work/disk. Off by default; package_outputs()
-    # (cropper/crop_report.py) still builds them automatically whenever
-    # primary_archive_format is actually 'sheets' (or the sheets_zip LLM
-    # bundle is active), so those keep working with no extra config needed.
-    # Only turn this on to get sheets alongside 'panels' mode for some other
-    # reason.
-    always_generate_sheets: bool = False
     panels_per_sheet: int = 4
-    # Whether to build sheets.zip/panels.zip (whichever primary_archive_format
-    # says) at the chapter root at all. Separate from everything under
-    # llm_bundle below - named "primary" specifically to keep it distinct
-    # from those, since a chapter can perfectly well have this off and only
-    # the LLM upload bundles on (or vice versa).
-    primary_archive_enabled: bool = True
 
-    # Everything about the optional, size-capped LLM upload bundles lives
-    # under this one key - see LLMBundleConfig above for what each field does.
-    llm_bundle: LLMBundleConfig = Field(default_factory=LLMBundleConfig)
-
-    @property
-    def expected_zip_name(self) -> str:
-        """The vision-archive filename this `primary_archive_format` implies -
-        computed on demand instead of stored, so it can never drift out of
-        sync with it."""
-        return "panels.zip" if self.primary_archive_format.lower() == "panels" else "sheets.zip"
+    # Two independent sections - see GenerateConfig/PackageConfig above:
+    # `generate` decides what content exists at all (beyond panels/, always
+    # produced), `package` decides what gets zipped/PDF'd from it for
+    # upload. There's no separate "primary archive" concept anymore - every
+    # zip a chapter gets, sheets or panels, goes through `package` alone.
+    generate: GenerateConfig = Field(default_factory=GenerateConfig)
+    package: PackageConfig = Field(default_factory=PackageConfig)
 
     # Gutter-snap refinement: treats the LLM's crops.json box as a best guess and
     # corrects each edge against real pixel evidence (see remanga/cropper/gutter.py)

@@ -1,6 +1,5 @@
 """Consolidates sequential manga panels into labeled contact-sheet composites
-for LLM vision upload (sheets.zip/sheets_zip - see remanga.cropper.archive
-and remanga.cropper.llm_sheets).
+for LLM vision upload (sheets_zip - see remanga.cropper.llm_sheets).
 
 Every panel is merged in at its full original resolution - the composite
 canvas is sized from the panels' own native pixel dimensions, never the

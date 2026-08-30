@@ -18,17 +18,17 @@
     "margin_padding_pixels": 8,
     "auto_contrast_clean": false,
     "save_format": "PNG",
-    "primary_archive_format": "panels",
-    "always_generate_sheets": false,
     "panels_per_sheet": 4,
-    "primary_archive_enabled": true,
-    "llm_bundle": {
-      "panels_zip_enabled": true,
-      "panels_zip_split_enabled": false,
-      "panels_pdf_enabled": false,
-      "panels_pdf_split_enabled": false,
-      "sheets_zip_enabled": false,
-      "sheets_zip_split_enabled": false,
+    "generate": {
+      "sheets": false
+    },
+    "package": {
+      "panels_zip": true,
+      "panels_zip_split": false,
+      "panels_pdf": false,
+      "panels_pdf_split": false,
+      "sheets_zip": false,
+      "sheets_zip_split": false,
       "max_mb": 50.0
     },
     "snap_to_gutters": true,

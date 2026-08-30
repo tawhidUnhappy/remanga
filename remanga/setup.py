@@ -1,6 +1,7 @@
-"""Reusable validators that ensure a RemangaConfig has valid voice/BGM/vision-format settings,
-prompting interactively to fix them when they're missing. Used both by the CLI/wizard and by
-the audio pipeline stages that depend on these settings being valid before they run."""
+"""Reusable validators that ensure a RemangaConfig has valid voice/BGM settings (prompting
+interactively to fix them when they're missing) and the vision-output "what to generate,
+what to zip" checklist (configure_vision_outputs). Used both by the CLI/wizard and by the
+audio pipeline stages that depend on these settings being valid before they run."""
 
 from __future__ import annotations
 
@@ -24,39 +25,15 @@ def is_valid_file(raw_path: str, min_size: int = 0) -> Optional[Path]:
     return None
 
 
-def ensure_valid_vision_asset_preference(config: RemangaConfig, interactive: bool = True) -> str:
-    """Ensures the vision package format ('sheets' vs 'panels') is configured and saved."""
-    current = (config.cropper.primary_archive_format or "").strip().lower()
-    if current in ("sheets", "panels"):
-        return current
-
-    if not interactive:
-        config.cropper.primary_archive_format = "panels"
-        return "panels"
-
-    console.print(
-        "\n[bold yellow]🖼️  LLM Vision Asset Upload Format[/]\n"
-        "Choose how cropped manga artwork is packaged for your LLM:\n"
-        "  1. [bold cyan]Individual Panels (panels.zip)[/] — Individual high-resolution cropped panel files (Default)\n"
-        "  2. [bold cyan]Contact Sheets (sheets.zip)[/] — 2x2 labeled grid sheets (lowest vision token cost)\n"
-    )
-    choice = Prompt.ask("[bold cyan]Choose vision packaging format[/]", choices=["1", "2"], default="1").strip()
-    config.cropper.primary_archive_format = "sheets" if choice == "2" else "panels"
-
-    config.save()
-    console.print(f"[bold green]✓ Vision asset format set to '{config.cropper.primary_archive_format}' ({config.cropper.expected_zip_name}) and saved to config.json![/]\n")
-    return config.cropper.primary_archive_format
-
-
-def bundle_state_str(bundle, enabled: bool, split_enabled: bool) -> str:
+def bundle_state_str(package, enabled: bool, split_enabled: bool) -> str:
     if split_enabled:
-        return f"on, split at {bundle.max_mb:g}MB"
+        return f"on, split at {package.max_mb:g}MB"
     return "on, unsplit" if enabled else "off"
 
 
 def _ask_bundle_checklist(label: str, single_hint: str, split_hint: str, enabled: bool, split_enabled: bool) -> tuple[bool, bool]:
     """Each format is a checklist of two independent things to generate, not
-    a mode to pick - see LLMBundleConfig's docstring. Both questions are
+    a mode to pick - see PackageConfig's docstring. Both questions are
     always asked, regardless of how the other was answered, so checking or
     unchecking one never silently loses the other's setting."""
     console.print(f"\n[bold]{label}[/]")
@@ -65,55 +42,73 @@ def _ask_bundle_checklist(label: str, single_hint: str, split_hint: str, enabled
     return enabled, split_enabled
 
 
-def configure_llm_bundle_formats(config: RemangaConfig) -> None:
-    """The 'what should get zipped' menu: an interactive checklist over every
-    LLM upload bundle format (panels_zip, panels_pdf, sheets_zip - see
-    LLMBundleConfig), so the user can control exactly what gets built - e.g.
-    "only the PDF, not the zip" is just answering yes to one question and no
-    to the rest, not a hidden config.json edit. Shared by `remanga
-    setup-config` (step 3, part of the full settings walkthrough) and the
-    main interactive wizard's own "adjust LLM upload bundles" prompt, so
-    there's one place a user can reach this without needing to know
-    setup-config exists separately. Saves config.json itself, like every
-    other ensure_valid_*/configure_* helper in this module."""
+def configure_vision_outputs(config: RemangaConfig) -> None:
+    """The 'what to generate, what to zip' menu: two independent sections,
+    matching CropperConfig's `generate`/`package` split -
+    1. **Generate** - what visual content to produce at all. Individual
+       panel crops (panels/) always exist - that's what cropping a chapter
+       means - so the only thing to choose here today is contact sheets.
+    2. **Package** - what to zip/PDF up from whatever Section 1 produced,
+       for LLM upload (panels_zip, panels_pdf, sheets_zip - see
+       PackageConfig) - a checklist, not a mode: e.g. "only the PDF, not
+       the zip" is just answering yes to one question and no to the rest,
+       not a hidden config.json edit.
+
+    Shared by `remanga setup-config` (step 2/3, part of the full settings
+    walkthrough) and the main interactive wizard's own "adjust what gets
+    generated/zipped" prompt, so there's one place a user can reach this
+    without needing to know setup-config exists separately. Saves
+    config.json itself, like every other ensure_valid_*/configure_* helper
+    in this module."""
     console.print(
-        "\n[bold yellow]📦 LLM Upload Bundles[/]\n"
-        "[dim]Extra archives just for uploading to an LLM chat interface, losslessly re-encoded "
-        "smaller - independent of the primary archive (cropper.primary_archive_enabled), never "
-        "replacing it or panels/ (still full quality, still what video rendering reads). Check "
-        "only what you actually want built - e.g. just the PDF and nothing else is a valid answer.[/]"
+        "\n[bold yellow]🖼️  Section 1: What to Generate[/]\n"
+        "[dim]Individual panel crops (panels/) are always produced - that's what cropping a "
+        "chapter means. Choose anything extra on top of that:[/]"
     )
-    bundle = config.cropper.llm_bundle
+    config.cropper.generate.sheets = Confirm.ask(
+        "  Generate contact sheet composites (sheets/ - 2x2 labeled grids merged at full "
+        "original resolution, for lower LLM vision-token cost)?",
+        default=config.cropper.generate.sheets,
+    )
 
-    bundle.panels_zip_enabled, bundle.panels_zip_split_enabled = _ask_bundle_checklist(
-        "ZIP bundle [dim](single file on by default - individual panels, a safe, no-downside win for LLM upload)[/]",
+    console.print(
+        "\n[bold yellow]📦 Section 2: What to Zip/PDF for Upload[/]\n"
+        "[dim]Losslessly re-encoded smaller, never touching panels/ itself (still full quality, "
+        "still what video rendering reads). Check only what you actually want built.[/]"
+    )
+    package = config.cropper.package
+
+    package.panels_zip, package.panels_zip_split = _ask_bundle_checklist(
+        "panels_zip [dim](single file on by default - individual panels, a safe, no-downside win for LLM upload)[/]",
         "panels_zip/panels_1.zip", "panels_zip/panels_1.zip, panels_2.zip, ...",
-        bundle.panels_zip_enabled, bundle.panels_zip_split_enabled,
+        package.panels_zip, package.panels_zip_split,
     )
-    bundle.panels_pdf_enabled, bundle.panels_pdf_split_enabled = _ask_bundle_checklist(
-        "PDF bundle [dim](off by default - individual panels, one per page)[/]",
+    package.panels_pdf, package.panels_pdf_split = _ask_bundle_checklist(
+        "panels_pdf [dim](off by default - individual panels, one per page)[/]",
         "panels_pdf/panels_1.pdf", "panels_pdf/panels_1.pdf, panels_2.pdf, ...",
-        bundle.panels_pdf_enabled, bundle.panels_pdf_split_enabled,
+        package.panels_pdf, package.panels_pdf_split,
     )
-    bundle.sheets_zip_enabled, bundle.sheets_zip_split_enabled = _ask_bundle_checklist(
-        "SHEETS ZIP bundle [dim](off by default - full-resolution 2x2 contact sheet composites, not individual panels)[/]",
+    package.sheets_zip, package.sheets_zip_split = _ask_bundle_checklist(
+        "sheets_zip [dim](off by default - full-resolution contact sheet composites, not "
+        "individual panels; builds sheets/ automatically even if Section 1 above is off)[/]",
         "sheets_zip/sheets_1.zip", "sheets_zip/sheets_1.zip, sheets_2.zip, ...",
-        bundle.sheets_zip_enabled, bundle.sheets_zip_split_enabled,
+        package.sheets_zip, package.sheets_zip_split,
     )
 
-    if bundle.panels_zip_split_enabled or bundle.panels_pdf_split_enabled or bundle.sheets_zip_split_enabled:
-        max_mb_str = Prompt.ask("[bold cyan]Size cap per part, in MB[/]", default=str(bundle.max_mb))
+    if package.panels_zip_split or package.panels_pdf_split or package.sheets_zip_split:
+        max_mb_str = Prompt.ask("[bold cyan]Size cap per part, in MB[/]", default=str(package.max_mb))
         try:
-            bundle.max_mb = float(max_mb_str)
+            package.max_mb = float(max_mb_str)
         except ValueError:
-            console.print(f"[yellow]Not a number, keeping {bundle.max_mb:g}MB.[/]")
+            console.print(f"[yellow]Not a number, keeping {package.max_mb:g}MB.[/]")
 
     config.save()
     console.print(
-        f"[bold green]✓ LLM upload bundles saved:[/] "
-        f"ZIP {bundle_state_str(bundle, bundle.panels_zip_enabled, bundle.panels_zip_split_enabled)} | "
-        f"PDF {bundle_state_str(bundle, bundle.panels_pdf_enabled, bundle.panels_pdf_split_enabled)} | "
-        f"SHEETS ZIP {bundle_state_str(bundle, bundle.sheets_zip_enabled, bundle.sheets_zip_split_enabled)}\n"
+        f"[bold green]✓ Vision output settings saved:[/] "
+        f"sheets {'on' if config.cropper.generate.sheets else 'off'} | "
+        f"panels_zip {bundle_state_str(package, package.panels_zip, package.panels_zip_split)} | "
+        f"panels_pdf {bundle_state_str(package, package.panels_pdf, package.panels_pdf_split)} | "
+        f"sheets_zip {bundle_state_str(package, package.sheets_zip, package.sheets_zip_split)}\n"
     )
 
 

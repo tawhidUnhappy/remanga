@@ -1,13 +1,12 @@
-"""Builds the PDF variant of the LLM upload bundle - see
-remanga.cropper.llm_zip's module docstring for the zip variant this mirrors
-closely (same LLMBundleConfig.max_mb/panels_pdf_split_enabled behavior, same
-lossless-or-nothing guarantee, same per-part chapter identity); this is the
-PDF equivalent for chat interfaces that handle a single PDF upload more
-gracefully than a zip of individual images. Off by default, unlike the zip
-(LLMBundleConfig) - PDF is a less universally-supported upload format, and
-has no dedicated lossless image codec of its own to lean on (see below).
-Written to panels_pdf/panels_1.pdf, panels_2.pdf, ... - never touches
-panels/ itself or the primary vision archive.
+"""Builds the panels_pdf package format - see remanga.cropper.llm_zip's
+module docstring for the zip format this mirrors closely (same
+PackageConfig.max_mb/panels_pdf_split behavior, same lossless-or-nothing
+guarantee, same per-part chapter identity); this is the PDF equivalent for
+chat interfaces that handle a single PDF upload more gracefully than a zip
+of individual images. Off by default, unlike the zip (PackageConfig) - PDF
+is a less universally-supported upload format, and has no dedicated
+lossless image codec of its own to lean on (see below). Written to
+panels_pdf/panels_1.pdf, panels_2.pdf, ... - never touches panels/ itself.
 
 See remanga.cropper.pdf_writer's module docstring for why this doesn't just
 use Pillow's own `Image.save(..., "PDF")` (short version: it's lossy for RGB
@@ -80,10 +79,10 @@ def build_llm_pdf_bundle(
     can't be losslessly encoded (see _encode_panel - practically never, but
     never say never), the whole bundle is aborted rather than shipped
     missing a panel: a partial PDF silently under-representing the chapter is
-    worse than no PDF at all, and the primary archive/zip bundle remain
+    worse than no PDF at all, and the panels_zip/sheets_zip formats remain
     available regardless."""
     out_dir = chapter_dir / "panels_pdf"
-    if not config.llm_bundle.panels_pdf_active or not panel_paths:
+    if not config.package.panels_pdf_active or not panel_paths:
         if out_dir.exists():
             for stale in out_dir.glob("panels_*.pdf"):
                 stale.unlink()
@@ -93,7 +92,7 @@ def build_llm_pdf_bundle(
     for stale in out_dir.glob("panels_*.pdf"):
         stale.unlink()
 
-    max_bytes = max(1, int(config.llm_bundle.max_mb * 1024 * 1024))
+    max_bytes = max(1, int(config.package.max_mb * 1024 * 1024))
 
     encoded: List[Tuple[str, ImagePage]] = []
     for path in sorted(panel_paths):
@@ -102,14 +101,14 @@ def build_llm_pdf_bundle(
         except Exception as e:
             console.print(
                 f"[bold red]✗ LLM PDF bundle aborted:[/] {path.name} couldn't be losslessly "
-                f"encoded ({e}) - the zip bundle/primary archive are unaffected."
+                f"encoded ({e}) - the panels_zip/sheets_zip formats are unaffected."
             )
             for partial in out_dir.glob("panels_*.pdf"):
                 partial.unlink()
             return []
         encoded.append((path.stem, page))
 
-    parts = pack_by_size(encoded, lambda item: len(item[1].flate_data), max_bytes, config.llm_bundle.panels_pdf_split_enabled)
+    parts = pack_by_size(encoded, lambda item: len(item[1].flate_data), max_bytes, config.package.panels_pdf_split)
 
     total_parts = len(parts)
     identity = chapter_identity_fields(project_name, chapter_num)
@@ -133,7 +132,7 @@ def build_llm_pdf_bundle(
     # this reports the resulting size plainly rather than claiming a "saved"
     # figure that would sometimes be negative.
     total_mb = sum(p.stat().st_size for p in written) / (1024 * 1024)
-    size_note = f"{total_parts} part(s), ≤{config.llm_bundle.max_mb:g}MB each" if config.llm_bundle.panels_pdf_split_enabled \
+    size_note = f"{total_parts} part(s), ≤{config.package.max_mb:g}MB each" if config.package.panels_pdf_split \
         else "1 part, splitting off"
     console.print(
         f"[bold green]✓ Built LLM upload bundle - PDF ({size_note}, {total_mb:.1f}MB total) in:[/] {out_dir}"

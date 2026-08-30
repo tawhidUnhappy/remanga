@@ -33,7 +33,7 @@ def build_zip_bundle(
     """Builds `out_dir`/`file_prefix`_1.zip, `file_prefix`_2.zip, ... from
     `image_paths` (already-produced images - individual panels or sheet
     composites, whichever the caller passes). A no-op returning [] if
-    neither `enabled` nor `split_enabled` is set (see LLMBundleConfig's
+    neither `enabled` nor `split_enabled` is set (see PackageConfig's
     docstring for what that pair means together) or there are no images.
     Clears out any stale parts from a previous run first, so a chapter that
     now needs fewer parts doesn't leave old extras behind.

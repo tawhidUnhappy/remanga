@@ -1,15 +1,13 @@
-"""Builds the sheets_zip variant of the LLM upload bundle - the same idea as
+"""Builds the sheets_zip package format - the same idea as
 remanga.cropper.llm_zip, just packaging 2x2 contact sheet composites
 (sheet_001.___, sheet_002.___, ... - whichever lossless extension each one
-won, see remanga.cropper.sheets - the same content sheets.zip/the primary
-archive would, when primary_archive_format is "sheets") instead of individual
-panel crops. Off by default (see LLMBundleConfig) - most users pick either
-individual panels (llm_zip.py) or sheets, not both, and panels is the
-default. Completely independent of `primary_archive_format`: this bundle can
-be built (and the sheet_* composites it needs generated) even while the
-primary archive is packaging panels.zip - see crop_report.py's
-package_outputs, which generates sheets/ whenever this format is active,
-not only when primary_archive_format is "sheets".
+won, see remanga.cropper.sheets) instead of individual panel crops. Off by
+default (see PackageConfig) - most users pick either individual panels
+(llm_zip.py) or sheets, not both, and panels is the default. This bundle can
+be built (and the sheet_* composites it needs generated) whether or not
+`GenerateConfig.sheets` is separately on - see crop_report.py's
+ensure_sheets_generated, which generates sheets/ whenever this format is
+active, checking `generate.sheets` too.
 
 Per-part chapter_info.json entries reuse the same `panel_id_start`/
 `panel_id_end` field names remanga.cropper.llm_zip uses - here they hold
@@ -41,9 +39,9 @@ def build_llm_sheets_bundle(
     sheet_paths: List[Path],
 ) -> List[Path]:
     """Builds sheets_zip/sheets_1.zip, sheets_2.zip, ... - see module docstring."""
-    bundle = config.llm_bundle
+    package = config.package
     return build_zip_bundle(
         sheet_paths, chapter_dir / "sheets_zip", "sheets",
-        bundle.sheets_zip_enabled, bundle.sheets_zip_split_enabled, bundle.max_mb,
+        package.sheets_zip, package.sheets_zip_split, package.max_mb,
         project_name, chapter_num, "SHEETS ZIP",
     )

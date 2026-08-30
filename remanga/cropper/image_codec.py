@@ -1,13 +1,13 @@
 """Shared, format-agnostic image helpers used everywhere a panel image gets
-losslessly shrunk or embedded elsewhere: the primary vision archive
-(remanga.cropper.archive), the zip LLM bundle (remanga.cropper.llm_zip), and
-- for the underlying open/verify primitives - the PDF LLM bundle
-(remanga.cropper.llm_pdf's own raw FlateDecode re-encoding). One place for
-opening/normalizing a panel image the same way every caller starts from, and
-for the one thing that actually makes any of their "lossless" claims
-trustworthy - decoding a candidate re-encoding back and comparing it
-pixel-for-pixel against the source, rather than trusting a codec's own
-lossless flag (or our own filter math) blindly.
+losslessly shrunk or embedded elsewhere: the panels_zip/sheets_zip bundles
+(remanga.cropper.zip_bundle, remanga.cropper.sheets), and - for the
+underlying open/verify primitives - the panels_pdf bundle (remanga.cropper.
+llm_pdf's own raw FlateDecode re-encoding). One place for opening/normalizing
+a panel image the same way every caller starts from, and for the one thing
+that actually makes any of their "lossless" claims trustworthy - decoding a
+candidate re-encoding back and comparing it pixel-for-pixel against the
+source, rather than trusting a codec's own lossless flag (or our own filter
+math) blindly.
 """
 
 from __future__ import annotations

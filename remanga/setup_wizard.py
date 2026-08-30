@@ -1,6 +1,6 @@
-"""The full interactive settings walkthrough (voice, vision format, LLM upload
-bundles, language, BGM, resolution, background style, GPU) — `remanga
-setup-config` / the wizard's 's' option."""
+"""The full interactive settings walkthrough (voice, vision outputs -
+what to generate/zip, language, BGM, resolution, background style, GPU) —
+`remanga setup-config` / the wizard's 's' option."""
 
 from __future__ import annotations
 
@@ -12,14 +12,14 @@ from rich.table import Table
 
 from remanga.config import RemangaConfig
 from remanga.console import console
-from remanga.setup import bundle_state_str, configure_llm_bundle_formats, ensure_valid_voice_prompt, is_valid_file
+from remanga.setup import bundle_state_str, configure_vision_outputs, ensure_valid_voice_prompt, is_valid_file
 
 
 def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     """Interactive step-by-step configuration wizard."""
     console.print(Panel(
         "[bold cyan]⚙️  remanga Production Settings Setup Wizard[/]\n"
-        "[dim]Configure vocal reference, vision upload formats, LLM upload bundles, BGM, video resolution, and canvas background style.[/]",
+        "[dim]Configure vocal reference, vision outputs (what to generate/zip), BGM, video resolution, and canvas background style.[/]",
         border_style="cyan"
     ))
 
@@ -34,49 +34,15 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     else:
         ensure_valid_voice_prompt(config, interactive=True)
 
-    # 2. Vision Packaging Format (Sheets vs Panels)
-    console.print("\n[bold yellow]2. Vision Asset Upload Format (LLM Input)[/]")
-    pack_table = Table(border_style="blue", show_header=True)
-    pack_table.add_column("#", style="bold yellow", width=4)
-    pack_table.add_column("Package Type", style="bold white")
-    pack_table.add_column("Archive File", style="cyan")
-    pack_table.add_column("Description", style="dim")
+    # 2. Vision Outputs: what to generate, what to zip/PDF for upload - see
+    # remanga.setup.configure_vision_outputs, the same two-section checklist
+    # the main interactive wizard can also reach on demand.
+    console.print("\n[bold yellow]2. Vision Outputs (What to Generate / Zip for Upload)[/]")
+    configure_vision_outputs(config)
+    package = config.cropper.package
 
-    pack_table.add_row("1", "Vision Contact Sheets", "sheets.zip", "2x2 labeled grid sheets [Recommended for token efficiency]")
-    pack_table.add_row("2", "Individual Panels", "panels.zip", "Direct standalone high-res crops for each panel [Default]")
-    console.print(pack_table)
-
-    curr_pref = "1" if config.cropper.primary_archive_format == "sheets" else "2"
-    pack_choice = Prompt.ask("[bold cyan]Select vision upload format[/]", choices=["1", "2"], default=curr_pref).strip()
-    config.cropper.primary_archive_format = "panels" if pack_choice == "2" else "sheets"
-
-    # Whether to actually build that archive at chapter root at all
-    # (cropper.primary_archive_enabled) - separate from every LLM Upload
-    # Bundle format below, and previously only settable by hand-editing
-    # config.json, which is exactly the kind of hidden setting that makes
-    # "just the bundles I picked" not actually happen. Asked here, in the
-    # same breath as the format choice it applies to, instead of being
-    # invisible.
-    config.cropper.primary_archive_enabled = Confirm.ask(
-        f"[bold cyan]Also build this as a single {config.cropper.expected_zip_name} at chapter root "
-        f"(on top of anything in the next step)?[/]",
-        default=config.cropper.primary_archive_enabled,
-    )
-    console.print(
-        f"[green]✓ Vision upload format set to:[/] {config.cropper.primary_archive_format.title()} "
-        f"({config.cropper.expected_zip_name}{' - building it' if config.cropper.primary_archive_enabled else ' - not building it'})"
-    )
-
-    # 3. LLM Upload Bundles (extra archives just for uploading - see
-    # LLMBundleConfig and remanga.setup.configure_llm_bundle_formats, the
-    # same "what should get zipped" checklist the main interactive wizard
-    # can also reach on demand).
-    console.print("\n[bold yellow]3. LLM Upload Bundles[/]")
-    configure_llm_bundle_formats(config)
-    bundle = config.cropper.llm_bundle
-
-    # 4. Voice Language Selection
-    console.print("\n[bold yellow]4. Voice Language[/]")
+    # 3. Voice Language Selection
+    console.print("\n[bold yellow]3. Voice Language[/]")
     lang_table = Table(border_style="blue", show_header=True)
     lang_table.add_column("#", style="bold yellow", width=4)
     lang_table.add_column("Language", style="bold white")
@@ -100,8 +66,8 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     config.tts.lang = matched_lang
     console.print(f"[green]✓ Language set to:[/] {matched_lang}")
 
-    # 5. Background Music (BGM)
-    console.print("\n[bold yellow]5. Background Music (BGM)[/]")
+    # 4. Background Music (BGM)
+    console.print("\n[bold yellow]4. Background Music (BGM)[/]")
     enable_bgm = Confirm.ask("Enable background music track for recaps?", default=config.audio.bgm_enabled)
     config.audio.bgm_enabled = enable_bgm
     if enable_bgm:
@@ -128,8 +94,8 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
             except ValueError:
                 config.audio.bgm_volume_db = -22.0
 
-    # 6. YouTube Quality / Video Resolution Presets
-    console.print("\n[bold yellow]6. Video Resolution Presets[/]")
+    # 5. YouTube Quality / Video Resolution Presets
+    console.print("\n[bold yellow]5. Video Resolution Presets[/]")
     res_table = Table(title="Available Resolution Presets", border_style="blue")
     res_table.add_column("#", style="bold yellow", width=4)
     res_table.add_column("Preset Quality", style="bold white")
@@ -166,8 +132,8 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
 
     console.print(f"[green]✓ Resolution configured:[/] {config.video.width}x{config.video.height}")
 
-    # 7. Canvas Background Style
-    console.print("\n[bold yellow]7. Canvas Background Style[/]")
+    # 6. Canvas Background Style
+    console.print("\n[bold yellow]6. Canvas Background Style[/]")
     bg_table = Table(border_style="blue")
     bg_table.add_column("#", style="bold yellow", width=4)
     bg_table.add_column("Background Style", style="bold white")
@@ -190,8 +156,8 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
         config.video.background_style = "blur"
         console.print("[green]✓ Background set to:[/] Fast Bokeh Canvas Blur")
 
-    # 8. Hardware Acceleration
-    console.print("\n[bold yellow]8. Hardware Acceleration[/]")
+    # 7. Hardware Acceleration
+    console.print("\n[bold yellow]7. Hardware Acceleration[/]")
     config.system.prefer_gpu = Confirm.ask("Prefer NVIDIA GPU Hardware Acceleration (NVENC)?", default=config.system.prefer_gpu)
 
     # Save Configuration
@@ -202,15 +168,14 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     summary_table.add_column("Value", style="cyan")
 
     summary_table.add_row(
-        "Vision Upload Format",
-        f"{config.cropper.primary_archive_format.title()} "
-        f"({config.cropper.expected_zip_name if config.cropper.primary_archive_enabled else 'not built'})",
+        "Generate",
+        f"panels (always) + sheets {'on' if config.cropper.generate.sheets else 'off'}",
     )
     summary_table.add_row(
-        "LLM Upload Bundles",
-        f"ZIP {bundle_state_str(bundle, bundle.panels_zip_enabled, bundle.panels_zip_split_enabled)}, "
-        f"PDF {bundle_state_str(bundle, bundle.panels_pdf_enabled, bundle.panels_pdf_split_enabled)}, "
-        f"SHEETS ZIP {bundle_state_str(bundle, bundle.sheets_zip_enabled, bundle.sheets_zip_split_enabled)}",
+        "Package (zip/PDF for upload)",
+        f"panels_zip {bundle_state_str(package, package.panels_zip, package.panels_zip_split)}, "
+        f"panels_pdf {bundle_state_str(package, package.panels_pdf, package.panels_pdf_split)}, "
+        f"sheets_zip {bundle_state_str(package, package.sheets_zip, package.sheets_zip_split)}",
     )
     summary_table.add_row("Resolution", f"{config.video.width}x{config.video.height} @ {config.video.fps}fps")
     summary_table.add_row("Background Style", f"{config.video.background_style.title()} Blur" if config.video.background_style == "blur" else "Solid Black")

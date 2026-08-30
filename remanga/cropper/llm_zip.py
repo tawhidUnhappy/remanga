@@ -1,16 +1,10 @@
-"""Builds the panels_zip variant of the LLM upload bundle - a second vision
-archive purely for uploading to an LLM chat interface, packaging individual
-panel crops (the same content panels.zip/the primary archive would, when
-primary_archive_format is "panels"). On by default (see LLMBundleConfig), since
-the lossless re-encode is a safe, no-downside win over the primary archive
-for this purpose. Completely separate from:
-- panels/ itself, which is untouched and stays the full-quality source video
-  rendering reads from (remanga.video.compose) - this module only ever READS
-  those files, never writes into that folder.
-- the primary vision archive (remanga.cropper.archive's sheets.zip/panels.zip),
-  which keeps working exactly as it did before this module existed - the
-  "previous legacy method" prompts/narration.md still documents alongside this
-  one (and alongside remanga.cropper.llm_pdf/llm_sheets, the other formats).
+"""Builds the panels_zip package format - a zip archive purely for uploading
+to an LLM chat interface, packaging individual panel crops. On by default
+(see PackageConfig), since the lossless re-encode is a safe, no-downside
+default upload format. Completely separate from panels/ itself, which is
+untouched and stays the full-quality source video rendering reads from
+(remanga.video.compose) - this module only ever READS those files, never
+writes into that folder.
 
 The actual packing (lossless re-encode, single-file-or-split-by-size,
 per-part chapter_info.json) is remanga.cropper.zip_bundle.build_zip_bundle,
@@ -35,9 +29,9 @@ def build_llm_zip_bundle(
     panel_paths: List[Path],
 ) -> List[Path]:
     """Builds panels_zip/panels_1.zip, panels_2.zip, ... - see module docstring."""
-    bundle = config.llm_bundle
+    package = config.package
     return build_zip_bundle(
         panel_paths, chapter_dir / "panels_zip", "panels",
-        bundle.panels_zip_enabled, bundle.panels_zip_split_enabled, bundle.max_mb,
+        package.panels_zip, package.panels_zip_split, package.max_mb,
         project_name, chapter_num, "ZIP",
     )
