@@ -8,7 +8,7 @@ import requests
 from rich.progress import BarColumn, DownloadColumn, Progress, TextColumn, TimeRemainingColumn
 
 from remanga.config import DownloaderConfig
-from remanga.console import console
+from remanga.console import console, escape as _esc
 from remanga.cropper.naming import page_stem
 from remanga.downloader.resolve import BASE_URL, MangaDexResolver
 from remanga.json_io import read_json_or, write_json
@@ -38,7 +38,7 @@ class MangaDexDownloader:
             if meta_json.exists():
                 zf.write(meta_json, arcname="pages_metadata.json")
 
-        console.print(f"[bold green]✓ Created Pages ZIP archive:[/] {zip_path}")
+        console.print(f"[bold green]✓ Created Pages ZIP archive:[/] {_esc(str(zip_path))}")
         return zip_path
 
     def download_chapter(self, manga_id_or_url: Optional[str], chapter_num: str, project_name: str) -> Path:
@@ -128,7 +128,7 @@ class MangaDexDownloader:
                 self._create_pages_zip(chapter_dir, dest_dir)
             return dest_dir
 
-        console.print(f"[green]Downloading {len(filenames)} pages politely to:[/] {dest_dir}")
+        console.print(f"[green]Downloading {len(filenames)} pages politely to:[/] {_esc(str(dest_dir))}")
 
         downloaded_meta: List[Dict[str, Any]] = []
 

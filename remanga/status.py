@@ -8,9 +8,9 @@ from typing import Any, Dict
 from rich.panel import Panel
 
 from remanga.config import RemangaConfig
-from remanga.console import display_path, wrap_at_slashes
+from remanga.console import display_path, escape as _esc, wrap_at_slashes
 from remanga.json_io import has_real_json_content, read_json_or
-from remanga.paths import get_chapter_dir, load_project_metadata
+from remanga.paths import get_chapter_dir, get_final_video_path, load_project_metadata
 
 
 def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
@@ -44,7 +44,7 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
     timing_exist = (chap_dir / "audio_timing.json").exists()
     master_audio_exist = (chap_dir / "master_audio.wav").exists()
 
-    final_video_path = chap_dir / f"{project_name}_ch{chapter_num}_recap.mp4"
+    final_video_path = get_final_video_path(project_name, chapter_num)
     video_exist = final_video_path.exists() and final_video_path.stat().st_size > 1000
 
     if video_exist:
@@ -137,6 +137,6 @@ def render_status_panel(project: str, chapter: str) -> Panel:
    8. sheets_zip          : {'[green]✓ Built[/]' if st['sheets_zip_built'] else ('[dim yellow]✗ Not generated[/]' if package.sheets_zip_active else '[dim]— off[/]')}
    9. Narration Script    : {'[green]✓ Present (narration.json)[/]' if st['narration_exist'] else '[yellow]✗ Missing/Empty placeholder[/]'}
   10. Master Audio Track  : {'[green]✓ Generated (IndexTTS-2.5)[/]' if st['master_audio_exist'] else '[red]✗ Not built (' + str(st['audio_clips_count']) + '/' + str(st['total_narration_entries']) + ' clips)[/]'}
-  11. Final Recap Video   : {'[green]✓ Ready (' + st['video_path'].name + ')[/]' if st['video_exist'] else '[red]✗ Not rendered[/]'}
+  11. Final Recap Video   : {'[green]✓ Ready (' + _esc(st['video_path'].name) + ')[/]' if st['video_exist'] else '[red]✗ Not rendered[/]'}
 """
     return Panel(status_str.strip(), title="[bold white]remanga Chapter Production Status[/]", border_style="blue")

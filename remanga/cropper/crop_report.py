@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from remanga.config import CropperConfig
-from remanga.console import console
+from remanga.console import console, escape as _esc
 from remanga.cropper.llm_bundles import build_llm_bundles
 from remanga.cropper.sheet_folders import PanelFolderGenerator
 from remanga.cropper.sheets import PanelSheetGenerator
@@ -80,7 +80,7 @@ def print_crop_summary(
     panels_trimmed: int,
     duplicate_panels_dropped: int,
 ) -> None:
-    console.print(f"[bold green]✓ Cropped {total_panels} panels successfully into:[/] {panels_dir}")
+    console.print(f"[bold green]✓ Cropped {total_panels} panels successfully into:[/] {_esc(str(panels_dir))}")
     if config.snap_to_gutters:
         console.print(
             f"[dim]  ↳ Gutter-snap refined {gutter_panels_adjusted}/{total_panels} panels "

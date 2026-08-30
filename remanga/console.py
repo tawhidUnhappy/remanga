@@ -23,6 +23,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from rich.console import Console
+from rich.markup import escape
 
 console = Console()
 
@@ -76,13 +77,24 @@ def display_path(path, wrap: bool = True) -> str:
     path meant to be individually ctrl+click-opened from an editor's
     integrated terminal (VS Code, etc.) - see `print_path` below, which is
     the pairing this is meant for.
+
+    Either way, the result is Rich-markup-escaped before it comes back: a
+    literal `[` in a real filename (a manga volume/chapter directory named
+    "Title [Complete]" is common) would otherwise be read by Rich as the
+    start of a style tag the moment this gets embedded in a console.print
+    call, silently swallowing everything after it - or raising
+    rich.errors.MarkupError outright for an unrecognized/unclosed tag - and
+    either way never actually showing the path. Escaping here means every
+    caller gets a safe-to-embed string for free, without having to remember
+    to do it themselves.
     """
     p = Path(path)
     try:
         text = str(p.resolve().relative_to(Path.cwd().resolve())).replace("\\", "/")
     except ValueError:
         text = str(p.resolve()).replace("\\", "/")
-    return wrap_at_slashes(text) if wrap else text
+    text = wrap_at_slashes(text) if wrap else text
+    return escape(text)
 
 
 def print_path(text: str) -> None:

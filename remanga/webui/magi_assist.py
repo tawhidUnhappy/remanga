@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 from remanga.config import MarkerConfig
-from remanga.console import console
+from remanga.console import console, escape as _esc
 from remanga.venvs import REPO_ROOT, extract_missing_packages, get_scripts_dir, get_tool_python
 
 
@@ -158,7 +158,7 @@ def ensure_weights_downloaded(config: MarkerConfig) -> Optional[Path]:
     if result.returncode != 0:
         console.print(f"[bold red]Error downloading MAGI v3 weights:[/] {result.stderr.strip()}")
         raise RuntimeError(f"MAGI v3 weight download failed: {result.stderr.strip()}")
-    console.print(f"[bold green]✓ MAGI v3 weights downloaded:[/] {model_dir}")
+    console.print(f"[bold green]✓ MAGI v3 weights downloaded:[/] {_esc(str(model_dir))}")
 
     console.print("[cyan]Verifying MAGI v3 loads correctly...[/]")
     proc = _spawn_worker_with_auto_heal(config)

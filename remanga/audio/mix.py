@@ -6,7 +6,7 @@ from pydub import AudioSegment
 
 from remanga import setup
 from remanga.config import AudioConfig, RemangaConfig
-from remanga.console import console
+from remanga.console import console, escape as _esc
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.json_io import read_json
 from remanga.paths import get_chapter_dir
@@ -74,7 +74,7 @@ class AudioProcessor:
 
         # 2. Mix Background Music (BGM) if enabled
         if self.config.bgm_enabled and self.config.bgm_path and Path(self.config.bgm_path).exists():
-            console.print(f"[cyan]Overlaying background music:[/] {self.config.bgm_path}")
+            console.print(f"[cyan]Overlaying background music:[/] {_esc(str(self.config.bgm_path))}")
             bgm_track = AudioSegment.from_file(self.config.bgm_path)
             bgm_track = bgm_track.set_channels(2).set_frame_rate(self.config.sample_rate)
             bgm_track = bgm_track + self.config.bgm_volume_db  # Adjust volume gain
@@ -90,7 +90,7 @@ class AudioProcessor:
             # Overlay voice over BGM
             master_audio = bgm_loop.overlay(master_audio)
         elif self.config.bgm_enabled:
-            console.print(f"[yellow]BGM is enabled in config, but file was not found at: {self.config.bgm_path}. Continuing without BGM.[/]")
+            console.print(f"[yellow]BGM is enabled in config, but file was not found at: {_esc(str(self.config.bgm_path))}. Continuing without BGM.[/]")
 
         # 3. Export Raw Master Track
         master_audio.export(master_raw_path, format="wav")
@@ -115,5 +115,5 @@ class AudioProcessor:
         else:
             master_raw_path.rename(master_final_path)
 
-        console.print(f"[bold green]✓ Master audio track generated successfully:[/] {master_final_path}")
+        console.print(f"[bold green]✓ Master audio track generated successfully:[/] {_esc(str(master_final_path))}")
         return master_final_path

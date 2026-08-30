@@ -11,7 +11,7 @@ from typing import Optional
 from rich.prompt import Confirm, Prompt
 
 from remanga.config import RemangaConfig
-from remanga.console import console, display_path
+from remanga.console import console, display_path, escape as _esc
 
 
 def is_valid_file(raw_path: str, min_size: int = 0) -> Optional[Path]:
@@ -166,7 +166,7 @@ def ensure_valid_bgm(config: RemangaConfig, interactive: bool = True) -> Optiona
         return str(valid.resolve())
 
     if not interactive:
-        console.print(f"[yellow]BGM is enabled but file '{raw_path}' was not found. Proceeding without BGM.[/]")
+        console.print(f"[yellow]BGM is enabled but file '{_esc(str(raw_path))}' was not found. Proceeding without BGM.[/]")
         return None
 
     console.print(

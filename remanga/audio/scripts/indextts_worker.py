@@ -49,6 +49,38 @@ def send(obj: dict) -> None:
     real_stdout.flush()
 
 
+def _run_infer(model, call_kwargs: dict) -> None:
+    """Runs one synthesis call, working around IndexTTS2's own "low VRAM"
+    special case (indextts/infer_v2_5.py IndexTTS2.infer): on any GPU under
+    10GB it auto-enables `self.low_vram` at load time and, for any text over
+    40 characters, hard-splits it on punctuation into ~40-char fragments -
+    synthesized one at a time and stitched together with a fixed silence gap
+    - regardless of sentence structure. That's what produces the choppy,
+    "word after word" delivery instead of one natural read-through: a
+    narration line rarely breaks into clean sentences every 40 characters,
+    so this chops mid-clause as often as not, and every fragment boundary
+    gets the same flat gap a real sentence break would.
+
+    `infer()` itself only takes that crude path when NOT low_vram - the path
+    it takes otherwise is `list(model.infer_generator(...))[0]`, which
+    segments by whole tokens/sentences (`max_text_tokens_per_segment`,
+    default 120 - far more forgiving than a blind character count) and is
+    the same call this function makes directly. So on a `low_vram` model
+    this bypasses `infer()` entirely and calls `infer_generator()` the exact
+    same way `infer()` does on a higher-VRAM GPU, giving every GPU the same
+    natural segmentation instead of only the ones with 10GB+ of VRAM.
+    Anything that isn't IndexTTS2 v2.5 (no `low_vram` attribute, or no
+    `infer_generator` method - e.g. the older infer_v2 fallback import
+    above) never takes this path and just calls `infer()` as before."""
+    if getattr(model, "low_vram", False) and hasattr(model, "infer_generator"):
+        try:
+            list(model.infer_generator(**call_kwargs, stream_return=False, more_segment_before=0))
+            return
+        except TypeError:
+            pass  # signature mismatch on this checkout - fall through to infer()
+    model.infer(**call_kwargs)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cfg_path", required=True)
@@ -112,7 +144,7 @@ def main() -> None:
                 call_kwargs["duration_factor"] = req["duration_factor"]
 
             with contextlib.redirect_stdout(io.StringIO()):
-                model.infer(**call_kwargs)
+                _run_infer(model, call_kwargs)
 
             if not Path(req["output_path"]).exists():
                 raise RuntimeError("infer() returned without writing an output file")

@@ -24,6 +24,22 @@ def get_chapter_dir(project_name: str, chapter_num: str) -> Path:
     return get_project_dir(project_name) / "chapters" / f"chapter_{clean_chap}"
 
 
+def get_project_video_dir(project_name: str) -> Path:
+    """Where every chapter's *final* rendered MP4 for this manga lives -
+    {manga}/video/, one flat folder shared across all of its chapters,
+    separate from the per-chapter chapters/chapter_N/video/ working
+    directory (frames/, concat_list.txt) that render.py still uses to build
+    each video before dropping the finished file here."""
+    d = get_project_dir(project_name) / "video"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def get_final_video_path(project_name: str, chapter_num: str) -> Path:
+    clean_chap = str(chapter_num).strip().replace("/", "_").replace("\\", "_")
+    return get_project_video_dir(project_name) / f"{project_name}_ch{clean_chap}_recap.mp4"
+
+
 def get_project_metadata_path(project_name: str) -> Path:
     return get_project_dir(project_name) / "project.json"
 

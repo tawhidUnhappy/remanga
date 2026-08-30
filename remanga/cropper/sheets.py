@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import List
 from PIL import Image, ImageDraw, ImageFont
 
-from remanga.console import console
+from remanga.console import console, escape as _esc
 from remanga.cropper.image_codec import smallest_lossless_encoding_for_image
 from remanga.cropper.manifest_info import info_to_text_lines
 from remanga.cropper.naming import sheet_stem
@@ -154,7 +154,7 @@ class PanelSheetGenerator:
         info_sheet_path = gen._render_info_sheet(info, output_dir)
         generated_sheets.insert(0, info_sheet_path)
 
-        console.print(f"[bold green]✓ Created {len(generated_sheets)} full-resolution panel sheets in:[/] {output_dir}")
+        console.print(f"[bold green]✓ Created {len(generated_sheets)} full-resolution panel sheets in:[/] {_esc(str(output_dir))}")
         return generated_sheets
 
     @staticmethod

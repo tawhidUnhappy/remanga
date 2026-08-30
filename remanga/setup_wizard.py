@@ -11,7 +11,7 @@ from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from remanga.config import RemangaConfig
-from remanga.console import console
+from remanga.console import console, escape as _esc
 from remanga.setup import bundle_state_str, configure_vision_outputs, ensure_valid_voice_prompt, is_valid_file
 
 
@@ -78,7 +78,7 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
                 valid = is_valid_file(bgm_input)
                 if valid:
                     config.audio.bgm_path = str(valid.resolve())
-                    console.print(f"[green]✓ BGM path saved:[/] {config.audio.bgm_path}")
+                    console.print(f"[green]✓ BGM path saved:[/] {_esc(str(config.audio.bgm_path))}")
                     break
                 else:
                     console.print(f"[red]File not found:[/] {Path(bgm_input).expanduser()}. Please enter a valid file path.")

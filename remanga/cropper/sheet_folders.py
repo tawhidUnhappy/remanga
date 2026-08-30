@@ -17,7 +17,7 @@ import shutil
 from pathlib import Path
 from typing import List
 
-from remanga.console import console
+from remanga.console import console, escape as _esc
 
 
 class PanelFolderGenerator:
@@ -70,6 +70,6 @@ class PanelFolderGenerator:
 
         console.print(
             f"[bold green]✓ Grouped {len(panel_paths)} panels into {len(folder_paths)} folders "
-            f"(total items: {len(panel_paths)}) in:[/] {output_dir}"
+            f"(total items: {len(panel_paths)}) in:[/] {_esc(str(output_dir))}"
         )
         return folder_paths

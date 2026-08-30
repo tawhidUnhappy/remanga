@@ -7,10 +7,10 @@ from pathlib import Path
 from typing import Optional
 
 from remanga.config import SystemConfig, VideoConfig
-from remanga.console import console
+from remanga.console import console, escape as _escape_path
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.json_io import read_json
-from remanga.paths import get_chapter_dir
+from remanga.paths import get_chapter_dir, get_final_video_path
 from remanga.venvs import REPO_ROOT
 from remanga.video.compose import FrameCompositor
 
@@ -112,10 +112,14 @@ class VideoRenderer:
         timing_path = chapter_dir / "audio_timing.json"
         master_audio = chapter_dir / "master_audio.wav"
         video_dir = chapter_dir / "video"
-        final_video = chapter_dir / f"{project_name}_ch{chapter_num}_recap.mp4"
+        # Final MP4 lives at {manga}/video/ - one shared folder across all of
+        # a manga's chapters, not buried per-chapter - while video_dir above
+        # stays the chapter-scoped working directory (frames/, concat list)
+        # this function builds the video from. See remanga.paths.
+        final_video = get_final_video_path(project_name, chapter_num)
 
         if not force and final_video.exists() and final_video.stat().st_size > 1000:
-            console.print(f"[bold green]✓ Recap video already rendered:[/] {final_video}")
+            console.print(f"[bold green]✓ Recap video already rendered:[/] {_escape_path(str(final_video))}")
             return final_video
 
         if not master_audio.exists():
@@ -183,5 +187,5 @@ class VideoRenderer:
             raise RuntimeError("FFmpeg rendering failed.")
 
         console.print(f"[bold green]✓ Recap video generated successfully![/]")
-        console.print(f"[bold green]Location:[/] {final_video}")
+        console.print(f"[bold green]Location:[/] {_escape_path(str(final_video))}")
         return final_video
