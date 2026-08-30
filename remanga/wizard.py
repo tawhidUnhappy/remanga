@@ -52,9 +52,10 @@ def run_interactive_pipeline():
     asset_mode = config.cropper.vision_asset_type
     archive_name = config.cropper.expected_zip_name
 
+    archive_status = archive_name if config.cropper.create_zip else "not built - create_zip is off"
     console.print(f"\n[bold]Current Chapter Workspace:[/] {chap_dir.resolve()}")
     console.print(f"[bold]Current Chapter Status:[/] [{'green' if 'Ready' in status['summary'] else 'yellow'}]{status['summary']}[/]")
-    console.print(f"[bold]Vision Packaging Format:[/] {asset_mode.title()} ({archive_name})")
+    console.print(f"[bold]Vision Packaging Format:[/] {asset_mode.title()} ({archive_status})")
     console.print(f"[bold]Render Output:[/] {config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)\n")
 
     # =========================================================================
@@ -83,7 +84,8 @@ def run_interactive_pipeline():
     # =========================================================================
     # Step 3: Cropping Panels & Building Vision Archive (sheets.zip or panels.zip)
     # =========================================================================
-    console.print(f"\n[bold blue]=== Step 2: Cropping Panels & Compiling {archive_name} ===[/]")
+    crop_step_title = f"Cropping Panels & Compiling {archive_name}" if config.cropper.create_zip else "Cropping Panels"
+    console.print(f"\n[bold blue]=== Step 2: {crop_step_title} ===[/]")
     cropper = CoordinateCropper(config.cropper)
     cropper.crop_chapter_from_json(project, chapter)
 
@@ -103,15 +105,20 @@ def run_interactive_pipeline():
         narration_path.write_text("", encoding="utf-8")
 
         def _bundle_line(parts, kind: str) -> str:
+            names = ", ".join(p.name for p in parts)
+            location = f"{parts[0].parent.name}/"
             size_note = (
-                f"split into {len(parts)} parts, ≤{config.cropper.llm_bundle.max_mb:g}MB each - upload every part "
-                f"together" if len(parts) > 1 else "one file"
+                f"split into {len(parts)} parts, ≤{config.cropper.llm_bundle.max_mb:g}MB each" if len(parts) > 1
+                else "one file"
             )
-            return f"  - [bold]{', '.join(p.name for p in parts)}[/] (in {parts[0].parent.resolve()}) - {kind}, losslessly re-encoded smaller, {size_note}"
+            return f"  • [bold]{location}{{{names}}}[/]  —  {kind}, {size_note}" if len(parts) > 1 \
+                else f"  • [bold]{location}{names}[/]  —  {kind}, {size_note}"
 
         # Just a plain list of everything actually available this run - no
         # priority pick, no "or use X instead" hedging. Upload any ONE of
         # these, never a mix (see prompts/narration.md's Chapter Identity).
+        # Paths are shown relative to the chapter folder printed once above
+        # the list, instead of repeating the full absolute path per line.
         upload_options = []
         if llm_pdf_parts:
             upload_options.append(_bundle_line(llm_pdf_parts, "PDF bundle"))
@@ -120,21 +127,21 @@ def run_interactive_pipeline():
         if llm_sheets_parts:
             upload_options.append(_bundle_line(llm_sheets_parts, "sheets zip bundle"))
         if config.cropper.create_zip:
-            upload_options.append(f"  - [bold]{target_vision_archive.name}[/] (in {target_vision_archive.parent.resolve()}) - full-quality primary archive")
+            upload_options.append(f"  • [bold]{target_vision_archive.name}[/]  —  full-quality primary archive")
         if not upload_options:
-            upload_options.append(f"  - [bold]{target_vision_archive.resolve()}[/]")
+            upload_options.append(f"  • [bold]{target_vision_archive.name}[/]")
 
         console.print(Panel(
+            f"[bold]Chapter folder:[/] {chap_dir.resolve()}\n\n"
             f"[bold yellow]Action Required:[/]\n"
-            f"1. Upload [bold]any one[/] of the following to your LLM, along with [bold]prompts/narration.md[/]"
-            + (f", plus the current [bold]{memory_path.resolve()}[/] for story continuity" if memory_has_content else "")
-            + ":\n"
+            f"1. Upload [bold]any one[/] of these to your LLM, along with [bold]prompts/narration.md[/]"
+            + (" and the current memory.json below (story continuity)" if memory_has_content else "") + ":\n"
             + "\n".join(upload_options) + "\n"
-            f"[dim](each already carries the project name, manga name/URL, and chapter number itself, so the LLM "
-            f"reads those directly - no need to type them in chat)[/]\n"
-            f"2. It replies with two JSON blocks - save each one into its own file:\n"
-            f"   [bold green]{narration_path.resolve()}[/]  (narration.json)\n"
-            f"   [bold green]{memory_path.resolve()}[/]  (memory.json)",
+            f"[dim](each file already carries the project/manga/chapter identity itself - no need to type it in "
+            f"chat)[/]\n\n"
+            f"2. Save its reply into:\n"
+            f"  • [bold green]narration.json[/]  (in the chapter folder above)\n"
+            f"  • [bold green]memory.json[/]  ({memory_path.resolve()})",
             title="[bold white]Generate narration.json + memory.json[/]",
             border_style="yellow"
         ))
