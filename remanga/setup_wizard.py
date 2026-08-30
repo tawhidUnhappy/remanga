@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
@@ -17,14 +16,13 @@ from remanga.setup import bundle_state_str, configure_vision_outputs, ensure_val
 
 def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     """Interactive step-by-step configuration wizard."""
-    console.print(Panel(
-        "[bold cyan]⚙️  remanga Production Settings Setup Wizard[/]\n"
-        "[dim]Configure vocal reference, vision outputs (what to generate/zip), BGM, video resolution, and canvas background style.[/]",
-        border_style="cyan"
-    ))
+    console.print(
+        "[bold]remanga production settings[/]\n"
+        "[dim]Configure vocal reference, vision outputs (what to generate/zip), BGM, video resolution, and canvas background style.[/]\n"
+    )
 
     # 1. Reference Vocal Audio (Voice Cloning)
-    console.print("\n[bold yellow]1. Reference Speaker Voice (IndexTTS-2.5 Cloning)[/]")
+    console.print("[bold]1. Reference Speaker Voice (IndexTTS-2.5 Cloning)[/]")
     console.print("[dim]Provide a clean 3-10 second WAV file of a neutral, steady voice.[/]")
     curr_voice = config.tts.spk_audio_prompt
     if is_valid_file(curr_voice):
@@ -37,16 +35,16 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     # 2. Vision Outputs: what to generate, what to zip/PDF for upload - see
     # remanga.setup.configure_vision_outputs, the same two-section checklist
     # the main interactive wizard can also reach on demand.
-    console.print("\n[bold yellow]2. Vision Outputs (What to Generate / Zip for Upload)[/]")
+    console.print("\n[bold]2. Vision Outputs (What to Generate / Zip for Upload)[/]")
     configure_vision_outputs(config)
     package = config.cropper.package
 
     # 3. Voice Language Selection
-    console.print("\n[bold yellow]3. Voice Language[/]")
-    lang_table = Table(border_style="blue", show_header=True)
-    lang_table.add_column("#", style="bold yellow", width=4)
-    lang_table.add_column("Language", style="bold white")
-    lang_table.add_column("Code", style="cyan")
+    console.print("\n[bold]3. Voice Language[/]")
+    lang_table = Table(show_edge=False, show_header=True)
+    lang_table.add_column("#", width=4)
+    lang_table.add_column("Language")
+    lang_table.add_column("Code", style="dim")
 
     languages = [
         ("1", "English", "EN"),
@@ -61,19 +59,19 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
 
     curr_lang = config.tts.lang.upper()
     default_lang_num = next((num for num, _, code in languages if code == curr_lang), "1")
-    lang_choice = Prompt.ask("[bold cyan]Select narration language[/]", default=default_lang_num).strip()
+    lang_choice = Prompt.ask("[bold]Select narration language[/]", default=default_lang_num).strip()
     matched_lang = next((code for num, _, code in languages if num == lang_choice or code.lower() == lang_choice.lower()), "EN")
     config.tts.lang = matched_lang
     console.print(f"[green]✓ Language set to:[/] {matched_lang}")
 
     # 4. Background Music (BGM)
-    console.print("\n[bold yellow]4. Background Music (BGM)[/]")
+    console.print("\n[bold]4. Background Music (BGM)[/]")
     enable_bgm = Confirm.ask("Enable background music track for recaps?", default=config.audio.bgm_enabled)
     config.audio.bgm_enabled = enable_bgm
     if enable_bgm:
         while True:
             curr_bgm = config.audio.bgm_path or ""
-            bgm_input = Prompt.ask("[bold cyan]Enter path to BGM audio file (MP3/WAV/AAC)[/]", default=curr_bgm).strip().strip("'\"")
+            bgm_input = Prompt.ask("[bold]Enter path to BGM audio file (MP3/WAV/AAC)[/]", default=curr_bgm).strip().strip("'\"")
             if bgm_input:
                 valid = is_valid_file(bgm_input)
                 if valid:
@@ -88,18 +86,18 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
                 break
 
         if config.audio.bgm_enabled:
-            vol_str = Prompt.ask("[bold cyan]BGM Volume Gain in dB (recommended -22 to -18 dB)[/]", default=str(config.audio.bgm_volume_db))
+            vol_str = Prompt.ask("[bold]BGM Volume Gain in dB (recommended -22 to -18 dB)[/]", default=str(config.audio.bgm_volume_db))
             try:
                 config.audio.bgm_volume_db = float(vol_str)
             except ValueError:
                 config.audio.bgm_volume_db = -22.0
 
     # 5. YouTube Quality / Video Resolution Presets
-    console.print("\n[bold yellow]5. Video Resolution Presets[/]")
-    res_table = Table(title="Available Resolution Presets", border_style="blue")
-    res_table.add_column("#", style="bold yellow", width=4)
-    res_table.add_column("Preset Quality", style="bold white")
-    res_table.add_column("Resolution", style="cyan")
+    console.print("\n[bold]5. Video Resolution Presets[/]")
+    res_table = Table(title="Available Resolution Presets", show_edge=False)
+    res_table.add_column("#", width=4)
+    res_table.add_column("Preset Quality")
+    res_table.add_column("Resolution", style="dim")
     res_table.add_column("Description", style="dim")
 
     resolutions = [
@@ -117,7 +115,7 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     curr_res_str = f"{config.video.width}x{config.video.height}"
     default_res_num = next((num for num, _, res, _, _, _ in resolutions if res == curr_res_str), "1")
 
-    res_choice = Prompt.ask("[bold cyan]Choose video resolution preset[/]", default=default_res_num).strip()
+    res_choice = Prompt.ask("[bold]Choose video resolution preset[/]", default=default_res_num).strip()
     selected_preset = next((item for item in resolutions if item[0] == res_choice), resolutions[0])
 
     if selected_preset[0] == "5":
@@ -133,10 +131,10 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     console.print(f"[green]✓ Resolution configured:[/] {config.video.width}x{config.video.height}")
 
     # 6. Canvas Background Style
-    console.print("\n[bold yellow]6. Canvas Background Style[/]")
-    bg_table = Table(border_style="blue")
-    bg_table.add_column("#", style="bold yellow", width=4)
-    bg_table.add_column("Background Style", style="bold white")
+    console.print("\n[bold]6. Canvas Background Style[/]")
+    bg_table = Table(show_edge=False)
+    bg_table.add_column("#", width=4)
+    bg_table.add_column("Background Style")
     bg_table.add_column("Description", style="dim")
 
     bg_styles = [
@@ -148,7 +146,7 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     console.print(bg_table)
 
     default_bg_num = "1" if config.video.background_style == "blur" else "2"
-    bg_choice = Prompt.ask("[bold cyan]Choose background style[/]", default=default_bg_num).strip()
+    bg_choice = Prompt.ask("[bold]Choose background style[/]", default=default_bg_num).strip()
     if bg_choice == "2":
         config.video.background_style = "solid"
         console.print("[green]✓ Background set to:[/] Solid Black (#000000)")
@@ -157,15 +155,15 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
         console.print("[green]✓ Background set to:[/] Fast Bokeh Canvas Blur")
 
     # 7. Hardware Acceleration
-    console.print("\n[bold yellow]7. Hardware Acceleration[/]")
+    console.print("\n[bold]7. Hardware Acceleration[/]")
     config.system.prefer_gpu = Confirm.ask("Prefer NVIDIA GPU Hardware Acceleration (NVENC)?", default=config.system.prefer_gpu)
 
     # Save Configuration
     config.save()
 
-    summary_table = Table(title="[bold green]✓ Production Settings Saved (config.json)[/]", border_style="green")
-    summary_table.add_column("Setting", style="bold white")
-    summary_table.add_column("Value", style="cyan")
+    summary_table = Table(title="Production settings saved (config.json)", show_edge=False)
+    summary_table.add_column("Setting")
+    summary_table.add_column("Value", style="dim")
 
     summary_table.add_row(
         "Generate",
@@ -185,5 +183,5 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     summary_table.add_row("GPU Codec", f"{config.system.gpu_codec} (Fallback: {config.system.fallback_codec})")
 
     console.print(summary_table)
-    console.print("[bold green]All settings successfully saved to config.json![/]\n")
+    console.print("[green]✓ Saved to config.json[/]\n")
     return config

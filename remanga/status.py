@@ -1,11 +1,9 @@
-"""Chapter production-status computation and its rich-panel presentation."""
+"""Chapter production-status computation and its plain-text presentation."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Dict
-
-from rich.panel import Panel
 
 from remanga.config import RemangaConfig
 from remanga.console import display_path, escape as _esc, wrap_at_slashes
@@ -89,8 +87,8 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
     }
 
 
-def render_status_panel(project: str, chapter: str) -> Panel:
-    """Builds the rich Panel summarizing a chapter's production status for the CLI."""
+def render_status_panel(project: str, chapter: str) -> str:
+    """Builds the plain-text chapter production status summary for the CLI."""
     st = get_chapter_status(project, chapter)
     meta = load_project_metadata(project)
     saved_url = wrap_at_slashes(meta.get("manga_url") or meta.get("manga_id", "Not set"))
@@ -118,8 +116,8 @@ def render_status_panel(project: str, chapter: str) -> Panel:
     # anything narrower than a very wide terminal; a bare filename never
     # needs to wrap at all.
     status_str = f"""
-[bold cyan]Project:[/] {project} | [bold cyan]Chapter:[/] {chapter}
-[bold cyan]Saved Manga Source:[/] {saved_url}
+[bold]Project:[/] {project} | [bold]Chapter:[/] {chapter}
+[bold]Saved Manga Source:[/] {saved_url}
 [bold]Workspace Directory:[/] {display_path(st['chap_dir'])}
 [bold]Video Resolution:[/] {res_str}
 [bold]Generate:[/] {generate_str}
@@ -139,4 +137,4 @@ def render_status_panel(project: str, chapter: str) -> Panel:
   10. Master Audio Track  : {'[green]✓ Generated (IndexTTS-2.5)[/]' if st['master_audio_exist'] else '[red]✗ Not built (' + str(st['audio_clips_count']) + '/' + str(st['total_narration_entries']) + ' clips)[/]'}
   11. Final Recap Video   : {'[green]✓ Ready (' + _esc(st['video_path'].name) + ')[/]' if st['video_exist'] else '[red]✗ Not rendered[/]'}
 """
-    return Panel(status_str.strip(), title="[bold white]remanga Chapter Production Status[/]", border_style="blue")
+    return status_str.strip()

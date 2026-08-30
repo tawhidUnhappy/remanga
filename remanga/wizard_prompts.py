@@ -3,7 +3,6 @@ including the resume-vs-restart offer for a chapter that already has generated p
 
 from __future__ import annotations
 
-from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
@@ -20,21 +19,21 @@ def select_or_create_project(config: RemangaConfig) -> str:
     existing_projects = list_projects()
 
     if existing_projects:
-        table = Table(title="[bold cyan]📁 Existing Projects[/]", border_style="blue")
-        table.add_column("#", style="bold yellow", width=4)
-        table.add_column("Project Name", style="bold white")
-        table.add_column("Chapters", style="green")
+        table = Table(title="Existing Projects", show_edge=False)
+        table.add_column("#", width=4)
+        table.add_column("Project Name")
+        table.add_column("Chapters")
         table.add_column("Saved Manga Source", style="dim")
 
         for idx, p in enumerate(existing_projects, start=1):
-            chaps_str = ", ".join(p["chapters"]) if p["chapters"] else "[dim]None[/]"
-            src_str = p["manga_url"] or p["manga_id"] or "[dim]None[/]"
+            chaps_str = ", ".join(p["chapters"]) if p["chapters"] else "[dim]none[/]"
+            src_str = p["manga_url"] or p["manga_id"] or "[dim]none[/]"
             table.add_row(str(idx), p["name"], chaps_str, src_str[:55] + ("..." if len(src_str) > 55 else ""))
 
         console.print(table)
-        console.print("[dim]Select a project number, 'n' for new project, or 's' to configure settings (Voice/BGM/Resolution/Blur/Vision Format).[/]\n")
+        console.print("[dim]Select a project number, 'n' for new project, or 's' for settings (voice/BGM/resolution/blur/vision format).[/]\n")
 
-        choice = Prompt.ask("[bold cyan]Choose project number or enter new project name[/]", default="1").strip()
+        choice = Prompt.ask("[bold]Choose project number or enter new project name[/]", default="1").strip()
         if choice.lower() == "s":
             run_setup_wizard(config)
             return select_or_create_project(config)
@@ -43,11 +42,11 @@ def select_or_create_project(config: RemangaConfig) -> str:
             if 1 <= idx <= len(existing_projects):
                 return existing_projects[idx - 1]["name"]
         elif choice.lower() == "n":
-            return Prompt.ask("[bold cyan]Enter new project name[/]").strip()
+            return Prompt.ask("[bold]Enter new project name[/]").strip()
         elif choice:
             return choice
 
-    return Prompt.ask("[bold cyan]Enter project name[/]", default="DefinitelyYandere").strip()
+    return Prompt.ask("[bold]Enter project name[/]", default="DefinitelyYandere").strip()
 
 
 # Restart menu choices below "1. Resume", in order from least to most destructive.
@@ -87,16 +86,15 @@ def offer_chapter_restart(project_name: str, chapter_num: str) -> None:
     if not hard_candidates:
         return  # nothing generated yet beyond the downloaded pages - nothing to choose between
 
-    console.print(Panel(
-        f"[bold yellow]Chapter {chapter_num} already has progress:[/] {status['summary']}\n"
-        f"[dim]{len(hard_candidates)} generated item(s) present (crops/panels/narration/audio/video).[/]",
-        border_style="yellow"
-    ))
-    console.print(f"  [bold]1.[/] Resume Chapter {chapter_num} where it left off")
+    console.print(
+        f"\n[bold]Chapter {chapter_num} already has progress:[/] {status['summary']}\n"
+        f"[dim]{len(hard_candidates)} generated item(s) present (crops/panels/narration/audio/video).[/]"
+    )
+    console.print(f"  1. Resume Chapter {chapter_num} where it left off")
     for i, (_, _, label, _) in enumerate(_RESTART_MENU, start=2):
-        console.print(f"  [bold]{i}.[/] {label}")
+        console.print(f"  {i}. {label}")
     choices = [str(i) for i in range(1, len(_RESTART_MENU) + 2)]
-    choice = Prompt.ask("[bold cyan]Choose an option[/]", choices=choices, default="1")
+    choice = Prompt.ask("[bold]Choose an option[/]", choices=choices, default="1")
     if choice == "1":
         console.print(f"[dim]Resuming Chapter {chapter_num} from its current progress.[/]\n")
         return
@@ -118,7 +116,7 @@ def offer_chapter_restart(project_name: str, chapter_num: str) -> None:
         default=False,
     ):
         reset.restart_chapter(project_name, chapter_num, mode=deletion_mode)
-        console.print(f"[bold green]✓ Chapter {chapter_num} {kind.lower()} complete. Downloaded pages re-verified and kept — ready to reprocess.[/]\n")
+        console.print(f"[green]✓ Chapter {chapter_num} {kind.lower()} complete. Downloaded pages re-verified and kept — ready to reprocess.[/]\n")
 
         if mode == "remark":
             # Deferred imports: this module is loaded very early (project/
@@ -129,16 +127,14 @@ def offer_chapter_restart(project_name: str, chapter_num: str) -> None:
             from remanga.webui import launch_and_wait as launch_panel_marker
 
             marker_config = RemangaConfig.load().marker
-            console.print(Panel(
-                f"[bold yellow]Reopening the Panel Marker for Chapter {chapter_num}...[/]\n"
+            console.print(
+                f"\n[bold]Reopening the Panel Marker for Chapter {chapter_num}...[/]\n"
                 f"Your existing marks are pre-loaded (MAGI won't touch them) - adjust anything, then "
-                f"press [bold]{'⌘S' if marker_config.auto_open_browser else 'Ctrl+S'}[/] or click "
-                f"[bold]Save & Continue[/] in the browser tab.",
-                title="[bold white]Re-mark Panels[/]",
-                border_style="yellow"
-            ))
+                f"press {'⌘S' if marker_config.auto_open_browser else 'Ctrl+S'} or click "
+                f"Save & Continue in the browser tab.\n"
+            )
             launch_panel_marker(project_name, chapter_num, marker_config)
-            console.print(f"[bold green]✓ Marks for Chapter {chapter_num} updated and saved.[/]\n")
+            console.print(f"[green]✓ Marks for Chapter {chapter_num} updated and saved.[/]\n")
     else:
         console.print(f"[dim]Restart cancelled. Resuming Chapter {chapter_num} from its current progress instead.[/]\n")
 
@@ -149,26 +145,26 @@ def select_chapter(project_name: str) -> str:
     project_info = existing_projects.get(project_name)
 
     if project_info and project_info["chapters"]:
-        table = Table(title=f"[bold cyan]📑 Chapters for '{project_name}'[/]", border_style="cyan")
-        table.add_column("#", style="bold yellow", width=4)
-        table.add_column("Chapter", style="bold white")
-        table.add_column("Current Status", style="green")
+        table = Table(title=f"Chapters for '{project_name}'", show_edge=False)
+        table.add_column("#", width=4)
+        table.add_column("Chapter")
+        table.add_column("Status")
 
         for idx, ch in enumerate(project_info["chapters"], start=1):
             status = get_chapter_status(project_name, ch)
-            table.add_row(str(idx), f"Chapter {ch}", f"[{'green' if 'Ready' in status['summary'] else 'yellow'}]{status['summary']}[/]")
+            table.add_row(str(idx), f"Chapter {ch}", status["summary"])
 
         console.print(table)
         console.print("[dim]Select a chapter number to resume, or type a new chapter number.[/]\n")
 
         default_ch = project_info["chapters"][-1]
-        choice = Prompt.ask("[bold cyan]Enter chapter number to process[/]", default=str(default_ch)).strip()
+        choice = Prompt.ask("[bold]Enter chapter number to process[/]", default=str(default_ch)).strip()
         if choice.isdigit() and int(choice) <= len(project_info["chapters"]) and int(choice) >= 1:
             chapter = project_info["chapters"][int(choice) - 1]
         else:
             chapter = choice
     else:
-        chapter = Prompt.ask("[bold cyan]Enter chapter number to process (e.g. 1 or 01)[/]", default="1").strip()
+        chapter = Prompt.ask("[bold]Enter chapter number to process (e.g. 1 or 01)[/]", default="1").strip()
 
     offer_chapter_restart(project_name, chapter)
     return chapter

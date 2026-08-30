@@ -50,7 +50,7 @@ def configure_vision_outputs(config: RemangaConfig) -> None:
     config.json itself, like every other ensure_valid_*/configure_* helper
     in this module."""
     console.print(
-        "\n[bold yellow]📦 What to Generate / Zip for Upload[/]\n"
+        "\n[bold]What to Generate / Zip for Upload[/]\n"
         "[dim]Individual panel crops (panels/) are always produced - that's what cropping a "
         "chapter means. Everything below is optional, losslessly re-encoded smaller, and never "
         "touches panels/ itself (still full quality, still what video rendering reads). Check "
@@ -103,7 +103,7 @@ def configure_vision_outputs(config: RemangaConfig) -> None:
     )
 
     if package.pdf_splite or package.pdf_zip_splite or package.panels_zip_splites:
-        max_mb_str = Prompt.ask("[bold cyan]Size cap per part, in MB[/]", default=str(package.max_mb))
+        max_mb_str = Prompt.ask("[bold]Size cap per part, in MB[/]", default=str(package.max_mb))
         try:
             package.max_mb = float(max_mb_str)
         except ValueError:
@@ -137,13 +137,13 @@ def ensure_valid_voice_prompt(config: RemangaConfig, interactive: bool = True) -
         )
 
     console.print(
-        "\n[bold yellow]🎙️  IndexTTS-2.5 Speaker Voice Setup[/]\n"
+        "\n[bold]IndexTTS-2.5 Speaker Voice Setup[/]\n"
         "A clean 3-10 second reference WAV audio file is required for zero-shot speaker cloning.\n"
         f"[dim]Current setting: '{raw_path or 'Not configured'}'[/]"
     )
 
     while True:
-        user_input = Prompt.ask("[bold cyan]Enter absolute or relative path to your reference voice WAV file[/]").strip().strip("'\"")
+        user_input = Prompt.ask("[bold]Enter absolute or relative path to your reference voice WAV file[/]").strip().strip("'\"")
         valid = is_valid_file(user_input, min_size=1)
         if valid:
             config.tts.spk_audio_prompt = str(valid)
@@ -170,7 +170,7 @@ def ensure_valid_bgm(config: RemangaConfig, interactive: bool = True) -> Optiona
         return None
 
     console.print(
-        "\n[bold yellow]🎵 Background Music (BGM) Setup[/]\n"
+        "\n[bold]Background Music (BGM) Setup[/]\n"
         "BGM is enabled in your configuration, but the audio file path is missing or invalid.\n"
     )
 
@@ -182,7 +182,7 @@ def ensure_valid_bgm(config: RemangaConfig, interactive: bool = True) -> Optiona
         return None
 
     while True:
-        user_input = Prompt.ask("[bold cyan]Enter path to your BGM audio file (or press Enter to skip)[/]").strip().strip("'\"")
+        user_input = Prompt.ask("[bold]Enter path to your BGM audio file (or press Enter to skip)[/]").strip().strip("'\"")
         if not user_input:
             config.audio.bgm_enabled = False
             config.save()

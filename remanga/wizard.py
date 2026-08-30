@@ -1,9 +1,9 @@
 """The master interactive production wizard: project/chapter discovery followed by the
-full download -> crop -> narrate -> synthesize -> mix -> render pipeline, in order."""
+full download -> crop -> narrate -> synthesize -> mix -> render pipeline, in order -
+or, in full-recap mode, compiling a whole project's chapters into one continuous video."""
 
 from __future__ import annotations
 
-from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 
 from remanga import setup
@@ -12,6 +12,7 @@ from remanga.config import RemangaConfig
 from remanga.console import console, display_path, print_path, wrap_at_slashes
 from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
+from remanga.full_recap import FullRecapCompiler, chapter_sort_key, discover_chapters
 from remanga.json_io import has_real_json_content
 from remanga.paths import ensure_memory_file, get_chapter_dir, load_project_metadata
 from remanga.status import get_chapter_status
@@ -22,47 +23,58 @@ from remanga.wizard_prompts import select_chapter, select_or_create_project
 
 def run_interactive_pipeline():
     """Master interactive production wizard with project discovery, resume guards, and setup option."""
-    console.print(Panel("[bold magenta]✨ remanga: Interactive Recap Production Engine (IndexTTS-2.5)[/]", border_style="magenta"))
+    console.print("[bold]remanga[/] [dim]— interactive recap production[/]\n")
 
     config = RemangaConfig.load()
 
     # 1. Project Selection / Creation / Settings
     project = select_or_create_project(config)
+
+    # 2. Single chapter, or the whole manga joined into one video?
+    console.print(
+        "\n[bold]1.[/] Process a chapter\n"
+        "[bold]2.[/] Compile the whole project into one continuous video (full-recap)\n"
+    )
+    mode = Prompt.ask("[bold]Choose[/]", choices=["1", "2"], default="1")
+    if mode == "2":
+        _run_full_recap(project, config)
+        return
+
     meta = load_project_metadata(project)
     saved_url = meta.get("manga_url", "")
 
     if saved_url:
-        console.print(f"[green]Found saved MangaDex URL:[/] {wrap_at_slashes(saved_url)}")
+        console.print(f"[dim]Saved MangaDex URL:[/] {wrap_at_slashes(saved_url)}")
         use_saved = Confirm.ask("Use saved MangaDex URL?", default=True)
-        url = saved_url if use_saved else Prompt.ask("[bold cyan]Enter MangaDex title URL/ID[/]").strip()
+        url = saved_url if use_saved else Prompt.ask("[bold]Enter MangaDex title URL/ID[/]").strip()
     else:
-        url = Prompt.ask("[bold cyan]Enter MangaDex title URL/ID[/]").strip()
+        url = Prompt.ask("[bold]Enter MangaDex title URL/ID[/]").strip()
 
-    # 2. Chapter Selection
+    # 3. Chapter Selection
     chapter = select_chapter(project)
     chap_dir = get_chapter_dir(project, chapter)
 
-    # 3. Reference Voice and BGM Validation
+    # 4. Reference Voice and BGM Validation
     setup.ensure_valid_voice_prompt(config, interactive=True)
     setup.ensure_valid_bgm(config, interactive=True)
 
-    # 4. Status Overview
+    # 5. Status Overview
     status = get_chapter_status(project, chapter)
     package = config.cropper.package
 
     console.print()
-    print_path(f"[bold]Current Chapter Workspace:[/] {display_path(chap_dir, wrap=False)}")
-    console.print(f"[bold]Current Chapter Status:[/] [{'green' if 'Ready' in status['summary'] else 'yellow'}]{status['summary']}[/]")
-    console.print(f"[bold]Generate:[/] panels (always) + sheets {'on' if package.sheets else 'off'}")
+    print_path(f"[bold]Workspace:[/] {display_path(chap_dir, wrap=False)}")
+    console.print(f"[bold]Status:[/] {status['summary']}")
+    console.print(f"[dim]Generate: panels (always) + sheets {'on' if package.sheets else 'off'}[/]")
     console.print(
-        f"[bold]Package (zip/PDF for upload):[/] "
+        f"[dim]Package: "
         f"panels_zip {setup.bundle_state_str(package, package.panels_zip, package.panels_zip_splites)} | "
         f"pdf {'on' if package.pdf else 'off'} | pdf_splite {'on' if package.pdf_splite else 'off'} | "
         f"pdf_zip {'on' if package.pdf_zip else 'off'} | "
         f"pdf_zip_splite {'on' if package.pdf_zip_splite else 'off'} | "
-        f"sheets_zip {'on' if package.sheets_zip else 'off'}"
+        f"sheets_zip {'on' if package.sheets_zip else 'off'}[/]"
     )
-    console.print(f"[bold]Render Output:[/] {config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)\n")
+    console.print(f"[dim]Render output: {config.video.width}x{config.video.height} ({config.video.background_style.title()} canvas)[/]\n")
 
     # What gets generated/zipped/PDF'd comes straight from config.json's
     # cropper.package settings (shown above) - it's a project-wide setting
@@ -72,7 +84,7 @@ def run_interactive_pipeline():
     # =========================================================================
     # Step 1: Download Pages
     # =========================================================================
-    console.print(f"\n[bold blue]=== Step 1: Downloading Chapter {chapter} ===[/]")
+    console.print(f"[bold]Step 1 — Downloading Chapter {chapter}[/]")
     dl = MangaDexDownloader(config.downloader)
     dl.download_chapter(url, chapter, project)
 
@@ -81,21 +93,20 @@ def run_interactive_pipeline():
     # =========================================================================
     crops_path = chap_dir / "crops.json"
     if not has_real_json_content(crops_path):
-        console.print(Panel(
-            f"[bold yellow]Opening the Panel Marker web UI...[/]\n"
-            f"Mark each panel on every story page (MAGI v3 pre-fills what it can find), "
-            f"then press [bold]{'⌘S' if config.marker.auto_open_browser else 'Ctrl+S'}[/] or click "
-            f"[bold]Save & Continue[/] in the browser tab.",
-            title="[bold white]Mark Panels[/]",
-            border_style="yellow"
-        ))
+        console.print(
+            "\n[bold]Mark Panels[/]\n"
+            "Opening the Panel Marker web UI. Mark each panel on every story page "
+            f"(MAGI v3 pre-fills what it can find), then press "
+            f"{'⌘S' if config.marker.auto_open_browser else 'Ctrl+S'} or click "
+            "Save & Continue in the browser tab.\n"
+        )
         launch_panel_marker(project, chapter, config.marker)
-        console.print("[bold green]✓ Panels marked and crops.json saved.[/]")
+        console.print("[green]✓ Panels marked and crops.json saved.[/]")
 
     # =========================================================================
     # Step 3: Cropping Panels & Packaging Vision Uploads
     # =========================================================================
-    console.print("\n[bold blue]=== Step 2: Cropping Panels & Packaging Vision Uploads ===[/]")
+    console.print("\n[bold]Step 2 — Cropping Panels & Packaging Vision Uploads[/]")
     cropper = CoordinateCropper(config.cropper)
     cropper.crop_chapter_from_json(project, chapter)
 
@@ -154,43 +165,33 @@ def run_interactive_pipeline():
         # have failed or produced no output) - tell the user exactly how to
         # fix it instead of silently printing an empty upload list.
         if not upload_groups:
-            console.print(Panel(
-                "[bold red]Nothing to upload:[/] no panels, sheets, or zip/PDF bundle exist for "
-                "this chapter.\nRe-run the wizard and answer [bold]yes[/] to \"Adjust what gets "
-                "generated/zipped for this chapter?\", or run [bold]./run.sh setup-config[/] "
-                "(step 2), and turn at least [bold]sheets[/] on.",
-                title="[bold white]No Vision Archive Available[/]",
-                border_style="red"
-            ))
+            console.print(
+                "\n[bold red]Nothing to upload:[/] no panels, sheets, or zip/PDF bundle exist for "
+                "this chapter.\nRe-run the wizard and answer yes to \"Adjust what gets "
+                "generated/zipped for this chapter?\", or run ./run.sh setup-config "
+                "(step 2), and turn at least sheets on."
+            )
             raise SystemExit(1)
 
-        # Instructions live in the Panel; every actual path is printed after
-        # it via print_path, one per line, never inside the Panel's border.
-        # A Panel has to fit its content inside a fixed-width box, so it
-        # force-wraps anything too long to fit - which is exactly what
-        # breaks ctrl+click-to-open on a path in an editor's integrated
-        # terminal (VS Code, etc.): the terminal can only turn one
-        # continuous line into a link, not one Rich has hard-wrapped in two.
-        console.print(Panel(
-            f"[bold yellow]Action Required:[/]\n"
-            f"1. Upload [bold]any one[/] of the file(s) listed below to your LLM, along with "
-            f"[bold]prompts/narration.md[/]"
+        # Every actual path is printed via print_path, one per line, never
+        # force-wrapped - a wrapped path breaks ctrl+click-to-open in an
+        # editor's integrated terminal (VS Code, etc.).
+        console.print(
+            "\n[bold]Generate narration.json + memory.json[/]\n"
+            f"1. Upload any one of the file(s) listed below to your LLM, along with prompts/narration.md"
             + (
-                " and the current memory.json ([bold]required[/] from chapter 2 onward, for story continuity)"
+                " and the current memory.json (required from chapter 2 onward, for story continuity)"
                 if chapter_needs_memory else
                 " and the current memory.json (for story continuity)" if memory_has_content else ""
             ) + ".\n"
-            f"[dim](each file already carries the project/manga/chapter identity itself - no need to type it in "
-            f"chat)[/]\n\n"
-            f"2. It replies with two JSON blocks - save each one into the matching path listed below.",
-            title="[bold white]Generate narration.json + memory.json[/]",
-            border_style="yellow"
-        ))
+            "[dim](each file already carries the project/manga/chapter identity itself - no need to type it in chat)[/]\n"
+            "2. It replies with two JSON blocks - save each one into the matching path listed below.\n"
+        )
 
-        console.print("\n[bold]Chapter folder:[/]")
+        console.print("[bold]Chapter folder:[/]")
         print_path(f"  {display_path(chap_dir, wrap=False)}")
 
-        console.print("\n[bold]Upload any [underline]one[/] of:[/]")
+        console.print("\n[bold]Upload any one of:[/]")
         for kind, parts in upload_groups:
             note = (
                 f"split into {len(parts)} parts, ≤{package.max_mb:g}MB each - upload all parts "
@@ -201,12 +202,12 @@ def run_interactive_pipeline():
                 print_path(f"    {display_path(part, wrap=False)}")
 
         console.print("\n[bold]Save its reply into:[/]")
-        console.print("  [bold green]narration.json[/]")
+        console.print("  narration.json")
         print_path(f"    {display_path(narration_path, wrap=False)}")
-        console.print("  [bold green]memory.json[/]")
+        console.print("  memory.json")
         print_path(f"    {display_path(memory_path, wrap=False)}")
 
-        Prompt.ask("\n[bold cyan]Press Enter once both files are saved and ready[/]")
+        Prompt.ask("\n[bold]Press Enter once both files are saved and ready[/]")
 
         # Starting chapter 2, memory.json isn't optional anymore - it's the
         # only thing carrying story continuity from the previous chapter
@@ -218,42 +219,61 @@ def run_interactive_pipeline():
         # guessing.
         if chapter_needs_memory:
             while not has_real_json_content(memory_path):
-                console.print(Panel(
-                    f"[bold red]memory.json is still empty/missing.[/] From chapter 2 onward this "
+                console.print(
+                    f"\n[bold red]memory.json is still empty/missing.[/] From chapter 2 onward this "
                     f"is required, not optional - it's what carries story continuity (character "
                     f"names, prior events) forward from the last chapter. Save the LLM's memory.json "
-                    f"reply to:\n{display_path(memory_path, wrap=False)}",
-                    title="[bold white]Continuity Memory Required[/]",
-                    border_style="red"
-                ))
-                Prompt.ask("[bold cyan]Press Enter once memory.json is saved[/]")
+                    f"reply to:\n{display_path(memory_path, wrap=False)}"
+                )
+                Prompt.ask("[bold]Press Enter once memory.json is saved[/]")
 
     # =========================================================================
     # Step 5: Synthesizing Vocal Audio via IndexTTS-2.5
     # =========================================================================
-    console.print(f"\n[bold blue]=== Step 3: Synthesizing Vocal Audio via IndexTTS-2.5 ===[/]")
+    console.print("\n[bold]Step 3 — Synthesizing Vocal Audio via IndexTTS-2.5[/]")
     tts = TTSEngine(config.tts, config.audio)
     tts.generate_narration_audio(project, chapter, interactive=True)
 
     # =========================================================================
     # Step 6: Mixing Master Audio Track & Loudnorm
     # =========================================================================
-    console.print(f"\n[bold blue]=== Step 4: Mixing Master Audio Track ===[/]")
+    console.print("\n[bold]Step 4 — Mixing Master Audio Track[/]")
     mixer = AudioProcessor(config.audio)
     mixer.mix_master_audio(project, chapter, interactive=True)
 
     # =========================================================================
     # Step 7: Render Final Video (1080p / 2K / 4K)
     # =========================================================================
-    console.print(f"\n[bold blue]=== Step 5: Rendering Final {config.video.height}p Recap Video ===[/]")
+    console.print(f"\n[bold]Step 5 — Rendering Final {config.video.height}p Recap Video[/]")
     renderer = VideoRenderer(config.system, config.video)
     final_video = renderer.render_video(project, chapter)
 
-    console.print(Panel(
-        f"[bold green]🎉 Recap Video Production Complete![/]\n\n"
-        f"[bold white]Resolution:[/] {config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)",
-        title="[bold green]Success[/]",
-        border_style="green"
-    ))
-    console.print("[bold white]Output File:[/]")
+    console.print(f"\n[bold green]✓ Recap video complete[/] [dim]({config.video.width}x{config.video.height}, {config.video.background_style.title()} canvas)[/]")
     print_path(f"  {display_path(final_video, wrap=False)}")
+
+
+def _run_full_recap(project: str, config: RemangaConfig) -> None:
+    """Full-recap mode: no per-chapter download/mark/crop walkthrough - every
+    chapter is expected to already have cropped panels and a narration.json
+    (write those with the regular per-chapter flow first). This just picks
+    which chapters to include, validates voice/BGM, and compiles."""
+    chapters = discover_chapters(project)
+    if not chapters:
+        console.print(f"[bold red]No chapters found for '{project}'.[/]")
+        return
+
+    console.print(f"\n[dim]Chapters found: {', '.join(chapters)}[/]")
+    choice = Prompt.ask(
+        "[bold]Compile all of them, or a subset? (comma-separated chapter numbers, or Enter for all)[/]",
+        default="",
+    ).strip()
+    selected = sorted({c.strip() for c in choice.split(",") if c.strip()}, key=chapter_sort_key) if choice else chapters
+
+    setup.ensure_valid_voice_prompt(config, interactive=True)
+    setup.ensure_valid_bgm(config, interactive=True)
+
+    force = Confirm.ask("Force a full recompile even if already compiled?", default=False)
+
+    console.print(f"\n[bold]Compiling {len(selected)} chapter(s) into one continuous video[/]")
+    compiler = FullRecapCompiler(config)
+    compiler.compile_full_manga(project, force=force, chapters=selected)
