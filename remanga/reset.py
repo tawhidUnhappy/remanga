@@ -10,7 +10,12 @@ from remanga.console import console
 from remanga.paths import get_chapter_dir
 
 # Chapter-workspace entries that represent the downloaded source pages — always preserved on restart.
-KEEP_ON_RESTART = {"pages", "pages.zip", "pages_metadata.json"}
+# pages.zip is deliberately NOT listed here: it's only ever kept when
+# downloader.zip_pages_enabled says it should exist at all (see _keep_set) -
+# otherwise a stale pages.zip left over from a config change gets swept up
+# and deleted like any other unwanted artifact, same as everything else not
+# explicitly kept.
+KEEP_ON_RESTART = {"pages", "pages_metadata.json"}
 
 # A "marks_only" restart additionally keeps crops.json — the panel coordinates
 # marked by hand in the panel-marking web UI — but drops everything derived
@@ -38,12 +43,26 @@ RESTART_MODES = ("hard", "marks_only", "soft")
 
 def _keep_set(mode: str) -> set:
     if mode == "hard":
-        return KEEP_ON_RESTART
-    if mode == "marks_only":
-        return KEEP_ON_MARKS_ONLY_RESTART
-    if mode == "soft":
-        return KEEP_ON_SOFT_RESTART
-    raise ValueError(f"Unknown restart mode {mode!r} - expected one of {RESTART_MODES}")
+        base = KEEP_ON_RESTART
+    elif mode == "marks_only":
+        base = KEEP_ON_MARKS_ONLY_RESTART
+    elif mode == "soft":
+        base = KEEP_ON_SOFT_RESTART
+    else:
+        raise ValueError(f"Unknown restart mode {mode!r} - expected one of {RESTART_MODES}")
+
+    # pages.zip only belongs in the keep set while the config actually wants
+    # it to exist - deferred import to dodge the same config/downloader/reset
+    # import cycle _reverify_downloads below already works around. If the
+    # config can't be loaded for some reason, err toward keeping it rather
+    # than risking an unwanted deletion.
+    try:
+        from remanga.config import RemangaConfig
+        zip_pages_enabled = RemangaConfig.load().downloader.zip_pages_enabled
+    except Exception:
+        zip_pages_enabled = True
+
+    return base | {"pages.zip"} if zip_pages_enabled else base
 
 
 def restart_candidates(project_name: str, chapter_num: str, *, mode: str = "hard") -> List[Path]:
@@ -65,9 +84,11 @@ def restart_chapter(
     reverify_downloads: bool = True,
 ) -> List[Path]:
     """
-    Deletes generated chapter artifacts while preserving the downloaded pages/ folder,
-    pages.zip, and pages_metadata.json — so the chapter can be reprocessed without
-    re-downloading. Three levels, from most to least destructive:
+    Deletes generated chapter artifacts while preserving the downloaded pages/ folder
+    and pages_metadata.json — so the chapter can be reprocessed without re-downloading.
+    pages.zip is preserved too, but only while downloader.zip_pages_enabled is on; if
+    it's off, any pages.zip found is treated as a stale leftover and deleted like every
+    other artifact not explicitly kept. Three levels, from most to least destructive:
 
     - "hard" (default, the original restart behavior): wipes everything else -
       crops.json, panels/, sheets/, the vision zip, narration.json, audio/,
