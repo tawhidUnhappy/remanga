@@ -57,15 +57,15 @@ class CoordinateCropper:
         # format existed, or with it previously disabled, gets it built once
         # on its next run instead of never.
         #
-        # The primary archive only has to exist if config.create_zip is
-        # actually on - otherwise it never gets built at all (see
+        # The primary archive only has to exist if config.primary_archive_enabled
+        # is actually on - otherwise it never gets built at all (see
         # crop_report.py's package_outputs), and requiring it here would mean
-        # a chapter with create_zip off could never take this fast path,
-        # forcing a full re-crop on every single run for no reason.
+        # a chapter with primary_archive_enabled off could never take this
+        # fast path, forcing a full re-crop on every single run for no reason.
         existing_panels = sorted(panels_dir.glob("panel_*.*"))
-        primary_archive_ready = not self.config.create_zip or expected_zip.exists()
+        primary_archive_ready = not self.config.primary_archive_enabled or expected_zip.exists()
         if not force and existing_panels and manifest_path.exists() and primary_archive_ready:
-            status = expected_zip.name if self.config.create_zip else "no primary archive (create_zip is off)"
+            status = expected_zip.name if self.config.primary_archive_enabled else "no primary archive (primary_archive_enabled is off)"
             console.print(f"[bold green]✓ Found {len(existing_panels)} panels already cropped and {status} ready! Skipping re-crop.[/]")
             if not is_up_to_date(self.config, chapter_dir):
                 sheet_paths = ensure_sheets_generated(self.config, existing_panels, sheets_dir)

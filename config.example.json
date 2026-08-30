@@ -12,23 +12,23 @@
     "max_retries": 3,
     "retry_delay_seconds": 2,
     "request_delay_seconds": 0.35,
-    "create_zip": false
+    "zip_pages_enabled": false
   },
   "cropper": {
     "margin_padding_pixels": 8,
     "auto_contrast_clean": false,
     "save_format": "PNG",
-    "vision_asset_type": "panels",
-    "create_sheets": false,
+    "primary_archive_format": "panels",
+    "always_generate_sheets": false,
     "panels_per_sheet": 4,
-    "create_zip": true,
+    "primary_archive_enabled": true,
     "llm_bundle": {
-      "zip_enabled": true,
-      "zip_split_enabled": false,
-      "pdf_enabled": false,
-      "pdf_split_enabled": false,
-      "sheets_enabled": false,
-      "sheets_split_enabled": false,
+      "panels_zip_enabled": true,
+      "panels_zip_split_enabled": false,
+      "panels_pdf_enabled": false,
+      "panels_pdf_split_enabled": false,
+      "sheets_zip_enabled": false,
+      "sheets_zip_split_enabled": false,
       "max_mb": 50.0
     },
     "snap_to_gutters": true,

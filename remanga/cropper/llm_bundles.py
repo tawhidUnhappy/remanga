@@ -2,9 +2,9 @@
 crop.py/crop_report.py don't need to know about each format individually -
 currently the zip (remanga.cropper.llm_zip), the PDF (remanga.cropper.
 llm_pdf), and the contact-sheets zip (remanga.cropper.llm_sheets), each
-independently activated (LLMBundleConfig.zip_active/pdf_active/
-sheets_active) but sharing one size cap (LLMBundleConfig.max_mb). Adding a
-fourth format later only means wiring it in here."""
+independently activated (LLMBundleConfig.panels_zip_active/panels_pdf_active/
+sheets_zip_active) but sharing one size cap (LLMBundleConfig.max_mb). Adding
+a fourth format later only means wiring it in here."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ def is_up_to_date(config: CropperConfig, chapter_dir: Path) -> bool:
     disk (an inactive format never blocks this). Used by crop.py's resume-check
     to decide whether a chapter that's already fully cropped still needs its
     LLM bundle(s) topped up, without forcing a full re-crop just for that."""
-    zip_ok = not config.llm_bundle.zip_active or any((chapter_dir / "panels_zip").glob("panels_*.zip"))
-    pdf_ok = not config.llm_bundle.pdf_active or any((chapter_dir / "panels_pdf").glob("panels_*.pdf"))
-    sheets_ok = not config.llm_bundle.sheets_active or any((chapter_dir / "sheets_zip").glob("sheets_*.zip"))
+    zip_ok = not config.llm_bundle.panels_zip_active or any((chapter_dir / "panels_zip").glob("panels_*.zip"))
+    pdf_ok = not config.llm_bundle.panels_pdf_active or any((chapter_dir / "panels_pdf").glob("panels_*.pdf"))
+    sheets_ok = not config.llm_bundle.sheets_zip_active or any((chapter_dir / "sheets_zip").glob("sheets_*.zip"))
     return zip_ok and pdf_ok and sheets_ok

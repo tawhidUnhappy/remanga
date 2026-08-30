@@ -1,7 +1,7 @@
-"""Builds the zip variant of the LLM upload bundle - a second vision archive
-purely for uploading to an LLM chat interface, packaging individual panel
-crops (the same content panels.zip/the primary archive would, when
-vision_asset_type is "panels"). On by default (see LLMBundleConfig), since
+"""Builds the panels_zip variant of the LLM upload bundle - a second vision
+archive purely for uploading to an LLM chat interface, packaging individual
+panel crops (the same content panels.zip/the primary archive would, when
+primary_archive_format is "panels"). On by default (see LLMBundleConfig), since
 the lossless re-encode is a safe, no-downside win over the primary archive
 for this purpose. Completely separate from:
 - panels/ itself, which is untouched and stays the full-quality source video
@@ -38,6 +38,6 @@ def build_llm_zip_bundle(
     bundle = config.llm_bundle
     return build_zip_bundle(
         panel_paths, chapter_dir / "panels_zip", "panels",
-        bundle.zip_enabled, bundle.zip_split_enabled, bundle.max_mb,
+        bundle.panels_zip_enabled, bundle.panels_zip_split_enabled, bundle.max_mb,
         project_name, chapter_num, "ZIP",
     )

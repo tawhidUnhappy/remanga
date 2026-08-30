@@ -44,7 +44,7 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
     final_video_path = chap_dir / f"{project_name}_ch{chapter_num}_recap.mp4"
     video_exist = final_video_path.exists() and final_video_path.stat().st_size > 1000
 
-    vision_ready = (config.cropper.vision_asset_type == "panels" and panels_zip_exist) or (config.cropper.vision_asset_type == "sheets" and sheets_zip_exist) or sheets_zip_exist or panels_zip_exist
+    vision_ready = (config.cropper.primary_archive_format == "panels" and panels_zip_exist) or (config.cropper.primary_archive_format == "sheets" and sheets_zip_exist) or sheets_zip_exist or panels_zip_exist
 
     if video_exist:
         summary = "Recap Ready"
@@ -101,7 +101,7 @@ def render_status_panel(project: str, chapter: str) -> Panel:
     bgm_status = f"[green]Enabled ({display_path(bgm_path)})[/]" if (config.audio.bgm_enabled and bgm_path and bgm_path.exists()) else "[dim]Disabled / None[/]"
 
     res_str = f"{config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)"
-    asset_mode = config.cropper.vision_asset_type
+    asset_mode = config.cropper.primary_archive_format
     target_zip_name = config.cropper.expected_zip_name
     target_zip_ready = st['panels_zip_exist'] if asset_mode == "panels" else st['sheets_zip_exist']
 

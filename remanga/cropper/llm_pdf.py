@@ -1,6 +1,6 @@
 """Builds the PDF variant of the LLM upload bundle - see
 remanga.cropper.llm_zip's module docstring for the zip variant this mirrors
-closely (same LLMBundleConfig.max_mb/pdf_split_enabled behavior, same
+closely (same LLMBundleConfig.max_mb/panels_pdf_split_enabled behavior, same
 lossless-or-nothing guarantee, same per-part chapter identity); this is the
 PDF equivalent for chat interfaces that handle a single PDF upload more
 gracefully than a zip of individual images. Off by default, unlike the zip
@@ -83,7 +83,7 @@ def build_llm_pdf_bundle(
     worse than no PDF at all, and the primary archive/zip bundle remain
     available regardless."""
     out_dir = chapter_dir / "panels_pdf"
-    if not config.llm_bundle.pdf_active or not panel_paths:
+    if not config.llm_bundle.panels_pdf_active or not panel_paths:
         if out_dir.exists():
             for stale in out_dir.glob("panels_*.pdf"):
                 stale.unlink()
@@ -109,7 +109,7 @@ def build_llm_pdf_bundle(
             return []
         encoded.append((path.stem, page))
 
-    parts = pack_by_size(encoded, lambda item: len(item[1].flate_data), max_bytes, config.llm_bundle.pdf_split_enabled)
+    parts = pack_by_size(encoded, lambda item: len(item[1].flate_data), max_bytes, config.llm_bundle.panels_pdf_split_enabled)
 
     total_parts = len(parts)
     identity = chapter_identity_fields(project_name, chapter_num)
@@ -133,7 +133,7 @@ def build_llm_pdf_bundle(
     # this reports the resulting size plainly rather than claiming a "saved"
     # figure that would sometimes be negative.
     total_mb = sum(p.stat().st_size for p in written) / (1024 * 1024)
-    size_note = f"{total_parts} part(s), ≤{config.llm_bundle.max_mb:g}MB each" if config.llm_bundle.pdf_split_enabled \
+    size_note = f"{total_parts} part(s), ≤{config.llm_bundle.max_mb:g}MB each" if config.llm_bundle.panels_pdf_split_enabled \
         else "1 part, splitting off"
     console.print(
         f"[bold green]✓ Built LLM upload bundle - PDF ({size_note}, {total_mb:.1f}MB total) in:[/] {out_dir}"

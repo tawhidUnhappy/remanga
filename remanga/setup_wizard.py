@@ -12,7 +12,7 @@ from rich.table import Table
 
 from remanga.config import RemangaConfig
 from remanga.console import console
-from remanga.setup import ensure_valid_voice_prompt, is_valid_file
+from remanga.setup import bundle_state_str, configure_llm_bundle_formats, ensure_valid_voice_prompt, is_valid_file
 
 
 def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
@@ -46,81 +46,34 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     pack_table.add_row("2", "Individual Panels", "panels.zip", "Direct standalone high-res crops for each panel [Default]")
     console.print(pack_table)
 
-    curr_pref = "1" if config.cropper.vision_asset_type == "sheets" else "2"
+    curr_pref = "1" if config.cropper.primary_archive_format == "sheets" else "2"
     pack_choice = Prompt.ask("[bold cyan]Select vision upload format[/]", choices=["1", "2"], default=curr_pref).strip()
-    config.cropper.vision_asset_type = "panels" if pack_choice == "2" else "sheets"
+    config.cropper.primary_archive_format = "panels" if pack_choice == "2" else "sheets"
 
     # Whether to actually build that archive at chapter root at all
-    # (cropper.create_zip) - separate from every LLM Upload Bundle format
-    # below, and previously only settable by hand-editing config.json, which
-    # is exactly the kind of hidden setting that makes "just the bundles I
-    # picked" not actually happen. Asked here, in the same breath as the
-    # format choice it applies to, instead of being invisible.
-    config.cropper.create_zip = Confirm.ask(
+    # (cropper.primary_archive_enabled) - separate from every LLM Upload
+    # Bundle format below, and previously only settable by hand-editing
+    # config.json, which is exactly the kind of hidden setting that makes
+    # "just the bundles I picked" not actually happen. Asked here, in the
+    # same breath as the format choice it applies to, instead of being
+    # invisible.
+    config.cropper.primary_archive_enabled = Confirm.ask(
         f"[bold cyan]Also build this as a single {config.cropper.expected_zip_name} at chapter root "
         f"(on top of anything in the next step)?[/]",
-        default=config.cropper.create_zip,
+        default=config.cropper.primary_archive_enabled,
     )
     console.print(
-        f"[green]✓ Vision upload format set to:[/] {config.cropper.vision_asset_type.title()} "
-        f"({config.cropper.expected_zip_name}{' - building it' if config.cropper.create_zip else ' - not building it'})"
+        f"[green]✓ Vision upload format set to:[/] {config.cropper.primary_archive_format.title()} "
+        f"({config.cropper.expected_zip_name}{' - building it' if config.cropper.primary_archive_enabled else ' - not building it'})"
     )
 
-    # 3. LLM Upload Bundles (extra archives just for uploading - see LLMBundleConfig)
+    # 3. LLM Upload Bundles (extra archives just for uploading - see
+    # LLMBundleConfig and remanga.setup.configure_llm_bundle_formats, the
+    # same "what should get zipped" checklist the main interactive wizard
+    # can also reach on demand).
     console.print("\n[bold yellow]3. LLM Upload Bundles[/]")
-    console.print(
-        "[dim]Extra archives just for uploading to an LLM chat interface, losslessly re-encoded "
-        "smaller - independent of the primary archive above (which just got its own on/off "
-        "question), never replacing it or panels/ (still full quality, still what video "
-        "rendering reads). If you turned the primary archive off and only want what you check "
-        "here, that's exactly what happens - nothing extra gets built.[/]"
-    )
+    configure_llm_bundle_formats(config)
     bundle = config.cropper.llm_bundle
-
-    def _ask_bundle_checklist(label: str, single_hint: str, split_hint: str, enabled: bool, split_enabled: bool) -> tuple[bool, bool]:
-        """Each format is a checklist of two independent things to generate,
-        not a mode to pick - see LLMBundleConfig's docstring. Both questions
-        are always asked, regardless of how the other was answered, so
-        checking or unchecking one never silently loses the other's setting."""
-        console.print(f"\n[bold]{label}[/]")
-        enabled = Confirm.ask(f"  Generate a single file ({single_hint})?", default=enabled)
-        split_enabled = Confirm.ask(f"  Generate it split into size-capped parts ({split_hint})?", default=split_enabled)
-        return enabled, split_enabled
-
-    bundle.zip_enabled, bundle.zip_split_enabled = _ask_bundle_checklist(
-        "ZIP bundle [dim](single file on by default - individual panels, a safe, no-downside win for LLM upload)[/]",
-        "panels_zip/panels_1.zip", "panels_zip/panels_1.zip, panels_2.zip, ...",
-        bundle.zip_enabled, bundle.zip_split_enabled,
-    )
-    bundle.pdf_enabled, bundle.pdf_split_enabled = _ask_bundle_checklist(
-        "PDF bundle [dim](off by default - individual panels, one per page)[/]",
-        "panels_pdf/panels_1.pdf", "panels_pdf/panels_1.pdf, panels_2.pdf, ...",
-        bundle.pdf_enabled, bundle.pdf_split_enabled,
-    )
-    bundle.sheets_enabled, bundle.sheets_split_enabled = _ask_bundle_checklist(
-        "SHEETS ZIP bundle [dim](off by default - 2x2 contact sheet composites, not individual panels)[/]",
-        "sheets_zip/sheets_1.zip", "sheets_zip/sheets_1.zip, sheets_2.zip, ...",
-        bundle.sheets_enabled, bundle.sheets_split_enabled,
-    )
-
-    if bundle.zip_split_enabled or bundle.pdf_split_enabled or bundle.sheets_split_enabled:
-        max_mb_str = Prompt.ask("[bold cyan]Size cap per part, in MB[/]", default=str(bundle.max_mb))
-        try:
-            bundle.max_mb = float(max_mb_str)
-        except ValueError:
-            console.print(f"[yellow]Not a number, keeping {bundle.max_mb:g}MB.[/]")
-
-    def _bundle_state(enabled: bool, split_enabled: bool) -> str:
-        if split_enabled:
-            return f"on, split at {bundle.max_mb:g}MB"
-        return "on, unsplit" if enabled else "off"
-
-    console.print(
-        f"[green]✓ LLM upload bundles:[/] "
-        f"ZIP {_bundle_state(bundle.zip_enabled, bundle.zip_split_enabled)} | "
-        f"PDF {_bundle_state(bundle.pdf_enabled, bundle.pdf_split_enabled)} | "
-        f"SHEETS ZIP {_bundle_state(bundle.sheets_enabled, bundle.sheets_split_enabled)}"
-    )
 
     # 4. Voice Language Selection
     console.print("\n[bold yellow]4. Voice Language[/]")
@@ -250,14 +203,14 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
 
     summary_table.add_row(
         "Vision Upload Format",
-        f"{config.cropper.vision_asset_type.title()} "
-        f"({config.cropper.expected_zip_name if config.cropper.create_zip else 'not built'})",
+        f"{config.cropper.primary_archive_format.title()} "
+        f"({config.cropper.expected_zip_name if config.cropper.primary_archive_enabled else 'not built'})",
     )
     summary_table.add_row(
         "LLM Upload Bundles",
-        f"ZIP {_bundle_state(bundle.zip_enabled, bundle.zip_split_enabled)}, "
-        f"PDF {_bundle_state(bundle.pdf_enabled, bundle.pdf_split_enabled)}, "
-        f"SHEETS ZIP {_bundle_state(bundle.sheets_enabled, bundle.sheets_split_enabled)}",
+        f"ZIP {bundle_state_str(bundle, bundle.panels_zip_enabled, bundle.panels_zip_split_enabled)}, "
+        f"PDF {bundle_state_str(bundle, bundle.panels_pdf_enabled, bundle.panels_pdf_split_enabled)}, "
+        f"SHEETS ZIP {bundle_state_str(bundle, bundle.sheets_zip_enabled, bundle.sheets_zip_split_enabled)}",
     )
     summary_table.add_row("Resolution", f"{config.video.width}x{config.video.height} @ {config.video.fps}fps")
     summary_table.add_row("Background Style", f"{config.video.background_style.title()} Blur" if config.video.background_style == "blur" else "Solid Black")

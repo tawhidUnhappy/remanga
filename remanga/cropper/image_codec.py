@@ -47,6 +47,44 @@ def pixel_identical(reference: Image.Image, candidate_bytes: bytes) -> bool:
         return False
 
 
+def smallest_lossless_encoding_for_image(img: Image.Image, best_bytes: bytes = b"", best_ext: str = ".png") -> Tuple[bytes, str]:
+    """The actual codec comparison behind `smallest_lossless_encoding` below,
+    factored out so it can also run on an image that only exists in memory -
+    a composited sheet canvas (remanga.cropper.sheets), not a file on disk.
+
+    Tries a re-optimized PNG and a lossless WEBP, keeping whichever - either
+    of those two, or whatever was passed in as the starting `best_bytes`/
+    `best_ext` - comes out smallest, and only if `pixel_identical` confirms
+    it decodes back to the exact same pixels first. Pass no starting
+    baseline (the defaults) to just compare the two candidates against each
+    other, which is what a from-scratch composited image needs, since
+    there's no pre-existing file to also consider."""
+    try:
+        src = img if img.mode in ("RGB", "RGBA") else img.convert("RGB")
+
+        png_buf = io.BytesIO()
+        src.save(png_buf, "PNG", optimize=True, compress_level=9)
+        png_bytes = png_buf.getvalue()
+        if (not best_bytes or len(png_bytes) < len(best_bytes)) and pixel_identical(src, png_bytes):
+            best_bytes, best_ext = png_bytes, ".png"
+
+        # method=6 (max effort) was benchmarked at ~25x method=4's encode
+        # time for only ~3% extra size reduction on manga panel art -
+        # nowhere near worth it when this runs on every panel of every
+        # chapter cropped. method=4 gets nearly all of the size win at a
+        # small fraction of the cost; lossless=True is what guarantees no
+        # quality loss either way, not the method number.
+        webp_buf = io.BytesIO()
+        src.save(webp_buf, "WEBP", lossless=True, quality=100, method=4)
+        webp_bytes = webp_buf.getvalue()
+        if (not best_bytes or len(webp_bytes) < len(best_bytes)) and pixel_identical(src, webp_bytes):
+            best_bytes, best_ext = webp_bytes, ".webp"
+    except Exception:
+        pass
+
+    return best_bytes, best_ext
+
+
 def smallest_lossless_encoding(path: Path) -> Tuple[bytes, str]:
     """Returns (bytes, extension) for whichever lossless encoding of this
     panel image comes out smallest: the original file as-is, a re-optimized
@@ -60,33 +98,13 @@ def smallest_lossless_encoding(path: Path) -> Tuple[bytes, str]:
     so the same storage-optimizing, quality-preserving encode only has to be
     implemented, and trusted, once."""
     original_bytes = path.read_bytes()
-    best_bytes, best_ext = original_bytes, (path.suffix.lower() or ".png")
+    original_ext = path.suffix.lower() or ".png"
 
     try:
         with Image.open(path) as img:
             img.load()
-            src = img if img.mode in ("RGB", "RGBA") else img.convert("RGB")
-
-            png_buf = io.BytesIO()
-            src.save(png_buf, "PNG", optimize=True, compress_level=9)
-            png_bytes = png_buf.getvalue()
-            if len(png_bytes) < len(best_bytes) and pixel_identical(src, png_bytes):
-                best_bytes, best_ext = png_bytes, ".png"
-
-            # method=6 (max effort) was benchmarked at ~25x method=4's encode
-            # time for only ~3% extra size reduction on manga panel art -
-            # nowhere near worth it when this runs on every panel of every
-            # chapter cropped. method=4 gets nearly all of the size win at a
-            # small fraction of the cost; lossless=True is what guarantees no
-            # quality loss either way, not the method number.
-            webp_buf = io.BytesIO()
-            src.save(webp_buf, "WEBP", lossless=True, quality=100, method=4)
-            webp_bytes = webp_buf.getvalue()
-            if len(webp_bytes) < len(best_bytes) and pixel_identical(src, webp_bytes):
-                best_bytes, best_ext = webp_bytes, ".webp"
+            return smallest_lossless_encoding_for_image(img, original_bytes, original_ext)
     except Exception:
         # Any decode/encode hiccup on this one image: ship the original file
         # untouched rather than let an optimization attempt block the batch.
-        return original_bytes, (path.suffix.lower() or ".png")
-
-    return best_bytes, best_ext
+        return original_bytes, original_ext

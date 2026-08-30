@@ -105,7 +105,7 @@ class MangaDexDownloader:
 
         if all_present:
             console.print(f"[bold green]✓ All {len(filenames)} pages verified and already downloaded! Skipping download.[/]")
-            if self.config.create_zip:
+            if self.config.zip_pages_enabled:
                 self._create_pages_zip(chapter_dir, dest_dir)
             return dest_dir
 
@@ -177,7 +177,7 @@ class MangaDexDownloader:
 
         console.print(f"[bold green]✓ Successfully downloaded and verified all {len(filenames)} pages![/]")
 
-        if self.config.create_zip:
+        if self.config.zip_pages_enabled:
             self._create_pages_zip(chapter_dir, dest_dir)
 
         return dest_dir

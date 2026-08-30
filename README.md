@@ -156,23 +156,23 @@ Run the interactive settings wizard anytime to configure vocal reference files, 
     "threads": 4
   },
   "downloader": {
-    "create_zip": false
+    "zip_pages_enabled": false
   },
   "cropper": {
     "margin_padding_pixels": 8,
     "auto_contrast_clean": false,
     "save_format": "PNG",
-    "vision_asset_type": "panels",
-    "create_sheets": false,
+    "primary_archive_format": "panels",
+    "always_generate_sheets": false,
     "panels_per_sheet": 4,
-    "create_zip": true,
+    "primary_archive_enabled": true,
     "llm_bundle": {
-      "zip_enabled": true,
-      "zip_split_enabled": false,
-      "pdf_enabled": false,
-      "pdf_split_enabled": false,
-      "sheets_enabled": false,
-      "sheets_split_enabled": false,
+      "panels_zip_enabled": true,
+      "panels_zip_split_enabled": false,
+      "panels_pdf_enabled": false,
+      "panels_pdf_split_enabled": false,
+      "sheets_zip_enabled": false,
+      "sheets_zip_split_enabled": false,
       "max_mb": 50.0
     }
   },
@@ -213,10 +213,10 @@ Run the interactive settings wizard anytime to configure vocal reference files, 
 }
 ```
 
-A few worth calling out specifically:
-- **`downloader.create_zip`** (default `false`) — bundles the raw downloaded pages into `pages.zip`. Off by default because nothing downstream reads it; it's only useful if you want to hand a chapter's pages to an LLM by hand.
-- **`cropper.create_zip`** (default `true`) — a *different* setting from anything under `cropper.llm_bundle` below: this is whether to build the primary archive (`sheets.zip`/`panels.zip`) at chapter root at all. If you only want the LLM upload bundles and nothing else, turn this off too — `./run.sh setup-config` step 2 now asks about it right alongside the format choice, so it's no longer a setting you'd only find by editing `config.json`.
-- **`cropper.create_sheets`** (default `false`) — generates `sheets/*.png` contact sheets even when `vision_asset_type` is `"panels"` (which doesn't use them). Off by default to skip work nothing needs; it still turns itself on automatically whenever `vision_asset_type` is actually `"sheets"` or the sheets zip bundle is active.
+A few worth calling out specifically — names are deliberately verbose (`primary_archive_enabled` rather than a second `create_zip`) so nothing reads as a duplicate of a setting somewhere else in the file:
+- **`downloader.zip_pages_enabled`** (default `false`) — bundles the raw downloaded pages into `pages.zip`. Off by default because nothing downstream reads it; it's only useful if you want to hand a chapter's pages to an LLM by hand. Named for exactly what it zips (the downloaded *pages*) so it's never confused with the setting below, which zips something completely different.
+- **`cropper.primary_archive_enabled`** (default `true`) — a *different* setting from anything under `cropper.llm_bundle` below: this is whether to build the primary archive (`sheets.zip`/`panels.zip`) at chapter root at all. If you only want the LLM upload bundles and nothing else, turn this off too — `./run.sh setup-config` step 2 now asks about it right alongside the format choice, so it's no longer a setting you'd only find by editing `config.json`; the main interactive wizard also offers a quick "adjust LLM upload bundles" prompt of its own each run (default No, so it never interrupts a normal run uninvited).
+- **`cropper.always_generate_sheets`** (default `false`) — generates `sheets/*.png` contact sheets even when `primary_archive_format` is `"panels"` (which doesn't use them). Off by default to skip work nothing needs; it still turns itself on automatically whenever `primary_archive_format` is actually `"sheets"` or the sheets_zip bundle is active. Every sheet is merged from its panels' **full original resolution** — never downscaled — with only lossless re-encoding used to keep the file size down (see [LLM Upload Bundles](#llm-upload-bundles-panels_zip--panels_pdf--sheets_zip) below).
 - **`marker.click_to_select`** (default `true`) — see [Panel Marker Web UI](#panel-marker-web-ui) for what this protects against.
 - **`tts.synth_timeout_seconds`** (default `180`) — see [Reliability](#reliability-crashes-interrupts--resuming).
 
@@ -229,54 +229,54 @@ If you prefer scripting individual pipeline stages without the interactive wizar
 ### 1. Download Chapter Pages from MangaDex
 Pass a title query, title URL, chapter URL, or UUID:
 ```bash
-./run.sh download --project "yandere_sister" --chapter "1" --url "https://mangadex.org/title/..."
+./run.sh download --project "my_manga" --chapter "1" --url "https://mangadex.org/title/..."
 ```
-*Creates:* `projects/yandere_sister/chapters/chapter_1/pages/` (plus `pages.zip` if `downloader.create_zip` is enabled — off by default)
+*Creates:* `projects/my_manga/chapters/chapter_1/pages/` (plus `pages.zip` if `downloader.zip_pages_enabled` is enabled — off by default)
 
 ### 2. Mark Panels
 Launches the **Panel Marker** web UI: MAGI v3 pre-fills every page's panel boxes on a GPU, you drag/adjust/delete to correct them, then Save & Continue writes `crops.json`.
 ```bash
-./run.sh mark --project "yandere_sister" --chapter "1"
+./run.sh mark --project "my_manga" --chapter "1"
 ```
-*Creates:* `projects/yandere_sister/chapters/chapter_1/crops.json` — see [Panel Marker Web UI](#panel-marker-web-ui) below.
+*Creates:* `projects/my_manga/chapters/chapter_1/crops.json` — see [Panel Marker Web UI](#panel-marker-web-ui) below.
 
 ### 3. Crop Panels & Build Vision Archive
 ```bash
-./run.sh crop --project "yandere_sister" --chapter "1"
+./run.sh crop --project "my_manga" --chapter "1"
 ```
-*Creates:* `panels/`, `panels_manifest.json`, and the vision archive matching `cropper.vision_asset_type` (`sheets.zip` + `sheets/`, or `panels.zip`) — plus whichever of `panels_zip/panels_1.zip` (on by default), `panels_pdf/panels_1.pdf`, and `sheets_zip/sheets_1.zip` (both off by default) are active per `cropper.llm_bundle` (see [LLM Upload Bundles](#llm-upload-bundles-panels_zip--panels_pdf--sheets_zip) below). `sheets/` gets built whenever it's actually needed - for `vision_asset_type: "sheets"`, `create_sheets`, or the sheets zip bundle, whichever's on.
+*Creates:* `panels/`, `panels_manifest.json`, and the vision archive matching `cropper.primary_archive_format` (`sheets.zip` + `sheets/`, or `panels.zip`) — plus whichever of `panels_zip/panels_1.zip` (on by default), `panels_pdf/panels_1.pdf`, and `sheets_zip/sheets_1.zip` (both off by default) are active per `cropper.llm_bundle` (see [LLM Upload Bundles](#llm-upload-bundles-panels_zip--panels_pdf--sheets_zip) below). `sheets/` gets built whenever it's actually needed - for `primary_archive_format: "sheets"`, `always_generate_sheets`, or the sheets_zip bundle, whichever's on.
 
 ### 4. Generate and Place `narration.json` + `memory.json`
-Upload **any one** of your generated vision archives — whichever LLM upload bundles are active (`panels_pdf`, `panels_zip`, `sheets_zip`) plus the primary archive (`sheets.zip`/`panels.zip`) if `cropper.create_zip` is on — and `prompts/narration.md` to your LLM, attaching the project's current `memory.json` too, once it has real content, so continuity carries across chapters. The prompt asks for **exactly two fenced JSON code blocks and nothing else** (no commentary before/after), so the LLM's reply can be copy-pasted straight into each file. The interactive wizard prints a plain list of every archive actually available to upload this run, and both destination paths, when it gets to this step:
+Upload **any one** of your generated vision archives — whichever LLM upload bundles are active (`panels_pdf`, `panels_zip`, `sheets_zip`) plus the primary archive (`sheets.zip`/`panels.zip`) if `cropper.primary_archive_enabled` is on — and `prompts/narration.md` to your LLM, attaching the project's current `memory.json` too, once it has real content, so continuity carries across chapters. The prompt asks for **exactly two fenced JSON code blocks and nothing else** (no commentary before/after), so the LLM's reply can be copy-pasted straight into each file. The interactive wizard prints every archive actually available to upload this run as a ctrl+click-openable path (VS Code and similar editors), and both destination paths, when it gets to this step:
 ```text
-projects/yandere_sister/chapters/chapter_1/narration.json   (Block 1)
-projects/yandere_sister/memory.json                         (Block 2)
+projects/my_manga/chapters/chapter_1/narration.json   (Block 1)
+projects/my_manga/memory.json                         (Block 2)
 ```
 `memory.json` is auto-created as an empty placeholder the first time a project is touched, and updated in place chapter over chapter (carried-forward characters/factions, appended plot points, resolved/opened cliffhangers) — it's how the LLM keeps track of the story without re-reading every prior chapter.
 
 ### 5. Synthesize Vocal Audio (IndexTTS-2.5)
 ```bash
-./run.sh tts --project "yandere_sister" --chapter "1"
+./run.sh tts --project "my_manga" --chapter "1"
 ```
 *(Optional: override reference speaker voice with `--voice path/to/voice.wav` or force re-synthesis with `--force`)*
 
 ### 6. Mix Master Audio Track
 Applies micro edge-fading, mixes optional background music (BGM), and normalizes via EBU R128:
 ```bash
-./run.sh mix --project "yandere_sister" --chapter "1"
+./run.sh mix --project "my_manga" --chapter "1"
 ```
 *(Optional: override BGM path with `--bgm path/to/music.mp3`)*
 
 ### 7. Render Final Recap Video
 Composites frames onto the chosen background canvas and renders hardware-accelerated MP4:
 ```bash
-./run.sh render --project "yandere_sister" --chapter "1"
+./run.sh render --project "my_manga" --chapter "1"
 ```
-*Output File:* `projects/yandere_sister/chapters/chapter_1/yandere_sister_ch1_recap.mp4`
+*Output File:* `projects/my_manga/chapters/chapter_1/my_manga_ch1_recap.mp4`
 
 ### Check Workspace Status Anytime
 ```bash
-./run.sh status --project "yandere_sister" --chapter "1"
+./run.sh status --project "my_manga" --chapter "1"
 ```
 
 ---
@@ -293,7 +293,7 @@ Composites frames onto the chosen background canvas and renders hardware-acceler
 | **Soft** | `--mode soft` | + `crops.json`, `panels/`, `narration.json` | you changed voice/BGM/resolution and only need TTS/mix/render redone |
 
 ```bash
-./run.sh restart --project "yandere_sister" --chapter "1" --mode marks_only
+./run.sh restart --project "my_manga" --chapter "1" --mode marks_only
 ```
 Add `-f`/`--force` to skip the confirmation prompt, or `--no-reverify` to skip re-checking the downloaded pages afterward. `remark` still opens the Panel Marker and waits for you to save even with `--force` — that flag only skips the deletion confirmation, not the marking step itself. The interactive wizard offers the same four levels (plus "Resume") whenever you pick a chapter that already has progress.
 
@@ -308,47 +308,49 @@ Reopening the Panel Marker on a chapter that already has marks — via `remark`,
 | Asset Type | Archive File | Structure | Best For |
 |---|---|---|---|
 | **Individual Panels** (default) | `panels.zip` | Standalone cropped images (`panel_001.png`, etc.) | **Maximum resolution & fine detail examination** |
-| **Contact Sheets** | `sheets.zip` | 2x2 labeled grid images (`sheet_001.png`, etc.) | **Low vision token cost & fast LLM inference** (75% fewer images uploaded) |
+| **Contact Sheets** | `sheets.zip` | 2x2 labeled grid images (`sheet_001.png`, etc.), merged at full original resolution | **Low vision token cost & fast LLM inference** (75% fewer images uploaded) |
 
-Every image packed into either archive goes through the same lossless re-encoding the LLM upload bundles below use (see [LLM Upload Bundles](#llm-upload-bundles-panels_zip--panels_pdf--sheets_zip) for exactly how) before being zipped — typically ~40-50% smaller than the raw cropped files, at no quality cost, with no separate setting to turn on.
+Every image packed into either archive goes through the same lossless re-encoding the LLM upload bundles below use (see [LLM Upload Bundles](#llm-upload-bundles-panels_zip--panels_pdf--sheets_zip) for exactly how) before being zipped — typically ~40-50% smaller than the raw cropped files, at no quality cost, with no separate setting to turn on. Contact sheets are no exception: each one is merged from its panels' full native pixel dimensions (the composite canvas is sized *from* the panels, not the other way around), so a sheet never loses detail a plain panel crop wouldn't also have — the only thing keeping the file size down is picking whichever lossless container (PNG or lossless WEBP) comes out smaller, exactly like every other format on this page.
 
 To switch formats:
 1. Run `./run.sh setup-config` and choose option 2, **OR**
-2. Set `"vision_asset_type": "sheets"` (or `"panels"`, the default) in `config.json`.
+2. Set `"primary_archive_format": "sheets"` (or `"panels"`, the default) in `config.json`.
 
 ### LLM Upload Bundles (`panels_zip` / `panels_pdf` / `sheets_zip`)
 
-Extra vision archives built purely for uploading to an LLM chat interface, alongside the primary archive above (never replacing it, and never touching `panels/` - still full quality, still what video rendering reads). Three independent formats, differing in *what* they package:
+Extra vision archives built purely for uploading to an LLM chat interface, alongside the primary archive above (never replacing it, and never touching `panels/` - still full quality, still what video rendering reads). Three independent formats, each named for exactly what it packages and the folder it lands in:
 
 | Format | Packages | Container | Default |
 |---|---|---|---|
-| `zip` | Individual panel crops, one file per panel | zip | **On** |
-| `pdf` | The same individual panels, one per PDF page | PDF | Off |
-| `sheets` | 2x2 contact sheet composites instead - fewer, denser images, lower LLM vision-token cost at some per-panel resolution cost | zip | Off |
+| `panels_zip` | Individual panel crops, one file per panel | zip | **On** |
+| `panels_pdf` | The same individual panels, one per PDF page | PDF | Off |
+| `sheets_zip` | 2x2 contact sheet composites instead - fewer, denser images, lower LLM vision-token cost, still full original resolution (see above) | zip | Off |
 
-Each format is a **checklist of two independent things to generate**, not a mode to pick — check either, both, or neither:
+**Controlling what actually gets built** is a checklist, not a mode to pick — check either, both, or neither format, and within a format check either or both of:
 - `<format>_enabled`: generate it as **one single file** holding every image, regardless of size.
 - `<format>_split_enabled`: generate it **split into multiple size-capped parts** instead - `..._1.zip`/`.pdf`, `..._2.___`, ... packed in reading order, each staying at or under `max_mb`, so a part is never larger than the cap unless a single image alone already exceeds it.
 
-Checking `_split_enabled` builds the split version regardless of `_enabled` (either one is enough to generate something for that format); checking both together still only produces the split version, not two separate outputs.
+So "only the PDF, nothing else" is exactly `panels_pdf_enabled: true` with every other flag `false` — nothing else gets built, full stop. Checking `_split_enabled` builds the split version regardless of `_enabled` (either one is enough to generate something for that format); checking both together still only produces the split version, not two separate outputs. Reach this checklist two ways:
+- `./run.sh setup-config` (step 3), the full settings walkthrough, **or**
+- the main interactive wizard's own **"Adjust which LLM upload bundles get built?"** prompt each run (defaults to No, so it never interrupts a normal run uninvited) — the same checklist, without needing to know `setup-config` exists separately.
 
 How each format stays lossless:
-- **Zip / sheets zip:** the same re-encoding the primary archive above uses — every image re-encoded as an optimized PNG and as a lossless WEBP, keeping whichever comes out smaller. Manga line art/halftones typically shrink 30-50% this way.
+- **Panels zip / sheets zip:** the same re-encoding the primary archive above uses — every image re-encoded as an optimized PNG and as a lossless WEBP, keeping whichever comes out smaller. Manga line art/halftones typically shrink 30-50% this way.
 - **PDF:** every image is embedded as a `FlateDecode`-compressed raw bitmap (PDF's own native lossless image representation — the same class of compression a PNG uses internally, just packaged the way PDF expects), optionally TIFF-Predictor-2-filtered first for a better ratio. Pillow's own PDF writer re-encodes RGB images as lossy JPEG with no way to turn that off short of quantizing colors, which is why this is built directly rather than through Pillow's `Image.save(..., "PDF")`.
 - Either way, a candidate re-encoding only ever gets used after decoding it back and verifying it's pixel-for-pixel identical to the original — anything that doesn't round-trip exactly is discarded in favor of a safer encoding (or the original file, for the zip formats).
 
 Each part carries the same project/manga/chapter identity, plus which part it is, how many parts total, and that part's image range — as a `chapter_info.json` file for a zip/sheets-zip part, or as page 1 of a PDF part (rendered as plain, readable text, since a PDF can't hold a separate loose file the way a zip can) - true even with splitting off and a single part, so an LLM given only one part never has to guess whether more exist. See the "Chapter Identity" section of [`prompts/narration.md`](prompts/narration.md) for how the LLM is expected to read it.
 
-Every LLM-bundle setting lives together under one `cropper.llm_bundle` object, so there's exactly one place to look — set it interactively via `./run.sh setup-config` (step 3), or by hand in `config.json`:
+Every LLM-bundle setting lives together under one `cropper.llm_bundle` object, so there's exactly one place to look — set it interactively via `./run.sh setup-config` (step 3) or the wizard's own prompt above, or by hand in `config.json`:
 
 | Key (under `cropper.llm_bundle`) | Default | Meaning |
 |---|---|---|
-| `zip_enabled` | `true` | Build the zip bundle (individual panels) every crop run. Independent of `create_zip` above. |
-| `zip_split_enabled` | `false` | Allow the zip bundle to split into multiple size-capped parts. |
-| `pdf_enabled` | `false` | Build the PDF bundle (individual panels) every crop run. |
-| `pdf_split_enabled` | `false` | Allow the PDF bundle to split into multiple size-capped parts. |
-| `sheets_enabled` | `false` | Build the sheets zip bundle (2x2 composites) every crop run. Independent of `vision_asset_type` above - `sheets/` gets generated for this even in `"panels"` mode. |
-| `sheets_split_enabled` | `false` | Allow the sheets zip bundle to split into multiple size-capped parts. |
+| `panels_zip_enabled` | `true` | Build the panels_zip bundle (individual panels) every crop run. Independent of `primary_archive_enabled` above. |
+| `panels_zip_split_enabled` | `false` | Allow the panels_zip bundle to split into multiple size-capped parts. |
+| `panels_pdf_enabled` | `false` | Build the panels_pdf bundle (individual panels) every crop run. |
+| `panels_pdf_split_enabled` | `false` | Allow the panels_pdf bundle to split into multiple size-capped parts. |
+| `sheets_zip_enabled` | `false` | Build the sheets_zip bundle (2x2 composites) every crop run. Independent of `primary_archive_format` above - `sheets/` gets generated for this even in `"panels"` mode. |
+| `sheets_zip_split_enabled` | `false` | Allow the sheets_zip bundle to split into multiple size-capped parts. |
 | `max_mb` | `50.0` | Size cap per part, in MB — shared by all three formats, only used when their `*_split_enabled` is on. |
 
 ---
@@ -539,16 +541,16 @@ Emotion/prosody is inferred straight from each panel's `text` and its punctuatio
 ### 4. How do I switch between `sheets.zip` and `panels.zip`?
 `panels.zip` is the default. To switch to contact sheets:
 - Run `./run.sh setup-config` and select your preference in **Option 2 (Vision Asset Upload Format)**.
-- Or set `"vision_asset_type": "sheets"` directly in `config.json`.
+- Or set `"primary_archive_format": "sheets"` directly in `config.json`.
 
 ### 4b. What are the `panels_zip/`/`panels_pdf/`/`sheets_zip/` folders, and how do I configure them?
-They're the LLM upload bundles (see [LLM Upload Bundles](#llm-upload-bundles-panels_zip--panels_pdf--sheets_zip)). The **zip is on by default** (one unsplit `panels_1.zip`); **PDF and sheets zip are off**. None replace `panels/` or the primary archive, and building any of them doesn't cost quality anywhere. Easiest way to change any of them: `./run.sh setup-config`, step 3 (LLM Upload Bundles) — asks yes/no for each format, yes/no for splitting into size-capped parts, and the size cap, no manual editing needed. Or edit `config.json` directly — every setting for all three lives under one `"llm_bundle"` object in the `"cropper"` section:
+They're the LLM upload bundles (see [LLM Upload Bundles](#llm-upload-bundles-panels_zip--panels_pdf--sheets_zip)) — controllable as a checklist of exactly what you want built, e.g. "only the PDF" is a real, fully-supported answer. The **panels_zip is on by default** (one unsplit `panels_1.zip`); **panels_pdf and sheets_zip are off**. None replace `panels/` or the primary archive, and building any of them doesn't cost quality anywhere. Easiest way to change any of them: `./run.sh setup-config` step 3, **or** the main interactive wizard's own "Adjust which LLM upload bundles get built?" prompt each run — both ask yes/no for each format, yes/no for splitting into size-capped parts, and the size cap, no manual editing needed. Or edit `config.json` directly — every setting for all three lives under one `"llm_bundle"` object in the `"cropper"` section:
 ```json
 "cropper": {
   "llm_bundle": {
-    "zip_enabled": true, "zip_split_enabled": false,
-    "pdf_enabled": false, "pdf_split_enabled": false,
-    "sheets_enabled": false, "sheets_split_enabled": false,
+    "panels_zip_enabled": true, "panels_zip_split_enabled": false,
+    "panels_pdf_enabled": false, "panels_pdf_split_enabled": false,
+    "sheets_zip_enabled": false, "sheets_zip_split_enabled": false,
     "max_mb": 50.0
   }
 }
