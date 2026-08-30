@@ -64,12 +64,10 @@ def run_interactive_pipeline():
     )
     console.print(f"[bold]Render Output:[/] {config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)\n")
 
-    # What actually gets generated/zipped/PDF'd is controllable right here,
-    # not just via the separate `setup-config` command - defaults to No so a
-    # normal run isn't interrupted by extra questions every time.
-    if Confirm.ask("[bold cyan]Adjust what gets generated/zipped for this chapter?[/]", default=False):
-        setup.configure_vision_outputs(config)
-        package = config.cropper.package
+    # What gets generated/zipped/PDF'd comes straight from config.json's
+    # cropper.package settings (shown above) - it's a project-wide setting
+    # like voice/BGM, not something to re-confirm every chapter. Run
+    # `remanga setup-config` to change it.
 
     # =========================================================================
     # Step 1: Download Pages
