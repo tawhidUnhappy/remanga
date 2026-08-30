@@ -8,12 +8,16 @@ generated) whether or not `PackageConfig.sheets` is separately on - see
 crop_report.py's ensure_sheets_generated, which generates sheets/ whenever
 this format is active, checking `package.sheets` too.
 
-Per-part chapter_info.json entries reuse the same `panel_id_start`/
-`panel_id_end` field names remanga.cropper.llm_zip uses - here they hold
-sheet stems (e.g. "sheet_003") rather than panel stems, since a part is
-still just "the first/last item packed into it" regardless of which kind of
+Per-part chapter_info.json entries carry the same `contents`/`full_manifest`
+fields remanga.cropper.llm_zip uses (see remanga.cropper.manifest_info) -
+here they hold sheet stems rather than panel stems, since a part's manifest
+is still just "the item names packed into it" regardless of which kind of
 image that is; not worth a separate schema for what's otherwise identical
 bookkeeping.
+
+The first sheet of the *whole* format (not per part) is always the info
+sheet - see remanga.cropper.sheets.PanelSheetGenerator - so uploading the
+sheets bundle carries its own manifest without any separate step.
 
 The actual packing (lossless re-encode, single-file-or-split-by-size,
 per-part chapter_info.json) is remanga.cropper.zip_bundle.build_zip_bundle,

@@ -110,6 +110,11 @@ def run_interactive_pipeline():
     llm_sheets_parts = sorted((chap_dir / "sheets_zip").glob("sheets_*.zip")) if package.sheets_zip_active else []
     memory_path = ensure_memory_file(project)
     memory_has_content = has_real_json_content(memory_path)
+    chapter_needs_memory = False
+    try:
+        chapter_needs_memory = float(chapter) >= 2
+    except ValueError:
+        pass
 
     if not has_real_json_content(narration_path):
         narration_path.parent.mkdir(parents=True, exist_ok=True)
@@ -153,7 +158,11 @@ def run_interactive_pipeline():
             f"[bold yellow]Action Required:[/]\n"
             f"1. Upload [bold]any one[/] of the file(s) listed below to your LLM, along with "
             f"[bold]prompts/narration.md[/]"
-            + (" and the current memory.json (for story continuity)" if memory_has_content else "") + ".\n"
+            + (
+                " and the current memory.json ([bold]required[/] from chapter 2 onward, for story continuity)"
+                if chapter_needs_memory else
+                " and the current memory.json (for story continuity)" if memory_has_content else ""
+            ) + ".\n"
             f"[dim](each file already carries the project/manga/chapter identity itself - no need to type it in "
             f"chat)[/]\n\n"
             f"2. It replies with two JSON blocks - save each one into the matching path listed below.",
@@ -181,6 +190,26 @@ def run_interactive_pipeline():
         print_path(f"    {display_path(memory_path, wrap=False)}")
 
         Prompt.ask("\n[bold cyan]Press Enter once both files are saved and ready[/]")
+
+        # Starting chapter 2, memory.json isn't optional anymore - it's the
+        # only thing carrying story continuity from the previous chapter
+        # forward, so a chapter 2+ run with no real memory.json content is
+        # almost certainly a forgotten upload/save step, not a deliberate
+        # choice. Chapter 1 is exempt (nothing to carry continuity from
+        # yet). Chapter numbers that don't parse as plain numbers (a
+        # special/bonus chapter label) skip this check entirely rather than
+        # guessing.
+        if chapter_needs_memory:
+            while not has_real_json_content(memory_path):
+                console.print(Panel(
+                    f"[bold red]memory.json is still empty/missing.[/] From chapter 2 onward this "
+                    f"is required, not optional - it's what carries story continuity (character "
+                    f"names, prior events) forward from the last chapter. Save the LLM's memory.json "
+                    f"reply to:\n{display_path(memory_path, wrap=False)}",
+                    title="[bold white]Continuity Memory Required[/]",
+                    border_style="red"
+                ))
+                Prompt.ask("[bold cyan]Press Enter once memory.json is saved[/]")
 
     # =========================================================================
     # Step 5: Synthesizing Vocal Audio via IndexTTS-2.5

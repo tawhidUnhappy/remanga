@@ -43,7 +43,7 @@ class CoordinateCropper:
                 f"Please mark this chapter's panels in the Panel Marker web UI first."
             )
 
-        if not pages_dir.exists() or not list(pages_dir.glob("page_*.*")):
+        if not pages_dir.exists() or not any(p.is_file() for p in pages_dir.iterdir()):
             raise FileNotFoundError(
                 f"Pages directory is empty: {pages_dir}\n"
                 f"Please download the chapter pages first."
@@ -55,21 +55,25 @@ class CoordinateCropper:
         # not a full re-crop) - so a chapter cropped before that format
         # existed, or with it previously disabled, gets it built once on its
         # next run instead of never.
-        existing_panels = sorted(panels_dir.glob("panel_*.*"))
+        existing_panels = sorted(p for p in panels_dir.iterdir() if p.is_file()) if panels_dir.exists() else []
         if not force and existing_panels and manifest_path.exists():
             console.print(f"[bold green]✓ Found {len(existing_panels)} panels already cropped! Skipping re-crop.[/]")
             if not is_up_to_date(self.config, chapter_dir):
-                sheet_paths = ensure_sheets_generated(self.config, existing_panels, sheets_dir)
+                sheet_paths = ensure_sheets_generated(self.config, project_name, chapter_num, existing_panels, sheets_dir)
                 build_llm_bundles(self.config, chapter_dir, project_name, chapter_num, existing_panels, sheet_paths)
             return existing_panels
 
-        # Clear existing panels directory before fresh cropping
+        # Clear existing panels directory before fresh cropping - a full wipe,
+        # not a pattern-matched one, so anything that doesn't belong there
+        # (stray files, a leftover from an old naming scheme) never survives
+        # into the fresh crop.
         panels_dir.mkdir(parents=True, exist_ok=True)
-        for old_file in panels_dir.glob("panel_*.*"):
-            try:
-                old_file.unlink()
-            except Exception:
-                pass
+        for old_file in panels_dir.iterdir():
+            if old_file.is_file():
+                try:
+                    old_file.unlink()
+                except Exception:
+                    pass
 
         crop_data = read_json(crops_json_path)
         pages_list = crop_data.get("pages", [])
@@ -78,7 +82,6 @@ class CoordinateCropper:
 
         console.print(f"[cyan]Processing panel cropping for chapter {chapter_num}...[/]")
 
-        panel_counter = 1
         output_panel_paths: List[Path] = []
         manifest_data = []
         gutter_panels_adjusted = 0
@@ -86,12 +89,11 @@ class CoordinateCropper:
         duplicate_panels_dropped = 0
         panels_trimmed = 0
 
-        for page_entry in pages_list:
-            result = crop_page(page_entry, pages_dir, panels_dir, panel_counter, self.config)
+        for page_number, page_entry in enumerate(pages_list, start=1):
+            result = crop_page(page_entry, pages_dir, panels_dir, chapter_num, page_number, self.config)
             if result is None:
                 continue
 
-            panel_counter = result.next_panel_counter
             output_panel_paths.extend(result.panel_paths)
             manifest_data.extend(result.manifest_entries)
             gutter_panels_adjusted += result.gutter_panels_adjusted

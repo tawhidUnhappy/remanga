@@ -15,6 +15,7 @@ from remanga.console import console
 from remanga.cropper.dedupe import dedupe_panels
 from remanga.cropper.geometry import apply_padding
 from remanga.cropper.gutter import count_adjusted_edges, page_grayscale_array, sample_background_color
+from remanga.cropper.naming import panel_stem
 from remanga.cropper.page_locator import locate_page_file
 from remanga.cropper.panel_boxes import resolve_page_panel_boxes
 from remanga.cropper.trim import trim_panel_margins
@@ -27,7 +28,6 @@ class PageCropResult:
 
     panel_paths: List[Path] = field(default_factory=list)
     manifest_entries: List[Dict[str, Any]] = field(default_factory=list)
-    next_panel_counter: int = 1
     gutter_panels_adjusted: int = 0
     gutter_edges_adjusted: int = 0
     duplicate_panels_dropped: int = 0
@@ -38,12 +38,20 @@ def crop_page(
     page_entry: Dict[str, Any],
     pages_dir: Path,
     panels_dir: Path,
-    panel_counter: int,
+    chapter_num,
+    page_number: int,
     config: CropperConfig,
 ) -> Optional[PageCropResult]:
     """Crops every panel on one crops.json page entry. Returns None if the
     page was skipped (not a story page, no panels, or its image couldn't be
-    located) - the caller just moves on to the next page_entry in that case."""
+    located) - the caller just moves on to the next page_entry in that case.
+
+    `page_number` is a fallback page number (crop.py's 1-based position in
+    pages_list) used only if this page_entry has no `page_index` of its
+    own - whichever one wins is what every panel filename is actually
+    numbered against (`{chapter}_{page}_{panel}`, see remanga.cropper.naming),
+    so panel filenames match the downloaded page's own number whenever
+    that's known."""
     is_story_page = page_entry.get("is_story_page", True)
     panels = page_entry.get("panels", [])
 
@@ -53,7 +61,7 @@ def crop_page(
         console.print(f"[dim yellow]Skipping non-story page ({page_desc}): {note_str}[/]")
         return None
 
-    result = PageCropResult(next_panel_counter=panel_counter)
+    result = PageCropResult()
 
     # Safety net for an accidental double-mark: drop any panel entry whose box
     # is near-identical in both position and size to an earlier one on this
@@ -77,8 +85,9 @@ def crop_page(
 
     page_filename = page_entry.get("page_filename")
     page_index = page_entry.get("page_index")
+    naming_page_num = page_index if page_index is not None else page_number
 
-    page_img_path = locate_page_file(pages_dir, page_filename, page_index)
+    page_img_path = locate_page_file(pages_dir, page_filename, page_index, chapter_num)
     if not page_img_path or not page_img_path.exists():
         console.print(f"[yellow]Warning: Could not locate page image for: {page_entry}. Skipping...[/]")
         return None
@@ -102,6 +111,7 @@ def crop_page(
             panels, img_w, img_h, gray_arr, bg_level, config
         )
 
+        panel_number = 1  # resets every page - see panel_stem's docstring
         for panel, original_box, crop_box in zip(valid_panels, original_boxes, panel_boxes):
             if config.snap_to_gutters:
                 adjusted = count_adjusted_edges(original_box, crop_box)
@@ -134,13 +144,14 @@ def crop_page(
             if config.auto_contrast_clean:
                 cropped_img = ImageOps.autocontrast(cropped_img, cutoff=1)
 
-            out_name = f"panel_{result.next_panel_counter:03d}.{config.save_format.lower()}"
+            panel_id = panel_stem(chapter_num, naming_page_num, panel_number)
+            out_name = f"{panel_id}.{config.save_format.lower()}"
             out_path = panels_dir / out_name
             cropped_img.save(out_path, format=config.save_format, quality=95)
             result.panel_paths.append(out_path)
 
             result.manifest_entries.append({
-                "panel_id": f"panel_{result.next_panel_counter:03d}",
+                "panel_id": panel_id,
                 "source_page": page_img_path.name,
                 "crop_bounds": list(crop_box),
                 "width": cropped_img.width,
@@ -150,6 +161,6 @@ def crop_page(
                 "notes": panel.get("notes", ""),
             })
 
-            result.next_panel_counter += 1
+            panel_number += 1
 
     return result

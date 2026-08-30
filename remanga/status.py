@@ -21,12 +21,12 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
     sheets_dir = chap_dir / "sheets"
     audio_dir = chap_dir / "audio"
 
-    pages_count = len(list(pages_dir.glob("page_*.*"))) if pages_dir.exists() else 0
+    pages_count = len([p for p in pages_dir.iterdir() if p.is_file()]) if pages_dir.exists() else 0
     pages_zip_exist = (chap_dir / "pages.zip").exists()
     crops_exist = has_real_json_content(chap_dir / "crops.json")
 
-    panels_count = len(list(panels_dir.glob("panel_*.*"))) if panels_dir.exists() else 0
-    sheets_count = len(list(sheets_dir.glob("sheet_*.*"))) if sheets_dir.exists() else 0
+    panels_count = len([p for p in panels_dir.iterdir() if p.is_file()]) if panels_dir.exists() else 0
+    sheets_count = len([p for p in sheets_dir.iterdir() if p.is_file()]) if sheets_dir.exists() else 0
     # Any part of a package format existing counts as "built" - there's no
     # single "the" archive to check for anymore (see PackageConfig).
     panels_zip_built = any((chap_dir / "panels_zip").glob("panels_*.zip"))
@@ -40,7 +40,7 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
         n_data = read_json_or(narration_file, {})
         total_narration_entries = len(n_data.get("narration", []))
 
-    audio_clips_count = len(list(audio_dir.glob("panel_*.wav"))) if audio_dir.exists() else 0
+    audio_clips_count = len([p for p in audio_dir.glob("*.wav") if not p.stem.endswith("_raw")]) if audio_dir.exists() else 0
     timing_exist = (chap_dir / "audio_timing.json").exists()
     master_audio_exist = (chap_dir / "master_audio.wav").exists()
 

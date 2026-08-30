@@ -9,6 +9,7 @@ from rich.progress import BarColumn, DownloadColumn, Progress, TextColumn, TimeR
 
 from remanga.config import DownloaderConfig
 from remanga.console import console
+from remanga.cropper.naming import page_stem
 from remanga.downloader.resolve import BASE_URL, MangaDexResolver
 from remanga.json_io import read_json_or, write_json
 from remanga.paths import get_chapter_dir, load_project_metadata, save_project_metadata
@@ -29,7 +30,7 @@ class MangaDexDownloader:
         if zip_path.exists():
             zip_path.unlink()
 
-        pages = sorted(list(pages_dir.glob("page_*.*")))
+        pages = sorted(p for p in pages_dir.iterdir() if p.is_file())
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for p in pages:
                 zf.write(p, arcname=p.name)
@@ -90,13 +91,31 @@ class MangaDexDownloader:
         quality_key = self.config.image_quality
         filenames = chapter_data[quality_key]
 
+        # Every page this chapter is expected to have, by its new
+        # {chapter}_{page} filename - built up front (not just up to the
+        # first missing one) so the stray-file cleanup below always has the
+        # complete set to check against.
+        expected_names = {
+            f"{page_stem(chapter_num, idx)}{Path(fn).suffix or '.png'}"
+            for idx, fn in enumerate(filenames, start=1)
+        }
+
+        # Drop anything in pages_dir that doesn't belong there - a stray file
+        # left over from an interrupted run, a manual copy, an old naming
+        # scheme, or a leftover page from a different `image_quality`
+        # setting - so pages_dir always holds exactly this chapter's
+        # downloaded pages, nothing else.
+        for stray in dest_dir.iterdir():
+            if stray.is_file() and stray.name not in expected_names:
+                stray.unlink()
+
         # Check existing pages & verify against metadata
         all_present = True
         cached_meta = read_json_or(meta_json_path, None)
         if cached_meta and cached_meta.get("total_pages") == len(filenames) and cached_meta.get("chapter_id") == chapter_id:
             for idx, fn in enumerate(filenames, start=1):
                 page_ext = Path(fn).suffix or ".png"
-                p_file = dest_dir / f"page_{idx:03d}{page_ext}"
+                p_file = dest_dir / f"{page_stem(chapter_num, idx)}{page_ext}"
                 if not p_file.exists() or p_file.stat().st_size == 0:
                     all_present = False
                     break
@@ -134,7 +153,7 @@ class MangaDexDownloader:
 
             for idx, filename in enumerate(filenames, start=1):
                 page_ext = Path(filename).suffix or ".png"
-                out_path = dest_dir / f"page_{idx:03d}{page_ext}"
+                out_path = dest_dir / f"{page_stem(chapter_num, idx)}{page_ext}"
 
                 if out_path.exists() and out_path.stat().st_size > 0:
                     downloaded_meta.append({

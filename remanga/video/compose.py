@@ -141,7 +141,7 @@ class FrameCompositor:
         frames_dir = chapter_dir / "video" / "frames"
         frames_dir.mkdir(parents=True, exist_ok=True)
 
-        panels = sorted(list(panels_dir.glob("panel_*.png")) + list(panels_dir.glob("panel_*.jpg")))
+        panels = sorted(list(panels_dir.glob("*.png")) + list(panels_dir.glob("*.jpg")))
         if not panels:
             raise FileNotFoundError(f"No cropped panels found in: {panels_dir}")
 

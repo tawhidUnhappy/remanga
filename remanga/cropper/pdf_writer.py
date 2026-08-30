@@ -36,6 +36,9 @@ _TEXT_FONT = "Helvetica"
 _TEXT_SIZE = 11
 _TEXT_LEADING = 15
 _TEXT_MARGIN = 54
+# How many lines of the text page(s) fit before overflowing the page height -
+# usable height (page height minus top/bottom margin) divided by the leading.
+_LINES_PER_TEXT_PAGE = (_TEXT_PAGE_SIZE[1] - 2 * _TEXT_MARGIN) // _TEXT_LEADING
 
 
 @dataclass
@@ -106,9 +109,11 @@ def _text_page_content(lines: Sequence[str]) -> bytes:
 
 
 def build_pdf(image_pages: Sequence[ImagePage], info_lines: Sequence[str]) -> bytes:
-    """Assembles one complete PDF file: a leading text page rendering
-    `info_lines` as real, extractable text, followed by one full-page image
-    per `image_pages`, in order."""
+    """Assembles one complete PDF file: one or more leading text pages
+    rendering `info_lines` as real, extractable text (paginated - see
+    `_LINES_PER_TEXT_PAGE` - so a long manifest still gets a plain flowing
+    list instead of overflowing a single page), followed by one full-page
+    image per `image_pages`, in order."""
     objects: List[bytes] = [b""]  # 1-indexed - objects[0] is an unused placeholder
 
     def add_object(body: bytes) -> int:
@@ -123,17 +128,19 @@ def build_pdf(image_pages: Sequence[ImagePage], info_lines: Sequence[str]) -> by
 
     kids: List[int] = []
 
-    content = _text_page_content(info_lines)
-    content_id = add_object(
-        b"<< /Length " + str(len(content)).encode("ascii") + b" >>\nstream\n" + content + b"\nendstream"
-    )
-    kids.append(add_object(
-        b"<< /Type /Page /Parent " + str(pages_id).encode("ascii") + b" 0 R "
-        b"/MediaBox [0 0 " + str(_TEXT_PAGE_SIZE[0]).encode("ascii") + b" " +
-        str(_TEXT_PAGE_SIZE[1]).encode("ascii") + b"] "
-        b"/Resources << /Font << /F1 " + str(font_id).encode("ascii") + b" 0 R >> >> "
-        b"/Contents " + str(content_id).encode("ascii") + b" 0 R >>"
-    ))
+    text_pages = [info_lines[i:i + _LINES_PER_TEXT_PAGE] for i in range(0, len(info_lines), _LINES_PER_TEXT_PAGE)] or [[]]
+    for page_lines in text_pages:
+        content = _text_page_content(page_lines)
+        content_id = add_object(
+            b"<< /Length " + str(len(content)).encode("ascii") + b" >>\nstream\n" + content + b"\nendstream"
+        )
+        kids.append(add_object(
+            b"<< /Type /Page /Parent " + str(pages_id).encode("ascii") + b" 0 R "
+            b"/MediaBox [0 0 " + str(_TEXT_PAGE_SIZE[0]).encode("ascii") + b" " +
+            str(_TEXT_PAGE_SIZE[1]).encode("ascii") + b"] "
+            b"/Resources << /Font << /F1 " + str(font_id).encode("ascii") + b" 0 R >> >> "
+            b"/Contents " + str(content_id).encode("ascii") + b" 0 R >>"
+        ))
 
     for img in image_pages:
         colorspace = b"/DeviceRGB" if img.colors == 3 else b"/DeviceGray"

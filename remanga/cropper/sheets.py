@@ -22,6 +22,9 @@ from PIL import Image, ImageDraw, ImageFont
 
 from remanga.console import console
 from remanga.cropper.image_codec import smallest_lossless_encoding_for_image
+from remanga.cropper.manifest_info import info_to_text_lines
+from remanga.cropper.naming import sheet_stem
+from remanga.paths import chapter_identity_fields
 
 
 class PanelSheetGenerator:
@@ -37,17 +40,22 @@ class PanelSheetGenerator:
 
     @staticmethod
     def create_panel_sheets(
+        project_name: str,
+        chapter_num,
         panel_paths: List[Path],
         output_dir: Path,
         panels_per_sheet: int = 4,
     ) -> List[Path]:
         output_dir.mkdir(parents=True, exist_ok=True)
-        # Clear previous sheets (any extension from a previous run's chosen encoding)
-        for old_file in output_dir.glob("sheet_*.*"):
-            try:
-                old_file.unlink()
-            except Exception:
-                pass
+        # Clear anything previously in output_dir - a full wipe, not a
+        # pattern-matched one, so a stray file or a leftover from an old
+        # naming scheme never survives into the fresh set of sheets.
+        for old_file in output_dir.iterdir():
+            if old_file.is_file():
+                try:
+                    old_file.unlink()
+                except Exception:
+                    pass
 
         if not panel_paths:
             return []
@@ -127,9 +135,53 @@ class PanelSheetGenerator:
             # module docstring. The extension is only known once this picks
             # a winner, so the sheet's final filename is decided here too.
             data, ext = smallest_lossless_encoding_for_image(sheet_canvas)
-            sheet_path = output_dir / f"sheet_{sheet_idx + 1:03d}{ext}"
+            stem = sheet_stem(chapter_num, chunk[0].stem, chunk[-1].stem)
+            sheet_path = output_dir / f"{stem}{ext}"
             sheet_path.write_bytes(data)
             generated_sheets.append(sheet_path)
 
+        # Info sheet: an extra sheet ahead of every real one, rendering the
+        # same manifest/info section every other package format carries (see
+        # remanga.cropper.manifest_info) as plain text, so uploading the
+        # sheets themselves already carries their own manifest - no separate
+        # file for the user to remember to attach. Named "000_..." so it
+        # always sorts first regardless of chapter number.
+        identity = chapter_identity_fields(project_name, chapter_num)
+        info = dict(identity)
+        info["total_items"] = len(panel_paths)
+        info["contents"] = [p.stem for p in panel_paths]
+        info["full_manifest"] = info["contents"]
+        info_sheet_path = gen._render_info_sheet(info, output_dir)
+        generated_sheets.insert(0, info_sheet_path)
+
         console.print(f"[bold green]✓ Created {len(generated_sheets)} full-resolution panel sheets in:[/] {output_dir}")
         return generated_sheets
+
+    @staticmethod
+    def _render_info_sheet(info: dict, output_dir: Path) -> Path:
+        """Renders `info` (see manifest_info.info_to_text_lines) as a plain
+        left-aligned text image - the sheets bundle's own leading info
+        sheet, the same role the PDF formats' leading text page plays."""
+        gen = PanelSheetGenerator
+        lines = info_to_text_lines(info)
+
+        try:
+            font = ImageFont.load_default()
+        except Exception:
+            font = None
+
+        line_height = 16
+        margin = 24
+        width = 900
+        height = margin * 2 + line_height * max(1, len(lines))
+        canvas = Image.new("RGB", (width, height), color=(255, 255, 255))
+        draw = ImageDraw.Draw(canvas)
+        y = margin
+        for line in lines:
+            draw.text((margin, y), line, fill=(0, 0, 0), font=font)
+            y += line_height
+
+        data, ext = smallest_lossless_encoding_for_image(canvas)
+        path = output_dir / f"000_info{ext}"
+        path.write_bytes(data)
+        return path

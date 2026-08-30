@@ -35,6 +35,7 @@ import numpy as np
 from remanga.config import CropperConfig
 from remanga.console import console
 from remanga.cropper.image_codec import open_normalized
+from remanga.cropper.manifest_info import build_part_info, info_to_text_lines
 from remanga.cropper.pdf_writer import (
     ImagePage,
     build_pdf,
@@ -131,14 +132,12 @@ def build_llm_pdf_bundle(
 
     total_parts = len(parts)
     identity = chapter_identity_fields(project_name, chapter_num)
+    full_ids = [item_id for item_id, _ in encoded]
     written: List[Path] = []
     for idx, part in enumerate(parts, start=1):
-        info = dict(identity)
-        info["part_index"] = idx
-        info["total_parts"] = total_parts
-        info["panel_id_start"] = part[0][0]
-        info["panel_id_end"] = part[-1][0]
-        info_lines = [f"{k}: {v}" for k, v in info.items()]
+        part_ids = [item_id for item_id, _ in part]
+        info = build_part_info(identity, full_ids, part_ids, idx, total_parts)
+        info_lines = info_to_text_lines(info)
 
         pdf_bytes = build_pdf([page for _, page in part], info_lines)
         pdf_name = f"panels_{idx}.pdf"

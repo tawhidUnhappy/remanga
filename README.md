@@ -241,7 +241,7 @@ Launches the **Panel Marker** web UI: MAGI v3 pre-fills every page's panel boxes
 *Creates:* `panels/`, `panels_manifest.json`, `sheets/` (whenever it's actually needed - `package.sheets` on by default, or `package.sheets_zip` active), and whichever of `panels_zip/panels_1.zip`, `panels_pdf/panels_1.pdf` (or its zipped/split variants), and `sheets_zip/sheets_1.zip` (all off by default) are active per `cropper.package` (see [Vision Outputs](#vision-outputs-what-to-generate-what-to-zip) below).
 
 ### 4. Generate and Place `narration.json` + `memory.json`
-Upload **any one** of your generated vision archives — whichever package formats are active (`panels_zip`, `panels_pdf`, `sheets_zip`) — and `prompts/narration.md` to your LLM, attaching the project's current `memory.json` too, once it has real content, so continuity carries across chapters. The prompt asks for **exactly two fenced JSON code blocks and nothing else** (no commentary before/after), so the LLM's reply can be copy-pasted straight into each file. The interactive wizard prints every archive actually available to upload this run as a ctrl+click-openable path (VS Code and similar editors), and both destination paths, when it gets to this step:
+Upload **any one** of your generated vision archives — whichever package formats are active (`panels_zip`, `pdf`, `sheets_zip`) — and `prompts/narration.md` to your LLM, attaching the project's current `memory.json` too, once it has real content, so continuity carries across chapters. **From chapter 2 onward, `memory.json` isn't optional** — the interactive wizard blocks and re-prompts until it has real content, since it's the only thing carrying character/plot continuity forward from the previous chapter. The prompt asks for **exactly two fenced JSON code blocks and nothing else** (no commentary before/after), so the LLM's reply can be copy-pasted straight into each file. The interactive wizard prints every archive actually available to upload this run as a ctrl+click-openable path (VS Code and similar editors), and both destination paths, when it gets to this step:
 ```text
 projects/my_manga/chapters/chapter_1/narration.json   (Block 1)
 projects/my_manga/memory.json                         (Block 2)
@@ -299,7 +299,21 @@ Reopening the Panel Marker on a chapter that already has marks — via `remark`,
 
 ### Vision Outputs: What to Generate, What to Zip
 
-One flat checklist under `cropper.package` in `config.json` - every switch is independent, named for exactly what it produces, check any combination. There's no "primary archive" concept to keep track of separately - every zip a chapter gets goes through `package` alone. Individual panel crops (`panels/panel_001.png`, ...) are always produced - that's what cropping a chapter means - everything below is extra, never touching `panels/` itself (still full quality, still what video rendering reads):
+One flat checklist under `cropper.package` in `config.json` - every switch is independent, named for exactly what it produces, check any combination. There's no "primary archive" concept to keep track of separately - every zip a chapter gets goes through `package` alone. Individual panel crops are always produced - that's what cropping a chapter means - everything below is extra, never touching `panels/` itself (still full quality, still what video rendering reads).
+
+**File naming:** downloaded pages, cropped panels, and downloaded/cropped/marker directories all share one zero-padded scheme (`remanga/cropper/naming.py`):
+- A page: `{chapter}_{page}` (e.g. `003_012.png` - chapter 3, page 12).
+- A panel: `{chapter}_{page}_{panel}` (e.g. `003_012_02.png`) - `panel` resets to 1 at the start of every page, so it always answers "which panel on this page," not a running count across the chapter.
+- A contact sheet: `{chapter}_{start_panel_name}_{end_panel_name}` - named after the inclusive range of panel names it merges.
+
+Pages/panels/sheets directories are also kept clean automatically on every run - anything in them that doesn't belong (a stray leftover file, an old naming scheme, an interrupted-run remnant) is removed before the fresh download/crop/sheet-generation writes into them, so what's on disk always matches exactly what the current run produced.
+
+**Manifest/info section:** every package format also carries an ordered list of every panel/sheet name it contains, so the LLM (or you) can spot anything missing just by comparing lists, without counting by hand:
+- **Zip formats** (`panels_zip`, `sheets_zip`, `pdf_zip`, `pdf_zip_splite`): a `chapter_info.json` inside the zip carries `contents` (this part's items) and `full_manifest` (every item across every part).
+- **PDF formats** (`pdf`, `pdf_splite`): the leading page(s) of the PDF render that same manifest as plain text (paginated if it's long) instead of a story panel.
+- **Sheets** (`sheets`/`sheets_zip`): the very first sheet (`000_info`) is a plain text image with the same manifest, not a contact sheet of panels.
+
+See `prompts/narration.md`'s **Chapter Identity** section for exactly how the LLM is expected to read all of this.
 
 | Key (under `cropper.package`) | Default | Meaning |
 |---|---|---|

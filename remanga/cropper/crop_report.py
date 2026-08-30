@@ -33,9 +33,9 @@ def write_chapter_info(chapter_info_path: Path, project_name: str, chapter_num: 
     write_json(chapter_info_path, chapter_identity_fields(project_name, chapter_num))
 
 
-def ensure_sheets_generated(config: CropperConfig, panel_paths: List[Path], sheets_dir: Path) -> List[Path]:
-    """Generates sheet_* contact sheet composites into `sheets_dir` if
-    anything actually needs them right now: `package.sheets` is on, or the
+def ensure_sheets_generated(config: CropperConfig, project_name: str, chapter_num, panel_paths: List[Path], sheets_dir: Path) -> List[Path]:
+    """Generates contact sheet composites into `sheets_dir` if anything
+    actually needs them right now: `package.sheets` is on, or the
     sheets_zip package format (`PackageConfig.sheets_zip_active`) is -
     either one is enough, since checking sheets_zip alone should just work
     without also having to separately turn generation on. Shared by
@@ -47,11 +47,13 @@ def ensure_sheets_generated(config: CropperConfig, panel_paths: List[Path], shee
     needs_sheets = config.package.sheets or config.package.sheets_zip_active
     if panel_paths and needs_sheets:
         return PanelSheetGenerator.create_panel_sheets(
+            project_name=project_name,
+            chapter_num=chapter_num,
             panel_paths=panel_paths,
             output_dir=sheets_dir,
             panels_per_sheet=config.panels_per_sheet,
         )
-    return sorted(sheets_dir.glob("sheet_*.*")) if sheets_dir.exists() else []
+    return sorted(p for p in sheets_dir.iterdir() if p.is_file()) if sheets_dir.exists() else []
 
 
 def print_crop_summary(
@@ -89,7 +91,7 @@ def package_outputs(
     chapter_num: str,
 ) -> None:
     # 1. Generate vision contact sheets if anything needs them right now.
-    sheet_paths = ensure_sheets_generated(config, panel_paths, sheets_dir)
+    sheet_paths = ensure_sheets_generated(config, project_name, chapter_num, panel_paths, sheets_dir)
 
     # 2. Package whichever size-capped zip/PDF format(s) are active
     # (panels_zip/, panels_pdf/, and/or sheets_zip/) - see

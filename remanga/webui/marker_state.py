@@ -37,7 +37,8 @@ class MarkerState:
         self._load_pages()
 
     def _load_pages(self) -> None:
-        for i, path in enumerate(sorted(self.pages_dir.glob("page_*.*")), start=1):
+        existing_pages = sorted(p for p in self.pages_dir.iterdir() if p.is_file()) if self.pages_dir.exists() else []
+        for i, path in enumerate(existing_pages, start=1):
             with Image.open(path) as img:
                 w, h = img.size
             self.pages.append({"index": i, "filename": path.name, "width": w, "height": h})
