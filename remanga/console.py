@@ -52,29 +52,48 @@ def wrap_at_slashes(text: str) -> str:
     return "\n".join(lines)
 
 
-def display_path(path) -> str:
-    """Renders a filesystem path for terminal display, shortened and pre-wrapped
-    so it holds up on any screen width instead of the raw `path.resolve()`
-    Rich would otherwise hard-wrap mid-directory-name on a narrow terminal
-    (paths have no spaces, so Rich's word-wrap has nowhere sensible to break).
+def display_path(path, wrap: bool = True) -> str:
+    """Renders a filesystem path for terminal display, shortened - and, unless
+    `wrap=False`, pre-wrapped - so it holds up on any screen width instead of
+    the raw `path.resolve()` Rich would otherwise hard-wrap mid-directory-name
+    on a narrow terminal (paths have no spaces, so Rich's word-wrap has
+    nowhere sensible to break).
 
-    1. Shortened to be relative to the current working directory when
-       possible - the pipeline always runs from the repo root, so this drops
-       the machine-specific `/mnt/datadisk/remanga/` prefix that's long and
-       tells a human nothing they don't already know from being at their own
-       terminal. Falls back to the absolute path for anything outside the
-       cwd tree (e.g. a reference-voice file that lives elsewhere on disk).
-    2. Whatever's left is pre-wrapped at path-separator boundaries to the
-       live console width, so a still-long path breaks cleanly between
-       directory segments on its own multiple lines instead of splitting a
-       single directory/file name in half.
+    Always: shortened to be relative to the current working directory when
+    possible - the pipeline always runs from the repo root, so this drops the
+    machine-specific `/mnt/datadisk/remanga/` prefix that's long and tells a
+    human nothing they don't already know from being at their own terminal.
+    Falls back to the absolute path for anything outside the cwd tree (e.g. a
+    reference-voice file that lives elsewhere on disk).
 
-    Safe to embed directly in an f-string passed to console.print/Panel -
-    embedded newlines render fine in both.
+    wrap=True (default): also pre-wrapped at path-separator boundaries to the
+    live console width, so a still-long path breaks cleanly between directory
+    segments across multiple lines instead of splitting a name in half. Safe
+    to embed in prose passed to console.print/Panel - embedded newlines
+    render fine in both.
+
+    wrap=False: returned as one unbroken line, however long. Use this for any
+    path meant to be individually ctrl+click-opened from an editor's
+    integrated terminal (VS Code, etc.) - see `print_path` below, which is
+    the pairing this is meant for.
     """
     p = Path(path)
     try:
         text = str(p.resolve().relative_to(Path.cwd().resolve())).replace("\\", "/")
     except ValueError:
         text = str(p.resolve()).replace("\\", "/")
-    return wrap_at_slashes(text)
+    return wrap_at_slashes(text) if wrap else text
+
+
+def print_path(text: str) -> None:
+    """Prints one line containing a path (built with `display_path(..., wrap=False)`)
+    without Rich inserting any wrapping newline of its own - needed to keep the
+    path ctrl+click-openable in an editor's integrated terminal.
+
+    Those terminals detect a clickable file link from one continuous logical
+    line; a link Rich has split across two lines with an inserted '\\n' is no
+    longer recognized as a single path, even though on screen both looked
+    "wrapped" the same way. `soft_wrap=True` defers wrapping entirely to the
+    real terminal, which still visually wraps a too-long line the same way,
+    just without breaking the underlying line - so the link keeps working."""
+    console.print(text, soft_wrap=True)

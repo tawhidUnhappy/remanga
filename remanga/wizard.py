@@ -9,7 +9,7 @@ from rich.prompt import Confirm, Prompt
 from remanga import setup
 from remanga.audio import AudioProcessor, TTSEngine
 from remanga.config import RemangaConfig
-from remanga.console import console, display_path, wrap_at_slashes
+from remanga.console import console, display_path, print_path, wrap_at_slashes
 from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
 from remanga.json_io import has_real_json_content
@@ -53,7 +53,8 @@ def run_interactive_pipeline():
     archive_name = config.cropper.expected_zip_name
 
     archive_status = archive_name if config.cropper.create_zip else "not built - create_zip is off"
-    console.print(f"\n[bold]Current Chapter Workspace:[/] {display_path(chap_dir)}")
+    console.print()
+    print_path(f"[bold]Current Chapter Workspace:[/] {display_path(chap_dir, wrap=False)}")
     console.print(f"[bold]Current Chapter Status:[/] [{'green' if 'Ready' in status['summary'] else 'yellow'}]{status['summary']}[/]")
     console.print(f"[bold]Vision Packaging Format:[/] {asset_mode.title()} ({archive_status})")
     console.print(f"[bold]Render Output:[/] {config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)\n")
@@ -104,48 +105,61 @@ def run_interactive_pipeline():
         narration_path.parent.mkdir(parents=True, exist_ok=True)
         narration_path.write_text("", encoding="utf-8")
 
-        def _bundle_line(parts, kind: str) -> str:
-            names = ", ".join(p.name for p in parts)
-            location = f"{parts[0].parent.name}/"
-            size_note = (
-                f"split into {len(parts)} parts, ≤{config.cropper.llm_bundle.max_mb:g}MB each" if len(parts) > 1
-                else "one file"
-            )
-            return f"  • [bold]{location}{{{names}}}[/]  —  {kind}, {size_note}" if len(parts) > 1 \
-                else f"  • [bold]{location}{names}[/]  —  {kind}, {size_note}"
-
         # Just a plain list of everything actually available this run - no
         # priority pick, no "or use X instead" hedging. Upload any ONE of
         # these, never a mix (see prompts/narration.md's Chapter Identity).
-        # Paths are shown relative to the chapter folder printed once above
-        # the list, instead of repeating the full absolute path per line.
-        upload_options = []
+        upload_groups = []
         if llm_pdf_parts:
-            upload_options.append(_bundle_line(llm_pdf_parts, "PDF bundle"))
+            upload_groups.append(("PDF bundle", llm_pdf_parts))
         if llm_zip_parts:
-            upload_options.append(_bundle_line(llm_zip_parts, "zip bundle"))
+            upload_groups.append(("zip bundle", llm_zip_parts))
         if llm_sheets_parts:
-            upload_options.append(_bundle_line(llm_sheets_parts, "sheets zip bundle"))
-        if config.cropper.create_zip:
-            upload_options.append(f"  • [bold]{target_vision_archive.name}[/]  —  full-quality primary archive")
-        if not upload_options:
-            upload_options.append(f"  • [bold]{target_vision_archive.name}[/]")
+            upload_groups.append(("sheets zip bundle", llm_sheets_parts))
 
+        # Instructions live in the Panel; every actual path is printed after
+        # it via print_path, one per line, never inside the Panel's border.
+        # A Panel has to fit its content inside a fixed-width box, so it
+        # force-wraps anything too long to fit - which is exactly what
+        # breaks ctrl+click-to-open on a path in an editor's integrated
+        # terminal (VS Code, etc.): the terminal can only turn one
+        # continuous line into a link, not one Rich has hard-wrapped in two.
         console.print(Panel(
-            f"[bold]Chapter folder:[/] {display_path(chap_dir)}\n\n"
             f"[bold yellow]Action Required:[/]\n"
-            f"1. Upload [bold]any one[/] of these to your LLM, along with [bold]prompts/narration.md[/]"
-            + (" and the current memory.json below (story continuity)" if memory_has_content else "") + ":\n"
-            + "\n".join(upload_options) + "\n"
+            f"1. Upload [bold]any one[/] of the file(s) listed below to your LLM, along with "
+            f"[bold]prompts/narration.md[/]"
+            + (" and the current memory.json (for story continuity)" if memory_has_content else "") + ".\n"
             f"[dim](each file already carries the project/manga/chapter identity itself - no need to type it in "
             f"chat)[/]\n\n"
-            f"2. Save its reply into:\n"
-            f"  • [bold green]narration.json[/]  (in the chapter folder above)\n"
-            f"  • [bold green]memory.json[/]  ({display_path(memory_path)})",
+            f"2. It replies with two JSON blocks - save each one into the matching path listed below.",
             title="[bold white]Generate narration.json + memory.json[/]",
             border_style="yellow"
         ))
-        Prompt.ask("[bold cyan]Press Enter once both files are saved and ready[/]")
+
+        console.print("\n[bold]Chapter folder:[/]")
+        print_path(f"  {display_path(chap_dir, wrap=False)}")
+
+        console.print("\n[bold]Upload any [underline]one[/] of:[/]")
+        for kind, parts in upload_groups:
+            note = (
+                f"split into {len(parts)} parts, ≤{config.cropper.llm_bundle.max_mb:g}MB each - upload all parts "
+                f"together" if len(parts) > 1 else "one file"
+            )
+            console.print(f"  [dim]{kind}, {note}:[/]")
+            for part in parts:
+                print_path(f"    {display_path(part, wrap=False)}")
+        if config.cropper.create_zip:
+            console.print("  [dim]full-quality primary archive:[/]")
+            print_path(f"    {display_path(target_vision_archive, wrap=False)}")
+        if not upload_groups and not config.cropper.create_zip:
+            print_path(f"    {display_path(target_vision_archive, wrap=False)}")
+
+        console.print("\n[bold]Save its reply into:[/]")
+        console.print("  [bold green]narration.json[/]")
+        print_path(f"    {display_path(narration_path, wrap=False)}")
+        console.print("  [bold green]memory.json[/]")
+        print_path(f"    {display_path(memory_path, wrap=False)}")
+
+        Prompt.ask("\n[bold cyan]Press Enter once both files are saved and ready[/]")
 
     # =========================================================================
     # Step 5: Synthesizing Vocal Audio via IndexTTS-2.5
@@ -170,9 +184,10 @@ def run_interactive_pipeline():
 
     console.print(Panel(
         f"[bold green]🎉 Recap Video Production Complete![/]\n\n"
-        f"[bold white]Output File:[/] {display_path(final_video)}\n"
         f"[bold white]Resolution:[/] {config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)\n"
         f"[bold white]Vision Format:[/] {asset_mode.title()} ({archive_name})",
         title="[bold green]Success[/]",
         border_style="green"
     ))
+    console.print("[bold white]Output File:[/]")
+    print_path(f"  {display_path(final_video, wrap=False)}")
