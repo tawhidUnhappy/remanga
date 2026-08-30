@@ -35,10 +35,9 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
   - Runs inside an isolated Python 3.11 interpreter inside `.cache/`.
   - PyTorch, Hugging Face, and ModelScope caches are locked to `.cache/`.
   - **Deleting the `remanga/` folder leaves ZERO leftover files or tool modifications on your system.**
-- **Two-Section Vision Output Control - What to Generate, What to Zip:**
-  - **Generate:** individual panel crops (`panels/`, always produced) and, optionally, 2x2 labeled contact sheet composites (`sheets/`) merged at **full original resolution** - never downscaled - to drastically reduce LLM vision token consumption without losing detail.
-  - **Package:** zip/PDF any of it for upload - `panels_zip` (on by default), `panels_pdf`, `sheets_zip` (both off by default) - each independently a single file or split into size-capped parts, losslessly re-encoded smaller than the raw files either way.
-  - Configurable as a plain two-section checklist, interactively (`./run.sh setup-config`, or a prompt in the main wizard each run) and persistent in `config.json` - see [Vision Outputs](#vision-outputs-what-to-generate-what-to-zip).
+- **One Flat Vision Output Checklist - What to Generate, What to Zip:**
+  - Individual panel crops (`panels/`) are always produced. Everything else is an independent yes/no switch: `sheets` (contact sheets, 2x2 labeled composites merged at **full original resolution** - never downscaled), `sheets_zip`, `pdf`, `pdf_splite`, `pdf_zip`, `pdf_zip_splite`, `panels_zip`, `panels_zip_splites` - check any combination, losslessly re-encoded smaller than the raw files either way.
+  - Configurable as a plain checklist, interactively (`./run.sh setup-config`, or a prompt in the main wizard each run) and persistent in `config.json` - see [Vision Outputs](#vision-outputs-what-to-generate-what-to-zip).
 - **Natural, Expressive Vocal Synthesis (IndexTTS-2.5):**
   - No forced emotion vector — IndexTTS-2.5 infers its own emotion/prosody straight from each panel's narration text and punctuation, so delivery matches what the panel actually calls for instead of one flat register for every panel.
   - Temperature/top-p left at IndexTTS-2.5's own recommended defaults (`0.8`/`0.8`) for natural-sounding prosody — see [Natural, Expressive Narration](#natural-expressive-narration).
@@ -161,16 +160,14 @@ Run the interactive settings wizard anytime to configure vocal reference files, 
     "auto_contrast_clean": false,
     "save_format": "PNG",
     "panels_per_sheet": 4,
-    "generate": {
-      "sheets": false
-    },
     "package": {
-      "panels_zip": true,
-      "panels_zip_split": false,
-      "panels_pdf": false,
-      "panels_pdf_split": false,
+      "sheets": true,
       "sheets_zip": false,
-      "sheets_zip_split": false,
+      "pdf": false,
+      "pdf_zip": false,
+      "pdf_zip_splite": false,
+      "panels_zip": false,
+      "panels_zip_splites": false,
       "max_mb": 50.0
     }
   },
@@ -211,9 +208,9 @@ Run the interactive settings wizard anytime to configure vocal reference files, 
 }
 ```
 
-A few worth calling out specifically - `cropper.generate`/`cropper.package` are the two-section vision-output checklist, covered in full under [Vision Outputs](#vision-outputs-what-to-generate-what-to-zip) below:
+A few worth calling out specifically - `cropper.package` is the flat vision-output checklist, covered in full under [Vision Outputs](#vision-outputs-what-to-generate-what-to-zip) below:
 - **`downloader.zip_pages_enabled`** (default `false`) — bundles the raw downloaded pages into `pages.zip`. Off by default because nothing downstream reads it; it's only useful if you want to hand a chapter's pages to an LLM by hand. Named for exactly what it zips (the downloaded *pages*) so it's never confused with `cropper.package` below, which zips something completely different.
-- **`cropper.generate.sheets`** (default `false`) — generates `sheets/` contact sheet composites. Off by default to skip work nothing needs; `cropper.package.sheets_zip` (below) builds them automatically the moment it's checked, whether or not this is also on. Every sheet is merged from its panels' **full original resolution** — never downscaled — with only lossless re-encoding used to keep the file size down.
+- **`cropper.package.sheets`** (default `true`) — generates `sheets/` contact sheet composites. `cropper.package.sheets_zip` (below) builds them automatically the moment it's checked, whether or not this is also on. Every sheet is merged from its panels' **full original resolution** — never downscaled — with only lossless re-encoding used to keep the file size down.
 - **`marker.click_to_select`** (default `true`) — see [Panel Marker Web UI](#panel-marker-web-ui) for what this protects against.
 - **`tts.synth_timeout_seconds`** (default `180`) — see [Reliability](#reliability-crashes-interrupts--resuming).
 
@@ -241,7 +238,7 @@ Launches the **Panel Marker** web UI: MAGI v3 pre-fills every page's panel boxes
 ```bash
 ./run.sh crop --project "my_manga" --chapter "1"
 ```
-*Creates:* `panels/`, `panels_manifest.json`, `sheets/` (whenever it's actually needed - `generate.sheets` on, or `package.sheets_zip` active), and whichever of `panels_zip/panels_1.zip` (on by default), `panels_pdf/panels_1.pdf`, and `sheets_zip/sheets_1.zip` (both off by default) are active per `cropper.package` (see [Vision Outputs](#vision-outputs-what-to-generate-what-to-zip) below).
+*Creates:* `panels/`, `panels_manifest.json`, `sheets/` (whenever it's actually needed - `package.sheets` on by default, or `package.sheets_zip` active), and whichever of `panels_zip/panels_1.zip`, `panels_pdf/panels_1.pdf` (or its zipped/split variants), and `sheets_zip/sheets_1.zip` (all off by default) are active per `cropper.package` (see [Vision Outputs](#vision-outputs-what-to-generate-what-to-zip) below).
 
 ### 4. Generate and Place `narration.json` + `memory.json`
 Upload **any one** of your generated vision archives — whichever package formats are active (`panels_zip`, `panels_pdf`, `sheets_zip`) — and `prompts/narration.md` to your LLM, attaching the project's current `memory.json` too, once it has real content, so continuity carries across chapters. The prompt asks for **exactly two fenced JSON code blocks and nothing else** (no commentary before/after), so the LLM's reply can be copy-pasted straight into each file. The interactive wizard prints every archive actually available to upload this run as a ctrl+click-openable path (VS Code and similar editors), and both destination paths, when it gets to this step:
@@ -302,48 +299,30 @@ Reopening the Panel Marker on a chapter that already has marks — via `remark`,
 
 ### Vision Outputs: What to Generate, What to Zip
 
-Two independent sections under `cropper` in `config.json` - `generate` decides what visual content exists at all, `package` decides what gets zipped/PDF'd from it for LLM upload. There's no separate "primary archive" concept to also keep track of - every zip a chapter gets goes through `package` alone.
-
-**Section 1 - `generate`: what content to produce.** Individual panel crops (`panels/panel_001.png`, ...) are always produced - that's what cropping a chapter means - so the only thing to choose here is:
-
-| Key (under `cropper.generate`) | Default | Meaning |
-|---|---|---|
-| `sheets` | `false` | Build `sheets/` - 2x2 labeled contact sheet composites, merged at each panel's **full original resolution** (the composite canvas is sized *from* the panels, not the other way around - a sheet never loses detail a plain panel crop wouldn't also have). The only thing keeping file size down is picking whichever lossless container (PNG or lossless WEBP) comes out smaller, same as every format below. |
-
-**Section 2 - `package`: what to zip/PDF for upload**, from whatever Section 1 produced - never touching `panels/` itself (still full quality, still what video rendering reads):
-
-| Format | Packages | Container | Default |
-|---|---|---|---|
-| `panels_zip` | Individual panel crops, one file per panel | zip | **On** |
-| `panels_pdf` | The same individual panels, one per PDF page | PDF | Off |
-| `sheets_zip` | Contact sheet composites instead - fewer, denser images, lower LLM vision-token cost, still full original resolution (builds `sheets/` automatically the moment this is checked, whether or not `generate.sheets` above is also on) | zip | Off |
-
-**Controlling what actually gets built** is a checklist, not a mode to pick — check either, both, or neither format, and within a format check either or both of:
-- `<format>`: generate it as **one single file** holding every image, regardless of size.
-- `<format>_split`: generate it **split into multiple size-capped parts** instead - `..._1.zip`/`.pdf`, `..._2.___`, ... packed in reading order, each staying at or under `max_mb`, so a part is never larger than the cap unless a single image alone already exceeds it.
-
-So "only the PDF, nothing else" is exactly `panels_pdf: true` with every other flag `false` — nothing else gets built, full stop. Checking `<format>_split` builds the split version regardless of `<format>` (either one is enough to generate something for that format); checking both together still only produces the split version, not two separate outputs. Reach this checklist two ways:
-- `./run.sh setup-config` (step 2), the full settings walkthrough, **or**
-- the main interactive wizard's own **"Adjust what gets generated/zipped for this chapter?"** prompt each run (defaults to No, so it never interrupts a normal run uninvited) — the same two-section checklist, without needing to know `setup-config` exists separately.
-
-How each package format stays lossless:
-- **panels_zip / sheets_zip:** every image re-encoded as an optimized PNG and as a lossless WEBP, keeping whichever comes out smaller. Manga line art/halftones typically shrink 30-50% this way.
-- **panels_pdf:** every image is embedded as a `FlateDecode`-compressed raw bitmap (PDF's own native lossless image representation — the same class of compression a PNG uses internally, just packaged the way PDF expects), optionally TIFF-Predictor-2-filtered first for a better ratio. Pillow's own PDF writer re-encodes RGB images as lossy JPEG with no way to turn that off short of quantizing colors, which is why this is built directly rather than through Pillow's `Image.save(..., "PDF")`.
-- Either way, a candidate re-encoding only ever gets used after decoding it back and verifying it's pixel-for-pixel identical to the original — anything that doesn't round-trip exactly is discarded in favor of a safer encoding (or the original file, for the zip formats).
-
-Each part carries the same project/manga/chapter identity, plus which part it is, how many parts total, and that part's image range — as a `chapter_info.json` file for a panels_zip/sheets_zip part, or as page 1 of a PDF part (rendered as plain, readable text, since a PDF can't hold a separate loose file the way a zip can) - true even with splitting off and a single part, so an LLM given only one part never has to guess whether more exist. See the "Chapter Identity" section of [`prompts/narration.md`](prompts/narration.md) for how the LLM is expected to read it.
-
-Every package setting lives together under one `cropper.package` object, so there's exactly one place to look — set it interactively via `./run.sh setup-config` (step 2) or the wizard's own prompt above, or by hand in `config.json`:
+One flat checklist under `cropper.package` in `config.json` - every switch is independent, named for exactly what it produces, check any combination. There's no "primary archive" concept to keep track of separately - every zip a chapter gets goes through `package` alone. Individual panel crops (`panels/panel_001.png`, ...) are always produced - that's what cropping a chapter means - everything below is extra, never touching `panels/` itself (still full quality, still what video rendering reads):
 
 | Key (under `cropper.package`) | Default | Meaning |
 |---|---|---|
-| `panels_zip` | `true` | Build the panels_zip format (individual panels) every crop run. |
-| `panels_zip_split` | `false` | Allow the panels_zip format to split into multiple size-capped parts. |
-| `panels_pdf` | `false` | Build the panels_pdf format (individual panels) every crop run. |
-| `panels_pdf_split` | `false` | Allow the panels_pdf format to split into multiple size-capped parts. |
-| `sheets_zip` | `false` | Build the sheets_zip format (contact sheet composites) every crop run. |
-| `sheets_zip_split` | `false` | Allow the sheets_zip format to split into multiple size-capped parts. |
-| `max_mb` | `50.0` | Size cap per part, in MB — shared by all three formats, only used when their `<format>_split` is on. |
+| `sheets` | **On** | Build `sheets/` - 2x2 labeled contact sheet composites, merged at each panel's **full original resolution** (the composite canvas is sized *from* the panels, not the other way around - a sheet never loses detail a plain panel crop wouldn't also have). |
+| `sheets_zip` | Off | Zip those contact sheets into `sheets_zip/sheets_1.zip` - fewer, denser images than individual panels, lower LLM vision-token cost. Builds `sheets/` automatically the moment this is checked, whether or not `sheets` above is also on. |
+| `pdf` | Off | Build `panels_pdf/panels_1.pdf` - individual panels, one per PDF page, single file. |
+| `pdf_splite` | Off | Same PDF content, split into size-capped raw `.pdf` files instead - `panels_pdf/panels_1.pdf`, `panels_2.pdf`, ... - **not zipped**. |
+| `pdf_zip` | Off | The single PDF, wrapped in a zip - `panels_pdf/panels_1.zip` - for upload interfaces that only accept zip attachments. |
+| `pdf_zip_splite` | Off | The PDF split into size-capped parts, each zipped separately - `panels_pdf/panels_1.zip`, `panels_2.zip`, .... |
+| `panels_zip` | Off | Build `panels_zip/panels_1.zip` - individual panel crops, one file per panel, single file. |
+| `panels_zip_splites` | Off | Same panels zip, split into size-capped parts instead - `panels_zip/panels_1.zip`, `panels_2.zip`, .... |
+| `max_mb` | `50.0` | Size cap per part, in MB — shared by every format, only used when its `*splite*` switch is on. |
+
+Every key's name says exactly what it does: `pdf` = single raw file, `pdf_splite` = split raw files (no zip), `pdf_zip` = single file zipped, `pdf_zip_splite` = split files, each zipped — same pattern for `panels_zip`/`panels_zip_splites`. So "only the PDF, nothing else" is exactly `pdf: true` with every other flag `false` — nothing else gets built, full stop. Whenever any `*splite*` switch for a format is on, every active switch for that format uses the split form (checking `pdf` and `pdf_zip_splite` together still only produces split output, not extra single-file output too). Reach this checklist two ways:
+- `./run.sh setup-config` (step 2), the full settings walkthrough, **or**
+- the main interactive wizard's own **"Adjust what gets generated/zipped for this chapter?"** prompt each run (defaults to No, so it never interrupts a normal run uninvited) — the same checklist, without needing to know `setup-config` exists separately.
+
+How each package format stays lossless:
+- **panels_zip / sheets_zip:** every image re-encoded as an optimized PNG and as a lossless WEBP, keeping whichever comes out smaller. Manga line art/halftones typically shrink 30-50% this way.
+- **pdf / pdf_splite / pdf_zip / pdf_zip_splite:** every image is embedded as a `FlateDecode`-compressed raw bitmap (PDF's own native lossless image representation — the same class of compression a PNG uses internally, just packaged the way PDF expects), optionally TIFF-Predictor-2-filtered first for a better ratio. Pillow's own PDF writer re-encodes RGB images as lossy JPEG with no way to turn that off short of quantizing colors, which is why this is built directly rather than through Pillow's `Image.save(..., "PDF")`.
+- Either way, a candidate re-encoding only ever gets used after decoding it back and verifying it's pixel-for-pixel identical to the original — anything that doesn't round-trip exactly is discarded in favor of a safer encoding (or the original file, for the zip formats).
+
+Each part carries the same project/manga/chapter identity, plus which part it is, how many parts total, and that part's image range — as a `chapter_info.json` file for a panels_zip/sheets_zip/pdf_zip part, or as page 1 of a raw PDF part (rendered as plain, readable text, since a plain PDF can't hold a separate loose file the way a zip can) - true even with splitting off and a single part, so an LLM given only one part never has to guess whether more exist. See the "Chapter Identity" section of [`prompts/narration.md`](prompts/narration.md) for how the LLM is expected to read it.
 
 ---
 
@@ -466,9 +445,9 @@ remanga/
 │               ├── panels/             # Cropped individual panel images (full quality - video reads these)
 │               ├── panels_manifest.json  # Per-panel crop bookkeeping (crop.py)
 │               ├── chapter_info.json   # Project/manga/chapter identity, bundled into every package format below
-│               ├── sheets/             # 2x2 vision contact sheets, full original resolution (generate.sheets, or auto-built for sheets_zip)
-│               ├── panels_zip/         # (On by default) package format - individual panels - panels_1.zip, ...
-│               ├── panels_pdf/         # (Off by default) package format - individual panels - panels_1.pdf, ...
+│               ├── sheets/             # 2x2 vision contact sheets, full original resolution (on by default, or auto-built for sheets_zip)
+│               ├── panels_zip/         # (Off by default) package format - individual panels - panels_1.zip, ...
+│               ├── panels_pdf/         # (Off by default) package format - individual panels - panels_1.pdf and/or panels_1.zip, ...
 │               ├── sheets_zip/         # (Off by default) package format - 2x2 sheet composites - sheets_1.zip, ...
 │               ├── narration.json      # Synchronized narration script
 │               ├── audio/              # Synthesized vocal WAV files per panel
@@ -529,18 +508,18 @@ Emotion/prosody is inferred straight from each panel's `text` and its punctuatio
 - You can manually force CPU encoding by setting `"prefer_gpu": false` in `config.json`.
 
 ### 4. How do I get contact sheets instead of individual panels?
-Panels are on (`panels_zip: true`) by default. To also get, or switch to, contact sheets:
-- Run `./run.sh setup-config` and answer **Section 1 (What to Generate)** and **Section 2 (What to Zip/PDF for Upload)** in **Option 2 (Vision Outputs)** — check `sheets_zip`, uncheck `panels_zip` if you don't want both.
-- Or set `"generate": {"sheets": true}` and `"package": {"sheets_zip": true, "panels_zip": false}` directly under `"cropper"` in `config.json`.
+Contact sheets (`sheets`) are on by default; `panels_zip` is off. To get individual panels instead of, or in addition to, sheets:
+- Run `./run.sh setup-config` and answer the checklist in **Option 2 (Vision Outputs)** — check `panels_zip`, uncheck `sheets`/`sheets_zip` if you don't want both.
+- Or set `"package": {"sheets": false, "panels_zip": true}` directly under `"cropper"` in `config.json`.
 
 ### 4b. What are the `panels_zip/`/`panels_pdf/`/`sheets_zip/` folders, and how do I configure them?
-They're the [Vision Outputs](#vision-outputs-what-to-generate-what-to-zip) package formats — controllable as a checklist of exactly what you want built, e.g. "only the PDF" is a real, fully-supported answer. The **panels_zip is on by default** (one unsplit `panels_1.zip`); **panels_pdf and sheets_zip are off**. None replace `panels/`, and building any of them doesn't cost quality anywhere. Easiest way to change any of them: `./run.sh setup-config` step 2, **or** the main interactive wizard's own "Adjust what gets generated/zipped for this chapter?" prompt each run — both ask yes/no for each format, yes/no for splitting into size-capped parts, and the size cap, no manual editing needed. Or edit `config.json` directly — every setting for all three lives under one `"package"` object in the `"cropper"` section:
+They're the [Vision Outputs](#vision-outputs-what-to-generate-what-to-zip) package formats — controllable as a checklist of exactly what you want built, e.g. "only the PDF" is a real, fully-supported answer. **`sheets` is on by default**; every zip/PDF format (`sheets_zip`, `pdf`, `pdf_splite`, `pdf_zip`, `pdf_zip_splite`, `panels_zip`, `panels_zip_splites`) is off. None replace `panels/`, and building any of them doesn't cost quality anywhere. Easiest way to change any of them: `./run.sh setup-config` step 2, **or** the main interactive wizard's own "Adjust what gets generated/zipped for this chapter?" prompt each run — both ask yes/no for each switch, plus the size cap when a split switch is on, no manual editing needed. Or edit `config.json` directly — every setting lives under one `"package"` object in the `"cropper"` section:
 ```json
 "cropper": {
   "package": {
-    "panels_zip": true, "panels_zip_split": false,
-    "panels_pdf": false, "panels_pdf_split": false,
-    "sheets_zip": false, "sheets_zip_split": false,
+    "sheets": true, "sheets_zip": false,
+    "pdf": false, "pdf_splite": false, "pdf_zip": false, "pdf_zip_splite": false,
+    "panels_zip": false, "panels_zip_splites": false,
     "max_mb": 50.0
   }
 }

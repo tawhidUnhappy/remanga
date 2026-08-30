@@ -1,12 +1,21 @@
 """Builds the panels_pdf package format - see remanga.cropper.llm_zip's
 module docstring for the zip format this mirrors closely (same
-PackageConfig.max_mb/panels_pdf_split behavior, same lossless-or-nothing
-guarantee, same per-part chapter identity); this is the PDF equivalent for
-chat interfaces that handle a single PDF upload more gracefully than a zip
-of individual images. Off by default, unlike the zip (PackageConfig) - PDF
-is a less universally-supported upload format, and has no dedicated
-lossless image codec of its own to lean on (see below). Written to
-panels_pdf/panels_1.pdf, panels_2.pdf, ... - never touches panels/ itself.
+PackageConfig.max_mb behavior, same lossless-or-nothing guarantee, same
+per-part chapter identity); this is the PDF equivalent for chat interfaces
+that handle a single PDF upload more gracefully than a zip of individual
+images. Off by default, unlike panels_zip - PDF is a less
+universally-supported upload format, and has no dedicated lossless image
+codec of its own to lean on (see below).
+
+Four independent switches (see PackageConfig), all coordinated here:
+- `pdf` - a single panels_1.pdf, unsplit.
+- `pdf_splite` - the PDF split into `max_mb`-capped raw .pdf files instead,
+  not zipped: panels_1.pdf, panels_2.pdf, ....
+- `pdf_zip` - the single PDF, wrapped in panels_1.zip.
+- `pdf_zip_splite` - the PDF split into `max_mb`-capped parts, each zipped
+  separately: panels_1.zip, panels_2.zip, ....
+
+Written to panels_pdf/ - never touches panels/ itself.
 
 See remanga.cropper.pdf_writer's module docstring for why this doesn't just
 use Pillow's own `Image.save(..., "PDF")` (short version: it's lossy for RGB
@@ -16,6 +25,8 @@ palette).
 
 from __future__ import annotations
 
+import json
+import zipfile
 from pathlib import Path
 from typing import List, Tuple
 
@@ -82,17 +93,22 @@ def build_llm_pdf_bundle(
     worse than no PDF at all, and the panels_zip/sheets_zip formats remain
     available regardless."""
     out_dir = chapter_dir / "panels_pdf"
-    if not config.package.panels_pdf_active or not panel_paths:
+    package = config.package
+    if not package.pdf_active or not panel_paths:
         if out_dir.exists():
             for stale in out_dir.glob("panels_*.pdf"):
+                stale.unlink()
+            for stale in out_dir.glob("panels_*.zip"):
                 stale.unlink()
         return []
 
     out_dir.mkdir(parents=True, exist_ok=True)
     for stale in out_dir.glob("panels_*.pdf"):
         stale.unlink()
+    for stale in out_dir.glob("panels_*.zip"):
+        stale.unlink()
 
-    max_bytes = max(1, int(config.package.max_mb * 1024 * 1024))
+    max_bytes = max(1, int(package.max_mb * 1024 * 1024))
 
     encoded: List[Tuple[str, ImagePage]] = []
     for path in sorted(panel_paths):
@@ -105,10 +121,13 @@ def build_llm_pdf_bundle(
             )
             for partial in out_dir.glob("panels_*.pdf"):
                 partial.unlink()
+            for partial in out_dir.glob("panels_*.zip"):
+                partial.unlink()
             return []
         encoded.append((path.stem, page))
 
-    parts = pack_by_size(encoded, lambda item: len(item[1].flate_data), max_bytes, config.package.panels_pdf_split)
+    split = package.pdf_split
+    parts = pack_by_size(encoded, lambda item: len(item[1].flate_data), max_bytes, split)
 
     total_parts = len(parts)
     identity = chapter_identity_fields(project_name, chapter_num)
@@ -122,9 +141,19 @@ def build_llm_pdf_bundle(
         info_lines = [f"{k}: {v}" for k, v in info.items()]
 
         pdf_bytes = build_pdf([page for _, page in part], info_lines)
-        pdf_path = out_dir / f"panels_{idx}.pdf"
-        pdf_path.write_bytes(pdf_bytes)
-        written.append(pdf_path)
+        pdf_name = f"panels_{idx}.pdf"
+
+        if package.pdf or package.pdf_splite:
+            pdf_path = out_dir / pdf_name
+            pdf_path.write_bytes(pdf_bytes)
+            written.append(pdf_path)
+
+        if package.pdf_zip or package.pdf_zip_splite:
+            zip_path = out_dir / f"panels_{idx}.zip"
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+                zf.writestr(pdf_name, pdf_bytes)
+                zf.writestr("chapter_info.json", json.dumps(info, indent=2) + "\n")
+            written.append(zip_path)
 
     # Unlike the zip bundle's PNG/WEBP re-encoding, embedding raw (Flate/
     # predictor-compressed) bitmaps in a PDF isn't reliably smaller than the
@@ -132,8 +161,7 @@ def build_llm_pdf_bundle(
     # this reports the resulting size plainly rather than claiming a "saved"
     # figure that would sometimes be negative.
     total_mb = sum(p.stat().st_size for p in written) / (1024 * 1024)
-    size_note = f"{total_parts} part(s), ≤{config.package.max_mb:g}MB each" if config.package.panels_pdf_split \
-        else "1 part, splitting off"
+    size_note = f"{total_parts} part(s), ≤{package.max_mb:g}MB each" if split else "1 part, splitting off"
     console.print(
         f"[bold green]✓ Built LLM upload bundle - PDF ({size_note}, {total_mb:.1f}MB total) in:[/] {out_dir}"
     )

@@ -31,28 +31,17 @@ def bundle_state_str(package, enabled: bool, split_enabled: bool) -> str:
     return "on, unsplit" if enabled else "off"
 
 
-def _ask_bundle_checklist(label: str, single_hint: str, split_hint: str, enabled: bool, split_enabled: bool) -> tuple[bool, bool]:
-    """Each format is a checklist of two independent things to generate, not
-    a mode to pick - see PackageConfig's docstring. Both questions are
-    always asked, regardless of how the other was answered, so checking or
-    unchecking one never silently loses the other's setting."""
+def _ask_yes_no(label: str, hint: str, current: bool) -> bool:
     console.print(f"\n[bold]{label}[/]")
-    enabled = Confirm.ask(f"  Generate a single file ({single_hint})?", default=enabled)
-    split_enabled = Confirm.ask(f"  Generate it split into size-capped parts ({split_hint})?", default=split_enabled)
-    return enabled, split_enabled
+    return Confirm.ask(f"  Generate this ({hint})?", default=current)
 
 
 def configure_vision_outputs(config: RemangaConfig) -> None:
-    """The 'what to generate, what to zip' menu: two independent sections,
-    matching CropperConfig's `generate`/`package` split -
-    1. **Generate** - what visual content to produce at all. Individual
-       panel crops (panels/) always exist - that's what cropping a chapter
-       means - so the only thing to choose here today is contact sheets.
-    2. **Package** - what to zip/PDF up from whatever Section 1 produced,
-       for LLM upload (panels_zip, panels_pdf, sheets_zip - see
-       PackageConfig) - a checklist, not a mode: e.g. "only the PDF, not
-       the zip" is just answering yes to one question and no to the rest,
-       not a hidden config.json edit.
+    """The 'what to generate, what to zip' menu: one flat checklist - see
+    PackageConfig's docstring - of every independent yes/no switch a
+    chapter's vision output can have. Nothing here is a mode to pick: e.g.
+    "only the PDF, not the zip" is just answering yes to one question and no
+    to the rest, not a hidden config.json edit.
 
     Shared by `remanga setup-config` (step 2/3, part of the full settings
     walkthrough) and the main interactive wizard's own "adjust what gets
@@ -61,41 +50,53 @@ def configure_vision_outputs(config: RemangaConfig) -> None:
     config.json itself, like every other ensure_valid_*/configure_* helper
     in this module."""
     console.print(
-        "\n[bold yellow]🖼️  Section 1: What to Generate[/]\n"
+        "\n[bold yellow]📦 What to Generate / Zip for Upload[/]\n"
         "[dim]Individual panel crops (panels/) are always produced - that's what cropping a "
-        "chapter means. Choose anything extra on top of that:[/]"
-    )
-    config.cropper.generate.sheets = Confirm.ask(
-        "  Generate contact sheet composites (sheets/ - 2x2 labeled grids merged at full "
-        "original resolution, for lower LLM vision-token cost)?",
-        default=config.cropper.generate.sheets,
-    )
-
-    console.print(
-        "\n[bold yellow]📦 Section 2: What to Zip/PDF for Upload[/]\n"
-        "[dim]Losslessly re-encoded smaller, never touching panels/ itself (still full quality, "
-        "still what video rendering reads). Check only what you actually want built.[/]"
+        "chapter means. Everything below is optional, losslessly re-encoded smaller, and never "
+        "touches panels/ itself (still full quality, still what video rendering reads). Check "
+        "only what you actually want built:[/]"
     )
     package = config.cropper.package
 
-    package.panels_zip, package.panels_zip_split = _ask_bundle_checklist(
-        "panels_zip [dim](single file on by default - individual panels, a safe, no-downside win for LLM upload)[/]",
-        "panels_zip/panels_1.zip", "panels_zip/panels_1.zip, panels_2.zip, ...",
-        package.panels_zip, package.panels_zip_split,
+    package.sheets = _ask_yes_no(
+        "sheets [dim](on by default - 2x2 labeled grid composites merged at full original "
+        "resolution, for lower LLM vision-token cost)[/]",
+        "sheets/sheet_1.___, sheet_2.___, ...", package.sheets,
     )
-    package.panels_pdf, package.panels_pdf_split = _ask_bundle_checklist(
-        "panels_pdf [dim](off by default - individual panels, one per page)[/]",
-        "panels_pdf/panels_1.pdf", "panels_pdf/panels_1.pdf, panels_2.pdf, ...",
-        package.panels_pdf, package.panels_pdf_split,
+    package.sheets_zip = _ask_yes_no(
+        "sheets_zip [dim](off by default - zips those contact sheets; builds sheets/ "
+        "automatically even if `sheets` above is off)[/]",
+        "sheets_zip/sheets_1.zip", package.sheets_zip,
     )
-    package.sheets_zip, package.sheets_zip_split = _ask_bundle_checklist(
-        "sheets_zip [dim](off by default - full-resolution contact sheet composites, not "
-        "individual panels; builds sheets/ automatically even if Section 1 above is off)[/]",
-        "sheets_zip/sheets_1.zip", "sheets_zip/sheets_1.zip, sheets_2.zip, ...",
-        package.sheets_zip, package.sheets_zip_split,
+    package.pdf = _ask_yes_no(
+        "pdf [dim](off by default - individual panels, one per PDF page, single file)[/]",
+        "panels_pdf/panels_1.pdf", package.pdf,
+    )
+    package.pdf_splite = _ask_yes_no(
+        "pdf_splite [dim](off by default - that same PDF content split into size-capped raw "
+        ".pdf files, not zipped)[/]",
+        "panels_pdf/panels_1.pdf, panels_2.pdf, ...", package.pdf_splite,
+    )
+    package.pdf_zip = _ask_yes_no(
+        "pdf_zip [dim](off by default - that same single PDF, wrapped in a zip)[/]",
+        "panels_pdf/panels_1.zip", package.pdf_zip,
+    )
+    package.pdf_zip_splite = _ask_yes_no(
+        "pdf_zip_splite [dim](off by default - the PDF split into size-capped parts, each "
+        "zipped separately)[/]",
+        "panels_pdf/panels_1.zip, panels_2.zip, ...", package.pdf_zip_splite,
+    )
+    package.panels_zip = _ask_yes_no(
+        "panels_zip [dim](off by default - individual panel crops, single file)[/]",
+        "panels_zip/panels_1.zip", package.panels_zip,
+    )
+    package.panels_zip_splites = _ask_yes_no(
+        "panels_zip_splites [dim](off by default - that same panels zip, split into "
+        "size-capped parts)[/]",
+        "panels_zip/panels_1.zip, panels_2.zip, ...", package.panels_zip_splites,
     )
 
-    if package.panels_zip_split or package.panels_pdf_split or package.sheets_zip_split:
+    if package.pdf_splite or package.pdf_zip_splite or package.panels_zip_splites:
         max_mb_str = Prompt.ask("[bold cyan]Size cap per part, in MB[/]", default=str(package.max_mb))
         try:
             package.max_mb = float(max_mb_str)
@@ -105,10 +106,14 @@ def configure_vision_outputs(config: RemangaConfig) -> None:
     config.save()
     console.print(
         f"[bold green]✓ Vision output settings saved:[/] "
-        f"sheets {'on' if config.cropper.generate.sheets else 'off'} | "
-        f"panels_zip {bundle_state_str(package, package.panels_zip, package.panels_zip_split)} | "
-        f"panels_pdf {bundle_state_str(package, package.panels_pdf, package.panels_pdf_split)} | "
-        f"sheets_zip {bundle_state_str(package, package.sheets_zip, package.sheets_zip_split)}\n"
+        f"sheets {'on' if package.sheets else 'off'} | "
+        f"sheets_zip {'on' if package.sheets_zip else 'off'} | "
+        f"pdf {'on' if package.pdf else 'off'} | "
+        f"pdf_splite {'on' if package.pdf_splite else 'off'} | "
+        f"pdf_zip {'on' if package.pdf_zip else 'off'} | "
+        f"pdf_zip_splite {'on' if package.pdf_zip_splite else 'off'} | "
+        f"panels_zip {'on' if package.panels_zip else 'off'} | "
+        f"panels_zip_splites {'on' if package.panels_zip_splites else 'off'}\n"
     )
 
 

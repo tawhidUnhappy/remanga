@@ -19,16 +19,15 @@
     "auto_contrast_clean": false,
     "save_format": "PNG",
     "panels_per_sheet": 4,
-    "generate": {
-      "sheets": false
-    },
     "package": {
-      "panels_zip": true,
-      "panels_zip_split": false,
-      "panels_pdf": false,
-      "panels_pdf_split": false,
+      "sheets": true,
       "sheets_zip": false,
-      "sheets_zip_split": false,
+      "pdf": false,
+      "pdf_splite": false,
+      "pdf_zip": false,
+      "pdf_zip_splite": false,
+      "panels_zip": false,
+      "panels_zip_splites": false,
       "max_mb": 50.0
     },
     "snap_to_gutters": true,

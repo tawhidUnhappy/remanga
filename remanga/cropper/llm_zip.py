@@ -1,7 +1,6 @@
 """Builds the panels_zip package format - a zip archive purely for uploading
-to an LLM chat interface, packaging individual panel crops. On by default
-(see PackageConfig), since the lossless re-encode is a safe, no-downside
-default upload format. Completely separate from panels/ itself, which is
+to an LLM chat interface, packaging individual panel crops. Off by default
+(see PackageConfig). Completely separate from panels/ itself, which is
 untouched and stays the full-quality source video rendering reads from
 (remanga.video.compose) - this module only ever READS those files, never
 writes into that folder.
@@ -32,6 +31,6 @@ def build_llm_zip_bundle(
     package = config.package
     return build_zip_bundle(
         panel_paths, chapter_dir / "panels_zip", "panels",
-        package.panels_zip, package.panels_zip_split, package.max_mb,
+        package.panels_zip, package.panels_zip_splites, package.max_mb,
         project_name, chapter_num, "ZIP",
     )

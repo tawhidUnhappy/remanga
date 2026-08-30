@@ -30,7 +30,7 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
     # Any part of a package format existing counts as "built" - there's no
     # single "the" archive to check for anymore (see PackageConfig).
     panels_zip_built = any((chap_dir / "panels_zip").glob("panels_*.zip"))
-    panels_pdf_built = any((chap_dir / "panels_pdf").glob("panels_*.pdf"))
+    panels_pdf_built = any((chap_dir / "panels_pdf").glob("panels_*.pdf")) or any((chap_dir / "panels_pdf").glob("panels_*.zip"))
     sheets_zip_built = any((chap_dir / "sheets_zip").glob("sheets_*.zip"))
 
     narration_file = chap_dir / "narration.json"
@@ -104,10 +104,10 @@ def render_status_panel(project: str, chapter: str) -> Panel:
 
     res_str = f"{config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)"
     package = config.cropper.package
-    generate_str = f"panels (always) + sheets {'on' if config.cropper.generate.sheets else 'off'}"
+    generate_str = f"panels (always) + sheets {'on' if package.sheets else 'off'}"
     package_str = (
         f"panels_zip {'on' if package.panels_zip_active else 'off'}, "
-        f"panels_pdf {'on' if package.panels_pdf_active else 'off'}, "
+        f"pdf {'on' if package.pdf_active else 'off'}, "
         f"sheets_zip {'on' if package.sheets_zip_active else 'off'}"
     )
 
@@ -133,7 +133,7 @@ def render_status_panel(project: str, chapter: str) -> Panel:
    4. Panels Cropped      : {'[green]✓ Yes (' + str(st['panels_count']) + ' panels)[/]' if st['panels_count'] > 0 else '[red]✗ Missing[/]'}
    5. Panel Contact Sheets: {'[green]✓ Yes (' + str(st['sheets_count']) + ' sheets)[/]' if st['sheets_count'] > 0 else '[dim yellow]✗ Not generated[/]'}
    6. panels_zip          : {'[green]✓ Built[/]' if st['panels_zip_built'] else ('[dim yellow]✗ Not generated[/]' if package.panels_zip_active else '[dim]— off[/]')}
-   7. panels_pdf          : {'[green]✓ Built[/]' if st['panels_pdf_built'] else ('[dim yellow]✗ Not generated[/]' if package.panels_pdf_active else '[dim]— off[/]')}
+   7. pdf                 : {'[green]✓ Built[/]' if st['panels_pdf_built'] else ('[dim yellow]✗ Not generated[/]' if package.pdf_active else '[dim]— off[/]')}
    8. sheets_zip          : {'[green]✓ Built[/]' if st['sheets_zip_built'] else ('[dim yellow]✗ Not generated[/]' if package.sheets_zip_active else '[dim]— off[/]')}
    9. Narration Script    : {'[green]✓ Present (narration.json)[/]' if st['narration_exist'] else '[yellow]✗ Missing/Empty placeholder[/]'}
   10. Master Audio Track  : {'[green]✓ Generated (IndexTTS-2.5)[/]' if st['master_audio_exist'] else '[red]✗ Not built (' + str(st['audio_clips_count']) + '/' + str(st['total_narration_entries']) + ' clips)[/]'}

@@ -169,13 +169,13 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
 
     summary_table.add_row(
         "Generate",
-        f"panels (always) + sheets {'on' if config.cropper.generate.sheets else 'off'}",
+        f"panels (always) + sheets {'on' if package.sheets else 'off'}",
     )
     summary_table.add_row(
         "Package (zip/PDF for upload)",
-        f"panels_zip {bundle_state_str(package, package.panels_zip, package.panels_zip_split)}, "
-        f"panels_pdf {bundle_state_str(package, package.panels_pdf, package.panels_pdf_split)}, "
-        f"sheets_zip {bundle_state_str(package, package.sheets_zip, package.sheets_zip_split)}",
+        f"panels_zip {bundle_state_str(package, package.panels_zip, package.panels_zip_splites)}, "
+        f"pdf {bundle_state_str(package, package.pdf, package.pdf_split)}, "
+        f"sheets_zip {'on' if package.sheets_zip else 'off'}",
     )
     summary_table.add_row("Resolution", f"{config.video.width}x{config.video.height} @ {config.video.fps}fps")
     summary_table.add_row("Background Style", f"{config.video.background_style.title()} Blur" if config.video.background_style == "blur" else "Solid Black")

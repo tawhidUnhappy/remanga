@@ -53,12 +53,14 @@ def run_interactive_pipeline():
     console.print()
     print_path(f"[bold]Current Chapter Workspace:[/] {display_path(chap_dir, wrap=False)}")
     console.print(f"[bold]Current Chapter Status:[/] [{'green' if 'Ready' in status['summary'] else 'yellow'}]{status['summary']}[/]")
-    console.print(f"[bold]Generate:[/] panels (always) + sheets {'on' if config.cropper.generate.sheets else 'off'}")
+    console.print(f"[bold]Generate:[/] panels (always) + sheets {'on' if package.sheets else 'off'}")
     console.print(
         f"[bold]Package (zip/PDF for upload):[/] "
-        f"panels_zip {setup.bundle_state_str(package, package.panels_zip, package.panels_zip_split)} | "
-        f"panels_pdf {setup.bundle_state_str(package, package.panels_pdf, package.panels_pdf_split)} | "
-        f"sheets_zip {setup.bundle_state_str(package, package.sheets_zip, package.sheets_zip_split)}"
+        f"panels_zip {setup.bundle_state_str(package, package.panels_zip, package.panels_zip_splites)} | "
+        f"pdf {'on' if package.pdf else 'off'} | pdf_splite {'on' if package.pdf_splite else 'off'} | "
+        f"pdf_zip {'on' if package.pdf_zip else 'off'} | "
+        f"pdf_zip_splite {'on' if package.pdf_zip_splite else 'off'} | "
+        f"sheets_zip {'on' if package.sheets_zip else 'off'}"
     )
     console.print(f"[bold]Render Output:[/] {config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)\n")
 
@@ -103,7 +105,7 @@ def run_interactive_pipeline():
     # Step 4: Narration Script + Continuity Memory (narration.json + memory.json)
     # =========================================================================
     narration_path = chap_dir / "narration.json"
-    llm_pdf_parts = sorted((chap_dir / "panels_pdf").glob("panels_*.pdf")) if package.panels_pdf_active else []
+    llm_pdf_parts = sorted((chap_dir / "panels_pdf").glob("panels_*.pdf")) + sorted((chap_dir / "panels_pdf").glob("panels_*.zip")) if package.pdf_active else []
     llm_zip_parts = sorted((chap_dir / "panels_zip").glob("panels_*.zip")) if package.panels_zip_active else []
     llm_sheets_parts = sorted((chap_dir / "sheets_zip").glob("sheets_*.zip")) if package.sheets_zip_active else []
     memory_path = ensure_memory_file(project)
@@ -130,7 +132,7 @@ def run_interactive_pipeline():
         # empty upload list.
         if not upload_groups:
             console.print(Panel(
-                "[bold red]Nothing to upload:[/] every package format (panels_zip, panels_pdf, "
+                "[bold red]Nothing to upload:[/] every package format (panels_zip, pdf, "
                 "sheets_zip) is off in cropper.package, so no vision archive was built for this "
                 "chapter.\nRe-run the wizard and answer [bold]yes[/] to \"Adjust what gets "
                 "generated/zipped for this chapter?\", or run [bold]./run.sh setup-config[/] "
