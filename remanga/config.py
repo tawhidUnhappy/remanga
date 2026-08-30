@@ -53,6 +53,11 @@ class PackageConfig(BaseModel):
       full-resolution images than individual panels, for lower LLM
       vision-token cost. Off by default. Single-file only - no split option
       for sheets today.
+    - `sheets_folders` - the plain-folder alternative to `sheets`: no grid
+      compositing at all, just each panel crop copied as-is into small
+      numbered subfolders of `panels_per_folder` panels each (remanga/
+      cropper/sheet_folders.py), written to sheets_folders/folder_001/,
+      folder_002/, .... Off by default.
     - `pdf` - individual panel crops, one per PDF page (remanga/cropper/
       llm_pdf.py), as a single file: panels_pdf/panels_1.pdf. Off by
       default - a less universally-supported format, and PDF has no
@@ -95,6 +100,7 @@ class PackageConfig(BaseModel):
 
     sheets: bool = True
     sheets_zip: bool = False
+    sheets_folders: bool = False
     pdf: bool = False
     pdf_splite: bool = False
     pdf_zip: bool = False
@@ -141,6 +147,11 @@ class CropperConfig(BaseModel):
     auto_contrast_clean: bool = False
     save_format: str = "PNG"
     panels_per_sheet: int = 4
+    # Group size for the `sheets_folders` package format (see PackageConfig
+    # above / remanga/cropper/sheet_folders.py) - how many panels go into
+    # each numbered subfolder. Independent of panels_per_sheet, since the
+    # two formats serve different upload interfaces.
+    panels_per_folder: int = 10
 
     # One flat checklist - see PackageConfig above - of everything a chapter
     # can produce/zip/PDF for upload. There's no separate "primary archive"

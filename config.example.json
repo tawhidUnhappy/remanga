@@ -19,9 +19,11 @@
     "auto_contrast_clean": false,
     "save_format": "PNG",
     "panels_per_sheet": 4,
+    "panels_per_folder": 10,
     "package": {
       "sheets": true,
       "sheets_zip": false,
+      "sheets_folders": false,
       "pdf": false,
       "pdf_splite": false,
       "pdf_zip": false,

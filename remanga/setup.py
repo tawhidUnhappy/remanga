@@ -68,6 +68,12 @@ def configure_vision_outputs(config: RemangaConfig) -> None:
         "automatically even if `sheets` above is off)[/]",
         "sheets_zip/sheets_1.zip", package.sheets_zip,
     )
+    package.sheets_folders = _ask_yes_no(
+        "sheets_folders [dim](off by default - no compositing at all, just each panel crop "
+        "copied as-is into small numbered subfolders)[/]",
+        f"sheets_folders/folder_1/ .. folder_N/ ({config.cropper.panels_per_folder} panels each)",
+        package.sheets_folders,
+    )
     package.pdf = _ask_yes_no(
         "pdf [dim](off by default - individual panels, one per PDF page, single file)[/]",
         "panels_pdf/panels_1.pdf", package.pdf,
@@ -108,6 +114,7 @@ def configure_vision_outputs(config: RemangaConfig) -> None:
         f"[bold green]✓ Vision output settings saved:[/] "
         f"sheets {'on' if package.sheets else 'off'} | "
         f"sheets_zip {'on' if package.sheets_zip else 'off'} | "
+        f"sheets_folders {'on' if package.sheets_folders else 'off'} | "
         f"pdf {'on' if package.pdf else 'off'} | "
         f"pdf_splite {'on' if package.pdf_splite else 'off'} | "
         f"pdf_zip {'on' if package.pdf_zip else 'off'} | "

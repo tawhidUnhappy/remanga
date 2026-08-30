@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 from remanga.config import CropperConfig
 from remanga.console import console
 from remanga.cropper.llm_bundles import build_llm_bundles
+from remanga.cropper.sheet_folders import PanelFolderGenerator
 from remanga.cropper.sheets import PanelSheetGenerator
 from remanga.json_io import write_json
 from remanga.paths import chapter_identity_fields
@@ -56,6 +57,20 @@ def ensure_sheets_generated(config: CropperConfig, project_name: str, chapter_nu
     return sorted(p for p in sheets_dir.iterdir() if p.is_file()) if sheets_dir.exists() else []
 
 
+def ensure_panel_folders_generated(config: CropperConfig, panel_paths: List[Path], folders_dir: Path) -> List[Path]:
+    """Generates the `sheets_folders` package format into `folders_dir` if
+    `package.sheets_folders` is on - the plain-folder alternative to
+    `ensure_sheets_generated` above (see remanga/cropper/sheet_folders.py).
+    Mirrors that function's "return what's already there otherwise" shape."""
+    if panel_paths and config.package.sheets_folders:
+        return PanelFolderGenerator.create_panel_folders(
+            panel_paths=panel_paths,
+            output_dir=folders_dir,
+            panels_per_folder=config.panels_per_folder,
+        )
+    return sorted(p for p in folders_dir.iterdir() if p.is_dir()) if folders_dir.exists() else []
+
+
 def print_crop_summary(
     panels_dir: Path,
     total_panels: int,
@@ -92,6 +107,9 @@ def package_outputs(
 ) -> None:
     # 1. Generate vision contact sheets if anything needs them right now.
     sheet_paths = ensure_sheets_generated(config, project_name, chapter_num, panel_paths, sheets_dir)
+
+    # 1b. Generate the plain-folder alternative (`sheets_folders`) if it's on.
+    ensure_panel_folders_generated(config, panel_paths, chapter_dir / "sheets_folders")
 
     # 2. Package whichever size-capped zip/PDF format(s) are active
     # (panels_zip/, panels_pdf/, and/or sheets_zip/) - see
