@@ -8,7 +8,11 @@ from typing import Any, Dict
 from remanga.config import RemangaConfig
 from remanga.console import display_path, escape as _esc, wrap_at_slashes
 from remanga.json_io import has_real_json_content, read_json_or
-from remanga.paths import get_chapter_dir, get_final_video_path, load_project_metadata
+from remanga.paths import (
+    get_audio_dir, get_audio_timing_path, get_chapter_dir, get_final_video_path, get_master_audio_path,
+    get_pages_zip_path, get_panels_pdf_dir, get_panels_zip_dir, get_sheets_dir, get_sheets_zip_dir,
+    load_project_metadata,
+)
 
 
 def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
@@ -16,20 +20,21 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
     chap_dir = get_chapter_dir(project_name, chapter_num)
     pages_dir = chap_dir / "pages"
     panels_dir = chap_dir / "panels"
-    sheets_dir = chap_dir / "sheets"
-    audio_dir = chap_dir / "audio"
+    sheets_dir = get_sheets_dir(project_name, chapter_num, create=False)
+    audio_dir = get_audio_dir(project_name, chapter_num, create=False)
 
     pages_count = len([p for p in pages_dir.iterdir() if p.is_file()]) if pages_dir.exists() else 0
-    pages_zip_exist = (chap_dir / "pages.zip").exists()
+    pages_zip_exist = get_pages_zip_path(project_name, chapter_num, create=False).exists()
     crops_exist = has_real_json_content(chap_dir / "crops.json")
 
     panels_count = len([p for p in panels_dir.iterdir() if p.is_file()]) if panels_dir.exists() else 0
     sheets_count = len([p for p in sheets_dir.iterdir() if p.is_file()]) if sheets_dir.exists() else 0
     # Any part of a package format existing counts as "built" - there's no
     # single "the" archive to check for anymore (see PackageConfig).
-    panels_zip_built = any((chap_dir / "panels_zip").glob("panels_*.zip"))
-    panels_pdf_built = any((chap_dir / "panels_pdf").glob("panels_*.pdf")) or any((chap_dir / "panels_pdf").glob("panels_*.zip"))
-    sheets_zip_built = any((chap_dir / "sheets_zip").glob("sheets_*.zip"))
+    panels_zip_built = any(get_panels_zip_dir(project_name, chapter_num, create=False).glob("panels_*.zip"))
+    panels_pdf_dir = get_panels_pdf_dir(project_name, chapter_num, create=False)
+    panels_pdf_built = any(panels_pdf_dir.glob("panels_*.pdf")) or any(panels_pdf_dir.glob("panels_*.zip"))
+    sheets_zip_built = any(get_sheets_zip_dir(project_name, chapter_num, create=False).glob("sheets_*.zip"))
 
     narration_file = chap_dir / "narration.json"
     narration_exist = has_real_json_content(narration_file)
@@ -39,10 +44,10 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
         total_narration_entries = len(n_data.get("narration", []))
 
     audio_clips_count = len([p for p in audio_dir.glob("*.wav") if not p.stem.endswith("_raw")]) if audio_dir.exists() else 0
-    timing_exist = (chap_dir / "audio_timing.json").exists()
-    master_audio_exist = (chap_dir / "master_audio.wav").exists()
+    timing_exist = get_audio_timing_path(project_name, chapter_num, create=False).exists()
+    master_audio_exist = get_master_audio_path(project_name, chapter_num, create=False).exists()
 
-    final_video_path = get_final_video_path(project_name, chapter_num)
+    final_video_path = get_final_video_path(project_name, chapter_num, create=False)
     video_exist = final_video_path.exists() and final_video_path.stat().st_size > 1000
 
     if video_exist:

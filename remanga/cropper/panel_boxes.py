@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from remanga.config import CropperConfig
-from remanga.console import console
+from remanga.console import console, escape as _esc
 from remanga.cropper.geometry import calculate_pixel_bounds
 from remanga.cropper.gutter import PixelBox, refine_box_to_gutters
 from remanga.cropper.seams import reconcile_adjacent_seams
@@ -57,7 +57,7 @@ def resolve_page_panel_boxes(
     for panel in panels:
         box = panel.get("box_1000") or panel.get("box_pixel") or panel.get("coordinates")
         if not box or len(box) != 4:
-            console.print(f"[yellow]Skipping invalid panel coordinate entry: {panel}[/]")
+            console.print(f"[yellow]Skipping invalid panel coordinate entry: {_esc(str(panel))}[/]")
             continue
 
         is_normalized = "box_1000" in panel or max(box) <= 1000

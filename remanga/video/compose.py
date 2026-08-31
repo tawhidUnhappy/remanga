@@ -6,7 +6,7 @@ from PIL import Image, ImageColor, ImageDraw, ImageEnhance, ImageFilter, ImageOp
 
 from remanga.config import VideoConfig
 from remanga.console import console
-from remanga.paths import get_chapter_dir
+from remanga.paths import get_chapter_dir, get_video_frames_dir
 
 
 class FrameCompositor:
@@ -136,10 +136,8 @@ class FrameCompositor:
 
     def prepare_composited_frames(self, project_name: str, chapter_num: str, force: bool = False) -> Path:
         """Processes all cropped panels into full-resolution canvas frames."""
-        chapter_dir = get_chapter_dir(project_name, chapter_num)
-        panels_dir = chapter_dir / "panels"
-        frames_dir = chapter_dir / "video" / "frames"
-        frames_dir.mkdir(parents=True, exist_ok=True)
+        panels_dir = get_chapter_dir(project_name, chapter_num) / "panels"
+        frames_dir = get_video_frames_dir(project_name, chapter_num)
 
         panels = sorted(list(panels_dir.glob("*.png")) + list(panels_dir.glob("*.jpg")))
         if not panels:

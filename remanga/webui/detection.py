@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import List
 
 from remanga.config import MarkerConfig
-from remanga.console import console
+from remanga.console import console, escape as _esc
 from remanga.webui.marker_state import MarkerState
 
 
@@ -45,6 +45,6 @@ def run_detection(state: MarkerState, config: MarkerConfig) -> None:
         detect_panels_for_pages(page_paths, config, on_page_done=on_page_done)
     except Exception as e:
         state.detect_error = str(e)
-        console.print(f"[bold red]MAGI v3 detection failed:[/] {e}")
+        console.print(f"[bold red]MAGI v3 detection failed:[/] {_esc(str(e))}")
     finally:
         state.detect_running = False

@@ -1,6 +1,7 @@
-"""Post-crop bookkeeping for a chapter: writing panels_manifest.json, printing
-the summary line, and packaging the vision-upload asset (sheets/zip). Split
-out of crop.py so CoordinateCropper's loop isn't tangled up with reporting."""
+"""Post-crop bookkeeping for a chapter: recording panel info into this
+project's shared manifest.json, printing the summary line, and packaging
+the vision-upload asset (sheets/zip). Split out of crop.py so
+CoordinateCropper's loop isn't tangled up with reporting."""
 
 from __future__ import annotations
 
@@ -12,39 +13,33 @@ from remanga.console import console, escape as _esc
 from remanga.cropper.llm_bundles import build_llm_bundles
 from remanga.cropper.sheet_folders import PanelFolderGenerator
 from remanga.cropper.sheets import PanelSheetGenerator
-from remanga.json_io import write_json
-from remanga.paths import chapter_identity_fields
+from remanga.paths import get_sheets_dir, get_sheets_folders_dir, update_manifest_chapter
 
 
-def write_manifest(manifest_path: Path, chapter_num: str, panel_paths: List[Path], manifest_entries: List[Dict[str, Any]]) -> None:
-    write_json(manifest_path, {
-        "chapter": str(chapter_num),
+def write_manifest(project_name: str, chapter_num: str, panel_paths: List[Path], manifest_entries: List[Dict[str, Any]]) -> None:
+    """Records this chapter's panel info into {manga}/manifest.json's
+    "panels" section (see paths.update_manifest_chapter) - purely
+    informational bookkeeping, nothing in the pipeline reads it back, same
+    as the old standalone panels_manifest.json this replaces (now one
+    shared file instead of one repeated per chapter)."""
+    update_manifest_chapter(project_name, chapter_num, "panels", {
         "total_panels": len(panel_paths),
         "panels": manifest_entries,
     })
 
 
-def write_chapter_info(chapter_info_path: Path, project_name: str, chapter_num: str) -> None:
-    """Writes chapter_info.json - bundled into every LLM upload zip/PDF part
-    alongside the images (see llm_bundles.py) so the LLM narrating this
-    chapter always has authoritative project/manga/chapter identity straight
-    from the upload, instead of depending on whatever the human happens to
-    type in the chat (see prompts/narration.md's "Chapter Identity" section,
-    which reads this file for exactly that)."""
-    write_json(chapter_info_path, chapter_identity_fields(project_name, chapter_num))
-
-
-def ensure_sheets_generated(config: CropperConfig, project_name: str, chapter_num, panel_paths: List[Path], sheets_dir: Path) -> List[Path]:
-    """Generates contact sheet composites into `sheets_dir` if anything
-    actually needs them right now: `package.sheets` is on, or the
+def ensure_sheets_generated(config: CropperConfig, project_name: str, chapter_num, panel_paths: List[Path]) -> List[Path]:
+    """Generates contact sheet composites into {manga}/sheets/chapter_N/ if
+    anything actually needs them right now: `package.sheets` is on, or the
     sheets_zip package format (`PackageConfig.sheets_zip_active`) is -
     either one is enough, since checking sheets_zip alone should just work
     without also having to separately turn generation on. Shared by
     package_outputs (every fresh crop) and crop.py's resume-check top-up
     path (an already-cropped chapter that just had the sheets bundle turned
-    on, so sheets/ doesn't exist yet). Returns whatever's on disk in
-    `sheets_dir` either way, so a caller that doesn't need to regenerate
-    anything can still use what's already there."""
+    on, so sheets/chapter_N/ doesn't exist yet). Returns whatever's on disk
+    either way, so a caller that doesn't need to regenerate anything can
+    still use what's already there."""
+    sheets_dir = get_sheets_dir(project_name, chapter_num, create=False)
     needs_sheets = config.package.sheets or config.package.sheets_zip_active
     if panel_paths and needs_sheets:
         return PanelSheetGenerator.create_panel_sheets(
@@ -57,11 +52,13 @@ def ensure_sheets_generated(config: CropperConfig, project_name: str, chapter_nu
     return sorted(p for p in sheets_dir.iterdir() if p.is_file()) if sheets_dir.exists() else []
 
 
-def ensure_panel_folders_generated(config: CropperConfig, panel_paths: List[Path], folders_dir: Path) -> List[Path]:
-    """Generates the `sheets_folders` package format into `folders_dir` if
-    `package.sheets_folders` is on - the plain-folder alternative to
-    `ensure_sheets_generated` above (see remanga/cropper/sheet_folders.py).
-    Mirrors that function's "return what's already there otherwise" shape."""
+def ensure_panel_folders_generated(config: CropperConfig, project_name: str, chapter_num, panel_paths: List[Path]) -> List[Path]:
+    """Generates the `sheets_folders` package format into
+    {manga}/sheets_folders/chapter_N/ if `package.sheets_folders` is on -
+    the plain-folder alternative to `ensure_sheets_generated` above (see
+    remanga/cropper/sheet_folders.py). Mirrors that function's "return
+    what's already there otherwise" shape."""
+    folders_dir = get_sheets_folders_dir(project_name, chapter_num, create=False)
     if panel_paths and config.package.sheets_folders:
         return PanelFolderGenerator.create_panel_folders(
             panel_paths=panel_paths,
@@ -99,22 +96,19 @@ def print_crop_summary(
 
 def package_outputs(
     config: CropperConfig,
-    chapter_dir: Path,
-    sheets_dir: Path,
     panel_paths: List[Path],
     project_name: str,
     chapter_num: str,
 ) -> None:
     # 1. Generate vision contact sheets if anything needs them right now.
-    sheet_paths = ensure_sheets_generated(config, project_name, chapter_num, panel_paths, sheets_dir)
+    sheet_paths = ensure_sheets_generated(config, project_name, chapter_num, panel_paths)
 
     # 1b. Generate the plain-folder alternative (`sheets_folders`) if it's on.
-    ensure_panel_folders_generated(config, panel_paths, chapter_dir / "sheets_folders")
+    ensure_panel_folders_generated(config, project_name, chapter_num, panel_paths)
 
     # 2. Package whichever size-capped zip/PDF format(s) are active
     # (panels_zip/, panels_pdf/, and/or sheets_zip/) - see
     # remanga.cropper.llm_bundles/PackageConfig. This is the only zip
     # mechanism a chapter has - no separate "primary archive" exists to
     # also account for.
-    build_llm_bundles(config, chapter_dir, project_name, chapter_num, panel_paths, sheet_paths)
-
+    build_llm_bundles(config, project_name, chapter_num, panel_paths, sheet_paths)

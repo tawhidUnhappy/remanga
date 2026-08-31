@@ -10,7 +10,7 @@ from remanga.config import SystemConfig, VideoConfig
 from remanga.console import console, escape as _escape_path
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.json_io import read_json
-from remanga.paths import get_chapter_dir, get_final_video_path
+from remanga.paths import get_audio_timing_path, get_final_video_path, get_master_audio_path, get_video_concat_path, get_video_frames_dir
 from remanga.venvs import REPO_ROOT
 from remanga.video.compose import FrameCompositor
 
@@ -108,19 +108,24 @@ class VideoRenderer:
         Composites frames, synchronizes with master audio,
         and renders final MP4 with GPU acceleration (or fallback CPU encoder).
         """
-        chapter_dir = get_chapter_dir(project_name, chapter_num)
-        timing_path = chapter_dir / "audio_timing.json"
-        master_audio = chapter_dir / "master_audio.wav"
-        video_dir = chapter_dir / "video"
-        # Final MP4 lives at {manga}/video/ - one shared folder across all of
-        # a manga's chapters, not buried per-chapter - while video_dir above
-        # stays the chapter-scoped working directory (frames/, concat list)
-        # this function builds the video from. See remanga.paths.
+        timing_path = get_audio_timing_path(project_name, chapter_num)
+        master_audio = get_master_audio_path(project_name, chapter_num)
+        frames_dir = get_video_frames_dir(project_name, chapter_num)
+        # Final MP4 lives at {manga}/video/chapter_N/ - see remanga.paths.
         final_video = get_final_video_path(project_name, chapter_num)
 
-        if not force and final_video.exists() and final_video.stat().st_size > 1000:
+        # Rebuild if missing/forced, OR if master_audio.wav is newer than the
+        # last render - the case that matters most: the user only changed
+        # BGM/volume and re-ran `mix`, so the video needs a fresh encode of
+        # this (cheap) step even though nobody passed --force. TTS and frame
+        # compositing are untouched either way - see prepare_composited_frames
+        # below, which stays a no-op for every already-cached frame.
+        stale_audio = final_video.exists() and master_audio.exists() and master_audio.stat().st_mtime > final_video.stat().st_mtime
+        if not force and final_video.exists() and final_video.stat().st_size > 1000 and not stale_audio:
             console.print(f"[bold green]✓ Recap video already rendered:[/] {_escape_path(str(final_video))}")
             return final_video
+        if stale_audio:
+            console.print("[dim]master_audio.wav is newer than the last render (BGM/volume likely changed) - re-encoding video only.[/]")
 
         if not master_audio.exists():
             raise FileNotFoundError(f"Master audio not found: {master_audio}")
@@ -132,17 +137,17 @@ class VideoRenderer:
         timing_info = read_json(timing_path)
 
         panels = timing_info.get("panels", [])
-        concat_file = video_dir / "concat_list.txt"
+        concat_file = get_video_concat_path(project_name, chapter_num)
 
         with open(concat_file, "w", encoding="utf-8") as f:
             for p in panels:
                 panel_id = p["panel_id"]
-                frame_file = video_dir / "frames" / f"frame_{panel_id}.png"
+                frame_file = frames_dir / f"frame_{panel_id}.png"
                 duration = p["total_slot_sec"]
                 f.write(f"file '{frame_file.resolve()}'\n")
                 f.write(f"duration {duration}\n")
             if panels:
-                last_frame = video_dir / "frames" / f"frame_{panels[-1]['panel_id']}.png"
+                last_frame = frames_dir / f"frame_{panels[-1]['panel_id']}.png"
                 f.write(f"file '{last_frame.resolve()}'\n")
 
         # 3. Select Video Codec (GPU NVENC vs CPU libx264) and which ffmpeg binary
@@ -183,7 +188,7 @@ class VideoRenderer:
         result = run_ffmpeg(cmd, capture=True)
 
         if result.returncode != 0:
-            console.print(f"[red]FFmpeg Error Details:\n{result.stderr}[/]")
+            console.print(f"[red]FFmpeg Error Details:\n{_escape_path(result.stderr)}[/]")
             raise RuntimeError("FFmpeg rendering failed.")
 
         console.print(f"[bold green]✓ Recap video generated successfully![/]")

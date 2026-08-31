@@ -18,19 +18,20 @@ from typing import List
 
 from remanga.config import CropperConfig
 from remanga.cropper.zip_bundle import build_zip_bundle
+from remanga.paths import get_panels_zip_dir
 
 
 def build_llm_zip_bundle(
     config: CropperConfig,
-    chapter_dir: Path,
     project_name: str,
     chapter_num: str,
     panel_paths: List[Path],
 ) -> List[Path]:
-    """Builds panels_zip/panels_1.zip, panels_2.zip, ... - see module docstring."""
+    """Builds {manga}/panels_zip/chapter_N/panels_1.zip, panels_2.zip, ... -
+    see module docstring."""
     package = config.package
     return build_zip_bundle(
-        panel_paths, chapter_dir / "panels_zip", "panels",
+        panel_paths, get_panels_zip_dir(project_name, chapter_num, create=False), "panels",
         package.panels_zip, package.panels_zip_splites, package.max_mb,
         project_name, chapter_num, "ZIP",
     )

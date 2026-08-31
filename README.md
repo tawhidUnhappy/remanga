@@ -238,7 +238,7 @@ Launches the **Panel Marker** web UI: MAGI v3 pre-fills every page's panel boxes
 ```bash
 ./run.sh crop --project "my_manga" --chapter "1"
 ```
-*Creates:* `panels/`, `panels_manifest.json`, `sheets/` (whenever it's actually needed - `package.sheets` on by default, or `package.sheets_zip` active), and whichever of `panels_zip/panels_1.zip`, `panels_pdf/panels_1.pdf` (or its zipped/split variants), and `sheets_zip/sheets_1.zip` (all off by default) are active per `cropper.package` (see [Vision Outputs](#vision-outputs-what-to-generate-what-to-zip) below).
+*Creates:* `chapters/chapter_<num>/panels/` (source), this chapter's `panels` entry in the project's shared `manifest.json`, and - all under the project-level generated tree, not the chapter's source folder - `sheets/chapter_<num>/` (whenever it's actually needed - `package.sheets` on by default, or `package.sheets_zip` active), and whichever of `panels_zip/chapter_<num>/panels_1.zip`, `panels_pdf/chapter_<num>/panels_1.pdf` (or its zipped/split variants), `sheets_zip/chapter_<num>/sheets_1.zip`, and `sheets_folders/chapter_<num>/` (all off by default) are active per `cropper.package` (see [Vision Outputs](#vision-outputs-what-to-generate-what-to-zip) below).
 
 ### 4. Generate and Place `narration.json` + `memory.json`
 Upload **any one** of your generated vision archives — whichever package formats are active (`panels_zip`, `pdf`, `sheets_zip`) — and `prompts/narration.md` to your LLM, attaching the project's current `memory.json` too, once it has real content, so continuity carries across chapters. **From chapter 2 onward, `memory.json` isn't optional** — the interactive wizard blocks and re-prompts until it has real content, since it's the only thing carrying character/plot continuity forward from the previous chapter. The prompt asks for **exactly two fenced JSON code blocks and nothing else** (no commentary before/after), so the LLM's reply can be copy-pasted straight into each file. The interactive wizard prints every archive actually available to upload this run as a ctrl+click-openable path (VS Code and similar editors), and both destination paths, when it gets to this step:
@@ -427,6 +427,7 @@ In short: if a chapter's TTS run gets interrupted or a worker locks up, just re-
 ./run.sh tts      -p <PROJECT> -c <CHAPTER> [-v <VOICE_WAV>] [-f]
 ./run.sh mix      -p <PROJECT> -c <CHAPTER> [-b <BGM_FILE>]
 ./run.sh render   -p <PROJECT> -c <CHAPTER> [-f]
+./run.sh full-recap -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-f]
 ./run.sh status   -p <PROJECT> -c <CHAPTER>
 ./run.sh restart  -p <PROJECT> -c <CHAPTER> [-m hard|marks_only|soft] [-f] [--no-reverify]
 ```
@@ -451,24 +452,28 @@ remanga/
 │   └── <project_name>/
 │       ├── project.json        # Saved MangaDex URL and chapter index
 │       ├── memory.json         # Story continuity state across chapters
-│       └── chapters/
-│           └── chapter_<num>/
-│               ├── pages/              # Raw downloaded chapter pages
-│               ├── pages.zip           # (Optional - off by default) raw pages bundled for manual LLM upload
-│               ├── crops.json          # Panel crop coordinates from the Panel Marker web UI
-│               ├── panels/             # Cropped individual panel images (full quality - video reads these)
-│               ├── panels_manifest.json  # Per-panel crop bookkeeping (crop.py)
-│               ├── chapter_info.json   # Project/manga/chapter identity, bundled into every package format below
-│               ├── sheets/             # 2x2 vision contact sheets, full original resolution (on by default, or auto-built for sheets_zip)
-│               ├── panels_zip/         # (Off by default) package format - individual panels - panels_1.zip, ...
-│               ├── panels_pdf/         # (Off by default) package format - individual panels - panels_1.pdf and/or panels_1.zip, ...
-│               ├── sheets_zip/         # (Off by default) package format - 2x2 sheet composites - sheets_1.zip, ...
-│               ├── narration.json      # Synchronized narration script
-│               ├── audio/              # Synthesized vocal WAV files per panel
-│               ├── audio_timing.json   # Panel timeline synchronization map
-│               ├── master_audio.wav    # Master audio track (Loudnorm + BGM)
-│               ├── video/frames/       # Composited 1080p/2K/4K canvas frames
-│               └── <project>_ch<num>_recap.mp4  # FINAL RECAP VIDEO
+│       ├── manifest.json       # Per-chapter pages/panels bookkeeping, one shared file (informational only)
+│       ├── chapters/
+│       │   └── chapter_<num>/          # SOURCE ONLY - the handful of things nothing else can regenerate
+│       │       ├── pages/              # Raw downloaded chapter pages
+│       │       ├── crops.json          # Panel crop coordinates from the Panel Marker web UI
+│       │       ├── panels/             # Cropped individual panel images (full quality - video reads these)
+│       │       └── narration.json      # Synchronized narration script
+│       │
+│       # Everything below is GENERATED - one shared, per-kind, per-chapter tree,
+│       # never mixed into the source chapter folder above. A restart (any mode)
+│       # wipes a chapter's entry here in full; the source folder above is what
+│       # each restart mode chooses how much of to keep. See remanga/paths.py.
+│       ├── pages_zip/chapter_<num>/pages.zip       # (Optional - off by default)
+│       ├── sheets/chapter_<num>/                   # 2x2 vision contact sheets (on by default, or auto-built for sheets_zip)
+│       ├── sheets_zip/chapter_<num>/sheets_1.zip    # (Off by default) package format
+│       ├── sheets_folders/chapter_<num>/folder_1/   # (Off by default) package format - no compositing, plain numbered folders
+│       ├── panels_zip/chapter_<num>/panels_1.zip    # (Off by default) package format
+│       ├── panels_pdf/chapter_<num>/panels_1.pdf    # (Off by default) package format
+│       ├── audio/chapter_<num>/                    # Synthesized vocal WAV per panel + audio_timing.json + master_audio.wav
+│       └── video/
+│           ├── chapter_<num>/                      # frames/, concat_list.txt, and <project>_ch<num>_recap.mp4 (kept)
+│           └── <project>_full_recap.mp4            # `full-recap`'s whole-manga joined video, plus its own master audio/concat list
 ├── remanga/                    # Python core pipeline package
 │   ├── audio/                  # synth.py (talks to the .tools/venv-indextts worker) & mix.py (master audio mixer)
 │   │   └── scripts/             # indextts_worker.py - runs inside .tools/venv-indextts, not the main env

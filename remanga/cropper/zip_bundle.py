@@ -13,7 +13,7 @@ import zipfile
 from pathlib import Path
 from typing import List, Tuple
 
-from remanga.console import console
+from remanga.console import console, escape as _esc
 from remanga.cropper.image_codec import smallest_lossless_encoding
 from remanga.cropper.manifest_info import build_part_info
 from remanga.cropper.size_pack import pack_by_size
@@ -85,7 +85,7 @@ def build_zip_bundle(
     size_note = f"{total_parts} part(s), ≤{max_mb:g}MB each" if split_enabled \
         else f"1 part, {encoded_total / (1024 * 1024):.1f}MB, splitting off"
     console.print(
-        f"[bold green]✓ Built LLM upload bundle - {label} ({size_note}) in:[/] {out_dir} "
+        f"[bold green]✓ Built LLM upload bundle - {label} ({size_note}) in:[/] {_esc(str(out_dir))} "
         f"[dim](losslessly saved {saved_mb:.1f}MB re-encoding)[/]"
     )
     return written

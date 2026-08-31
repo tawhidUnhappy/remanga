@@ -1,19 +1,21 @@
 """Whole-manga compilation: runs every chapter's remaining pipeline steps (TTS,
-frame compositing) in order, then joins them into ONE continuous recap video
-instead of 24 separate ones - a single `remanga full-recap` run.
+mix, render) in order - producing and KEEPING each chapter's own final MP4,
+exactly like running `remanga render` on it one at a time would - then joins
+all of them into ONE continuous recap video instead of leaving 24 separate
+ones as the only whole-manga option.
 
-Why this isn't just "render each chapter, then ffmpeg-concat the finished
-MP4s": that approach bakes background music into each chapter's audio
-independently (remanga/audio/mix.py) - each chapter gets its own BGM loop
-restarted from ms 0, its own fade-in/fade-out, its own separate EBU R128
-loudnorm pass. Concatenating those finished files back together would give
-exactly the artifacts this mode exists to avoid: BGM visibly/audibly
-restarting and re-fading at every chapter boundary, and a small loudness
-jump at every join since each chapter was normalized on its own.
+Why the join isn't just "ffmpeg-concat the per-chapter MP4s just built":
+each chapter's audio/mix.py bakes background music into that chapter's own
+audio independently - its own BGM loop restarted from ms 0, its own
+fade-in/fade-out, its own separate EBU R128 loudnorm pass. Concatenating
+those finished files back together would give exactly the artifacts this
+mode exists to avoid: BGM visibly/audibly restarting and re-fading at every
+chapter boundary, and a small loudness jump at every join since each
+chapter was normalized on its own.
 
-Instead this builds one continuous timeline across the whole manga before
-anything gets mixed: one combined narration track (concatenating the same
-per-panel clips remanga/audio/mix.py uses - already edge-faded, see
+Instead the join step builds one continuous timeline across the whole manga
+from scratch: one combined narration track (concatenating the same
+per-panel voice clips remanga/audio/mix.py uses - already edge-faded, see
 remanga/audio/tts.py - so a chapter boundary is just another panel-to-panel
 join, no different from one already handled safely inside a single chapter
 today), ONE background-music loop laid under the entire thing with exactly
@@ -21,6 +23,18 @@ one fade-in at the very start and one fade-out at the very end, and exactly
 one loudnorm pass over the result. Frames are concatenated the same way -
 one ffmpeg concat list spanning every chapter in order, so there's no seam
 where the video-side timing could drift from the audio-side timing either.
+
+Keeping each chapter's own MP4 (rather than treating it as a throwaway
+intermediate) is deliberate: TTS and frame compositing are the genuinely
+expensive steps here and are already cached/resumable, but so is the mix
+(audio/mix.py) and per-chapter render (video/render.py) now - re-running
+`full-recap` after only changing config.json's BGM path/volume re-mixes and
+re-encodes just the per-chapter video (video/render.py auto-detects a newer
+master_audio.wav and re-encodes even without --force), never touching TTS
+or frame compositing. The whole-manga join itself still needs an explicit
+--force to rebuild, since detecting "did anything downstream change" across
+every chapter at once isn't worth the complexity for an occasional
+whole-manga operation.
 """
 
 from __future__ import annotations
@@ -32,12 +46,17 @@ from typing import List, Optional, Tuple
 from pydub import AudioSegment
 
 from remanga import setup
+from remanga.audio.mix import AudioProcessor
 from remanga.audio.tts import TTSEngine
 from remanga.config import RemangaConfig
 from remanga.console import console, escape as _esc
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.json_io import read_json
-from remanga.paths import get_chapter_dir, get_project_dir, get_project_video_dir
+from remanga.paths import (
+    get_audio_dir, get_audio_timing_path, get_chapter_dir, get_final_video_path,
+    get_full_recap_concat_path, get_full_recap_master_audio_path, get_full_recap_video_path,
+    get_project_dir, get_video_frames_dir,
+)
 from remanga.video.compose import FrameCompositor
 from remanga.video.render import VideoRenderer
 
@@ -68,25 +87,28 @@ def discover_chapters(project_name: str) -> List[str]:
 
 
 class FullRecapCompiler:
-    """Owns one whole-manga compilation run. Reuses TTSEngine/FrameCompositor
-    for the per-chapter prep work (both already resumable on their own -
-    an interrupted run just picks up where it left off), then does its own
-    cross-chapter audio/frame assembly and a single ffmpeg encode."""
+    """Owns one whole-manga compilation run. Reuses TTSEngine/AudioProcessor/
+    VideoRenderer for the per-chapter work (all already resumable on their
+    own - an interrupted run just picks up where it left off), then does its
+    own cross-chapter audio/frame assembly and a single ffmpeg encode for
+    the join."""
 
     def __init__(self, config: Optional[RemangaConfig] = None):
         self.config = config or RemangaConfig.load()
         self._tts = TTSEngine(self.config.tts, self.config.audio)
+        self._mixer = AudioProcessor(self.config.audio)
         self._compositor = FrameCompositor(self.config.video)
         self._renderer = VideoRenderer(self.config.system, self.config.video)
 
-    def _ensure_chapter_ready(self, project_name: str, chapter_num: str) -> Path:
-        """Makes sure chapter_num has cropped panels, a narration script, its
-        per-panel voice clips, and its composited frames - raising a clear,
-        chapter-named error the moment any prerequisite this mode can't
-        supply on its own (marking panels, writing narration) is missing,
-        rather than silently skipping that chapter or failing deep inside a
-        later step with no indication which chapter caused it. Returns the
-        chapter's audio_timing.json path once everything's confirmed ready."""
+    def _ensure_chapter_video(self, project_name: str, chapter_num: str, force: bool) -> Path:
+        """Makes sure chapter_num has cropped panels, a narration script,
+        its per-panel voice clips, its mixed master audio, and its own
+        final rendered MP4 - raising a clear, chapter-named error the
+        moment any prerequisite this mode can't supply on its own (marking
+        panels, writing narration) is missing, rather than silently
+        skipping that chapter or failing deep inside a later step with no
+        indication which chapter caused it. Returns the chapter's own
+        final video path once it's confirmed ready."""
         chapter_dir = get_chapter_dir(project_name, chapter_num)
         panels_dir = chapter_dir / "panels"
         narration_path = chapter_dir / "narration.json"
@@ -103,14 +125,10 @@ class FullRecapCompiler:
             )
 
         self._tts.generate_narration_audio(project_name, chapter_num, interactive=False, force=False)
-        self._compositor.prepare_composited_frames(project_name, chapter_num, force=False)
+        self._mixer.mix_master_audio(project_name, chapter_num, interactive=False)
+        return self._renderer.render_video(project_name, chapter_num, force=force)
 
-        timing_path = chapter_dir / "audio_timing.json"
-        if not timing_path.exists():
-            raise RuntimeError(f"Chapter {chapter_num}: audio_timing.json still missing after TTS - cannot continue.")
-        return timing_path
-
-    def _assemble_combined_audio(self, project_name: str, chapters: List[str], timing_paths: List[Path]) -> Tuple[Path, List[Tuple[Path, float]]]:
+    def _assemble_combined_audio(self, project_name: str, chapters: List[str]) -> Tuple[Path, List[Tuple[Path, float]]]:
         """Builds ONE narration track spanning every chapter (concatenating
         the same already edge-faded per-panel clips remanga/audio/mix.py
         uses within a single chapter - see module docstring), overlays ONE
@@ -120,19 +138,16 @@ class FullRecapCompiler:
         the whole manga plays for, in order, for the video side to reuse
         without re-deriving it."""
         audio_config = self.config.audio
-        full_config = self.config
-
-        valid_bgm = setup.ensure_valid_bgm(full_config, interactive=False)
+        valid_bgm = setup.ensure_valid_bgm(self.config, interactive=False)
 
         combined_voice = AudioSegment.empty()
         frame_timeline: List[Tuple[Path, float]] = []
 
         console.print("[cyan]Assembling one continuous narration track across every chapter...[/]")
-        for chapter_num, timing_path in zip(chapters, timing_paths):
-            chapter_dir = get_chapter_dir(project_name, chapter_num)
-            audio_dir = chapter_dir / "audio"
-            frames_dir = chapter_dir / "video" / "frames"
-            timing = read_json(timing_path)
+        for chapter_num in chapters:
+            audio_dir = get_audio_dir(project_name, chapter_num)
+            frames_dir = get_video_frames_dir(project_name, chapter_num)
+            timing = read_json(get_audio_timing_path(project_name, chapter_num))
 
             for p in timing.get("panels", []):
                 clip_file = audio_dir / p["audio_file"]
@@ -168,9 +183,8 @@ class FullRecapCompiler:
         elif audio_config.bgm_enabled:
             console.print("[yellow]BGM is enabled in config, but no valid BGM file was found. Continuing without BGM.[/]")
 
-        video_dir = get_project_video_dir(project_name)
-        raw_path = video_dir / f"{project_name}_full_master_raw.wav"
-        final_path = video_dir / f"{project_name}_full_master.wav"
+        final_path = get_full_recap_master_audio_path(project_name)
+        raw_path = final_path.with_name(final_path.stem + "_raw.wav")
         master_audio.export(raw_path, format="wav")
 
         if audio_config.enable_loudnorm:
@@ -186,7 +200,7 @@ class FullRecapCompiler:
                 run_ffmpeg(cmd, check=True, capture=True)
                 raw_path.unlink(missing_ok=True)
             except Exception as e:
-                console.print(f"[yellow]Loudnorm filter warning: {e}. Falling back to the un-normalized full-manga track.[/]")
+                console.print(f"[yellow]Loudnorm filter warning: {_esc(str(e))}. Falling back to the un-normalized full-manga track.[/]")
                 raw_path.rename(final_path)
         else:
             raw_path.rename(final_path)
@@ -194,8 +208,7 @@ class FullRecapCompiler:
         return final_path, frame_timeline
 
     def compile_full_manga(self, project_name: str, force: bool = False, chapters: Optional[List[str]] = None) -> Path:
-        video_dir = get_project_video_dir(project_name)
-        final_video = video_dir / f"{project_name}_full_recap.mp4"
+        final_video = get_full_recap_video_path(project_name)
 
         if not force and final_video.exists() and final_video.stat().st_size > 1000:
             console.print(f"[bold green]✓ Full-manga recap already compiled:[/] {_esc(str(final_video))}")
@@ -208,21 +221,23 @@ class FullRecapCompiler:
         start_time = time.perf_counter()
         console.print(f"[bold cyan]Compiling {len(chapter_list)} chapter(s) into one continuous recap:[/] {', '.join(chapter_list)}")
 
-        timing_paths = []
+        # Phase 1: every chapter's OWN final video first (kept, not a
+        # throwaway) - each one independently resumable/cheap-to-rebuild via
+        # TTSEngine/AudioProcessor/VideoRenderer's own caching.
+        chapter_videos: List[Path] = []
         for i, chapter_num in enumerate(chapter_list, start=1):
             console.print(f"[cyan]({i}/{len(chapter_list)}) Preparing chapter {chapter_num}...[/]")
-            timing_paths.append(self._ensure_chapter_ready(project_name, chapter_num))
+            chapter_videos.append(self._ensure_chapter_video(project_name, chapter_num, force=force))
 
-        master_audio_path, frame_timeline = self._assemble_combined_audio(project_name, chapter_list, timing_paths)
+        # Phase 2: the whole-manga join - a fresh continuous audio timeline
+        # (see _assemble_combined_audio's docstring for why this can't just
+        # reuse the per-chapter mixed audio from phase 1) plus one concat
+        # list spanning every chapter's frames in order.
+        master_audio_path, frame_timeline = self._assemble_combined_audio(project_name, chapter_list)
         if not frame_timeline:
             raise RuntimeError("No panels found across any chapter - nothing to compile.")
 
-        # One concat list spanning every frame of every chapter, in order -
-        # identical mechanism to VideoRenderer.render_video's per-chapter
-        # concat list (see remanga/video/render.py), just never restarted at
-        # a chapter boundary, so there's no seam for video/audio timing to
-        # drift apart at.
-        concat_file = video_dir / f"{project_name}_full_concat_list.txt"
+        concat_file = get_full_recap_concat_path(project_name)
         with open(concat_file, "w", encoding="utf-8") as f:
             for frame_path, duration in frame_timeline:
                 f.write(f"file '{frame_path.resolve()}'\n")
@@ -256,7 +271,7 @@ class FullRecapCompiler:
         console.print("[yellow]Encoding the full-manga recap... This may take a while for a long manga.[/]")
         result = run_ffmpeg(cmd, capture=True)
         if result.returncode != 0:
-            console.print(f"[red]FFmpeg Error Details:\n{result.stderr}[/]")
+            console.print(f"[red]FFmpeg Error Details:\n{_esc(result.stderr)}[/]")
             raise RuntimeError("FFmpeg full-manga rendering failed.")
 
         total_video_sec = sum(d for _, d in frame_timeline)
@@ -265,6 +280,7 @@ class FullRecapCompiler:
                        f"[dim]({len(chapter_list)} chapters, {_fmt_duration(total_video_sec)} runtime, "
                        f"{_fmt_duration(elapsed_sec)} to compile)[/]")
         console.print(f"[bold green]Location:[/] {_esc(str(final_video))}")
+        console.print(f"[dim]Per-chapter videos kept at:[/] {_esc(str(get_final_video_path(project_name, chapter_list[0]).parent.parent))}/*/")
         return final_video
 
 

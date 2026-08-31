@@ -26,7 +26,7 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     console.print("[dim]Provide a clean 3-10 second WAV file of a neutral, steady voice.[/]")
     curr_voice = config.tts.spk_audio_prompt
     if is_valid_file(curr_voice):
-        console.print(f"Current Voice: [green]{curr_voice}[/]")
+        console.print(f"Current Voice: [green]{_esc(str(curr_voice))}[/]")
         if not Confirm.ask("Keep current reference voice?", default=True):
             ensure_valid_voice_prompt(config, interactive=True)
     else:

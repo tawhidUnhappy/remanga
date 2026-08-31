@@ -9,7 +9,7 @@ import requests
 from rich.progress import BarColumn, Progress, TextColumn
 
 from remanga.config import DownloaderConfig
-from remanga.console import console
+from remanga.console import console, escape as _esc
 
 
 BASE_URL = "https://api.mangadex.org"
@@ -75,7 +75,7 @@ class MangaDexResolver:
 
     def search_manga_by_title(self, title: str) -> str:
         """Search MangaDex for a manga title and return the top matching ID."""
-        console.print(f"[cyan]Searching MangaDex for manga:[/] [bold]{title}[/]")
+        console.print(f"[cyan]Searching MangaDex for manga:[/] [bold]{_esc(title)}[/]")
         res = self.request_with_retry(
             "GET",
             f"{BASE_URL}/manga",

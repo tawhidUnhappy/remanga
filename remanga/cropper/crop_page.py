@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 from PIL import Image, ImageOps
 
 from remanga.config import CropperConfig
-from remanga.console import console
+from remanga.console import console, escape as _esc
 from remanga.cropper.dedupe import dedupe_panels
 from remanga.cropper.geometry import apply_padding
 from remanga.cropper.gutter import count_adjusted_edges, page_grayscale_array, sample_background_color
@@ -89,7 +89,7 @@ def crop_page(
 
     page_img_path = locate_page_file(pages_dir, page_filename, page_index, chapter_num)
     if not page_img_path or not page_img_path.exists():
-        console.print(f"[yellow]Warning: Could not locate page image for: {page_entry}. Skipping...[/]")
+        console.print(f"[yellow]Warning: Could not locate page image for: {_esc(str(page_entry))}. Skipping...[/]")
         return None
 
     with Image.open(page_img_path) as img:

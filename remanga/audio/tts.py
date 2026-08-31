@@ -10,7 +10,7 @@ from remanga.audio.synth import IndexTTSSynthesizer
 from remanga.config import AudioConfig, RemangaConfig, TTSConfig
 from remanga.console import console
 from remanga.json_io import read_json, write_json
-from remanga.paths import get_chapter_dir
+from remanga.paths import get_audio_dir, get_audio_timing_path, get_chapter_dir
 
 
 class TTSEngine:
@@ -41,8 +41,7 @@ class TTSEngine:
 
         chapter_dir = get_chapter_dir(project_name, chapter_num)
         narration_path = chapter_dir / "narration.json"
-        audio_dir = chapter_dir / "audio"
-        audio_dir.mkdir(parents=True, exist_ok=True)
+        audio_dir = get_audio_dir(project_name, chapter_num)
 
         # Debris from an atomic_export() that was itself interrupted before its
         # rename-into-place (a kill exactly mid-write) - harmless leftovers, never
@@ -207,7 +206,7 @@ class TTSEngine:
                 current_timeline_ms += total_panel_slot_ms
                 progress.advance(task)
 
-        timing_manifest_path = chapter_dir / "audio_timing.json"
+        timing_manifest_path = get_audio_timing_path(project_name, chapter_num)
         write_json(timing_manifest_path, {
             "chapter": str(chapter_num),
             "total_timeline_ms": current_timeline_ms,

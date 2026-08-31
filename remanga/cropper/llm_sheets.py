@@ -32,19 +32,20 @@ from typing import List
 
 from remanga.config import CropperConfig
 from remanga.cropper.zip_bundle import build_zip_bundle
+from remanga.paths import get_sheets_zip_dir
 
 
 def build_llm_sheets_bundle(
     config: CropperConfig,
-    chapter_dir: Path,
     project_name: str,
     chapter_num: str,
     sheet_paths: List[Path],
 ) -> List[Path]:
-    """Builds sheets_zip/sheets_1.zip, sheets_2.zip, ... - see module docstring."""
+    """Builds {manga}/sheets_zip/chapter_N/sheets_1.zip, sheets_2.zip, ... -
+    see module docstring."""
     package = config.package
     return build_zip_bundle(
-        sheet_paths, chapter_dir / "sheets_zip", "sheets",
+        sheet_paths, get_sheets_zip_dir(project_name, chapter_num, create=False), "sheets",
         package.sheets_zip, False, package.max_mb,
         project_name, chapter_num, "SHEETS ZIP",
     )

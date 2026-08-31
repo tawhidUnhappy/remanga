@@ -14,7 +14,10 @@ from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
 from remanga.full_recap import FullRecapCompiler, chapter_sort_key, discover_chapters
 from remanga.json_io import has_real_json_content
-from remanga.paths import ensure_memory_file, get_chapter_dir, load_project_metadata
+from remanga.paths import (
+    ensure_memory_file, get_chapter_dir, get_panels_pdf_dir, get_panels_zip_dir, get_sheets_dir,
+    get_sheets_zip_dir, load_project_metadata,
+)
 from remanga.status import get_chapter_status
 from remanga.video import VideoRenderer
 from remanga.webui import launch_and_wait as launch_panel_marker
@@ -114,9 +117,10 @@ def run_interactive_pipeline():
     # Step 4: Narration Script + Continuity Memory (narration.json + memory.json)
     # =========================================================================
     narration_path = chap_dir / "narration.json"
-    llm_pdf_parts = sorted((chap_dir / "panels_pdf").glob("panels_*.pdf")) + sorted((chap_dir / "panels_pdf").glob("panels_*.zip")) if package.pdf_active else []
-    llm_zip_parts = sorted((chap_dir / "panels_zip").glob("panels_*.zip")) if package.panels_zip_active else []
-    llm_sheets_parts = sorted((chap_dir / "sheets_zip").glob("sheets_*.zip")) if package.sheets_zip_active else []
+    panels_pdf_dir = get_panels_pdf_dir(project, chapter, create=False)
+    llm_pdf_parts = sorted(panels_pdf_dir.glob("panels_*.pdf")) + sorted(panels_pdf_dir.glob("panels_*.zip")) if package.pdf_active else []
+    llm_zip_parts = sorted(get_panels_zip_dir(project, chapter, create=False).glob("panels_*.zip")) if package.panels_zip_active else []
+    llm_sheets_parts = sorted(get_sheets_zip_dir(project, chapter, create=False).glob("sheets_*.zip")) if package.sheets_zip_active else []
     memory_path = ensure_memory_file(project)
     memory_has_content = has_real_json_content(memory_path)
     chapter_needs_memory = False
@@ -149,7 +153,7 @@ def run_interactive_pipeline():
         # resort.
         if not upload_groups:
             raw_sheets_parts = sorted(
-                p for p in (chap_dir / "sheets").glob("*") if p.is_file()
+                p for p in get_sheets_dir(project, chapter, create=False).glob("*") if p.is_file()
             ) if package.sheets else []
             if raw_sheets_parts:
                 upload_groups.append(("sheets (unzipped)", raw_sheets_parts))

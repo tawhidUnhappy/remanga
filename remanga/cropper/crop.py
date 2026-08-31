@@ -13,10 +13,10 @@ from typing import List, Optional
 from remanga.config import CropperConfig
 from remanga.console import console
 from remanga.cropper.crop_page import crop_page
-from remanga.cropper.crop_report import ensure_panel_folders_generated, ensure_sheets_generated, package_outputs, print_crop_summary, write_chapter_info, write_manifest
+from remanga.cropper.crop_report import ensure_panel_folders_generated, ensure_sheets_generated, package_outputs, print_crop_summary, write_manifest
 from remanga.cropper.llm_bundles import build_llm_bundles, is_up_to_date
 from remanga.json_io import has_real_json_content, read_json
-from remanga.paths import get_chapter_dir
+from remanga.paths import get_chapter_dir, read_manifest
 
 
 class CoordinateCropper:
@@ -33,9 +33,6 @@ class CoordinateCropper:
         crops_json_path = chapter_dir / "crops.json"
         pages_dir = chapter_dir / "pages"
         panels_dir = chapter_dir / "panels"
-        sheets_dir = chapter_dir / "sheets"
-        manifest_path = chapter_dir / "panels_manifest.json"
-        chapter_info_path = chapter_dir / "chapter_info.json"
 
         if not has_real_json_content(crops_json_path):
             raise FileNotFoundError(
@@ -54,14 +51,19 @@ class CoordinateCropper:
         # that's missing (a lightweight re-encode of already-cropped panels,
         # not a full re-crop) - so a chapter cropped before that format
         # existed, or with it previously disabled, gets it built once on its
-        # next run instead of never.
+        # next run instead of never. "Already cropped" is decided by this
+        # chapter having a "panels" entry in the shared manifest.json (see
+        # crop_report.write_manifest) - the crop step's own record that it
+        # ran to completion for this chapter, same role the old standalone
+        # panels_manifest.json's mere existence used to play.
         existing_panels = sorted(p for p in panels_dir.iterdir() if p.is_file()) if panels_dir.exists() else []
-        if not force and existing_panels and manifest_path.exists():
+        already_cropped = bool(read_manifest(project_name).get("chapters", {}).get(str(chapter_num), {}).get("panels"))
+        if not force and existing_panels and already_cropped:
             console.print(f"[bold green]✓ Found {len(existing_panels)} panels already cropped! Skipping re-crop.[/]")
-            if not is_up_to_date(self.config, chapter_dir):
-                sheet_paths = ensure_sheets_generated(self.config, project_name, chapter_num, existing_panels, sheets_dir)
-                build_llm_bundles(self.config, chapter_dir, project_name, chapter_num, existing_panels, sheet_paths)
-            ensure_panel_folders_generated(self.config, existing_panels, chapter_dir / "sheets_folders")
+            if not is_up_to_date(self.config, project_name, chapter_num):
+                sheet_paths = ensure_sheets_generated(self.config, project_name, chapter_num, existing_panels)
+                build_llm_bundles(self.config, project_name, chapter_num, existing_panels, sheet_paths)
+            ensure_panel_folders_generated(self.config, project_name, chapter_num, existing_panels)
             return existing_panels
 
         # Clear existing panels directory before fresh cropping - a full wipe,
@@ -102,12 +104,11 @@ class CoordinateCropper:
             duplicate_panels_dropped += result.duplicate_panels_dropped
             panels_trimmed += result.panels_trimmed
 
-        write_manifest(manifest_path, chapter_num, output_panel_paths, manifest_data)
-        write_chapter_info(chapter_info_path, project_name, chapter_num)
+        write_manifest(project_name, chapter_num, output_panel_paths, manifest_data)
         print_crop_summary(
             panels_dir, len(output_panel_paths), self.config,
             gutter_panels_adjusted, gutter_edges_adjusted, panels_trimmed, duplicate_panels_dropped,
         )
-        package_outputs(self.config, chapter_dir, sheets_dir, output_panel_paths, project_name, chapter_num)
+        package_outputs(self.config, output_panel_paths, project_name, chapter_num)
 
         return output_panel_paths

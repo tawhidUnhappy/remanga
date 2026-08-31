@@ -9,7 +9,7 @@ from rich.prompt import Confirm
 from remanga import reset
 from remanga.audio import AudioProcessor, TTSEngine
 from remanga.config import RemangaConfig
-from remanga.console import console
+from remanga.console import console, escape as _esc
 from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
 from remanga.full_recap import FullRecapCompiler, chapter_sort_key
@@ -181,7 +181,7 @@ def main():
                 else:
                     console.print("[dim]Restart cancelled.[/]")
     except Exception as e:
-        console.print(f"[bold red]Error:[/] {e}")
+        console.print(f"[bold red]Error:[/] {_esc(str(e))}")
         sys.exit(1)
 
 

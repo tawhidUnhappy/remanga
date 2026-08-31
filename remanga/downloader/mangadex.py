@@ -11,8 +11,7 @@ from remanga.config import DownloaderConfig
 from remanga.console import console, escape as _esc
 from remanga.cropper.naming import page_stem
 from remanga.downloader.resolve import BASE_URL, MangaDexResolver
-from remanga.json_io import read_json_or, write_json
-from remanga.paths import get_chapter_dir, load_project_metadata, save_project_metadata
+from remanga.paths import get_chapter_dir, get_pages_zip_path, load_project_metadata, read_manifest, save_project_metadata, update_manifest_chapter
 
 
 class MangaDexDownloader:
@@ -24,9 +23,9 @@ class MangaDexDownloader:
         })
         self.resolver = MangaDexResolver(self.config, self.session)
 
-    def _create_pages_zip(self, chapter_dir: Path, pages_dir: Path) -> Path:
+    def _create_pages_zip(self, project_name: str, chapter_num: str, pages_dir: Path) -> Path:
         """Package downloaded pages into a single ZIP archive for easy LLM uploading."""
-        zip_path = chapter_dir / "pages.zip"
+        zip_path = get_pages_zip_path(project_name, chapter_num)
         if zip_path.exists():
             zip_path.unlink()
 
@@ -34,9 +33,6 @@ class MangaDexDownloader:
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for p in pages:
                 zf.write(p, arcname=p.name)
-            meta_json = chapter_dir / "pages_metadata.json"
-            if meta_json.exists():
-                zf.write(meta_json, arcname="pages_metadata.json")
 
         console.print(f"[bold green]✓ Created Pages ZIP archive:[/] {_esc(str(zip_path))}")
         return zip_path
@@ -77,7 +73,6 @@ class MangaDexDownloader:
         chapter_dir = get_chapter_dir(project_name, chapter_num)
         dest_dir = chapter_dir / "pages"
         dest_dir.mkdir(parents=True, exist_ok=True)
-        meta_json_path = chapter_dir / "pages_metadata.json"
 
         chapter_id = self.resolver.find_chapter_id(manga_id, chapter_num)
 
@@ -109,9 +104,12 @@ class MangaDexDownloader:
             if stray.is_file() and stray.name not in expected_names:
                 stray.unlink()
 
-        # Check existing pages & verify against metadata
+        # Check existing pages & verify against metadata - stored in this
+        # project's shared manifest.json (see paths.update_manifest_chapter)
+        # instead of a per-chapter pages_metadata.json file, since this is
+        # the only thing that ever reads it back.
         all_present = True
-        cached_meta = read_json_or(meta_json_path, None)
+        cached_meta = read_manifest(project_name).get("chapters", {}).get(str(chapter_num), {}).get("pages")
         if cached_meta and cached_meta.get("total_pages") == len(filenames) and cached_meta.get("chapter_id") == chapter_id:
             for idx, fn in enumerate(filenames, start=1):
                 page_ext = Path(fn).suffix or ".png"
@@ -125,7 +123,7 @@ class MangaDexDownloader:
         if all_present:
             console.print(f"[bold green]✓ All {len(filenames)} pages verified and already downloaded! Skipping download.[/]")
             if self.config.zip_pages_enabled:
-                self._create_pages_zip(chapter_dir, dest_dir)
+                self._create_pages_zip(project_name, chapter_num, dest_dir)
             return dest_dir
 
         console.print(f"[green]Downloading {len(filenames)} pages politely to:[/] {_esc(str(dest_dir))}")
@@ -182,21 +180,19 @@ class MangaDexDownloader:
 
                 progress.advance(dl_task)
 
-        # Save verification metadata
-        write_json(meta_json_path, {
-            "project": project_name,
-            "chapter": str(chapter_num),
+        # Save verification metadata into this project's shared manifest.json
+        update_manifest_chapter(project_name, chapter_num, "pages", {
             "chapter_id": chapter_id,
             "manga_id": manga_id,
             "total_pages": len(filenames),
             "quality": quality_key,
             "timestamp": time.time(),
-            "pages": downloaded_meta
+            "pages": downloaded_meta,
         })
 
         console.print(f"[bold green]✓ Successfully downloaded and verified all {len(filenames)} pages![/]")
 
         if self.config.zip_pages_enabled:
-            self._create_pages_zip(chapter_dir, dest_dir)
+            self._create_pages_zip(project_name, chapter_num, dest_dir)
 
         return dest_dir

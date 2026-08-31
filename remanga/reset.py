@@ -1,4 +1,15 @@
-"""Chapter reset: wipe generated production artifacts while preserving downloaded pages."""
+"""Chapter reset: wipe generated production artifacts while preserving the
+chapter's source folder (or the parts of it each mode keeps).
+
+Since paths.get_chapter_dir now holds ONLY source material - pages/,
+panels/, crops.json, narration.json (see that function's docstring) - and
+everything derived lives one level up under paths.get_generated_dir's
+per-kind, per-chapter directories (sheets, sheets_zip, sheets_folders,
+panels_zip, panels_pdf, pages_zip, audio, video), every restart mode wipes
+ALL of those generated directories for this chapter, every time - there's
+never a reason to leave a stale sheet, zip, audio clip, or rendered frame
+sitting in {manga}/ once the source it came from might change. The three
+modes below only differ in how much of the SOURCE folder they keep."""
 
 from __future__ import annotations
 
@@ -7,36 +18,15 @@ from pathlib import Path
 from typing import List
 
 from remanga.console import console
-from remanga.paths import get_chapter_dir
+from remanga.json_io import write_json
+from remanga.paths import GENERATED_KINDS, get_chapter_dir, get_generated_dir, get_manifest_path, read_manifest
 
-# Chapter-workspace entries that represent the downloaded source pages — always preserved on restart.
-# pages.zip is deliberately NOT listed here: it's only ever kept when
-# downloader.zip_pages_enabled says it should exist at all (see _keep_set) -
-# otherwise a stale pages.zip left over from a config change gets swept up
-# and deleted like any other unwanted artifact, same as everything else not
-# explicitly kept.
-KEEP_ON_RESTART = {"pages", "pages_metadata.json"}
-
-# A "marks_only" restart additionally keeps crops.json — the panel coordinates
-# marked by hand in the panel-marking web UI — but drops everything derived
-# from it: panels/, sheets/, the vision zip, and narration.json all get
-# wiped and rebuilt from crops.json on the next run. Useful when the marks
-# are still good but a cropper setting changed (margin, gutter-snap, vision
-# packaging format, ...) or the narration script needs a clean redo.
+# Chapter-source entries kept by each restart mode - see module docstring.
+# "pages" (the downloaded scans) is always kept by every mode; a restart
+# never re-downloads unless reverify_downloads finds something missing.
+KEEP_ON_RESTART = {"pages"}
 KEEP_ON_MARKS_ONLY_RESTART = KEEP_ON_RESTART | {"crops.json"}
-
-# A "soft" restart additionally keeps everything upstream of TTS: crops.json
-# (the marked panel coordinates), panels/ (the actual cropped panel image
-# files), panels_manifest.json and chapter_info.json (crop.py's own
-# bookkeeping/identity metadata for that folder - see cropper/crop_report.py),
-# and narration.json (the LLM-written script). That's the expensive-to-redo
-# work — marking every panel by hand and writing a whole chapter's narration
-# — so it lets voice/BGM/resolution/vision-format settings change and
-# TTS/mix/render redo cleanly without re-marking or re-narrating anything.
-# Sheets/the primary vision zip/the LLM upload bundles (panels_zip/panels_pdf)
-# /audio/video still get wiped, same as a hard restart - all cheap to rebuild from the
-# panels/ this mode does keep.
-KEEP_ON_SOFT_RESTART = KEEP_ON_RESTART | {"crops.json", "panels", "panels_manifest.json", "chapter_info.json", "narration.json"}
+KEEP_ON_SOFT_RESTART = KEEP_ON_RESTART | {"crops.json", "panels", "narration.json"}
 
 RESTART_MODES = ("hard", "marks_only", "soft")
 
@@ -51,29 +41,35 @@ def _keep_set(mode: str) -> set:
     else:
         raise ValueError(f"Unknown restart mode {mode!r} - expected one of {RESTART_MODES}")
 
-    # pages.zip only belongs in the keep set while the config actually wants
-    # it to exist - deferred import to dodge the same config/downloader/reset
-    # import cycle _reverify_downloads below already works around. If the
-    # config can't be loaded for some reason, err toward keeping it rather
-    # than risking an unwanted deletion.
-    try:
-        from remanga.config import RemangaConfig
-        zip_pages_enabled = RemangaConfig.load().downloader.zip_pages_enabled
-    except Exception:
-        zip_pages_enabled = True
+    # pages.zip lives under {manga}/pages_zip/chapter_N/ now (a generated
+    # artifact, not part of the source folder), so it's handled by the
+    # generated-dirs wipe below, not this keep set - nothing to add here
+    # anymore.
+    return base
 
-    return base | {"pages.zip"} if zip_pages_enabled else base
+
+def _generated_dirs_for_chapter(project_name: str, chapter_num: str) -> List[Path]:
+    """Every {manga}/{kind}/chapter_N/ directory that currently exists for
+    this chapter, across every GENERATED_KINDS - what every restart mode
+    wipes in full, regardless of mode (see module docstring)."""
+    dirs = []
+    for kind in GENERATED_KINDS:
+        d = get_generated_dir(project_name, kind, chapter_num, create=False)
+        if d.exists():
+            dirs.append(d)
+    return dirs
 
 
 def restart_candidates(project_name: str, chapter_num: str, *, mode: str = "hard") -> List[Path]:
-    """Lists everything in the chapter workspace a restart of this `mode` would delete
-    (before any narration.json re-emptying a marks_only restart also does - see
-    restart_chapter), without deleting it."""
+    """Lists everything a restart of this `mode` would delete (before any
+    narration.json re-emptying a marks_only restart also does - see
+    restart_chapter): the not-kept part of the chapter's source folder, plus
+    every generated directory this chapter has anything in. Doesn't delete
+    anything."""
     chap_dir = get_chapter_dir(project_name, chapter_num)
-    if not chap_dir.exists():
-        return []
     keep = _keep_set(mode)
-    return [entry for entry in sorted(chap_dir.iterdir()) if entry.name not in keep]
+    source_candidates = [entry for entry in sorted(chap_dir.iterdir()) if entry.name not in keep] if chap_dir.exists() else []
+    return source_candidates + _generated_dirs_for_chapter(project_name, chapter_num)
 
 
 def restart_chapter(
@@ -84,23 +80,25 @@ def restart_chapter(
     reverify_downloads: bool = True,
 ) -> List[Path]:
     """
-    Deletes generated chapter artifacts while preserving the downloaded pages/ folder
-    and pages_metadata.json — so the chapter can be reprocessed without re-downloading.
-    pages.zip is preserved too, but only while downloader.zip_pages_enabled is on; if
-    it's off, any pages.zip found is treated as a stale leftover and deleted like every
-    other artifact not explicitly kept. Three levels, from most to least destructive:
+    Deletes generated chapter artifacts while preserving the source folder
+    (or the part of it each mode keeps) - so the chapter can be reprocessed
+    without redoing more than necessary. Every mode wipes every generated
+    {manga}/{kind}/chapter_N/ directory for this chapter in full (sheets,
+    zips/PDFs, audio, video, the final MP4) - see module docstring for why
+    that's always safe: everything in them is cheaply rebuilt from whatever
+    of the source folder the chosen mode keeps. Three levels, from most to
+    least destructive about the SOURCE folder itself:
 
-    - "hard" (default, the original restart behavior): wipes everything else -
-      crops.json, panels/, sheets/, the vision zip, narration.json, audio/,
-      audio_timing.json, master_audio*.wav, video/, and the final recap mp4.
-    - "marks_only": also keeps crops.json (see KEEP_ON_MARKS_ONLY_RESTART), but
-      still wipes narration.json along with everything else - and then
-      recreates it as an empty placeholder (the same blank-file state it's in
-      before any LLM has ever touched it - see json_io.has_real_json_content),
-      so it reads as "not yet generated" rather than just missing.
-    - "soft": also keeps crops.json, panels/, panels_manifest.json,
-      chapter_info.json, and narration.json (see KEEP_ON_SOFT_RESTART) - only
-      sheets/the vision zip/audio/video get wiped.
+    - "hard" (default, the original restart behavior): wipes crops.json and
+      panels/ too - keeps only pages/.
+    - "marks_only": also keeps crops.json, but still wipes narration.json -
+      then recreates it as an empty placeholder (the same blank-file state
+      it's in before any LLM has ever touched it - see
+      json_io.has_real_json_content), so it reads as "not yet generated"
+      rather than just missing.
+    - "soft": also keeps panels/ and narration.json (see
+      KEEP_ON_SOFT_RESTART) - the source folder is untouched entirely, only
+      the generated directories get wiped.
 
     reverify_downloads (on by default, every mode) re-runs the normal download
     step's own presence/integrity check against pages/ afterward — re-fetching
@@ -119,6 +117,16 @@ def restart_chapter(
 
     if mode == "marks_only":
         (get_chapter_dir(project_name, chapter_num) / "narration.json").write_text("", encoding="utf-8")
+
+    # panels/ no longer exists (hard/marks_only) or is being treated as
+    # about to be re-cropped either way - this chapter's "panels" bookkeeping
+    # in the shared manifest.json is stale regardless of mode, so it's
+    # cleared here rather than left describing panel files that are gone.
+    manifest = read_manifest(project_name)
+    chapter_entry = manifest.get("chapters", {}).get(str(chapter_num))
+    if chapter_entry and "panels" in chapter_entry:
+        del chapter_entry["panels"]
+        write_json(get_manifest_path(project_name), manifest)
 
     if reverify_downloads:
         _reverify_downloads(project_name, chapter_num)

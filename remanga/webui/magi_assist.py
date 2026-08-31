@@ -139,7 +139,7 @@ def ensure_weights_downloaded(config: MarkerConfig) -> Optional[Path]:
     try:
         python = get_tool_python("magi")
     except FileNotFoundError as e:
-        console.print(f"[yellow]{e}[/]")
+        console.print(f"[yellow]{_esc(str(e))}[/]")
         return None
 
     if not is_gpu_available():

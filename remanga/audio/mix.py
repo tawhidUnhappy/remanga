@@ -9,7 +9,7 @@ from remanga.config import AudioConfig, RemangaConfig
 from remanga.console import console, escape as _esc
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.json_io import read_json
-from remanga.paths import get_chapter_dir
+from remanga.paths import get_audio_dir, get_audio_timing_path, get_master_audio_path
 
 
 class AudioProcessor:
@@ -39,11 +39,10 @@ class AudioProcessor:
             self.config.bgm_path = valid_bgm
             self.config.bgm_enabled = True
 
-        chapter_dir = get_chapter_dir(project_name, chapter_num)
-        timing_path = chapter_dir / "audio_timing.json"
-        audio_dir = chapter_dir / "audio"
-        master_raw_path = chapter_dir / "master_audio_raw.wav"
-        master_final_path = chapter_dir / "master_audio.wav"
+        timing_path = get_audio_timing_path(project_name, chapter_num)
+        audio_dir = get_audio_dir(project_name, chapter_num)
+        master_final_path = get_master_audio_path(project_name, chapter_num)
+        master_raw_path = master_final_path.with_name("master_audio_raw.wav")
 
         if not timing_path.exists():
             raise FileNotFoundError(f"Missing audio timing metadata at: {timing_path}")
@@ -110,7 +109,7 @@ class AudioProcessor:
                 if master_raw_path.exists():
                     master_raw_path.unlink()
             except Exception as e:
-                console.print(f"[yellow]Loudnorm filter warning: {e}. Falling back to standard raw master audio.[/]")
+                console.print(f"[yellow]Loudnorm filter warning: {_esc(str(e))}. Falling back to standard raw master audio.[/]")
                 master_raw_path.rename(master_final_path)
         else:
             master_raw_path.rename(master_final_path)

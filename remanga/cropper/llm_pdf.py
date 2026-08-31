@@ -33,7 +33,7 @@ from typing import List, Tuple
 import numpy as np
 
 from remanga.config import CropperConfig
-from remanga.console import console
+from remanga.console import console, escape as _esc
 from remanga.cropper.image_codec import open_normalized
 from remanga.cropper.manifest_info import build_part_info, info_to_text_lines
 from remanga.cropper.pdf_writer import (
@@ -45,7 +45,7 @@ from remanga.cropper.pdf_writer import (
     encode_predictor2,
 )
 from remanga.cropper.size_pack import pack_by_size
-from remanga.paths import chapter_identity_fields
+from remanga.paths import chapter_identity_fields, get_panels_pdf_dir
 
 
 def _encode_panel(path: Path) -> ImagePage:
@@ -80,7 +80,6 @@ def _encode_panel(path: Path) -> ImagePage:
 
 def build_llm_pdf_bundle(
     config: CropperConfig,
-    chapter_dir: Path,
     project_name: str,
     chapter_num: str,
     panel_paths: List[Path],
@@ -93,7 +92,7 @@ def build_llm_pdf_bundle(
     missing a panel: a partial PDF silently under-representing the chapter is
     worse than no PDF at all, and the panels_zip/sheets_zip formats remain
     available regardless."""
-    out_dir = chapter_dir / "panels_pdf"
+    out_dir = get_panels_pdf_dir(project_name, chapter_num, create=False)
     package = config.package
     if not package.pdf_active or not panel_paths:
         if out_dir.exists():
@@ -162,6 +161,6 @@ def build_llm_pdf_bundle(
     total_mb = sum(p.stat().st_size for p in written) / (1024 * 1024)
     size_note = f"{total_parts} part(s), ≤{package.max_mb:g}MB each" if split else "1 part, splitting off"
     console.print(
-        f"[bold green]✓ Built LLM upload bundle - PDF ({size_note}, {total_mb:.1f}MB total) in:[/] {out_dir}"
+        f"[bold green]✓ Built LLM upload bundle - PDF ({size_note}, {total_mb:.1f}MB total) in:[/] {_esc(str(out_dir))}"
     )
     return written
