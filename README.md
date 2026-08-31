@@ -14,6 +14,7 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
 - [Configuration & Settings Wizard](#configuration--settings-wizard)
 - [Step-by-Step CLI Production Workflow](#step-by-step-cli-production-workflow)
 - [Resetting/Restarting a Chapter](#resettingrestarting-a-chapter)
+- [Whole-Manga Video & Remixing BGM](#whole-manga-video--remixing-bgm)
 - [LLM Prompting & Vision Asset Guide](#llm-prompting--vision-asset-guide)
   - [Vision Outputs: What to Generate, What to Zip](#vision-outputs-what-to-generate-what-to-zip)
   - [Panel Marker Web UI](#panel-marker-web-ui)
@@ -118,6 +119,16 @@ The easiest way to produce a recap video is through the interactive terminal wiz
 *(or run `./run.sh interactive`)*
 
 ### Wizard Step-by-Step Flow:
+
+After picking a project, the wizard asks which of three things you want to do:
+
+```
+1. Process a chapter
+2. Compile the whole project into one continuous video (full-recap)
+3. Change background music/volume and rebuild video(s) only (no re-narration)
+```
+
+**Option 1** (the normal per-chapter flow):
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ 1. Select or Create Project & Chapter                       │
@@ -131,6 +142,10 @@ The easiest way to produce a recap video is through the interactive terminal wiz
 │ 9. Render Final 1080p / 2K / 4K MP4 Video                   │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+**Option 2** (`full-recap`, see below) walks you through picking which chapters to include, then builds and keeps each chapter's own MP4 before joining all of them into one continuous video with a single BGM pass and a single loudness pass.
+
+**Option 3** (`remix`, see below) is the fast path for "I just want different music, or a different volume" - pick which chapters, optionally point it at a new BGM file (or hop into `setup-config` first to change `bgm_volume_db`), and it re-mixes + re-renders just those chapters (and re-joins the full-recap video, if one exists) - no re-marking, no re-narrating, no re-synthesizing voice.
 
 ---
 
@@ -293,6 +308,26 @@ Add `-f`/`--force` to skip the confirmation prompt, or `--no-reverify` to skip r
 
 Reopening the Panel Marker on a chapter that already has marks — via `remark`, or by just running `remanga mark` again — always pre-loads the existing `crops.json` instead of starting blank, and flags every page it loaded marks for as already-reviewed so MAGI's background assist won't overwrite them.
 
+Every restart mode also wipes this chapter's ENTIRE generated tree — sheets, zips/PDFs, audio, video, all of it — under `{manga}/{kind}/chapter_<num>/` (see [Workspace Directory Structure](#workspace-directory-structure)), regardless of mode; the modes only differ in how much of the chapter's *source* folder (`pages/`, `crops.json`, `panels/`, `narration.json`) they keep. So a restart never leaves a stale sheet, zip, audio clip, or old rendered frame sitting around from before it.
+
+---
+
+## Whole-Manga Video & Remixing BGM
+
+Two commands - both reachable from `remanga interactive`'s project-picker menu (options 2 and 3), no flags to remember - cover producing and then tweaking a whole manga's worth of chapters at once:
+
+**`full-recap`** compiles every chapter of a project into ONE continuous video, instead of leaving you with N separate chapter MP4s to stitch together yourself:
+```bash
+./run.sh full-recap --project "my_manga" [--chapters 1,2,3] [--force]
+```
+It runs each chapter's remaining TTS/mix/render steps (skipping whatever's already cached) and **keeps every chapter's own MP4** — under `video/chapter_<num>/` — then builds the joined video separately: one continuous narration track, ONE background-music loop under the whole thing (a single fade-in at the very start, a single fade-out at the very end — never restarted per chapter), and ONE loudness-normalization pass, so there's no audible BGM restart or loudness jump at a chapter boundary the way naively concatenating N independently-mixed chapter videos would produce. The result lands at `video/<project>_full_recap.mp4`.
+
+**`remix`** is the fast path once you've already rendered something and just want different music or a different volume:
+```bash
+./run.sh remix --project "my_manga" [--chapters 1,2] [--bgm new_song.wav] [--no-rejoin]
+```
+It re-mixes and re-renders only the chapters you name (default: all of them) — never touching TTS or frame compositing, the genuinely expensive steps — then re-joins the full-recap video too if one already exists, so it never silently drifts out of sync with a BGM change applied to its chapters. Pass `--bgm` to swap the music file itself; to change only `bgm_volume_db`, run `setup-config` first (or answer yes when the wizard's remix option offers to) and then remix with no `--bgm`.
+
 ---
 
 ## LLM Prompting & Vision Asset Guide
@@ -428,6 +463,7 @@ In short: if a chapter's TTS run gets interrupted or a worker locks up, just re-
 ./run.sh mix      -p <PROJECT> -c <CHAPTER> [-b <BGM_FILE>]
 ./run.sh render   -p <PROJECT> -c <CHAPTER> [-f]
 ./run.sh full-recap -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-f]
+./run.sh remix    -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-b <BGM_FILE>] [--no-rejoin]
 ./run.sh status   -p <PROJECT> -c <CHAPTER>
 ./run.sh restart  -p <PROJECT> -c <CHAPTER> [-m hard|marks_only|soft] [-f] [--no-reverify]
 ```
@@ -471,9 +507,12 @@ remanga/
 │       ├── panels_zip/chapter_<num>/panels_1.zip    # (Off by default) package format
 │       ├── panels_pdf/chapter_<num>/panels_1.pdf    # (Off by default) package format
 │       ├── audio/chapter_<num>/                    # Synthesized vocal WAV per panel + audio_timing.json + master_audio.wav
-│       └── video/
-│           ├── chapter_<num>/                      # frames/, concat_list.txt, and <project>_ch<num>_recap.mp4 (kept)
-│           └── <project>_full_recap.mp4            # `full-recap`'s whole-manga joined video, plus its own master audio/concat list
+│       └── video/                                  # Only ever holds finished MP4s at each level - see below
+│           ├── chapter_<num>/
+│           │   ├── _work/                          # frames/, concat_list.txt - build artifacts, not deliverables
+│           │   └── <project>_ch<num>_recap.mp4      # This chapter's own video (kept - see `remix` below)
+│           ├── _work/                               # full-recap's own master audio/concat list
+│           └── <project>_full_recap.mp4             # `full-recap`'s whole-manga joined video
 ├── remanga/                    # Python core pipeline package
 │   ├── audio/                  # synth.py (talks to the .tools/venv-indextts worker) & mix.py (master audio mixer)
 │   │   └── scripts/             # indextts_worker.py - runs inside .tools/venv-indextts, not the main env

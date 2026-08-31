@@ -111,38 +111,53 @@ def get_master_audio_path(project_name: str, chapter_num: str, create: bool = Tr
 
 
 def get_video_dir(project_name: str, chapter_num: str, create: bool = True) -> Path:
-    """This chapter's own video working directory - frames/ and
-    concat_list.txt - one level under get_generated_dir(..., "video",
-    chapter_num); the chapter's finished MP4 itself is get_final_video_path,
-    a sibling of this directory, not inside it."""
+    """This chapter's own video/{kind} directory. Only ever holds two
+    things: the finished MP4 itself (get_final_video_path) and one _work/
+    subfolder for everything that builds it (frames/, concat_list.txt) - see
+    get_video_work_dir. Keeping build artifacts out of this directory's own
+    top level is deliberate: a bare `ls` here should only ever show "the
+    video" and nothing that could be mistaken for another one, or for a
+    working file left over from building it."""
     return get_generated_dir(project_name, "video", chapter_num, create=create)
 
 
-def get_video_frames_dir(project_name: str, chapter_num: str, create: bool = True) -> Path:
-    d = get_video_dir(project_name, chapter_num, create=create) / "frames"
+def get_video_work_dir(project_name: str, chapter_num: str, create: bool = True) -> Path:
+    d = get_video_dir(project_name, chapter_num, create=create) / "_work"
     if create:
         d.mkdir(parents=True, exist_ok=True)
     return d
 
 
+def get_video_frames_dir(project_name: str, chapter_num: str, create: bool = True) -> Path:
+    return get_video_work_dir(project_name, chapter_num, create=create) / "frames"
+
+
 def get_video_concat_path(project_name: str, chapter_num: str, create: bool = True) -> Path:
-    return get_video_dir(project_name, chapter_num, create=create) / "concat_list.txt"
+    return get_video_work_dir(project_name, chapter_num, create=create) / "concat_list.txt"
+
+
+def get_project_video_dir(project_name: str, create: bool = True) -> Path:
+    """{manga}/video/ - one chapter_N/ subfolder per chapter (see
+    get_video_dir) plus the manga-wide full-recap join's own output
+    directly here. Same "only the finished file(s) at this level" rule as
+    get_video_dir: the join's own working audio/concat files live in
+    get_full_recap_work_dir, not loose here next to the finished MP4."""
+    return get_generated_dir(project_name, "video", create=create)
+
+
+def get_full_recap_work_dir(project_name: str, create: bool = True) -> Path:
+    d = get_project_video_dir(project_name, create=create) / "_work"
+    if create:
+        d.mkdir(parents=True, exist_ok=True)
+    return d
 
 
 def get_full_recap_master_audio_path(project_name: str) -> Path:
-    return get_project_video_dir(project_name) / f"{project_name}_full_master.wav"
+    return get_full_recap_work_dir(project_name) / f"{project_name}_full_master.wav"
 
 
 def get_full_recap_concat_path(project_name: str) -> Path:
-    return get_project_video_dir(project_name) / f"{project_name}_full_concat_list.txt"
-
-
-def get_project_video_dir(project_name: str) -> Path:
-    """{manga}/video/ - the manga-wide join outputs (the full-recap MP4 and
-    its working audio/concat files) live directly here; each chapter's own
-    final MP4 lives one level deeper, in get_generated_dir(..., "video",
-    chapter_num) - see get_final_video_path."""
-    return get_generated_dir(project_name, "video")
+    return get_full_recap_work_dir(project_name) / f"{project_name}_full_concat_list.txt"
 
 
 def get_final_video_path(project_name: str, chapter_num: str, create: bool = True) -> Path:
