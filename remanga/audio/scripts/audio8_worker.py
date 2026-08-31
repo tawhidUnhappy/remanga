@@ -104,6 +104,10 @@ def main() -> None:
                     "temperature": req.get("temperature", 0.7),
                     "top_p": req.get("top_p", 0.9),
                     "do_sample": True,
+                    # Model card's own usage example passes this - without it,
+                    # generate() returns a bare Tensor of codes instead of the
+                    # ArkttsGenerateOutput wrapper .codes is read off below.
+                    "return_dict_in_generate": True,
                 }
                 output = model.generate(**inputs, **gen_kwargs)
                 waveforms, lengths = model.decode_audio(output.codes)
@@ -115,7 +119,7 @@ def main() -> None:
             if wav_np.ndim > 1:
                 wav_np = wav_np.squeeze()
 
-            sample_rate = getattr(getattr(model, "config", None), "sampling_rate", None) or 44100
+            sample_rate = getattr(getattr(model, "config", None), "codec_sample_rate", None) or 44100
             output_path = req["output_path"]
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             sf.write(output_path, wav_np, sample_rate)
