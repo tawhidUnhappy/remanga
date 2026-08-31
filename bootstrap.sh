@@ -11,6 +11,7 @@ CACHE_DIR="$SCRIPT_DIR/.cache"
 TOOLS_DIR="$SCRIPT_DIR/.tools"
 VENV_DIR="$SCRIPT_DIR/.venv"
 INDEXTTS_VENV_DIR="$TOOLS_DIR/venv-indextts"
+AUDIO8_VENV_DIR="$TOOLS_DIR/venv-audio8"
 MAGI_VENV_DIR="$TOOLS_DIR/venv-magi"
 
 mkdir -p "$BIN_DIR" "$CACHE_DIR/uv" "$CACHE_DIR/huggingface" "$CACHE_DIR/torch" "$TOOLS_DIR" assets/voices assets/bgm projects
@@ -90,14 +91,15 @@ if [ ! -f "$BIN_DIR/ffmpeg" ] || [ ! -f "$BIN_DIR/ffprobe" ]; then
     fi
 fi
 
-# 3. Provision standalone Python 3.11 & create the three isolated virtual
+# 3. Provision standalone Python 3.11 & create the four isolated virtual
 # environments: the main env (remanga's own lightweight core) at the repo
 # root, plus one per heavy ML dependency, tucked under .tools/ for easy
 # management, so their conflicting requirements never have to share a
-# resolution - IndexTTS-2.5 and MAGI v3 each pin their own torch/transformers
-# stack, sometimes incompatibly (MAGI v3 needs transformers<4.52; nothing
-# guarantees IndexTTS or some future tool won't need something newer). The
-# storage trade-off (three venvs instead of one) buys permanent isolation
+# resolution - IndexTTS-2.5, Audio8 TTS, and MAGI v3 each pin their own
+# torch/transformers stack, sometimes incompatibly (MAGI v3 needs
+# transformers<4.52; Audio8 needs transformers>=4.57; nothing guarantees any
+# two of them would ever agree on one shared resolution). The storage
+# trade-off (four venvs instead of one) buys permanent isolation
 # instead of a pin that has to be re-asserted and re-verified by hand every
 # time one tool's install could clobber another's. Nothing "activates" these -
 # the main env only ever invokes `.tools/venv-<tool>/bin/python` directly as a
@@ -113,6 +115,22 @@ echo "[+] Creating isolated IndexTTS-2.5 environment ($INDEXTTS_VENV_DIR)..."
 "$BIN_DIR/uv" venv "$INDEXTTS_VENV_DIR" --python 3.11 --allow-existing
 "$BIN_DIR/uv" pip install --python "$INDEXTTS_VENV_DIR" torch torchaudio transformers accelerate huggingface-hub modelscope
 "$BIN_DIR/uv" pip install --python "$INDEXTTS_VENV_DIR" git+https://github.com/index-tts/index-tts.git
+
+# Second, alternative TTS engine - Audio8/Audio8-TTS-Preview-0.1b on Hugging
+# Face (config.json's tts.engine picks which one actually runs; see
+# remanga/config.py's TTS_ENGINES and remanga/audio/synth.py). Its own
+# isolated venv, same reasoning as IndexTTS-2.5's: a `transformers>=4.57,<5`
+# pin (for its trust_remote_code=True custom modeling files) that has no
+# business sharing a resolution with IndexTTS's own pin, let alone MAGI v3's
+# `transformers<4.52`. Provisioned unconditionally alongside the other two
+# so switching engines later (config.json, or `setup-config`) never requires
+# re-running bootstrap.sh - only the weights themselves (checkpoints/
+# audio8_tts_0.1b/, ~1.7GB) are fetched lazily, the first time this engine
+# is actually selected and used (ModelManager.ensure_model(), same lazy
+# pattern IndexTTS-2.5's own weights already follow).
+echo "[+] Creating isolated Audio8 TTS environment ($AUDIO8_VENV_DIR)..."
+"$BIN_DIR/uv" venv "$AUDIO8_VENV_DIR" --python 3.11 --allow-existing
+"$BIN_DIR/uv" pip install --python "$AUDIO8_VENV_DIR" "torch>=2.5.0" "torchaudio>=2.5.0" "transformers>=4.57.0,<5" "soundfile>=0.12" "safetensors>=0.4" accelerate huggingface-hub
 
 echo "[+] Creating isolated MAGI v3 environment ($MAGI_VENV_DIR)..."
 "$BIN_DIR/uv" venv "$MAGI_VENV_DIR" --python 3.11 --allow-existing

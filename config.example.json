@@ -80,7 +80,17 @@
     "temperature": 0.8,
     "top_p": 0.8,
     "sample_rate": 22050,
-    "synth_timeout_seconds": 180
+    "synth_timeout_seconds": 180,
+    "audio8": {
+      "hf_repo_id": "Audio8/Audio8-TTS-Preview-0.1b",
+      "model_dir": "checkpoints/audio8_tts_0.1b",
+      "reference_text": "",
+      "use_bf16": true,
+      "temperature": 0.7,
+      "top_p": 0.9,
+      "max_new_tokens": 512,
+      "sample_rate": 44100
+    }
   },
   "audio": {
     "sample_rate": 44100,

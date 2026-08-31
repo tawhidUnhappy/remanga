@@ -13,7 +13,7 @@ from remanga.console import console, escape as _esc
 from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
 from remanga.full_recap import FullRecapCompiler, chapter_sort_key
-from remanga.models import ModelManager
+from remanga.audio.synth import create_synthesizer
 from remanga.remix import remix_project
 from remanga.verify import verify_project
 from remanga.setup_wizard import run_setup_wizard
@@ -149,8 +149,11 @@ def main():
         elif args.command == "setup-config":
             run_setup_wizard(config)
         elif args.command == "setup-models":
-            mgr = ModelManager(config.tts.model_dir, config.tts.hf_repo_id)
-            mgr.ensure_model()
+            # Only the currently-configured TTS engine's weights are fetched -
+            # switching tts.engine later (setup-config) downloads the other
+            # engine's weights the first time it's actually used, same as
+            # every engine's own lazy ensure_model() already does.
+            create_synthesizer(config.tts, config.audio).model_manager.ensure_model()
             from remanga.webui.magi_assist import ensure_weights_downloaded
             ensure_weights_downloaded(config.marker)
         elif args.command == "download":

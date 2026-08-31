@@ -1,8 +1,17 @@
-"""Low-level IndexTTS-2.5 speech synthesis: spawns and talks to the isolated
-`.venv-indextts` worker process (remanga/audio/scripts/indextts_worker.py) so
-IndexTTS's own dependency pins never have to share a Python process - or a
-dependency resolution - with the rest of remanga or with MAGI v3's isolated
-environment. See remanga/venvs.py for how that environment is located."""
+"""Low-level speech synthesis, one class per supported TTS engine
+(TTSConfig.engine - see remanga/config.py's TTS_ENGINES), each spawning and
+talking to its own isolated `.tools/venv-<tool>` worker process
+(remanga/audio/scripts/*_worker.py) so no two engines' dependency pins ever
+have to share a Python process or a dependency resolution with each other or
+with MAGI v3's isolated environment. See remanga/venvs.py for how those
+environments are located.
+
+Both synthesizer classes share the exact same worker-process lifecycle
+(spawn, ready-handshake, auto-heal a missing dependency, bounded-timeout
+request/response, stderr draining so a wedged worker can't deadlock, clean
+shutdown) via `_BaseWorkerSynthesizer` below - only the process command line
+and the per-request JSON payload actually differ per engine. Adding a third
+engine later means subclassing that base, not re-implementing all of this."""
 
 from __future__ import annotations
 
@@ -13,8 +22,7 @@ import select
 import subprocess
 import threading
 from pathlib import Path
-from typing import List, Optional
-from pydub import AudioSegment
+from typing import Any, Dict, List, Optional
 
 from remanga.config import AudioConfig, TTSConfig
 from remanga.console import console
@@ -29,14 +37,14 @@ _MAX_AUTO_HEAL_ATTEMPTS = 8
 _STDERR_TAIL_LINES = 200
 
 
-def _pip_install_into_indextts_env(packages: set) -> bool:
-    """Installs `packages` into `.venv-indextts`, preferring this repo's own
-    `bin/uv` (that isolated venv has no `pip` module at all)."""
+def _pip_install_into_tool_env(tool_name: str, packages: set) -> bool:
+    """Installs `packages` into `.tools/venv-<tool_name>`, preferring this
+    repo's own `bin/uv` (that isolated venv has no `pip` module at all)."""
     names = sorted(packages)
-    console.print(f"[yellow]Installing missing dependency into .venv-indextts: {' '.join(names)}...[/]")
+    console.print(f"[yellow]Installing missing dependency into .tools/venv-{tool_name}: {' '.join(names)}...[/]")
 
     uv_bin = REPO_ROOT / "bin" / "uv"
-    python = get_tool_python("indextts")
+    python = get_tool_python(tool_name)
     cmd = [str(uv_bin), "pip", "install", "--python", str(python), *names] if uv_bin.exists() \
         else [str(python), "-m", "pip", "install", *names]
 
@@ -48,42 +56,47 @@ def _pip_install_into_indextts_env(packages: set) -> bool:
     return True
 
 
-class IndexTTSSynthesizer:
-    """Owns one long-lived `.venv-indextts` worker subprocess and speaks to it
-    over stdin/stdout for every synthesize() call, so the model loads onto the
-    GPU once per production run instead of once per panel."""
+class _BaseWorkerSynthesizer:
+    """Owns one long-lived isolated-venv worker subprocess and speaks to it
+    over stdin/stdout for every synthesize() call, so the model loads onto
+    the GPU once per production run instead of once per panel. Subclasses
+    fill in: `tool_name` (selects `.tools/venv-<tool_name>`), `display_name`
+    (for console messages), `_spawn_worker()` (the process command line),
+    and `_build_request()` (the per-call JSON payload)."""
 
-    def __init__(self, tts_config: TTSConfig, audio_config: AudioConfig):
-        self.tts_config = tts_config
+    tool_name: str = ""
+    display_name: str = ""
+
+    def __init__(self, audio_config: AudioConfig, model_manager: ModelManager):
         self.audio_config = audio_config
-        self.model_manager = ModelManager(tts_config.model_dir, tts_config.hf_repo_id)
+        self.model_manager = model_manager
         self._proc: Optional[subprocess.Popen] = None
         self._stderr_tail: collections.deque = collections.deque(maxlen=_STDERR_TAIL_LINES)
         self._stderr_thread: Optional[threading.Thread] = None
         atexit.register(self.shutdown)
 
+    # --- subclass hooks -----------------------------------------------
+    def _spawn_worker(self, model_dir: Path) -> subprocess.Popen:
+        raise NotImplementedError
+
+    def _build_request(self, text: str, spk_prompt_path: str, output_wav: Path) -> Dict[str, Any]:
+        raise NotImplementedError
+
+    def _synth_timeout_seconds(self) -> float:
+        raise NotImplementedError
+
+    def _post_synthesize(self, output_wav: Path, request: Dict[str, Any]) -> None:
+        """Optional per-engine post-processing after a successful synthesis
+        (e.g. IndexTTS's ffmpeg-atempo speed fallback). No-op by default."""
+
+    # --- shared worker-process machinery -------------------------------
     def _drain_stderr(self, proc: subprocess.Popen) -> None:
-        """Runs for the lifetime of one worker process, on its own daemon thread,
-        continuously reading its stderr so the pipe can never fill up and block
-        the worker's next write to it.
-
-        Why this exists: indextts_worker.py only redirects the model's *stdout*
-        (IndexTTS2.infer() prints straight to it - see that script's own
-        comment); anything written to stderr instead - a tqdm progress bar, a
-        warnings.warn(), a logging handler someone set up against sys.stderr -
-        goes straight into this pipe untouched. Nothing used to read it during
-        normal operation, only on an error path via a one-shot proc.stderr.read()
-        - so once enough of that accumulated past the OS pipe's buffer (64KB on
-        Linux), the worker's next write to stderr simply blocked: the whole
-        process sat there mid-write, GPU memory still held, model still loaded,
-        zero forward progress, while this side waited on a stdout response line
-        that was never coming because the worker never got back from that
-        write() call. ("Stuck at 42/135, GPU memory loaded but doing nothing.")
-
-        Only the last _STDERR_TAIL_LINES lines are kept, for error messages;
-        everything older is simply dropped - unlike a one-shot read, this never
-        lets the pipe back up in the first place.
-        """
+        """Runs for the lifetime of one worker process, on its own daemon
+        thread, continuously reading its stderr so the pipe can never fill
+        up and block the worker's next write to it - see indextts_worker.py's
+        module docstring for the deadlock this specifically prevents. Only
+        the last _STDERR_TAIL_LINES lines are kept, for error messages;
+        everything older is simply dropped."""
         try:
             for line in proc.stderr:
                 self._stderr_tail.append(line)
@@ -93,47 +106,29 @@ class IndexTTSSynthesizer:
     def _stderr_snapshot(self) -> str:
         return "".join(self._stderr_tail)
 
-    def _spawn_worker(self, model_dir: Path) -> subprocess.Popen:
-        python = get_tool_python("indextts")
-        script = get_scripts_dir("audio") / "indextts_worker.py"
-
-        cmd: List[str] = [
-            str(python), "-u", str(script),
-            "--cfg_path", str(Path(self.tts_config.cfg_path).resolve()),
-            "--model_dir", str(model_dir.resolve()),
-        ]
-        if self.tts_config.use_bf16:
-            cmd.append("--use_bf16")
-
-        return subprocess.Popen(
-            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, bufsize=1,
-        )
-
     def _ensure_worker(self) -> subprocess.Popen:
         if self._proc is not None and self._proc.poll() is None:
             return self._proc
 
         model_dir = self.model_manager.ensure_model()
-        console.print("[cyan]Starting IndexTTS-2.5 worker...[/]")
+        console.print(f"[cyan]Starting {self.display_name} worker...[/]")
 
-        # Auto-heal: a missing dependency IndexTTS's own install didn't pin
-        # (bootstrap.sh's fixed package list, or a future IndexTTS revision
-        # that imports something new) gets installed into .venv-indextts and
-        # retried, instead of raising mid-session over something one pip
-        # install would have fixed. See remanga/webui/magi_assist.py for the
-        # same pattern against MAGI v3's own isolated env.
+        # Auto-heal: a missing dependency the engine's own install didn't pin
+        # gets installed into its isolated venv and retried, instead of
+        # raising mid-session over something one pip install would have
+        # fixed. See remanga/webui/magi_assist.py for the same pattern
+        # against MAGI v3's own isolated env.
         attempted: set = set()
         for _ in range(_MAX_AUTO_HEAL_ATTEMPTS + 1):
             proc = self._spawn_worker(model_dir)
             ready_line = proc.stdout.readline()
             if not ready_line:
                 stderr = proc.stderr.read()
-                raise RuntimeError(f"IndexTTS-2.5 worker exited before starting up:\n{stderr}")
+                raise RuntimeError(f"{self.display_name} worker exited before starting up:\n{stderr}")
 
             event = json.loads(ready_line)
             if event.get("event") == "ready":
-                console.print("[bold green]✓ IndexTTS-2.5 worker ready.[/]")
+                console.print(f"[bold green]✓ {self.display_name} worker ready.[/]")
                 self._proc = proc
                 self._stderr_tail = collections.deque(maxlen=_STDERR_TAIL_LINES)
                 self._stderr_thread = threading.Thread(target=self._drain_stderr, args=(proc,), daemon=True)
@@ -143,13 +138,13 @@ class IndexTTSSynthesizer:
             error_text = event.get("error", "")
             missing = extract_missing_packages(error_text) - attempted
             if not missing:
-                raise RuntimeError(f"IndexTTS-2.5 worker failed to load: {error_text}")
+                raise RuntimeError(f"{self.display_name} worker failed to load: {error_text}")
             attempted |= missing
-            if not _pip_install_into_indextts_env(missing):
-                raise RuntimeError(f"IndexTTS-2.5 worker failed to load: {error_text}")
-            console.print("[dim]Retrying IndexTTS-2.5 worker startup with the newly installed package(s)...[/]")
+            if not _pip_install_into_tool_env(self.tool_name, missing):
+                raise RuntimeError(f"{self.display_name} worker failed to load: {error_text}")
+            console.print(f"[dim]Retrying {self.display_name} worker startup with the newly installed package(s)...[/]")
 
-        raise RuntimeError(f"IndexTTS-2.5 worker still fails to load after installing: {', '.join(sorted(attempted))}")
+        raise RuntimeError(f"{self.display_name} worker still fails to load after installing: {', '.join(sorted(attempted))}")
 
     def ensure_ready(self) -> None:
         """Loads the model weights and spawns the worker if that hasn't happened yet.
@@ -161,7 +156,9 @@ class IndexTTSSynthesizer:
         self._ensure_worker()
 
     def _adjust_audio_speed(self, wav_path: Path, speed: float) -> None:
-        """Adjusts speaking tempo using pitch-preserving FFmpeg atempo filter."""
+        """Adjusts speaking tempo using pitch-preserving FFmpeg atempo filter -
+        the fallback path for an engine/request that couldn't apply speed on
+        the model side itself."""
         if abs(speed - 1.0) < 0.02 or not wav_path.exists():
             return
         temp_wav = wav_path.with_name(f"{wav_path.stem}_speedtmp.wav")
@@ -207,57 +204,35 @@ class IndexTTSSynthesizer:
             pass
 
     def synthesize(self, text: str, spk_prompt_path: str, output_wav: Path) -> None:
-        """Synthesizes speech via the IndexTTS-2.5 worker process. Deliberately
-        sends no emo_vector: IndexTTS-2.5 infers its own emotion/prosody
-        straight from `text`'s own wording and punctuation ("!"/"?"/"..." etc -
-        see prompts/narration.md Rule 3) when none is supplied, which is what
-        makes narration sound naturally expressive instead of a forced-flat
-        reading of whatever the text actually says. Temperature/top_p (TTSConfig)
-        are left at IndexTTS-2.5's own recommended defaults for natural prosody
-        within that inferred emotion."""
+        """Synthesizes speech via this engine's worker process."""
         proc = self._ensure_worker()
-
-        request = {
-            "cmd": "synthesize",
-            "spk_audio_prompt": spk_prompt_path,
-            "text": text,
-            "lang": (self.tts_config.lang or "EN").strip().upper(),
-            "output_path": str(output_wav.resolve()),
-            "temperature": self.tts_config.temperature,
-            "top_p": self.tts_config.top_p,
-        }
-        if abs(self.tts_config.speed - 1.0) >= 0.02:
-            request["duration_factor"] = round(1.0 / self.tts_config.speed, 3)
+        request = self._build_request(text, spk_prompt_path, output_wav)
 
         try:
             proc.stdin.write(json.dumps(request) + "\n")
             proc.stdin.flush()
-            response_line = self._read_response_line(proc, self.tts_config.synth_timeout_seconds)
+            response_line = self._read_response_line(proc, self._synth_timeout_seconds())
         except TimeoutError as e:
             stderr = self._stderr_snapshot()
             self._kill_stuck_worker(proc)
             raise RuntimeError(
-                f"IndexTTS-2.5 worker {e} on panel text {text[:80]!r} - killed it so the next attempt "
+                f"{self.display_name} worker {e} on panel text {text[:80]!r} - killed it so the next attempt "
                 f"gets a fresh one. Safe to just re-run; already-synthesized panels are cached and this "
                 f"one regenerates automatically.\n{stderr}"
             ) from e
         except (BrokenPipeError, OSError) as e:
             stderr = self._stderr_snapshot()
-            raise RuntimeError(f"IndexTTS-2.5 worker died mid-synthesis: {e}\n{stderr}") from e
+            raise RuntimeError(f"{self.display_name} worker died mid-synthesis: {e}\n{stderr}") from e
 
         if not response_line:
             stderr = self._stderr_snapshot()
-            raise RuntimeError(f"IndexTTS-2.5 worker closed its output unexpectedly:\n{stderr}")
+            raise RuntimeError(f"{self.display_name} worker closed its output unexpectedly:\n{stderr}")
 
         response = json.loads(response_line)
         if not response.get("ok"):
-            raise RuntimeError(f"IndexTTS-2.5 synthesis failed: {response.get('error')}")
+            raise RuntimeError(f"{self.display_name} synthesis failed: {response.get('error')}")
 
-        # duration_factor already handles speed on the model side when supported;
-        # only fall back to the ffmpeg post-process if the worker couldn't use it
-        # (older IndexTTS checkouts without a duration_factor parameter).
-        if "duration_factor" not in request and abs(self.tts_config.speed - 1.0) >= 0.02:
-            self._adjust_audio_speed(output_wav, self.tts_config.speed)
+        self._post_synthesize(output_wav, request)
 
     def shutdown(self) -> None:
         """Cleanly stops the worker process, if one is running. Safe to call
@@ -265,7 +240,7 @@ class IndexTTSSynthesizer:
         proc, self._proc = self._proc, None
         if proc is None or proc.poll() is not None:
             return
-        console.print("[dim]Stopping IndexTTS-2.5 worker...[/]")
+        console.print(f"[dim]Stopping {self.display_name} worker...[/]")
         try:
             proc.stdin.write(json.dumps({"cmd": "shutdown"}) + "\n")
             proc.stdin.flush()
@@ -280,3 +255,134 @@ class IndexTTSSynthesizer:
             # killed. Swallow it here (we're already tearing down) rather
             # than re-raising into "Exception ignored in atexit callback".
             proc.terminate()
+
+
+class IndexTTSSynthesizer(_BaseWorkerSynthesizer):
+    """IndexTTS-2.5 - talks to `.tools/venv-indextts`/indextts_worker.py."""
+
+    tool_name = "indextts"
+    display_name = "IndexTTS-2.5"
+
+    def __init__(self, tts_config: TTSConfig, audio_config: AudioConfig):
+        self.tts_config = tts_config
+        super().__init__(audio_config, ModelManager(
+            tts_config.model_dir, tts_config.hf_repo_id,
+            tool_name="indextts", download_script="download_indextts.py",
+            expected_files=("gpt.pth", "s2mel.pth"), display_name="IndexTTS-2.5",
+        ))
+
+    def _spawn_worker(self, model_dir: Path) -> subprocess.Popen:
+        python = get_tool_python("indextts")
+        script = get_scripts_dir("audio") / "indextts_worker.py"
+
+        cmd: List[str] = [
+            str(python), "-u", str(script),
+            "--cfg_path", str(Path(self.tts_config.cfg_path).resolve()),
+            "--model_dir", str(model_dir.resolve()),
+        ]
+        if self.tts_config.use_bf16:
+            cmd.append("--use_bf16")
+
+        return subprocess.Popen(
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, bufsize=1,
+        )
+
+    def _synth_timeout_seconds(self) -> float:
+        return self.tts_config.synth_timeout_seconds
+
+    def _build_request(self, text: str, spk_prompt_path: str, output_wav: Path) -> Dict[str, Any]:
+        """Deliberately sends no emo_vector: IndexTTS-2.5 infers its own
+        emotion/prosody straight from `text`'s own wording and punctuation
+        ("!"/"?"/"..." etc - see prompts/narration.md Rule 3) when none is
+        supplied, which is what makes narration sound naturally expressive
+        instead of a forced-flat reading of whatever the text actually
+        says. Temperature/top_p (TTSConfig) are left at IndexTTS-2.5's own
+        recommended defaults for natural prosody within that inferred
+        emotion."""
+        request: Dict[str, Any] = {
+            "cmd": "synthesize",
+            "spk_audio_prompt": spk_prompt_path,
+            "text": text,
+            "lang": (self.tts_config.lang or "EN").strip().upper(),
+            "output_path": str(output_wav.resolve()),
+            "temperature": self.tts_config.temperature,
+            "top_p": self.tts_config.top_p,
+        }
+        if abs(self.tts_config.speed - 1.0) >= 0.02:
+            request["duration_factor"] = round(1.0 / self.tts_config.speed, 3)
+        return request
+
+    def _post_synthesize(self, output_wav: Path, request: Dict[str, Any]) -> None:
+        # duration_factor already handles speed on the model side when supported;
+        # only fall back to the ffmpeg post-process if the worker couldn't use it
+        # (older IndexTTS checkouts without a duration_factor parameter).
+        if "duration_factor" not in request and abs(self.tts_config.speed - 1.0) >= 0.02:
+            self._adjust_audio_speed(output_wav, self.tts_config.speed)
+
+
+class Audio8Synthesizer(_BaseWorkerSynthesizer):
+    """Audio8/Audio8-TTS-Preview-0.1b - talks to `.tools/venv-audio8`/
+    audio8_worker.py. See config.Audio8Config for its settings and
+    audio8_worker.py's module docstring for the model itself."""
+
+    tool_name = "audio8"
+    display_name = "Audio8 TTS"
+
+    def __init__(self, tts_config: TTSConfig, audio_config: AudioConfig):
+        self.tts_config = tts_config
+        self.engine_config = tts_config.audio8
+        super().__init__(audio_config, ModelManager(
+            self.engine_config.model_dir, self.engine_config.hf_repo_id,
+            tool_name="audio8", download_script="download_audio8.py",
+            expected_files=("model.safetensors", "codec.pth"), display_name="Audio8 TTS",
+        ))
+
+    def _spawn_worker(self, model_dir: Path) -> subprocess.Popen:
+        python = get_tool_python("audio8")
+        script = get_scripts_dir("audio") / "audio8_worker.py"
+
+        cmd: List[str] = [
+            str(python), "-u", str(script),
+            "--model_dir", str(model_dir.resolve()),
+        ]
+        if self.engine_config.use_bf16:
+            cmd.append("--use_bf16")
+
+        return subprocess.Popen(
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, bufsize=1,
+        )
+
+    def _synth_timeout_seconds(self) -> float:
+        return self.tts_config.synth_timeout_seconds
+
+    def _build_request(self, text: str, spk_prompt_path: str, output_wav: Path) -> Dict[str, Any]:
+        return {
+            "cmd": "synthesize",
+            "spk_audio_prompt": spk_prompt_path,
+            "reference_text": self.engine_config.reference_text,
+            "text": text,
+            "output_path": str(output_wav.resolve()),
+            "temperature": self.engine_config.temperature,
+            "top_p": self.engine_config.top_p,
+            "max_new_tokens": self.engine_config.max_new_tokens,
+        }
+
+    def _post_synthesize(self, output_wav: Path, request: Dict[str, Any]) -> None:
+        # No model-side speed control for this engine - fall back to the
+        # shared ffmpeg-atempo path whenever tts.speed isn't 1.0.
+        if abs(self.tts_config.speed - 1.0) >= 0.02:
+            self._adjust_audio_speed(output_wav, self.tts_config.speed)
+
+
+def create_synthesizer(tts_config: TTSConfig, audio_config: AudioConfig) -> _BaseWorkerSynthesizer:
+    """Picks the Synthesizer matching `tts_config.engine` (see
+    config.TTS_ENGINES) - the one place that mapping is made, so callers
+    (audio/tts.py) never need to know about individual engine classes."""
+    engine = (tts_config.engine or "indextts-2.5").strip().lower()
+    if engine == "audio8-tts-0.1b":
+        return Audio8Synthesizer(tts_config, audio_config)
+    if engine != "indextts-2.5":
+        console.print(f"[yellow]Unknown tts.engine {engine!r} - falling back to indextts-2.5.[/]")
+    return IndexTTSSynthesizer(tts_config, audio_config)

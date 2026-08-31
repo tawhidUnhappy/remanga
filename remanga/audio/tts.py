@@ -6,7 +6,7 @@ from pydub import AudioSegment
 from rich.progress import BarColumn, Progress, TextColumn
 
 from remanga import setup
-from remanga.audio.synth import IndexTTSSynthesizer
+from remanga.audio.synth import create_synthesizer
 from remanga.config import AudioConfig, RemangaConfig, TTSConfig
 from remanga.console import console
 from remanga.json_io import read_json, read_json_or, write_json
@@ -17,7 +17,7 @@ class TTSEngine:
     def __init__(self, tts_config: Optional[TTSConfig] = None, audio_config: Optional[AudioConfig] = None):
         self.tts_config = tts_config or TTSConfig()
         self.audio_config = audio_config or AudioConfig()
-        self._synth = IndexTTSSynthesizer(self.tts_config, self.audio_config)
+        self._synth = create_synthesizer(self.tts_config, self.audio_config)
 
     def generate_narration_audio(
         self,
@@ -63,7 +63,7 @@ class TTSEngine:
             raise ValueError(f"No narration entries found in {narration_path}")
 
         console.print(
-            f"[cyan]Synthesizing consistent speech via IndexTTS-2.5[/] "
+            f"[cyan]Synthesizing consistent speech via {self._synth.display_name}[/] "
             f"[dim](Lang: {self.tts_config.lang}, Temp: {self.tts_config.temperature}, Reference Voice: {spk_prompt_path})[/]"
         )
 

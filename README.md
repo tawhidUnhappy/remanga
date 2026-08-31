@@ -12,6 +12,7 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
 - [Fresh PC Installation & Setup](#fresh-pc-installation--setup)
 - [Quick Start: Master Interactive Wizard](#quick-start-master-interactive-wizard)
 - [Configuration & Settings Wizard](#configuration--settings-wizard)
+- [Switching TTS Engines](#switching-tts-engines)
 - [Step-by-Step CLI Production Workflow](#step-by-step-cli-production-workflow)
 - [Resetting/Restarting a Chapter](#resettingrestarting-a-chapter)
 - [Whole-Manga Video & Remixing BGM](#whole-manga-video--remixing-bgm)
@@ -414,6 +415,23 @@ The included prompt system in `prompts/` enforces strict narrative rules:
 2. **Name Introduction Protocol:** Characters are referred to strictly by visible physical traits (*"a dark-haired student"*) until formally introduced by name in dialogue or captions.
 3. **Show-and-Synthesize:** Narrative commentary blends speech bubbles and actions into active present-tense storytelling.
 4. **Pacing Ceiling:** 10 to 20 words per panel (hard ceiling: 26 words) to ensure optimal retention and natural IndexTTS-2.5 speech pacing.
+
+---
+
+## Switching TTS Engines
+
+remanga can drive more than one text-to-speech engine, each in its own isolated `.tools/venv-*` environment (see [Fresh PC Installation & Setup](#fresh-pc-installation--setup)) so their dependency pins never have to share a resolution:
+
+| Engine (`tts.engine`) | Cloning input | Notes |
+|---|---|---|
+| `indextts-2.5` (default) | Reference voice WAV only | Zero-shot - infers its own emotion/prosody from `narration.json`'s text and punctuation (see below) |
+| `audio8-tts-0.1b` | Reference voice WAV **+ a text transcript of it** | [Audio8/Audio8-TTS-Preview-0.1b](https://huggingface.co/Audio8/Audio8-TTS-Preview-0.1b) - a ~170M-parameter Falcon-H1-based cloning model with its own 44.1kHz codec decoder |
+
+Switch by running `./run.sh setup-config` (step 1, "TTS Engine") or editing `tts.engine` in `config.json` directly. `bootstrap.sh` already provisions both engines' isolated venvs (`.tools/venv-indextts`, `.tools/venv-audio8`) regardless of which one is active, so switching never requires re-running it — only that engine's own model weights get downloaded, and only the first time it's actually used (`checkpoints/audio8_tts_0.1b/`, ~1.7GB).
+
+`audio8-tts-0.1b` needs one extra piece of configuration `indextts-2.5` doesn't: `tts.audio8.reference_text`, an accurate transcript of whatever WAV `tts.spk_audio_prompt` points at — the setup wizard asks for this right after the reference voice file whenever this engine is selected, since this model's cloning quality depends on transcript accuracy, not just the audio itself. `tts.audio8` also holds this engine's own `temperature`/`top_p`/`max_new_tokens` sampling settings, separate from `indextts-2.5`'s own top-level `temperature`/`top_p` fields.
+
+Everything downstream — `remanga tts`, resuming, `full-recap`, `remix` — works identically regardless of which engine is active; `remanga/audio/synth.py`'s `create_synthesizer()` is the only place that picks between them.
 
 ---
 

@@ -21,8 +21,26 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
         "[dim]Configure vocal reference, vision outputs (what to generate/zip), BGM, video resolution, and canvas background style.[/]\n"
     )
 
-    # 1. Reference Vocal Audio (Voice Cloning)
-    console.print("[bold]1. Reference Speaker Voice (IndexTTS-2.5 Cloning)[/]")
+    # 1. TTS Engine
+    console.print("[bold]1. TTS Engine[/]")
+    engine_table = Table(show_edge=False, show_header=True)
+    engine_table.add_column("#", width=4)
+    engine_table.add_column("Engine")
+    engine_table.add_column("Notes", style="dim")
+    engines = [
+        ("1", "indextts-2.5", "Zero-shot cloning from a reference voice WAV alone"),
+        ("2", "audio8-tts-0.1b", "Also wants a text transcript of the reference voice (see next step)"),
+    ]
+    for num, name, notes in engines:
+        engine_table.add_row(num, name, notes)
+    console.print(engine_table)
+    curr_engine_num = next((num for num, name, _ in engines if name == config.tts.engine), "1")
+    engine_choice = Prompt.ask("[bold]Select TTS engine[/]", choices=["1", "2"], default=curr_engine_num)
+    config.tts.engine = next(name for num, name, _ in engines if num == engine_choice)
+    console.print(f"[green]✓ Engine set to:[/] {config.tts.engine}")
+
+    # 2. Reference Vocal Audio (Voice Cloning)
+    console.print(f"\n[bold]2. Reference Speaker Voice Cloning ({config.tts.engine})[/]")
     console.print("[dim]Provide a clean 3-10 second WAV file of a neutral, steady voice.[/]")
     curr_voice = config.tts.spk_audio_prompt
     if is_valid_file(curr_voice):
@@ -32,15 +50,27 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     else:
         ensure_valid_voice_prompt(config, interactive=True)
 
+    if config.tts.engine == "audio8-tts-0.1b":
+        console.print(
+            "\n[dim]audio8-tts-0.1b also wants an accurate text transcript of that reference voice clip - "
+            "cloning quality depends on it, unlike indextts-2.5's audio-only cloning.[/]"
+        )
+        curr_ref_text = config.tts.audio8.reference_text
+        if curr_ref_text:
+            console.print(f"Current transcript: [green]{_esc(curr_ref_text)}[/]")
+        config.tts.audio8.reference_text = Prompt.ask(
+            "[bold]Transcript of the reference voice audio[/]", default=curr_ref_text
+        ).strip()
+
     # 2. Vision Outputs: what to generate, what to zip/PDF for upload - see
     # remanga.setup.configure_vision_outputs, the same two-section checklist
     # the main interactive wizard can also reach on demand.
-    console.print("\n[bold]2. Vision Outputs (What to Generate / Zip for Upload)[/]")
+    console.print("\n[bold]3. Vision Outputs (What to Generate / Zip for Upload)[/]")
     configure_vision_outputs(config)
     package = config.cropper.package
 
     # 3. Voice Language Selection
-    console.print("\n[bold]3. Voice Language[/]")
+    console.print("\n[bold]4. Voice Language[/]")
     lang_table = Table(show_edge=False, show_header=True)
     lang_table.add_column("#", width=4)
     lang_table.add_column("Language")
@@ -65,7 +95,7 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     console.print(f"[green]✓ Language set to:[/] {matched_lang}")
 
     # 4. Background Music (BGM)
-    console.print("\n[bold]4. Background Music (BGM)[/]")
+    console.print("\n[bold]5. Background Music (BGM)[/]")
     enable_bgm = Confirm.ask("Enable background music track for recaps?", default=config.audio.bgm_enabled)
     config.audio.bgm_enabled = enable_bgm
     if enable_bgm:
@@ -93,7 +123,7 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
                 config.audio.bgm_volume_db = -22.0
 
     # 5. YouTube Quality / Video Resolution Presets
-    console.print("\n[bold]5. Video Resolution Presets[/]")
+    console.print("\n[bold]6. Video Resolution Presets[/]")
     res_table = Table(title="Available Resolution Presets", show_edge=False)
     res_table.add_column("#", width=4)
     res_table.add_column("Preset Quality")
@@ -131,7 +161,7 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     console.print(f"[green]✓ Resolution configured:[/] {config.video.width}x{config.video.height}")
 
     # 6. Canvas Background Style
-    console.print("\n[bold]6. Canvas Background Style[/]")
+    console.print("\n[bold]7. Canvas Background Style[/]")
     bg_table = Table(show_edge=False)
     bg_table.add_column("#", width=4)
     bg_table.add_column("Background Style")
@@ -155,7 +185,7 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
         console.print("[green]✓ Background set to:[/] Fast Bokeh Canvas Blur")
 
     # 7. Hardware Acceleration
-    console.print("\n[bold]7. Hardware Acceleration[/]")
+    console.print("\n[bold]8. Hardware Acceleration[/]")
     config.system.prefer_gpu = Confirm.ask("Prefer NVIDIA GPU Hardware Acceleration (NVENC)?", default=config.system.prefer_gpu)
 
     # Save Configuration
@@ -177,6 +207,7 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
     )
     summary_table.add_row("Resolution", f"{config.video.width}x{config.video.height} @ {config.video.fps}fps")
     summary_table.add_row("Background Style", f"{config.video.background_style.title()} Blur" if config.video.background_style == "blur" else "Solid Black")
+    summary_table.add_row("TTS Engine", config.tts.engine)
     summary_table.add_row("Narration Language", config.tts.lang.upper())
     summary_table.add_row("Reference Voice", str(Path(config.tts.spk_audio_prompt).name) if config.tts.spk_audio_prompt else "[red]Not configured[/]")
     summary_table.add_row("Background Music (BGM)", f"Enabled ({Path(config.audio.bgm_path).name}, {config.audio.bgm_volume_db}dB)" if config.audio.bgm_enabled else "Disabled")
