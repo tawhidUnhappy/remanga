@@ -211,7 +211,16 @@ def get_manifest_path(project_name: str) -> Path:
     files repeated in every chapter folder (pages_metadata.json,
     panels_manifest.json, chapter_info.json). Keyed by chapter number, one
     section per production stage that wants to record something about a
-    chapter (currently "pages" and "panels")."""
+    chapter (currently "pages" and "panels") - deliberately kept to small
+    summary fields only (counts, ids, a timestamp), never a per-item dump.
+    A per-panel/per-page listing (path, crop box, width/height, ...) is
+    exactly the bloat those three files were replaced to get rid of - that
+    detail already lives in full wherever it's actually needed (panels/
+    itself, each package format's own per-part manifest), so repeating it
+    here a second time just to sit unread would recreate the same problem
+    under a new filename. If a future caller genuinely needs per-item data
+    back, resist the urge to reach for this file - it means the caller
+    should read the real source (panels/, pages/) instead."""
     return get_project_dir(project_name) / "manifest.json"
 
 

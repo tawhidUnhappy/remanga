@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Optional
 import requests
 from rich.progress import BarColumn, DownloadColumn, Progress, TextColumn, TimeRemainingColumn
 
@@ -128,8 +128,6 @@ class MangaDexDownloader:
 
         console.print(f"[green]Downloading {len(filenames)} pages politely to:[/] {_esc(str(dest_dir))}")
 
-        downloaded_meta: List[Dict[str, Any]] = []
-
         # refresh_per_second=4 (Rich's default is ~10): a long-lived Progress
         # bar redraws itself that many times a second regardless of whether
         # anything is actually reading the terminal's output - if the
@@ -154,12 +152,6 @@ class MangaDexDownloader:
                 out_path = dest_dir / f"{page_stem(chapter_num, idx)}{page_ext}"
 
                 if out_path.exists() and out_path.stat().st_size > 0:
-                    downloaded_meta.append({
-                        "page_index": idx,
-                        "filename": out_path.name,
-                        "source_file": filename,
-                        "size_bytes": out_path.stat().st_size
-                    })
                     progress.advance(dl_task)
                     continue
 
@@ -168,26 +160,23 @@ class MangaDexDownloader:
                 with open(out_path, "wb") as f:
                     f.write(r.content)
 
-                downloaded_meta.append({
-                    "page_index": idx,
-                    "filename": out_path.name,
-                    "source_file": filename,
-                    "size_bytes": out_path.stat().st_size
-                })
-
                 if self.config.request_delay_seconds > 0:
                     time.sleep(self.config.request_delay_seconds)
 
                 progress.advance(dl_task)
 
-        # Save verification metadata into this project's shared manifest.json
+        # Save verification metadata into this project's shared manifest.json -
+        # just enough for the resume-check above (total_pages + chapter_id);
+        # actual page presence/integrity is always re-verified against the
+        # real files in pages_dir, never trusted from this alone. No per-page
+        # list here - filename/source_file/size_bytes for every single page
+        # would just be repeating what pages_dir itself already shows.
         update_manifest_chapter(project_name, chapter_num, "pages", {
             "chapter_id": chapter_id,
             "manga_id": manga_id,
             "total_pages": len(filenames),
             "quality": quality_key,
             "timestamp": time.time(),
-            "pages": downloaded_meta,
         })
 
         console.print(f"[bold green]✓ Successfully downloaded and verified all {len(filenames)} pages![/]")

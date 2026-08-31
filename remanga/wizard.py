@@ -13,6 +13,7 @@ from remanga.console import console, display_path, print_path, wrap_at_slashes
 from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
 from remanga.full_recap import FullRecapCompiler, chapter_sort_key, discover_chapters
+from remanga.remix import remix_project
 from remanga.json_io import has_real_json_content
 from remanga.paths import (
     ensure_memory_file, get_chapter_dir, get_panels_pdf_dir, get_panels_zip_dir, get_sheets_dir,
@@ -33,14 +34,19 @@ def run_interactive_pipeline():
     # 1. Project Selection / Creation / Settings
     project = select_or_create_project(config)
 
-    # 2. Single chapter, or the whole manga joined into one video?
+    # 2. Single chapter, the whole manga joined into one video, or just a
+    # BGM/volume remix of what's already been rendered?
     console.print(
         "\n[bold]1.[/] Process a chapter\n"
         "[bold]2.[/] Compile the whole project into one continuous video (full-recap)\n"
+        "[bold]3.[/] Change background music/volume and rebuild video(s) only (no re-narration)\n"
     )
-    mode = Prompt.ask("[bold]Choose[/]", choices=["1", "2"], default="1")
+    mode = Prompt.ask("[bold]Choose[/]", choices=["1", "2", "3"], default="1")
     if mode == "2":
         _run_full_recap(project, config)
+        return
+    if mode == "3":
+        _run_remix(project, config)
         return
 
     meta = load_project_metadata(project)
@@ -281,3 +287,36 @@ def _run_full_recap(project: str, config: RemangaConfig) -> None:
     console.print(f"\n[bold]Compiling {len(selected)} chapter(s) into one continuous video[/]")
     compiler = FullRecapCompiler(config)
     compiler.compile_full_manga(project, force=force, chapters=selected)
+
+
+def _run_remix(project: str, config: RemangaConfig) -> None:
+    """Remix mode: re-mixes and re-renders already-rendered chapter(s) after
+    a BGM/volume change - never touches TTS or frame compositing. See
+    remix.py's module docstring."""
+    chapters = discover_chapters(project)
+    if not chapters:
+        console.print(f"[bold red]No chapters found for '{project}'.[/]")
+        return
+
+    console.print(f"\n[dim]Chapters found: {', '.join(chapters)}[/]")
+    choice = Prompt.ask(
+        "[bold]Remix all of them, or a subset? (comma-separated chapter numbers, or Enter for all)[/]",
+        default="",
+    ).strip()
+    selected = sorted({c.strip() for c in choice.split(",") if c.strip()}, key=chapter_sort_key) if choice else chapters
+
+    change_bgm = Confirm.ask("Change the background music file for this remix?", default=False)
+    bgm_override = None
+    if change_bgm:
+        bgm_override = Prompt.ask("[bold]Path to the new BGM audio file[/]").strip().strip("'\"")
+    else:
+        # Volume-only tweaks (or leaving BGM as-is entirely) go through
+        # config.json directly - offer to jump into setup-config now if the
+        # user actually wants to adjust bgm_volume_db before remixing.
+        if Confirm.ask("Adjust BGM volume (dB) or other settings in setup-config before remixing?", default=False):
+            from remanga.setup_wizard import run_setup_wizard
+            run_setup_wizard(config)
+
+    rejoin = Confirm.ask("Re-join the full-recap video too, if one exists?", default=True)
+
+    remix_project(project, config, chapters=selected, bgm_override=bgm_override, rejoin=rejoin)

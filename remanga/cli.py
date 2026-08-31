@@ -14,6 +14,7 @@ from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
 from remanga.full_recap import FullRecapCompiler, chapter_sort_key
 from remanga.models import ModelManager
+from remanga.remix import remix_project
 from remanga.setup_wizard import run_setup_wizard
 from remanga.status import render_status_panel
 from remanga.video import VideoRenderer
@@ -92,6 +93,20 @@ def main():
     )
     p_full.add_argument("--force", "-f", action="store_true", help="Force a full recompile even if already compiled")
 
+    # remix
+    p_remix = subparsers.add_parser(
+        "remix",
+        help="Re-mix + re-render a project's chapter video(s) after a BGM/volume change - "
+             "no re-narration, no re-cropping, and re-joins the full-recap video if one exists",
+    )
+    p_remix.add_argument("--project", "-p", required=True, help="Project name")
+    p_remix.add_argument(
+        "--chapters", "-c", required=False, default=None,
+        help="Comma-separated chapter numbers to remix (default: every chapter found)",
+    )
+    p_remix.add_argument("--bgm", "-b", required=False, default=None, help="Override background music audio path")
+    p_remix.add_argument("--no-rejoin", action="store_true", help="Don't recompile the full-recap video even if one exists")
+
     # status
     p_stat = subparsers.add_parser("status", help="Inspect chapter production status")
     p_stat.add_argument("--project", "-p", required=True, help="Project name")
@@ -147,6 +162,11 @@ def main():
                 chapters = sorted({c.strip() for c in args.chapters.split(",") if c.strip()}, key=chapter_sort_key)
             compiler = FullRecapCompiler(config)
             compiler.compile_full_manga(args.project, force=args.force, chapters=chapters)
+        elif args.command == "remix":
+            chapters = None
+            if args.chapters:
+                chapters = sorted({c.strip() for c in args.chapters.split(",") if c.strip()}, key=chapter_sort_key)
+            remix_project(args.project, config, chapters=chapters, bgm_override=args.bgm, rejoin=not args.no_rejoin)
         elif args.command == "status":
             console.print(render_status_panel(args.project, args.chapter))
         elif args.command == "restart":

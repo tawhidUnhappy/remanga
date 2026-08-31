@@ -27,7 +27,6 @@ class PageCropResult:
     loop in crop.py only has to accumulate these, not track loose counters."""
 
     panel_paths: List[Path] = field(default_factory=list)
-    manifest_entries: List[Dict[str, Any]] = field(default_factory=list)
     gutter_panels_adjusted: int = 0
     gutter_edges_adjusted: int = 0
     duplicate_panels_dropped: int = 0
@@ -149,17 +148,6 @@ def crop_page(
             out_path = panels_dir / out_name
             cropped_img.save(out_path, format=config.save_format, quality=95)
             result.panel_paths.append(out_path)
-
-            result.manifest_entries.append({
-                "panel_id": panel_id,
-                "source_page": page_img_path.name,
-                "crop_bounds": list(crop_box),
-                "width": cropped_img.width,
-                "height": cropped_img.height,
-                "aspect_ratio": round(cropped_img.width / cropped_img.height, 4),
-                "type": panel.get("type", "standard"),
-                "notes": panel.get("notes", ""),
-            })
 
             panel_number += 1
 

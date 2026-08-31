@@ -86,7 +86,6 @@ class CoordinateCropper:
         console.print(f"[cyan]Processing panel cropping for chapter {chapter_num}...[/]")
 
         output_panel_paths: List[Path] = []
-        manifest_data = []
         gutter_panels_adjusted = 0
         gutter_edges_adjusted = 0
         duplicate_panels_dropped = 0
@@ -98,13 +97,12 @@ class CoordinateCropper:
                 continue
 
             output_panel_paths.extend(result.panel_paths)
-            manifest_data.extend(result.manifest_entries)
             gutter_panels_adjusted += result.gutter_panels_adjusted
             gutter_edges_adjusted += result.gutter_edges_adjusted
             duplicate_panels_dropped += result.duplicate_panels_dropped
             panels_trimmed += result.panels_trimmed
 
-        write_manifest(project_name, chapter_num, output_panel_paths, manifest_data)
+        write_manifest(project_name, chapter_num, output_panel_paths)
         print_crop_summary(
             panels_dir, len(output_panel_paths), self.config,
             gutter_panels_adjusted, gutter_edges_adjusted, panels_trimmed, duplicate_panels_dropped,

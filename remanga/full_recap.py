@@ -207,7 +207,20 @@ class FullRecapCompiler:
 
         return final_path, frame_timeline
 
-    def compile_full_manga(self, project_name: str, force: bool = False, chapters: Optional[List[str]] = None) -> Path:
+    def compile_full_manga(
+        self, project_name: str, force: bool = False, chapters: Optional[List[str]] = None,
+        force_chapters: Optional[bool] = None,
+    ) -> Path:
+        """force controls both "recompile the join even if already compiled"
+        and, by default, "force each chapter's own render too". Pass
+        force_chapters=False explicitly to keep the first meaning while
+        skipping redundant per-chapter re-renders - e.g. remix.py's rejoin,
+        where every chapter was just freshly mixed/rendered a moment ago and
+        forcing them again would just repeat identical ffmpeg work; the
+        per-chapter render's own mtime-staleness check (see
+        video/render.py) still catches any chapter that's actually stale."""
+        if force_chapters is None:
+            force_chapters = force
         final_video = get_full_recap_video_path(project_name)
 
         if not force and final_video.exists() and final_video.stat().st_size > 1000:
@@ -227,7 +240,7 @@ class FullRecapCompiler:
         chapter_videos: List[Path] = []
         for i, chapter_num in enumerate(chapter_list, start=1):
             console.print(f"[cyan]({i}/{len(chapter_list)}) Preparing chapter {chapter_num}...[/]")
-            chapter_videos.append(self._ensure_chapter_video(project_name, chapter_num, force=force))
+            chapter_videos.append(self._ensure_chapter_video(project_name, chapter_num, force=force_chapters))
 
         # Phase 2: the whole-manga join - a fresh continuous audio timeline
         # (see _assemble_combined_audio's docstring for why this can't just

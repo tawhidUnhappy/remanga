@@ -6,7 +6,7 @@ CoordinateCropper's loop isn't tangled up with reporting."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import List
 
 from remanga.config import CropperConfig
 from remanga.console import console, escape as _esc
@@ -16,15 +16,20 @@ from remanga.cropper.sheets import PanelSheetGenerator
 from remanga.paths import get_sheets_dir, get_sheets_folders_dir, update_manifest_chapter
 
 
-def write_manifest(project_name: str, chapter_num: str, panel_paths: List[Path], manifest_entries: List[Dict[str, Any]]) -> None:
-    """Records this chapter's panel info into {manga}/manifest.json's
-    "panels" section (see paths.update_manifest_chapter) - purely
-    informational bookkeeping, nothing in the pipeline reads it back, same
-    as the old standalone panels_manifest.json this replaces (now one
-    shared file instead of one repeated per chapter)."""
+def write_manifest(project_name: str, chapter_num: str, panel_paths: List[Path]) -> None:
+    """Records that this chapter has been cropped into {manga}/manifest.json's
+    "panels" section (see paths.update_manifest_chapter) - just the count,
+    used as crop.py's own resume marker ("has this chapter been cropped
+    before"). Deliberately NOT a per-panel dump (path/crop_bounds/width/
+    height/... for every single panel, as the old standalone
+    panels_manifest.json this replaces used to carry) - `manifest_entries`
+    already lives in full, per-panel, wherever it's actually needed
+    (panels/ itself, and each package format's own per-part manifest - see
+    remanga.cropper.manifest_info); repeating all of it a second time here
+    just to sit unread was the exact bloat this file replaced three
+    per-chapter dead files to get away from."""
     update_manifest_chapter(project_name, chapter_num, "panels", {
         "total_panels": len(panel_paths),
-        "panels": manifest_entries,
     })
 
 
