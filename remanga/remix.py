@@ -51,7 +51,11 @@ def remix_project(
     console.print(f"[bold cyan]Remixing {len(chapter_list)} chapter(s) for '{project_name}'[/] [dim](audio mix + video re-encode only - no re-narration)[/]")
     for i, chapter_num in enumerate(chapter_list, start=1):
         console.print(f"[cyan]({i}/{len(chapter_list)}) Chapter {chapter_num}...[/]")
-        mixer.mix_master_audio(project_name, chapter_num, bgm_override=bgm_override, interactive=False)
+        # force=True: remix's whole purpose is "redo the mix" - if the user
+        # re-ran remix with identical settings on purpose (e.g. suspecting a
+        # bad mix), skipping it because the fingerprint looks unchanged
+        # would be the wrong call here specifically.
+        mixer.mix_master_audio(project_name, chapter_num, bgm_override=bgm_override, interactive=False, force=True)
         renderer.render_video(project_name, chapter_num, force=False)
 
     full_video = get_full_recap_video_path(project_name)

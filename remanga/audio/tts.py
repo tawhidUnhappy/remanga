@@ -9,7 +9,7 @@ from remanga import setup
 from remanga.audio.synth import IndexTTSSynthesizer
 from remanga.config import AudioConfig, RemangaConfig, TTSConfig
 from remanga.console import console
-from remanga.json_io import read_json, write_json
+from remanga.json_io import read_json, read_json_or, write_json
 from remanga.paths import get_audio_dir, get_audio_timing_path, get_chapter_dir
 
 
@@ -206,13 +206,26 @@ class TTSEngine:
                 current_timeline_ms += total_panel_slot_ms
                 progress.advance(task)
 
+        # Idempotent write: skip touching the file at all if the content is
+        # identical to what's already there. This isn't just tidiness -
+        # audio/mix.py treats this file's mtime as "did the synthesized
+        # audio actually change" to decide whether it needs to re-mix (and
+        # video/render.py, in turn, treats master_audio.wav's mtime the same
+        # way to decide whether to re-encode). Rewriting this file on every
+        # single TTS call - even a fully-resumed one where nothing was
+        # regenerated - would make that staleness check permanently useless:
+        # every downstream step would think something changed every time,
+        # forever re-mixing and re-encoding chapters that are actually
+        # already done.
         timing_manifest_path = get_audio_timing_path(project_name, chapter_num)
-        write_json(timing_manifest_path, {
+        new_timing = {
             "chapter": str(chapter_num),
             "total_timeline_ms": current_timeline_ms,
             "total_timeline_sec": round(current_timeline_ms / 1000.0, 3),
             "panels": timing_data
-        })
+        }
+        if read_json_or(timing_manifest_path, None) != new_timing:
+            write_json(timing_manifest_path, new_timing)
 
         if resumed_count > 0:
             console.print(f"[dim cyan](Resumed {resumed_count} existing audio clips without re-generating)[/]")
