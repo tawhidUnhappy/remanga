@@ -15,6 +15,7 @@ from remanga.downloader import MangaDexDownloader
 from remanga.full_recap import FullRecapCompiler, chapter_sort_key
 from remanga.models import ModelManager
 from remanga.remix import remix_project
+from remanga.verify import verify_project
 from remanga.setup_wizard import run_setup_wizard
 from remanga.status import render_status_panel
 from remanga.video import VideoRenderer
@@ -112,6 +113,19 @@ def main():
     p_stat.add_argument("--project", "-p", required=True, help="Project name")
     p_stat.add_argument("--chapter", "-c", required=True, help="Chapter number")
 
+    # verify
+    p_verify = subparsers.add_parser(
+        "verify",
+        help="Strictly verify every chapter's audio/video is complete and decodable, not just present on disk "
+             "(catches a file left truncated by a kill mid-write) - reports exactly what to re-run, if anything",
+    )
+    p_verify.add_argument("--project", "-p", required=True, help="Project name")
+    p_verify.add_argument(
+        "--chapters", "-c", required=False, default=None,
+        help="Comma-separated chapter numbers to verify (default: every chapter found)",
+    )
+    p_verify.add_argument("--no-video", action="store_true", help="Skip verifying rendered videos, audio only (faster)")
+
     # restart
     p_restart = subparsers.add_parser("restart", help="Wipe a chapter back to just its downloaded pages so it can be reprocessed from scratch")
     p_restart.add_argument("--project", "-p", required=True, help="Project name")
@@ -169,6 +183,11 @@ def main():
             remix_project(args.project, config, chapters=chapters, bgm_override=args.bgm, rejoin=not args.no_rejoin)
         elif args.command == "status":
             console.print(render_status_panel(args.project, args.chapter))
+        elif args.command == "verify":
+            chapters = None
+            if args.chapters:
+                chapters = sorted({c.strip() for c in args.chapters.split(",") if c.strip()}, key=chapter_sort_key)
+            verify_project(args.project, chapters=chapters, check_video=not args.no_video)
         elif args.command == "restart":
             # "remark" isn't a real reset.py mode - it deletes exactly like
             # marks_only, then additionally reopens the Panel Marker below.

@@ -14,6 +14,7 @@ from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
 from remanga.full_recap import FullRecapCompiler, chapter_sort_key, discover_chapters
 from remanga.remix import remix_project
+from remanga.verify import verify_project
 from remanga.json_io import has_real_json_content
 from remanga.paths import (
     ensure_memory_file, get_chapter_dir, get_panels_pdf_dir, get_panels_zip_dir, get_sheets_dir,
@@ -40,13 +41,17 @@ def run_interactive_pipeline():
         "\n[bold]1.[/] Process a chapter\n"
         "[bold]2.[/] Compile the whole project into one continuous video (full-recap)\n"
         "[bold]3.[/] Change background music/volume and rebuild video(s) only (no re-narration)\n"
+        "[bold]4.[/] Verify audio/video files are complete, not corrupt/truncated\n"
     )
-    mode = Prompt.ask("[bold]Choose[/]", choices=["1", "2", "3"], default="1")
+    mode = Prompt.ask("[bold]Choose[/]", choices=["1", "2", "3", "4"], default="1")
     if mode == "2":
         _run_full_recap(project, config)
         return
     if mode == "3":
         _run_remix(project, config)
+        return
+    if mode == "4":
+        _run_verify(project)
         return
 
     meta = load_project_metadata(project)
@@ -320,3 +325,22 @@ def _run_remix(project: str, config: RemangaConfig) -> None:
     rejoin = Confirm.ask("Re-join the full-recap video too, if one exists?", default=True)
 
     remix_project(project, config, chapters=selected, bgm_override=bgm_override, rejoin=rejoin)
+
+
+def _run_verify(project: str) -> None:
+    """Verify mode: strictly checks every chapter's audio/video is complete
+    and decodable, not just present - see verify.py's module docstring."""
+    chapters = discover_chapters(project)
+    if not chapters:
+        console.print(f"[bold red]No chapters found for '{project}'.[/]")
+        return
+
+    console.print(f"\n[dim]Chapters found: {', '.join(chapters)}[/]")
+    choice = Prompt.ask(
+        "[bold]Verify all of them, or a subset? (comma-separated chapter numbers, or Enter for all)[/]",
+        default="",
+    ).strip()
+    selected = sorted({c.strip() for c in choice.split(",") if c.strip()}, key=chapter_sort_key) if choice else chapters
+
+    check_video = Confirm.ask("Also verify rendered videos (slower - audio only if no)?", default=True)
+    verify_project(project, chapters=selected, check_video=check_video)
