@@ -1,7 +1,9 @@
-// Narration Reviewer frontend: one flat list of panel cards, each toggleable
-// between "ok" (no flag) and "flagged" (issue note + optional tag). No
-// canvas/drag state to manage - see marker's static/js/ for that pattern;
-// this UI only ever needs a list editor.
+// Narration Reviewer frontend: one flat list of panel cards, each showing
+// the panel's cropped image, its narration line, and an always-visible
+// review field - typing a note in a panel's field flags it, leaving it
+// empty means the panel is fine. No canvas/drag state to manage - see
+// marker's static/js/ for that pattern; this UI only ever needs a list
+// editor.
 
 let PANELS = [];
 let CHAPTER = null;
@@ -69,53 +71,52 @@ function render() {
 
     const current = flags.get(p.panel_id) || { issue: "", tag: "" };
 
+    // Every panel gets the same three things, always visible - the panel
+    // image, its narration line, and a review field - per panel. Leaving
+    // the review field empty means "this panel is fine"; typing anything
+    // in it flags the panel, no separate click needed first.
     card.innerHTML = `
       <div class="panel-thumb">${thumbHtml}</div>
       <div class="panel-body">
-        <div class="panel-id">${p.panel_id}</div>
+        <div class="panel-id-row">
+          <span class="panel-id">${p.panel_id}</span>
+          <span class="status-pill ${flagged ? "is-flagged" : "is-ok"}">${flagged ? "⚑ flagged" : "✓ ok"}</span>
+        </div>
         <div class="panel-text${p.text ? "" : " silent"}">${textHtml}</div>
-        <div class="flag-row">
-          <button class="toggle-btn ${flagged ? "is-flagged" : "is-ok"}" data-action="toggle">
-            ${flagged ? "⚑ Flagged" : "✓ Looks correct"}
-          </button>
-        </div>
-        <div class="issue-box ${flagged ? "open" : ""}">
-          <select data-field="tag">${tagOptionsHtml(current.tag)}</select>
-          <textarea data-field="issue" placeholder="What's wrong, specifically? e.g. 'This is attributed to the wrong character - the speech bubble tail points to the girl on the right, not Lloyd.'">${escapeHtml(current.issue)}</textarea>
-        </div>
+        <label class="review-label" for="issue-${p.panel_id}">Review</label>
+        <textarea id="issue-${p.panel_id}" data-field="issue" placeholder="Leave empty if this panel is correct. Otherwise, say exactly what's wrong - e.g. 'This is attributed to the wrong character - the speech bubble tail points to the girl on the right, not Lloyd.'">${escapeHtml(current.issue)}</textarea>
+        <select data-field="tag">${tagOptionsHtml(current.tag)}</select>
       </div>
     `;
 
-    card.querySelector('[data-action="toggle"]').addEventListener("click", () => toggleFlag(p.panel_id, card));
-    const issueBox = card.querySelector(".issue-box");
-    issueBox.querySelector('[data-field="issue"]').addEventListener("input", (e) => updateFlag(p.panel_id, "issue", e.target.value));
-    issueBox.querySelector('[data-field="tag"]').addEventListener("change", (e) => updateFlag(p.panel_id, "tag", e.target.value));
+    const issueField = card.querySelector('[data-field="issue"]');
+    const tagField = card.querySelector('[data-field="tag"]');
+    issueField.addEventListener("input", (e) => updateFlag(p.panel_id, "issue", e.target.value, card));
+    tagField.addEventListener("change", (e) => updateFlag(p.panel_id, "tag", e.target.value, card));
 
     list.appendChild(card);
   }
   updateCounts();
 }
 
-function toggleFlag(panelId, card) {
-  if (flags.has(panelId)) {
-    flags.delete(panelId);
-  } else {
-    flags.set(panelId, { issue: "", tag: "" });
-  }
-  const flagged = flags.has(panelId);
-  card.classList.toggle("flagged", flagged);
-  const btn = card.querySelector('[data-action="toggle"]');
-  btn.className = "toggle-btn " + (flagged ? "is-flagged" : "is-ok");
-  btn.textContent = flagged ? "⚑ Flagged" : "✓ Looks correct";
-  card.querySelector(".issue-box").classList.toggle("open", flagged);
-  if (flagged) card.querySelector('[data-field="issue"]').focus();
-  updateCounts();
-}
-
-function updateFlag(panelId, field, value) {
+function updateFlag(panelId, field, value, card) {
   const current = flags.get(panelId) || { issue: "", tag: "" };
   current[field] = value;
-  flags.set(panelId, current);
+
+  // Flagged status is derived purely from whether the review field has
+  // text in it - no separate toggle to keep in sync.
+  if (current.issue.trim()) {
+    flags.set(panelId, current);
+  } else {
+    flags.delete(panelId);
+  }
+
+  const flagged = flags.has(panelId);
+  card.classList.toggle("flagged", flagged);
+  const pill = card.querySelector(".status-pill");
+  pill.className = "status-pill " + (flagged ? "is-flagged" : "is-ok");
+  pill.textContent = flagged ? "⚑ flagged" : "✓ ok";
+  updateCounts();
 }
 
 function updateCounts() {
@@ -133,9 +134,12 @@ async function submitReview(approved) {
   const general_note = document.getElementById("general-note").value;
 
   // Push every flag's latest issue text to the server before finishing -
-  // the per-keystroke handlers above only update local state.
-  for (const [panelId, data] of flags.entries()) {
-    await fetch(`/api/flag/${encodeURIComponent(panelId)}`, {
+  // the per-keystroke handlers above only update local state. Also clears
+  // any panel that was flagged in a previous round but has since been
+  // emptied back out in this session.
+  for (const p of PANELS) {
+    const data = flags.get(p.panel_id) || { issue: "", tag: "" };
+    await fetch(`/api/flag/${encodeURIComponent(p.panel_id)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),

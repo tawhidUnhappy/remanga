@@ -92,22 +92,24 @@ main { max-width: 980px; margin: 0 auto; padding: 20px; }
 .panel-thumb .missing { font-size: 11px; color: var(--text-faint); padding: 20px; text-align: center; }
 
 .panel-body { display: flex; flex-direction: column; gap: 8px; }
+.panel-id-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .panel-id { font-family: ui-monospace, monospace; font-size: 12px; color: var(--text-dim); }
 .panel-text { font-size: 14px; line-height: 1.5; }
 .panel-text.silent { color: var(--text-faint); font-style: italic; }
 
-.flag-row { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
-.toggle-btn {
-  font-size: 12px;
-  padding: 6px 12px;
+.status-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
   border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
 }
-.toggle-btn.is-ok { border-color: var(--ok); color: var(--ok); }
-.toggle-btn.is-flagged { background: var(--danger); border-color: var(--danger); color: var(--danger-ink); font-weight: 700; }
+.status-pill.is-ok { border-color: var(--ok); color: var(--ok); }
+.status-pill.is-flagged { background: var(--danger); border-color: var(--danger); color: var(--danger-ink); }
 
-.issue-box { display: none; gap: 8px; }
-.issue-box.open { display: flex; flex-direction: column; }
-.issue-box textarea, .issue-box select {
+.review-label { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+.panel-body textarea, .panel-body select {
   font-family: inherit;
   font-size: 13px;
   background: var(--surface-2);
@@ -117,7 +119,8 @@ main { max-width: 980px; margin: 0 auto; padding: 20px; }
   padding: 8px 10px;
   resize: vertical;
 }
-.issue-box textarea { min-height: 54px; }
+.panel-body textarea { min-height: 54px; }
+.panel-card.flagged textarea { border-color: var(--danger); }
 
 .general-note {
   background: var(--surface);
@@ -165,7 +168,8 @@ footer {
 <main>
   <div id="loading">Loading narration…</div>
   <p class="hint" id="hint" style="display:none">
-    Mark any panel whose narration is wrong. Leave the rest alone - a panel with no flag is treated as correct.
+    Every panel below shows its image, its narration line, and a review field. Leave a field empty if the
+    panel is correct; type in it to flag what's wrong - typing is all it takes, no separate click needed.
     When you're done, Submit sends this round's flags to <code>narration_review.json</code>.
   </p>
   <div id="panel-list"></div>
