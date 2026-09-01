@@ -42,8 +42,12 @@ than guessing at a fix.
   ]
 }
 ```
-`tag` is one of: `wrong_detail`, `wrong_speaker`, `dropped_content`, `spoiler`, `punctuation`,
-`word_budget`, `continuity`, `other`, or empty. Treat it as a hint about *what kind* of mistake
+`tag` is one of: `wrong_detail`, `wrong_speaker`, `dropped_content`, `flattened_dialogue`,
+`spoiler`, `punctuation`, `word_budget`, `continuity`, `other`, or empty. `flattened_dialogue`
+means a panel's line was paraphrased into third-person summary when the character's actual
+words should have been quoted instead (Rule 5 of `prompts/narration.md`) — fix it by rewriting
+the line to work the real quote in, not by rephrasing the paraphrase. Treat `tag` as a hint about
+*what kind* of mistake
 this is — useful for writing a good generalized lesson (see Block 3 below) — not as the whole
 instruction; always read `issue` for the actual specifics.
 

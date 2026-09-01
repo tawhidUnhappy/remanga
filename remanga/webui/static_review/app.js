@@ -15,6 +15,7 @@ const TAGS = [
   ["wrong_detail", "Wrong/invented detail (doesn't match the art)"],
   ["wrong_speaker", "Wrong speaker attribution"],
   ["dropped_content", "Dropped dialogue/action"],
+  ["flattened_dialogue", "Paraphrased instead of quoting the actual line"],
   ["spoiler", "Spoiler / name used too early"],
   ["punctuation", "Punctuation overplayed or flat"],
   ["word_budget", "Too long / too short"],

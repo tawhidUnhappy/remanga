@@ -187,6 +187,9 @@ panel by panel and challenge every line:
   (Rule 7, Rule 10)?
 - Did a name get used before its formal introduction, or a spoiler leak in early (Rule 1)?
 - Does the punctuation actually match what the panel calls for - not overused into every line, not flattened out of a line that clearly needs it - and did the word budget get violated anywhere (Rules 3, 4)?
+- Does a panel's key spoken line sit only as third-person paraphrase when the actual words
+  should have been quoted instead (Rule 5) - would a viewer feel like they missed the real
+  moment hearing only this line?
 - Does the panel count and `panel_id` sequence actually match what was supplied (Rule 6)?
 - Read straight through as a viewer would hear it - is there any gap, jump, or missing beat
   that would leave someone feeling like they missed part of the story (Rule 9)?
@@ -259,9 +262,34 @@ the way the panel actually sounds, not around it:
 
 ### Rule 5: "Show-and-Synthesize" Active Storytelling
 - **Active Present Tense Only:** Always write in active present tense (*"He slides open the locker..."*).
-- **Synthesize Speech Balloons & Thought Clouds:** Blend dialogue and thoughts into smooth narrative summary:
-  - ❌ *Robotic Transcription:* "He opens the locker and thinks, 'Is this a love letter? Who could have put this here?'"
-  - ✅ *Objective Synthesis:* "Opening his locker, he discovers an anonymous sealed letter resting beside his shoes."
+- **Prefer the character's actual words over a paraphrase.** A recap that only ever
+  describes dialogue in third person ("he protests that it's unfair") instead of letting the
+  viewer actually hear the line ("he protests, *'this isn't fair!'*") is the single most common
+  way a recap ends up feeling thin or like it's skipping over the good parts, even when every
+  fact is technically covered. When a panel's spoken line is short, punchy, a real line of
+  dialogue (a threat, a joke, a declaration, a key piece of information a character states
+  outright), **quote it close to verbatim, worked into the narration sentence**, rather than
+  flattening it into indirect summary:
+  - ❌ *Over-synthesized (loses the actual moment):* "He protests that the skill is his
+    livelihood and that they shouldn't be allowed to take it from him."
+  - ✅ *Raw dialogue preserved:* "He shouts, *'this skill is my livelihood — you can't just
+    take it from me!'*"
+  - Narration frame (who's speaking, the beat around the line) stays third-person/active
+    present per the rule above — only the character's own words go in as a quote. That's the
+    balance: still a narrator describing the scene, not a bare transcript, but the viewer
+    actually hears what was said instead of only a summary of it.
+- **When to synthesize instead of quoting directly:** a panel with several stacked lines,
+  filler ("um," "well," repeated words), or dialogue that only makes sense chained across
+  multiple bubbles is still better condensed into flowing prose (Rule 7 still requires every
+  bubble's substance survive somewhere) — synthesis exists for exactly that case, not as the
+  default for every line. The test is "would a viewer feel like they missed the actual moment
+  hearing only my paraphrase?" — if yes, that line needed to be quoted, not summarized.
+  - ❌ *Still a valid case for synthesis:* "He opens the locker and thinks, 'Is this a love
+    letter? Who could have put this here?'" → **✅** "Opening his locker, he discovers an
+    anonymous sealed letter resting beside his shoes." (an interior thought stretched across
+    two rhetorical questions reads better condensed than quoted whole).
+  - Within the word budget (Rule 4), lean toward spending it on the character's real words for
+    a panel's key line rather than on extra narrator scene-setting the art already shows.
 
 ### Rule 6: Strict Sequential Panel Coverage — Every Story Panel, No Exceptions
 - Every panel image you are given (`{chapter}_001_01` through the last panel in the manifest) has **already been through story-page filtering upstream** — non-story pages (credits, ads, blank pages, duplicate spread halves) were dropped before cropping ever happened. That means **every single panel you receive is, by definition, part of the story** — there is no such thing as a supplied panel that is "not story-relevant." Never reason your way into skipping one on those grounds.
@@ -271,7 +299,7 @@ the way the panel actually sounds, not around it:
 
 ### Rule 7: Complete Dialogue & Action Coverage (ZERO OMISSION)
 Every panel must be fully accounted for — do not silently drop content because it's inconvenient to fit, redundant-seeming, or not the "main" beat of the panel.
-- **All dialogue, in order:** If a panel contains multiple speech bubbles, thought bubbles, captions, or SFX text, the narration must reflect the substance of **every one of them**, not just the first or the most dramatic line. Synthesize them into flowing prose (per Rule 5) rather than dropping the rest — condensing wording is fine, discarding a speaker's line entirely is not.
+- **All dialogue, in order:** If a panel contains multiple speech bubbles, thought bubbles, captions, or SFX text, the narration must reflect the substance of **every one of them**, not just the first or the most dramatic line. Per Rule 5, the panel's key line is quoted close to verbatim where it fits the word budget; the rest is synthesized into flowing prose around it — condensing wording is fine, discarding a speaker's line entirely is not.
 - **All actions, in order:** Every distinct physical action or event depicted in the panel (an entrance, a gesture, an object changing hands, a reaction) must be represented in the narration in the same order it reads on the page. Do not narrate only the first action in a panel and ignore a second one drawn in the same frame.
 - **Preserve reading order across the whole page/sequence:** narration order must follow the same right-to-left, top-to-bottom flow the panels were cropped in — never reorder events, and never narrate a later panel's content early or a fact before the panel that establishes it.
 - Before finalizing output, re-scan each panel image against its narration line and confirm nothing visible or spoken in it was left out; if something was omitted, revise the line (or split it across `text` and an adjacent silent beat) rather than letting it disappear.
@@ -333,6 +361,7 @@ the same chapter — handle both together, not one instead of the other:
   * `[01_001_02]`: Dark-haired boy walking toward his locker.
   * `[01_002_01]`: Close-up of an unintroduced boy finding a pink envelope inside the compartment.
   * `[01_002_02]`: Close-up reaction beat of the boy staring at the letter in silence.
+  * `[01_002_03]`: The boy turns, speech bubble: *"Who would even leave this for me?"*
 
 * **Correct Output:**
 ```json
@@ -352,9 +381,15 @@ the same chapter — handle both together, not one instead of the other:
   {
     "panel_id": "01_002_02",
     "text": ""
+  },
+  {
+    "panel_id": "01_002_03",
+    "text": "Turning it over, he mutters, 'who would even leave this for me?'"
   }
 ]
 ```
+Note `01_002_03`: the boy's actual line is quoted almost verbatim (Rule 5), not flattened into
+"he wonders who left it for him" — the viewer hears the real line, not just a report of it.
 
 ---
 
