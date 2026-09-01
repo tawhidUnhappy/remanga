@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 from typing import Sequence
 
 from remanga.console import console
+from remanga.proc_io import stream_subprocess
 from remanga.venvs import get_scripts_dir, get_tool_python
 
 
@@ -54,23 +54,15 @@ class ModelManager:
         # Buffering all of it until the subprocess exits - the previous
         # behavior - left the console looking completely stalled for that
         # entire time, only ever dumping the buffered output at the very end
-        # (and only on failure). Merging stderr into stdout and passing
-        # both straight through to this process's own stdout lets tqdm's
-        # carriage-return-driven redraws render normally in a real
-        # terminal, while still being collected here for the error message
-        # on failure.
-        proc = subprocess.Popen(
+        # (and only on failure). stream_subprocess overwrites tqdm's
+        # \r-terminated redraws in place (like a real terminal would) instead
+        # of flooding the console with one new line per refresh.
+        returncode, output = stream_subprocess(
             [str(python), str(script), str(self.model_dir.resolve()), self.repo_id],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
         )
-        output_lines: list[str] = []
-        for line in proc.stdout:  # type: ignore[union-attr]
-            print(line, end="", flush=True)
-            output_lines.append(line)
-        proc.wait()
 
-        if proc.returncode != 0:
-            tail = "".join(output_lines).strip()
+        if returncode != 0:
+            tail = output.strip()
             console.print(f"[bold red]Error downloading model weights:[/] {tail}")
             raise RuntimeError(f"{self.display_name} weight download failed: {tail}")
 
