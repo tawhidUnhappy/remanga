@@ -47,18 +47,32 @@ class ModelManager:
         python = get_tool_python(self.tool_name)
         script = get_scripts_dir("models") / self.download_script
 
-        # refresh_per_second=4 (Rich's console.status() default is ~12.5):
-        # see the Progress() note in downloader/mangadex.py - same rationale,
-        # applied to the spinner form.
-        with console.status(f"[bold cyan]Verifying {self.display_name} model weights ({self.repo_id})...[/]", spinner="dots", refresh_per_second=4):
-            result = subprocess.run(
-                [str(python), str(script), str(self.model_dir.resolve()), self.repo_id],
-                capture_output=True, text=True,
-            )
+        console.print(f"[bold cyan]Downloading {self.display_name} model weights ({self.repo_id})...[/]")
+        # Streamed live (not capture_output=True) - huggingface_hub's own
+        # snapshot_download() progress bars (tqdm, one per file) live on
+        # stderr, and a full multi-GB download can take tens of minutes.
+        # Buffering all of it until the subprocess exits - the previous
+        # behavior - left the console looking completely stalled for that
+        # entire time, only ever dumping the buffered output at the very end
+        # (and only on failure). Merging stderr into stdout and passing
+        # both straight through to this process's own stdout lets tqdm's
+        # carriage-return-driven redraws render normally in a real
+        # terminal, while still being collected here for the error message
+        # on failure.
+        proc = subprocess.Popen(
+            [str(python), str(script), str(self.model_dir.resolve()), self.repo_id],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
+        )
+        output_lines: list[str] = []
+        for line in proc.stdout:  # type: ignore[union-attr]
+            print(line, end="", flush=True)
+            output_lines.append(line)
+        proc.wait()
 
-        if result.returncode != 0:
-            console.print(f"[bold red]Error downloading model weights:[/] {result.stderr.strip()}")
-            raise RuntimeError(f"{self.display_name} weight download failed: {result.stderr.strip()}")
+        if proc.returncode != 0:
+            tail = "".join(output_lines).strip()
+            console.print(f"[bold red]Error downloading model weights:[/] {tail}")
+            raise RuntimeError(f"{self.display_name} weight download failed: {tail}")
 
         console.print(f"[bold green]✓ {self.display_name} model weights verified and ready![/]")
         return self.model_dir

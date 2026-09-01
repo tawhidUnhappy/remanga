@@ -185,7 +185,7 @@ class VideoRenderer:
         ])
 
         console.print("[yellow]Starting video rendering... This may take a moment.[/]")
-        result = run_ffmpeg(cmd, capture=True)
+        result = run_ffmpeg(cmd, capture=True, show_progress=True)
 
         if result.returncode != 0:
             console.print(f"[red]FFmpeg Error Details:\n{_escape_path(result.stderr)}[/]")

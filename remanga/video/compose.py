@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional, Tuple
 from PIL import Image, ImageColor, ImageDraw, ImageEnhance, ImageFilter, ImageOps
+from rich.progress import BarColumn, Progress, TextColumn
 
 from remanga.config import VideoConfig
 from remanga.console import console
@@ -145,14 +146,27 @@ class FrameCompositor:
 
         bg_mode = getattr(self.config, "background_style", "blur")
         console.print(f"[cyan]Compositing {len(panels)} panels onto {self.config.width}x{self.config.height} canvas (Mode: {bg_mode})...[/]")
-        reused_count = 0
 
+        reused_count = 0
+        to_composite = []
         for p in panels:
             out_frame = frames_dir / f"frame_{p.stem}.png"
             if not force and out_frame.exists() and out_frame.stat().st_size > 1000:
                 reused_count += 1
                 continue
-            self.fit_image_on_canvas(p, out_frame)
+            to_composite.append((p, out_frame))
+
+        if to_composite:
+            with Progress(
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TextColumn("{task.completed}/{task.total} panels"),
+                refresh_per_second=4,
+            ) as progress:
+                task = progress.add_task("[yellow]Compositing frames...", total=len(to_composite))
+                for p, out_frame in to_composite:
+                    self.fit_image_on_canvas(p, out_frame)
+                    progress.update(task, advance=1)
 
         if reused_count > 0:
             console.print(f"[dim cyan](Reused {reused_count} existing composited frames)[/]")

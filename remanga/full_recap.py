@@ -44,6 +44,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from pydub import AudioSegment
+from rich.progress import BarColumn, Progress, TextColumn
 
 from remanga import setup
 from remanga.audio.mix import AudioProcessor
@@ -143,25 +144,46 @@ class FullRecapCompiler:
         combined_voice = AudioSegment.empty()
         frame_timeline: List[Tuple[Path, float]] = []
 
+        # Load every chapter's panel timing up front so the progress bar below
+        # can show a real total (every panel across the whole manga) instead
+        # of restarting from 0 at each chapter boundary.
+        per_chapter_timing = [
+            (chapter_num, read_json(get_audio_timing_path(project_name, chapter_num)).get("panels", []))
+            for chapter_num in chapters
+        ]
+        total_panels = sum(len(panels) for _, panels in per_chapter_timing)
+
         console.print("[cyan]Assembling one continuous narration track across every chapter...[/]")
-        for chapter_num in chapters:
-            audio_dir = get_audio_dir(project_name, chapter_num)
-            frames_dir = get_video_frames_dir(project_name, chapter_num)
-            timing = read_json(get_audio_timing_path(project_name, chapter_num))
+        # This is pure CPU work (pydub decoding/concatenating every panel's WAV
+        # clip in sequence, plus PIL frame compositing next) - the GPU-accelerated
+        # part of this whole pipeline is only the final ffmpeg encode below,
+        # which now shows its own live progress too. Silent for a couple thousand
+        # panels' worth of I/O otherwise looked identical to a hang.
+        with Progress(
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("{task.completed}/{task.total} panels"),
+            refresh_per_second=4,
+        ) as progress:
+            task = progress.add_task("[yellow]Concatenating narration clips...", total=total_panels)
+            for chapter_num, panels in per_chapter_timing:
+                audio_dir = get_audio_dir(project_name, chapter_num)
+                frames_dir = get_video_frames_dir(project_name, chapter_num)
 
-            for p in timing.get("panels", []):
-                clip_file = audio_dir / p["audio_file"]
-                if clip_file.exists():
-                    segment = AudioSegment.from_file(clip_file)
-                else:
-                    segment = AudioSegment.silent(duration=p["duration_ms"], frame_rate=audio_config.sample_rate)
-                combined_voice += segment
+                for p in panels:
+                    clip_file = audio_dir / p["audio_file"]
+                    if clip_file.exists():
+                        segment = AudioSegment.from_file(clip_file)
+                    else:
+                        segment = AudioSegment.silent(duration=p["duration_ms"], frame_rate=audio_config.sample_rate)
+                    combined_voice += segment
 
-                pause_ms = p.get("pause_after_ms", 0)
-                if pause_ms > 0:
-                    combined_voice += AudioSegment.silent(duration=pause_ms, frame_rate=audio_config.sample_rate)
+                    pause_ms = p.get("pause_after_ms", 0)
+                    if pause_ms > 0:
+                        combined_voice += AudioSegment.silent(duration=pause_ms, frame_rate=audio_config.sample_rate)
 
-                frame_timeline.append((frames_dir / f"frame_{p['panel_id']}.png", p["total_slot_sec"]))
+                    frame_timeline.append((frames_dir / f"frame_{p['panel_id']}.png", p["total_slot_sec"]))
+                    progress.update(task, advance=1)
 
         master_audio = combined_voice.set_channels(2).set_frame_rate(audio_config.sample_rate)
 
@@ -197,7 +219,7 @@ class FullRecapCompiler:
                 str(final_path),
             ]
             try:
-                run_ffmpeg(cmd, check=True, capture=True)
+                run_ffmpeg(cmd, check=True, capture=True, show_progress=True)
                 raw_path.unlink(missing_ok=True)
             except Exception as e:
                 console.print(f"[yellow]Loudnorm filter warning: {_esc(str(e))}. Falling back to the un-normalized full-manga track.[/]")
@@ -282,7 +304,7 @@ class FullRecapCompiler:
         cmd.extend(["-c:a", "aac", "-b:a", "192k", "-shortest", str(final_video)])
 
         console.print("[yellow]Encoding the full-manga recap... This may take a while for a long manga.[/]")
-        result = run_ffmpeg(cmd, capture=True)
+        result = run_ffmpeg(cmd, capture=True, show_progress=True)
         if result.returncode != 0:
             console.print(f"[red]FFmpeg Error Details:\n{_esc(result.stderr)}[/]")
             raise RuntimeError("FFmpeg full-manga rendering failed.")

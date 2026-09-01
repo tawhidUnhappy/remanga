@@ -157,7 +157,7 @@ echo "[+] Building Audio8's fused Mamba CUDA kernels (mamba-ssm, causal-conv1d) 
     if [ -z "$NVCC_CUDA_HOME" ]; then
         # Fallback: locate it by the actual nvcc binary pip just installed,
         # since the importable package name has moved between releases.
-        NVCC_BIN="$(find "$AUDIO8_VENV_DIR/lib" -maxdepth 5 -type f -path "*/nvidia/*/bin/nvcc" 2>/dev/null | head -n 1)"
+        NVCC_BIN="$(find "$AUDIO8_VENV_DIR/lib" -maxdepth 7 -type f -path "*/nvidia/*/bin/nvcc" 2>/dev/null | head -n 1)"
         [ -n "$NVCC_BIN" ] && NVCC_CUDA_HOME="$(dirname "$(dirname "$NVCC_BIN")")"
     fi
     [ -n "$NVCC_CUDA_HOME" ] && [ -x "$NVCC_CUDA_HOME/bin/nvcc" ] || { echo "[-] Could not locate a usable nvcc after installing nvidia-cuda-nvcc - skipping fused kernels."; exit 1; }
