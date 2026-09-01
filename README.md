@@ -277,15 +277,17 @@ dropped content, spoiler, punctuation, word budget, continuity, other — helps 
 then either **Approve** (nothing flagged — continue straight to voice synthesis) or **Submit**.
 Submitting writes `narration_review.json` and prints exactly what to upload to your LLM next:
 `prompts/narration_review.md`, the current `narration.json`, `narration_review.json`,
-`memory.json`, and `projects/_global/narration_lessons.json`. The LLM fixes only the flagged
+`memory.json`, and `global/narration_lessons.json`. The LLM fixes only the flagged
 panels (everything else is left untouched), then replies with three JSON blocks — the corrected
 `narration.json`, an updated `memory.json`, and an updated `narration_lessons.json`. Save each one
 over its file and the wizard reopens the reviewer for another round — repeat as many rounds as you
 want; nothing moves on to TTS until you approve a round with zero flags (or explicitly choose not
 to review further).
 
-`narration_lessons.json` is the mechanism that makes review rounds compound over time: it's **one
-file shared across every project**, not per-manga, and every genuinely generalized lesson an LLM
+`narration_lessons.json` is the mechanism that makes review rounds compound over time: it lives at
+`global/narration_lessons.json` (a sibling of `projects/`, not inside it - so it never shows up as
+a bogus project in the wizard's project picker), and is **one file shared across every project**,
+not per-manga. Every genuinely generalized lesson an LLM
 writes there (phrased so it applies to any manga, not just this one — see
 `prompts/narration_review.md`) gets read back in as a standing rule on every future chapter's
 *first* narration pass (`prompts/narration.md`), for any project. A round's own history is kept

@@ -36,6 +36,7 @@ projects/*/chapters/*/video/
 *.wav
 *.mp3
 projects/
+global/
 checkpoints/
 .cache/
 bin/

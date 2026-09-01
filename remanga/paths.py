@@ -203,13 +203,17 @@ def get_narration_review_history_dir(project_name: str, chapter_num: str, create
 
 
 def get_global_lessons_path() -> Path:
-    """One file, shared by every project - not per-chapter or per-manga.
+    """One file, shared by every project - not per-chapter or per-manga, and
+    deliberately kept OUTSIDE projects/ (a sibling directory, not a
+    subdirectory of it): list_projects() below treats every directory under
+    projects/ as a manga project, so a "_global" folder living inside it
+    used to show up as a bogus project in the wizard's project picker.
     Accumulates generalized narration mistakes/fixes an LLM has made across
     review rounds (see prompts/narration_review.md), phrased so they're
     useful on any manga, not just the one that surfaced them. Uploaded
     alongside narration.md/narration_review.md on every writing or review
     round so the same class of mistake doesn't recur project to project."""
-    p = get_projects_dir() / "_global" / "narration_lessons.json"
+    p = Path("global") / "narration_lessons.json"
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
 
@@ -304,7 +308,11 @@ def list_projects() -> List[Dict[str, Any]]:
     if not root.exists():
         return results
 
-    for p in sorted(root.iterdir()):
+    # Case-insensitive so e.g. "reincarnated..." (lowercase r) doesn't sort
+    # after every capitalized project name - plain sorted() on Path objects
+    # is ASCII/case-sensitive, which reads as a scrambled, seemingly
+    # unstable order to anyone not thinking in ASCII code points.
+    for p in sorted(root.iterdir(), key=lambda entry: entry.name.casefold()):
         if p.is_dir():
             meta = load_project_metadata(p.name)
             chapters_dir = p / "chapters"

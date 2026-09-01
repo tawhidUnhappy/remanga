@@ -149,7 +149,7 @@ changes what happened in the chapter (e.g. a corrected speaker changes a relatio
 otherwise carry it forward unchanged, same rule as any other pass: never discard existing content.
 
 ### Block 3: `narration_lessons.json`
-Save to: `projects/_global/narration_lessons.json`
+Save to: `global/narration_lessons.json`
 The schema above — the existing list plus any new, genuinely generalized lesson(s) from this round.
 If this round produced no lesson worth generalizing, output the list **unchanged** (don't pad it
 with something trivial just to have written something).
