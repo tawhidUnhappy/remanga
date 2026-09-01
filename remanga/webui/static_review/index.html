@@ -64,21 +64,26 @@ button.primary { background: var(--accent); color: var(--accent-ink); border-col
 button.primary:hover { filter: brightness(1.08); }
 button.primary:disabled { opacity: .5; cursor: default; }
 
-main { max-width: 980px; margin: 0 auto; padding: 20px; }
+main { max-width: 900px; margin: 0 auto; padding: 20px; }
 
+/* Panel image on top, full card width, tall enough to actually read manga
+   art/text at a glance (most panels are portrait-oriented) - narration and
+   the review field sit below it, not squeezed into a side column. Click the
+   image for a true full-size lightbox on top of that. */
 .panel-card {
-  display: grid;
-  grid-template-columns: 220px 1fr;
-  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 14px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 .panel-card.flagged { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger) inset; }
 .panel-thumb {
-  width: 220px;
+  width: 100%;
+  max-height: 78vh;
   border-radius: 8px;
   overflow: hidden;
   background: var(--surface-2);
@@ -86,10 +91,11 @@ main { max-width: 980px; margin: 0 auto; padding: 20px; }
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 120px;
+  min-height: 160px;
 }
-.panel-thumb img { width: 100%; display: block; }
-.panel-thumb .missing { font-size: 11px; color: var(--text-faint); padding: 20px; text-align: center; }
+.panel-thumb img { max-width: 100%; max-height: 78vh; width: auto; height: auto; display: block; cursor: zoom-in; }
+.panel-thumb .missing { font-size: 12px; color: var(--text-faint); padding: 24px; text-align: center; line-height: 1.6; }
+.panel-thumb .missing code { color: var(--text-dim); }
 
 .panel-body { display: flex; flex-direction: column; gap: 8px; }
 .panel-id-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -155,6 +161,35 @@ footer {
 }
 .hint { font-size: 12px; color: var(--text-faint); margin: 0 0 14px; }
 #loading { padding: 40px; text-align: center; color: var(--text-dim); }
+
+/* Full-size lightbox: click any panel image to see it at its true
+   resolution instead of whatever the card's max-height happened to fit -
+   scrolls if it's still taller than the viewport. */
+#lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(10, 9, 13, 0.92);
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+  padding: 40px 20px;
+  cursor: zoom-out;
+}
+#lightbox.open { display: flex; }
+#lightbox img { max-width: none; width: auto; height: auto; box-shadow: var(--shadow); border-radius: 4px; }
+#lightbox .lightbox-hint {
+  position: fixed;
+  top: 14px;
+  right: 20px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+}
 </style>
 </head>
 <body>
@@ -168,9 +203,10 @@ footer {
 <main>
   <div id="loading">Loading narration…</div>
   <p class="hint" id="hint" style="display:none">
-    Every panel below shows its image, its narration line, and a review field. Leave a field empty if the
-    panel is correct; type in it to flag what's wrong - typing is all it takes, no separate click needed.
-    When you're done, Submit sends this round's flags to <code>narration_review.json</code>.
+    Every panel below shows its image, its narration line, and a review field. Click an image for a full-size
+    lightbox (Esc or click to close). Leave a field empty if the panel is correct; type in it to flag what's
+    wrong - typing is all it takes, no separate click needed. When you're done, Submit sends this round's
+    flags to <code>narration_review.json</code>.
   </p>
   <div id="panel-list"></div>
   <div class="general-note" id="general-note-wrap" style="display:none">
@@ -183,6 +219,11 @@ footer {
   <button id="btn-approve" class="primary">Approve — no issues, continue to voice synthesis</button>
   <button id="btn-submit">Submit flagged issues for another LLM pass</button>
 </footer>
+
+<div id="lightbox">
+  <span class="lightbox-hint">click anywhere to close</span>
+  <img id="lightbox-img" alt="">
+</div>
 
 <script src="/static/app.js"></script>
 </body>

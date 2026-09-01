@@ -46,6 +46,7 @@ async function main() {
 
   render();
   wireFooter();
+  wireLightbox();
 }
 
 function tagOptionsHtml(selected) {
@@ -61,9 +62,13 @@ function render() {
     card.className = "panel-card" + (flagged ? " flagged" : "");
     card.dataset.panelId = p.panel_id;
 
+    // Missing usually means narration.json's panel_id doesn't exactly match
+    // a filename in panels/ (e.g. an LLM typo dropping a zero-pad digit) -
+    // say so explicitly rather than leaving a bare "not found" that reads
+    // like a UI bug.
     const thumbHtml = p.image
-      ? `<img src="/api/panels/${encodeURIComponent(p.image)}" loading="lazy" alt="${p.panel_id}">`
-      : `<div class="missing">no cropped image found for ${p.panel_id}</div>`;
+      ? `<img src="/api/panels/${encodeURIComponent(p.image)}" loading="lazy" alt="${p.panel_id}" data-action="zoom">`
+      : `<div class="missing">No file named <code>${p.panel_id}.png/.jpg/.jpeg/.webp</code> in this chapter's <code>panels/</code> folder.<br>Check narration.json's panel_id for this entry against the actual cropped filename - a mismatch (e.g. missing zero-padding) is the usual cause.</div>`;
 
     const textHtml = p.text
       ? escapeHtml(p.text)
@@ -94,6 +99,9 @@ function render() {
     issueField.addEventListener("input", (e) => updateFlag(p.panel_id, "issue", e.target.value, card));
     tagField.addEventListener("change", (e) => updateFlag(p.panel_id, "tag", e.target.value, card));
 
+    const img = card.querySelector('img[data-action="zoom"]');
+    if (img) img.addEventListener("click", () => openLightbox(img.src, p.panel_id));
+
     list.appendChild(card);
   }
   updateCounts();
@@ -122,6 +130,25 @@ function updateFlag(panelId, field, value, card) {
 function updateCounts() {
   document.getElementById("counts").innerHTML = `<b>${flags.size}</b> / ${PANELS.length} flagged`;
   document.getElementById("btn-approve").disabled = flags.size > 0;
+}
+
+function openLightbox(src, alt) {
+  const lb = document.getElementById("lightbox");
+  const img = document.getElementById("lightbox-img");
+  img.src = src;
+  img.alt = alt;
+  lb.classList.add("open");
+}
+
+function closeLightbox() {
+  document.getElementById("lightbox").classList.remove("open");
+}
+
+function wireLightbox() {
+  document.getElementById("lightbox").addEventListener("click", closeLightbox);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeLightbox();
+  });
 }
 
 function escapeHtml(s) {
