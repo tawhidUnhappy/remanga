@@ -255,10 +255,21 @@ the way the panel actually sounds, not around it:
 ### Rule 4: Word Budget & Retention Pacing
 - **Standard Panel Target:** **10 to 20 words** (~3.5 to 5.0 seconds of audio).
 - **Hard Upper Ceiling:** **Never exceed 26 words** on any single panel.
-- **Silent & Reaction Impact Beats:**
-  - For silent stare downs, shock reveals, or massive environmental splash panels where dialogue is unnecessary:
-  - Set `"text": ""` (empty string).
-  - The pipeline applies its own fixed pause automatically for these - there is no per-entry pause field to set (see Section 4's schema). Do not try to signal a longer beat through the text itself (no dashes, no repeated punctuation); an empty `"text"` is the whole signal.
+- **Never leave `text` empty.** Every panel you're given already passed through story-page
+  *and* panel-relevance filtering upstream (see Rule 6) - a human marked exactly which panels
+  matter during cropping, before you ever see this chapter, so if a panel made it into your
+  upload, it has something worth narrating. `"text": ""` is **not a valid output for any
+  panel, ever** - there is no silent/reaction-beat exception anymore. A stare-down, a shock
+  reveal, or a splash panel still gets real narration:
+  - Describe what's happening in the moment itself - the expression, the pose, the reveal, the
+    weight of the silence - rather than narrating nothing because no one speaks. *"He freezes,
+    unable to look away from what's just been revealed."* is a valid, short line for a panel
+    with no dialogue at all; an empty string is not.
+  - This can and should still be a *short* line - a few words is fine and often right for a
+    genuinely quiet beat (the 10-20 word target is a norm, not a floor to hit on every panel) -
+    it just can never be zero words.
+  - If you're ever tempted to write `""`, that's the signal to look harder at the panel and
+    describe what it actually shows instead, not to leave it blank.
 
 ### Rule 5: "Show-and-Synthesize" Active Storytelling
 - **Active Present Tense Only:** Always write in active present tense (*"He slides open the locker..."*).
@@ -294,7 +305,7 @@ the way the panel actually sounds, not around it:
 ### Rule 6: Strict Sequential Panel Coverage — Every Story Panel, No Exceptions
 - Every panel image you are given (`{chapter}_001_01` through the last panel in the manifest) has **already been through story-page filtering upstream** — non-story pages (credits, ads, blank pages, duplicate spread halves) were dropped before cropping ever happened. That means **every single panel you receive is, by definition, part of the story** — there is no such thing as a supplied panel that is "not story-relevant." Never reason your way into skipping one on those grounds.
 - Include an entry for **every panel name in `full_manifest`** (`{chapter}_001_01` through the last panel in the manifest) in exact chronological sequence.
-- **Never skip, merge, or omit panel IDs.** If a panel seems minor, low-content, transitional, or repetitive, it still gets its own entry — use a short line or a silent beat (`"text": ""`, Rule 4), but the entry must exist. `narration.total_panels` must equal the number of panels actually supplied, and the `narration` array length must match it exactly — treat any mismatch as an error to fix before output, not an acceptable shortcut.
+- **Never skip, merge, or omit panel IDs.** If a panel seems minor, low-content, transitional, or repetitive, it still gets its own entry with a real, non-empty short line (Rule 4 — `"text": ""` is never valid), but the entry must exist. `narration.total_panels` must equal the number of panels actually supplied, and the `narration` array length must match it exactly — treat any mismatch as an error to fix before output, not an acceptable shortcut.
 - Before finalizing, count the panel images you were given and count the entries in your `narration` array — if they don't match 1:1 by `panel_id`, find the missing or extra entry and fix it before returning output.
 - **`panel_id` must be copied verbatim from `full_manifest`, character-for-character — never
   retyped, reformatted, or re-derived from memory.** A count match (the bullet above) is not
@@ -313,7 +324,7 @@ Every panel must be fully accounted for — do not silently drop content because
 - **All dialogue, in order:** If a panel contains multiple speech bubbles, thought bubbles, captions, or SFX text, the narration must reflect the substance of **every one of them**, not just the first or the most dramatic line. Per Rule 5, the panel's key line is quoted close to verbatim where it fits the word budget; the rest is synthesized into flowing prose around it — condensing wording is fine, discarding a speaker's line entirely is not.
 - **All actions, in order:** Every distinct physical action or event depicted in the panel (an entrance, a gesture, an object changing hands, a reaction) must be represented in the narration in the same order it reads on the page. Do not narrate only the first action in a panel and ignore a second one drawn in the same frame.
 - **Preserve reading order across the whole page/sequence:** narration order must follow the same right-to-left, top-to-bottom flow the panels were cropped in — never reorder events, and never narrate a later panel's content early or a fact before the panel that establishes it.
-- Before finalizing output, re-scan each panel image against its narration line and confirm nothing visible or spoken in it was left out; if something was omitted, revise the line (or split it across `text` and an adjacent silent beat) rather than letting it disappear.
+- Before finalizing output, re-scan each panel image against its narration line and confirm nothing visible or spoken in it was left out; if something was omitted, revise the line (or split it across `text` and an adjacent panel's line — never into an empty `text`, per Rule 4) rather than letting it disappear.
 
 ### Rule 8: Phonetic Clarity
 - Spell out abbreviations, ranks, and chapter numbers phonetically (e.g., "Class One-One", "Chapter One", "Room Three-B").
@@ -396,7 +407,7 @@ the same chapter — handle both together, not one instead of the other:
   },
   {
     "panel_id": "01_002_02",
-    "text": ""
+    "text": "He stares at it in silence, unable to guess who could have left it."
   },
   {
     "panel_id": "01_002_03",

@@ -43,11 +43,15 @@ than guessing at a fix.
 }
 ```
 `tag` is one of: `wrong_detail`, `wrong_speaker`, `dropped_content`, `flattened_dialogue`,
-`spoiler`, `punctuation`, `word_budget`, `continuity`, `other`, or empty. `flattened_dialogue`
-means a panel's line was paraphrased into third-person summary when the character's actual
-words should have been quoted instead (Rule 5 of `prompts/narration.md`) — fix it by rewriting
-the line to work the real quote in, not by rephrasing the paraphrase. Treat `tag` as a hint about
-*what kind* of mistake
+`empty_text`, `spoiler`, `punctuation`, `word_budget`, `continuity`, `other`, or empty.
+`flattened_dialogue` means a panel's line was paraphrased into third-person summary when the
+character's actual words should have been quoted instead (Rule 5 of `prompts/narration.md`) —
+fix it by rewriting the line to work the real quote in, not by rephrasing the paraphrase.
+`empty_text` means a panel was left with `"text": ""` — **never valid** per Rule 4 of
+`prompts/narration.md`; every panel that reaches this pipeline already passed human
+panel-relevance filtering during marking, so describe what the panel actually shows instead
+of leaving it blank, even for a silent/reaction beat. Treat `tag` as a hint about *what kind*
+of mistake
 this is — useful for writing a good generalized lesson (see Block 3 below) — not as the whole
 instruction; always read `issue` for the actual specifics.
 
