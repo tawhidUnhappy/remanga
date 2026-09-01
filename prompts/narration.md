@@ -296,6 +296,17 @@ the way the panel actually sounds, not around it:
 - Include an entry for **every panel name in `full_manifest`** (`{chapter}_001_01` through the last panel in the manifest) in exact chronological sequence.
 - **Never skip, merge, or omit panel IDs.** If a panel seems minor, low-content, transitional, or repetitive, it still gets its own entry — use a short line or a silent beat (`"text": ""`, Rule 4), but the entry must exist. `narration.total_panels` must equal the number of panels actually supplied, and the `narration` array length must match it exactly — treat any mismatch as an error to fix before output, not an acceptable shortcut.
 - Before finalizing, count the panel images you were given and count the entries in your `narration` array — if they don't match 1:1 by `panel_id`, find the missing or extra entry and fix it before returning output.
+- **`panel_id` must be copied verbatim from `full_manifest`, character-for-character — never
+  retyped, reformatted, or re-derived from memory.** A count match (the bullet above) is not
+  enough by itself: `total_panels` can be correct while an individual `panel_id` still has a
+  digit dropped, extra/missing zero-padding, or a typo (e.g. `01_010_01` instead of the
+  manifest's actual `001_010_01`) — this is invisible to a length check and silently breaks
+  every downstream step that keys off `panel_id` (audio sync, the human review UI's panel
+  image lookup), which just shows that panel as missing without any error surfacing here.
+  Before output, **diff your `narration` array's `panel_id` list against `full_manifest`
+  string-for-string, not just by count** — every single one must match exactly, in order. Fix
+  any mismatch by copying the manifest's exact string, never by adjusting the manifest's
+  padding to match what you wrote.
 
 ### Rule 7: Complete Dialogue & Action Coverage (ZERO OMISSION)
 Every panel must be fully accounted for — do not silently drop content because it's inconvenient to fit, redundant-seeming, or not the "main" beat of the panel.
@@ -312,6 +323,11 @@ Rules 6 and 7 already have you checking panel count and per-panel dialogue/actio
 while you draft. Before you output anything, do a **second, separate pass**: read the
 **entire finished script start to finish**, the way a viewer will actually hear it, not
 panel-by-panel in isolation.
+- **Re-verify every `panel_id` string-for-string against `full_manifest`** (Rule 6) — this is
+  a distinct check from the count check, done again here as a dedicated pass, not folded into
+  "read it like a viewer": a wrong `panel_id` produces no gap or jump a listening pass would
+  ever catch (the *text* is fine, only the id is broken), so it has to be checked by literally
+  comparing strings, not by ear.
 - **Re-verify accuracy:** every line still matches its panel's art (Rule 2) — no detail
   drifted or got paraphrased into something the panel doesn't actually show.
 - **Re-verify nothing was dropped:** every piece of dialogue, caption, and visible detail
