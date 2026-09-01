@@ -132,6 +132,51 @@ echo "[+] Creating isolated Audio8 TTS environment ($AUDIO8_VENV_DIR)..."
 "$BIN_DIR/uv" venv "$AUDIO8_VENV_DIR" --python 3.11 --allow-existing
 "$BIN_DIR/uv" pip install --python "$AUDIO8_VENV_DIR" "torch>=2.5.0" "torchaudio>=2.5.0" "transformers>=4.57.0,<5" "soundfile>=0.12" "safetensors>=0.4" accelerate huggingface-hub
 
+# Audio8 is Falcon-H1-based (a Mamba/state-space hybrid, not a plain
+# transformer) - its speed depends on the fused `mamba-ssm`/`causal-conv1d`
+# CUDA kernels for the state-space recurrence. Without them,
+# audio8_worker.py's `transformers` call silently falls back to a naive,
+# unfused, token-by-token recurrence loop that's dramatically slower
+# (measured ~2-3x slower per panel on an RTX 3060) - small parameter count
+# barely matters on that path. Best-effort only: these are genuine CUDA
+# extension builds (need nvcc matching torch's CUDA major version, ~10-20
+# min combined) and the worker already degrades gracefully to the naive
+# path if they're missing/fail to build, so a failure here must never abort
+# the rest of bootstrap.sh.
+echo "[+] Building Audio8's fused Mamba CUDA kernels (mamba-ssm, causal-conv1d) - this speeds up synthesis significantly and takes ~10-20 min; safe to skip on failure, Audio8 still works without it..."
+(
+    set -e
+    # torch's cpp_extension build only requires nvcc's MAJOR version to match
+    # torch.version.cuda (a minor mismatch is just a warning) - installing
+    # `nvidia-cuda-nvcc` into this same venv guarantees that match without
+    # touching the system CUDA toolkit (which may be a different, older
+    # major version - see this script's comment above the FFmpeg/NVENC pin
+    # for the same kind of driver/toolkit-version trap).
+    "$BIN_DIR/uv" pip install --python "$AUDIO8_VENV_DIR" nvidia-cuda-nvcc
+    NVCC_CUDA_HOME="$("$AUDIO8_VENV_DIR/bin/python" -c "import nvidia.cuda_nvcc as m, pathlib; print(pathlib.Path(m.__file__).parent)" 2>/dev/null || true)"
+    if [ -z "$NVCC_CUDA_HOME" ]; then
+        # Fallback: locate it by the actual nvcc binary pip just installed,
+        # since the importable package name has moved between releases.
+        NVCC_BIN="$(find "$AUDIO8_VENV_DIR/lib" -maxdepth 5 -type f -path "*/nvidia/*/bin/nvcc" 2>/dev/null | head -n 1)"
+        [ -n "$NVCC_BIN" ] && NVCC_CUDA_HOME="$(dirname "$(dirname "$NVCC_BIN")")"
+    fi
+    [ -n "$NVCC_CUDA_HOME" ] && [ -x "$NVCC_CUDA_HOME/bin/nvcc" ] || { echo "[-] Could not locate a usable nvcc after installing nvidia-cuda-nvcc - skipping fused kernels."; exit 1; }
+
+    export CUDA_HOME="$NVCC_CUDA_HOME"
+    export PATH="$CUDA_HOME/bin:$PATH"
+    # Target this machine's actual GPU compute capability (falls back to a
+    # broad common-GPU list if nvidia-smi isn't available) so nvcc doesn't
+    # waste the ~10-20 min build compiling kernels for architectures that
+    # will never run here.
+    export TORCH_CUDA_ARCH_LIST="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -n 1 | tr -d ' ' || true)"
+    [ -z "$TORCH_CUDA_ARCH_LIST" ] && TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6;8.9;9.0"
+    export MAX_JOBS=4
+
+    "$BIN_DIR/uv" pip install --python "$AUDIO8_VENV_DIR" causal-conv1d --no-build-isolation
+    "$BIN_DIR/uv" pip install --python "$AUDIO8_VENV_DIR" mamba-ssm --no-build-isolation
+) && echo "[+] Fused Mamba CUDA kernels installed - Audio8 will use the fast path." \
+  || echo "[-] Skipping fused Mamba CUDA kernels (build failed) - Audio8 will still work, just on its slower fallback path."
+
 echo "[+] Creating isolated MAGI v3 environment ($MAGI_VENV_DIR)..."
 "$BIN_DIR/uv" venv "$MAGI_VENV_DIR" --python 3.11 --allow-existing
 # einops/matplotlib: undeclared imports MAGI v3's remote modeling code needs
