@@ -121,12 +121,14 @@ The easiest way to produce a recap video is through the interactive terminal wiz
 
 ### Wizard Step-by-Step Flow:
 
-After picking a project, the wizard asks which of three things you want to do:
+After picking a project, the wizard asks which of five things you want to do:
 
 ```
 1. Process a chapter
 2. Compile the whole project into one continuous video (full-recap)
 3. Change background music/volume and rebuild video(s) only (no re-narration)
+4. Verify audio/video files are complete, not corrupt/truncated
+5. Review narration only (no other stage runs before or after)
 ```
 
 **Option 1** (the normal per-chapter flow):
@@ -138,15 +140,19 @@ After picking a project, the wizard asks which of three things you want to do:
 │ 4. Download Chapter Pages from MangaDex                     │
 │ 5. Mark Panels (Panel Marker web UI, MAGI v3-assisted)      │
 │ 6. Crop panels & package vision uploads                     │
-│ 7. Prompt for narration.json -> Synthesize Voice            │
-│ 8. Mix Master Audio with EBU R128 Normalization             │
-│ 9. Render Final 1080p / 2K / 4K MP4 Video                   │
+│ 7. Prompt for narration.json (+ memory.json)                │
+│ 8. Review Narration (Narration Reviewer web UI, N rounds)   │
+│ 9. Synthesize Voice                                         │
+│ 10. Mix Master Audio with EBU R128 Normalization             │
+│ 11. Render Final 1080p / 2K / 4K MP4 Video                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 **Option 2** (`full-recap`, see below) walks you through picking which chapters to include, then builds and keeps each chapter's own MP4 before joining all of them into one continuous video with a single BGM pass and a single loudness pass.
 
 **Option 3** (`remix`, see below) is the fast path for "I just want different music, or a different volume" - pick which chapters, optionally point it at a new BGM file (or hop into `setup-config` first to change `bgm_volume_db`), and it re-mixes + re-renders just those chapters (and re-joins the full-recap video, if one exists) - no re-marking, no re-narrating, no re-synthesizing voice.
+
+**Option 5** (`remanga review`, see [4b](#4b-review-the-narration-narration-reviewer-web-ui)) jumps straight into the Narration Reviewer for one chapter and stops there - no download/mark/crop before it, no TTS/mix/render after it, unlike Option 1 where the review step is one stage among the rest and falls straight through to voice synthesis the moment you approve or run out of flags. Use this to go back and do another review round on a chapter you already moved past, without re-running (or being forced into) anything else.
 
 ---
 

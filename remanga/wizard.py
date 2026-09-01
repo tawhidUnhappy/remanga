@@ -5,6 +5,7 @@ or, in full-recap mode, compiling a whole project's chapters into one continuous
 from __future__ import annotations
 
 from rich.prompt import Confirm, Prompt
+from rich.table import Table
 
 from remanga import setup
 from remanga.audio import AudioProcessor, TTSEngine
@@ -19,7 +20,7 @@ from remanga.json_io import has_real_json_content, read_json_or
 from remanga.paths import (
     ensure_global_lessons_file, ensure_memory_file, get_chapter_dir, get_global_lessons_path,
     get_narration_review_path, get_panels_pdf_dir, get_panels_zip_dir, get_sheets_dir,
-    get_sheets_zip_dir, load_project_metadata,
+    get_sheets_zip_dir, list_projects, load_project_metadata,
 )
 from remanga.status import get_chapter_status
 from remanga.video import VideoRenderer
@@ -109,8 +110,9 @@ def run_interactive_pipeline():
         "[bold]2.[/] Compile the whole project into one continuous video (full-recap)\n"
         "[bold]3.[/] Change background music/volume and rebuild video(s) only (no re-narration)\n"
         "[bold]4.[/] Verify audio/video files are complete, not corrupt/truncated\n"
+        "[bold]5.[/] Review narration only (no other stage runs before or after)\n"
     )
-    mode = Prompt.ask("[bold]Choose[/]", choices=["1", "2", "3", "4"], default="1")
+    mode = Prompt.ask("[bold]Choose[/]", choices=["1", "2", "3", "4", "5"], default="1")
     if mode == "2":
         _run_full_recap(project, config)
         return
@@ -119,6 +121,9 @@ def run_interactive_pipeline():
         return
     if mode == "4":
         _run_verify(project)
+        return
+    if mode == "5":
+        _run_review_only(project, config)
         return
 
     meta = load_project_metadata(project)
@@ -428,3 +433,51 @@ def _run_verify(project: str) -> None:
 
     check_video = Confirm.ask("Also verify rendered videos (slower - audio only if no)?", default=True)
     verify_project(project, chapters=selected, check_video=check_video)
+
+
+def _run_review_only(project: str, config: RemangaConfig) -> None:
+    """Standalone entry into the Narration Review stage: pick a chapter and
+    jump straight into the Narration Reviewer, then stop - no
+    download/mark/crop step before it, no TTS/mix/render after it, whether
+    or not this chapter already has those. For going back to do another
+    review round on a chapter you already moved past (Option 1's "Process a
+    chapter" always runs the review loop as one step among the rest, which
+    then falls straight through to voice synthesis the moment you approve
+    or run out of flags - this mode never falls through to anything)."""
+    project_info = next((p for p in list_projects() if p["name"] == project), None)
+    chapters = project_info["chapters"] if project_info else []
+    if not chapters:
+        console.print(f"[bold red]No chapters found for '{project}'.[/]")
+        return
+
+    table = Table(title=f"Chapters for '{project}'", show_edge=False)
+    table.add_column("#", width=4)
+    table.add_column("Chapter")
+    table.add_column("Status")
+    for idx, ch in enumerate(chapters, start=1):
+        status = get_chapter_status(project, ch)
+        table.add_row(str(idx), f"Chapter {ch}", status["summary"])
+    console.print(table)
+
+    default_ch = chapters[-1]
+    choice = Prompt.ask("[bold]Enter chapter number to review[/]", default=str(default_ch)).strip()
+    if choice.isdigit() and 1 <= int(choice) <= len(chapters):
+        chapter = chapters[int(choice) - 1]
+    else:
+        chapter = choice
+
+    narration_path = get_chapter_dir(project, chapter) / "narration.json"
+    if not has_real_json_content(narration_path):
+        console.print(
+            f"[bold red]Chapter {chapter} has no narration.json yet[/] - nothing to review. "
+            "Process this chapter first (option 1) to write narration before reviewing it."
+        )
+        return
+
+    run_narration_review_loop(project, chapter, config)
+    console.print(
+        f"\n[green]✓ Review session for Chapter {chapter} finished.[/] "
+        "[dim]Not continuing to any other stage - re-run the wizard (option 1) when you're "
+        "ready for voice synthesis/mix/render, or come back here for another review round "
+        "any time.[/]"
+    )
