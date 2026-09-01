@@ -201,6 +201,8 @@ def run_interactive_pipeline():
     llm_sheets_parts = sorted(get_sheets_zip_dir(project, chapter, create=False).glob("sheets_*.zip")) if package.sheets_zip_active else []
     memory_path = ensure_memory_file(project)
     memory_has_content = has_real_json_content(memory_path)
+    lessons_path = ensure_global_lessons_file()
+    lessons_has_content = has_real_json_content(lessons_path)
     chapter_needs_memory = False
     try:
         chapter_needs_memory = float(chapter) >= 2
@@ -258,14 +260,16 @@ def run_interactive_pipeline():
         # Every actual path is printed via print_path, one per line, never
         # force-wrapped - a wrapped path breaks ctrl+click-to-open in an
         # editor's integrated terminal (VS Code, etc.).
+        memory_clause = (
+            " and the current memory.json (required from chapter 2 onward, for story continuity)"
+            if chapter_needs_memory else
+            " and the current memory.json (for story continuity)" if memory_has_content else ""
+        )
+        lessons_clause = " and narration_lessons.json (standing rules from past review rounds, across every project)" if lessons_has_content else ""
         console.print(
             "\n[bold]Generate narration.json + memory.json[/]\n"
             f"1. Upload any one of the file(s) listed below to your LLM, along with prompts/narration.md"
-            + (
-                " and the current memory.json (required from chapter 2 onward, for story continuity)"
-                if chapter_needs_memory else
-                " and the current memory.json (for story continuity)" if memory_has_content else ""
-            ) + ".\n"
+            + memory_clause + lessons_clause + ".\n"
             "[dim](each file already carries the project/manga/chapter identity itself - no need to type it in chat)[/]\n"
             "2. It replies with two JSON blocks - save each one into the matching path listed below.\n"
         )
@@ -282,6 +286,10 @@ def run_interactive_pipeline():
             console.print(f"  [dim]{kind}, {note}:[/]")
             for part in parts:
                 print_path(f"    {display_path(part, wrap=False)}")
+        if memory_has_content:
+            print_path(f"  {display_path(memory_path, wrap=False)}  [dim](story continuity)[/]")
+        if lessons_has_content:
+            print_path(f"  {display_path(lessons_path, wrap=False)}  [dim](standing lessons so far)[/]")
 
         console.print("\n[bold]Save its reply into:[/]")
         console.print("  narration.json")
