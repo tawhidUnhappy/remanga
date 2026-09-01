@@ -10,8 +10,8 @@ from remanga.console import display_path, escape as _esc, wrap_at_slashes
 from remanga.json_io import has_real_json_content, read_json_or
 from remanga.paths import (
     get_audio_dir, get_audio_timing_path, get_chapter_dir, get_final_video_path, get_master_audio_path,
-    get_pages_zip_path, get_panels_pdf_dir, get_panels_zip_dir, get_sheets_dir, get_sheets_zip_dir,
-    load_project_metadata,
+    get_narration_review_path, get_pages_zip_path, get_panels_pdf_dir, get_panels_zip_dir, get_sheets_dir,
+    get_sheets_zip_dir, load_project_metadata,
 )
 
 
@@ -43,6 +43,12 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
         n_data = read_json_or(narration_file, {})
         total_narration_entries = len(n_data.get("narration", []))
 
+    review_path = get_narration_review_path(project_name, chapter_num)
+    review_pending = has_real_json_content(review_path)
+    review_flagged_count = 0
+    if review_pending:
+        review_flagged_count = read_json_or(review_path, {}).get("flagged_count", 0)
+
     audio_clips_count = len([p for p in audio_dir.glob("*.wav") if not p.stem.endswith("_raw")]) if audio_dir.exists() else 0
     timing_exist = get_audio_timing_path(project_name, chapter_num, create=False).exists()
     master_audio_exist = get_master_audio_path(project_name, chapter_num, create=False).exists()
@@ -58,6 +64,8 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
         summary = "TTS Ready (Pending Mix)"
     elif total_narration_entries > 0 and audio_clips_count > 0:
         summary = f"TTS In-Progress ({audio_clips_count}/{total_narration_entries})"
+    elif review_pending and review_flagged_count > 0:
+        summary = f"Narration Review Pending ({review_flagged_count} flagged)"
     elif narration_exist:
         summary = "Narration Script Ready"
     elif panels_count > 0:
@@ -83,6 +91,8 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
         "sheets_zip_built": sheets_zip_built,
         "narration_exist": narration_exist,
         "total_narration_entries": total_narration_entries,
+        "review_pending": review_pending,
+        "review_flagged_count": review_flagged_count,
         "audio_clips_count": audio_clips_count,
         "timing_exist": timing_exist,
         "master_audio_exist": master_audio_exist,
@@ -139,6 +149,7 @@ def render_status_panel(project: str, chapter: str) -> str:
    7. pdf                 : {'[green]✓ Built[/]' if st['panels_pdf_built'] else ('[dim yellow]✗ Not generated[/]' if package.pdf_active else '[dim]— off[/]')}
    8. sheets_zip          : {'[green]✓ Built[/]' if st['sheets_zip_built'] else ('[dim yellow]✗ Not generated[/]' if package.sheets_zip_active else '[dim]— off[/]')}
    9. Narration Script    : {'[green]✓ Present (narration.json)[/]' if st['narration_exist'] else '[yellow]✗ Missing/Empty placeholder[/]'}
+   9b. Narration Review   : {'[yellow]⚑ ' + str(st['review_flagged_count']) + ' flagged, awaiting LLM fix pass[/]' if st['review_pending'] else '[dim]— no pending review[/]'}
   10. Master Audio Track  : {'[green]✓ Generated (IndexTTS-2.5)[/]' if st['master_audio_exist'] else '[red]✗ Not built (' + str(st['audio_clips_count']) + '/' + str(st['total_narration_entries']) + ' clips)[/]'}
   11. Final Recap Video   : {'[green]✓ Ready (' + _esc(st['video_path'].name) + ')[/]' if st['video_exist'] else '[red]✗ Not rendered[/]'}
 """

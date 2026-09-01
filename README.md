@@ -264,6 +264,34 @@ projects/my_manga/memory.json                         (Block 2)
 ```
 `memory.json` is auto-created as an empty placeholder the first time a project is touched, and updated in place chapter over chapter (carried-forward characters/factions, appended plot points, resolved/opened cliffhangers) — it's how the LLM keeps track of the story without re-reading every prior chapter.
 
+### 4b. Review the Narration (Narration Reviewer web UI)
+An LLM-written script still gets things wrong — a line attributed to the wrong speaker, a detail
+that drifted from the art, a dropped bit of dialogue. Rather than trusting `narration.json` as
+final the moment it's pasted in, the wizard opens the **Narration Reviewer**, a local web UI (same
+shape as the Panel Marker) showing every panel's cropped image next to its narration line:
+```bash
+./run.sh review --project "my_manga" --chapter "1"
+```
+Flag any panel that's wrong with a short note on what's wrong (an optional tag — wrong speaker,
+dropped content, spoiler, punctuation, word budget, continuity, other — helps but isn't required),
+then either **Approve** (nothing flagged — continue straight to voice synthesis) or **Submit**.
+Submitting writes `narration_review.json` and prints exactly what to upload to your LLM next:
+`prompts/narration_review.md`, the current `narration.json`, `narration_review.json`,
+`memory.json`, and `projects/_global/narration_lessons.json`. The LLM fixes only the flagged
+panels (everything else is left untouched), then replies with three JSON blocks — the corrected
+`narration.json`, an updated `memory.json`, and an updated `narration_lessons.json`. Save each one
+over its file and the wizard reopens the reviewer for another round — repeat as many rounds as you
+want; nothing moves on to TTS until you approve a round with zero flags (or explicitly choose not
+to review further).
+
+`narration_lessons.json` is the mechanism that makes review rounds compound over time: it's **one
+file shared across every project**, not per-manga, and every genuinely generalized lesson an LLM
+writes there (phrased so it applies to any manga, not just this one — see
+`prompts/narration_review.md`) gets read back in as a standing rule on every future chapter's
+*first* narration pass (`prompts/narration.md`), for any project. A round's own history is kept
+too, under `projects/my_manga/chapters/chapter_1/narration_reviews/round_<n>.json`, in case you
+want to look back at what was flagged and fixed.
+
 ### 5. Synthesize Vocal Audio (IndexTTS-2.5)
 ```bash
 ./run.sh tts --project "my_manga" --chapter "1"
@@ -477,6 +505,7 @@ In short: if a chapter's TTS run gets interrupted or a worker locks up, just re-
 ./run.sh download -p <PROJECT> -c <CHAPTER> [-u <URL_OR_ID>]
 ./run.sh mark      -p <PROJECT> -c <CHAPTER>
 ./run.sh crop     -p <PROJECT> -c <CHAPTER> [-f]
+./run.sh review   -p <PROJECT> -c <CHAPTER>
 ./run.sh tts      -p <PROJECT> -c <CHAPTER> [-v <VOICE_WAV>] [-f]
 ./run.sh mix      -p <PROJECT> -c <CHAPTER> [-b <BGM_FILE>]
 ./run.sh render   -p <PROJECT> -c <CHAPTER> [-f]

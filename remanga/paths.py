@@ -182,6 +182,48 @@ def get_memory_path(project_name: str) -> Path:
     return get_project_dir(project_name) / "memory.json"
 
 
+def get_narration_review_path(project_name: str, chapter_num: str) -> Path:
+    """The current review round's output, in the chapter's source folder
+    right next to narration.json - written by the Narration Reviewer web UI
+    (remanga/webui/reviewer_*.py), read by the user to hand to the LLM for a
+    fix pass. Blanked (not deleted) once its round has been submitted, same
+    convention as narration.json's own placeholder (json_io.has_real_json_content)."""
+    return get_chapter_dir(project_name, chapter_num) / "narration_review.json"
+
+
+def get_narration_review_history_dir(project_name: str, chapter_num: str, create: bool = True) -> Path:
+    """Every past round's narration_review.json gets archived here as
+    round_<n>.json before the live file is blanked for the next round - so a
+    chapter's whole review history survives even though only the latest
+    round is ever the "live" narration_review.json."""
+    d = get_chapter_dir(project_name, chapter_num) / "narration_reviews"
+    if create:
+        d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def get_global_lessons_path() -> Path:
+    """One file, shared by every project - not per-chapter or per-manga.
+    Accumulates generalized narration mistakes/fixes an LLM has made across
+    review rounds (see prompts/narration_review.md), phrased so they're
+    useful on any manga, not just the one that surfaced them. Uploaded
+    alongside narration.md/narration_review.md on every writing or review
+    round so the same class of mistake doesn't recur project to project."""
+    p = get_projects_dir() / "_global" / "narration_lessons.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def ensure_global_lessons_file() -> Path:
+    """Creates a blank placeholder narration_lessons.json the first time
+    it's needed, without ever clobbering lessons an LLM has already written
+    there - same pattern as ensure_memory_file()."""
+    p = get_global_lessons_path()
+    if not p.exists():
+        p.write_text("", encoding="utf-8")
+    return p
+
+
 def ensure_memory_file(project_name: str) -> Path:
     """Creates a blank placeholder memory.json at the project root the first time a project
     is touched, without ever clobbering continuity data an LLM has already written there."""

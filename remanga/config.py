@@ -364,11 +364,23 @@ class MarkerConfig(BaseModel):
     shortcuts: ShortcutsConfig = Field(default_factory=ShortcutsConfig)
 
 
+class ReviewerConfig(BaseModel):
+    """The narration-review web UI: where narration_review.json comes from -
+    a panel-by-panel pass over an LLM-written narration.json where the user
+    flags lines that are wrong before they ever reach TTS. See remanga/webui/
+    reviewer_*.py. Separate host/port from MarkerConfig so both UIs could, in
+    principle, be open at once without colliding."""
+    host: str = "127.0.0.1"
+    port: int = 8766
+    auto_open_browser: bool = True
+
+
 class RemangaConfig(BaseModel):
     system: SystemConfig = Field(default_factory=SystemConfig)
     downloader: DownloaderConfig = Field(default_factory=DownloaderConfig)
     cropper: CropperConfig = Field(default_factory=CropperConfig)
     marker: MarkerConfig = Field(default_factory=MarkerConfig)
+    reviewer: ReviewerConfig = Field(default_factory=ReviewerConfig)
     tts: TTSConfig = Field(default_factory=TTSConfig)
     audio: AudioConfig = Field(default_factory=AudioConfig)
     video: VideoConfig = Field(default_factory=VideoConfig)

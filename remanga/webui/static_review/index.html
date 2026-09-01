@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Narration Reviewer</title>
+<style>
+:root {
+  --bg: #15131a;
+  --surface: #1c1922;
+  --surface-2: #26212e;
+  --surface-3: #302a3a;
+  --border: #37303f;
+  --text: #ece7f2;
+  --text-dim: #9c93ac;
+  --text-faint: #6b6479;
+  --accent: #ff5d3a;
+  --accent-ink: #2a120c;
+  --ok: #4fd1c5;
+  --ok-ink: #0c211f;
+  --danger: #ff5d5d;
+  --danger-ink: #2a0c0c;
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Manrope", system-ui, sans-serif;
+  min-height: 100vh;
+}
+header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+header h1 { font-size: 15px; margin: 0; font-weight: 700; }
+header .meta { font-size: 12px; color: var(--text-dim); }
+header .spacer { flex: 1; }
+header .counts { font-size: 12px; color: var(--text-dim); }
+header .counts b { color: var(--accent); }
+
+button {
+  font-family: inherit;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+button:hover { background: var(--surface-3); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+button.primary:hover { filter: brightness(1.08); }
+button.primary:disabled { opacity: .5; cursor: default; }
+
+main { max-width: 980px; margin: 0 auto; padding: 20px; }
+
+.panel-card {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.panel-card.flagged { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger) inset; }
+.panel-thumb {
+  width: 220px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+}
+.panel-thumb img { width: 100%; display: block; }
+.panel-thumb .missing { font-size: 11px; color: var(--text-faint); padding: 20px; text-align: center; }
+
+.panel-body { display: flex; flex-direction: column; gap: 8px; }
+.panel-id { font-family: ui-monospace, monospace; font-size: 12px; color: var(--text-dim); }
+.panel-text { font-size: 14px; line-height: 1.5; }
+.panel-text.silent { color: var(--text-faint); font-style: italic; }
+
+.flag-row { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.toggle-btn {
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+}
+.toggle-btn.is-ok { border-color: var(--ok); color: var(--ok); }
+.toggle-btn.is-flagged { background: var(--danger); border-color: var(--danger); color: var(--danger-ink); font-weight: 700; }
+
+.issue-box { display: none; gap: 8px; }
+.issue-box.open { display: flex; flex-direction: column; }
+.issue-box textarea, .issue-box select {
+  font-family: inherit;
+  font-size: 13px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+.issue-box textarea { min-height: 54px; }
+
+.general-note {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  margin: 6px 0 20px;
+}
+.general-note label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+.general-note textarea {
+  width: 100%;
+  font-family: inherit;
+  font-size: 13px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 10px;
+  min-height: 60px;
+  resize: vertical;
+}
+
+footer {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 14px 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.hint { font-size: 12px; color: var(--text-faint); margin: 0 0 14px; }
+#loading { padding: 40px; text-align: center; color: var(--text-dim); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Narration Reviewer</h1>
+  <span class="meta" id="chapter-meta">loading…</span>
+  <div class="spacer"></div>
+  <span class="counts" id="counts"></span>
+</header>
+
+<main>
+  <div id="loading">Loading narration…</div>
+  <p class="hint" id="hint" style="display:none">
+    Mark any panel whose narration is wrong. Leave the rest alone - a panel with no flag is treated as correct.
+    When you're done, Submit sends this round's flags to <code>narration_review.json</code>.
+  </p>
+  <div id="panel-list"></div>
+  <div class="general-note" id="general-note-wrap" style="display:none">
+    <label for="general-note">Overall note for this chapter (optional - anything that isn't about one specific panel)</label>
+    <textarea id="general-note" placeholder="e.g. speaker attribution keeps swapping in group scenes, punctuation is overused in the back half..."></textarea>
+  </div>
+</main>
+
+<footer id="footer" style="display:none">
+  <button id="btn-approve" class="primary">Approve — no issues, continue to voice synthesis</button>
+  <button id="btn-submit">Submit flagged issues for another LLM pass</button>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

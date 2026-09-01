@@ -68,6 +68,11 @@
       "reset_view": ["0"]
     }
   },
+  "reviewer": {
+    "host": "127.0.0.1",
+    "port": 8766,
+    "auto_open_browser": true
+  },
   "tts": {
     "engine": "indextts-2.5",
     "hf_repo_id": "IndexTeam/IndexTTS-2.5",

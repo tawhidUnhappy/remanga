@@ -20,7 +20,7 @@ from remanga.setup_wizard import run_setup_wizard
 from remanga.status import render_status_panel
 from remanga.video import VideoRenderer
 from remanga.webui import launch_and_wait as launch_panel_marker
-from remanga.wizard import run_interactive_pipeline
+from remanga.wizard import run_interactive_pipeline, run_narration_review_loop
 
 
 def graceful_sigint_handler(signum, frame):
@@ -55,6 +55,15 @@ def main():
     p_mark = subparsers.add_parser("mark", help="Launch the Panel Marker web UI to mark panels (writes crops.json)")
     p_mark.add_argument("--project", "-p", required=True, help="Project name")
     p_mark.add_argument("--chapter", "-c", required=True, help="Chapter number")
+
+    # review
+    p_review = subparsers.add_parser(
+        "review",
+        help="Launch the Narration Reviewer web UI to flag narration issues (writes narration_review.json), "
+             "looping for as many rounds as you want before continuing to voice synthesis",
+    )
+    p_review.add_argument("--project", "-p", required=True, help="Project name")
+    p_review.add_argument("--chapter", "-c", required=True, help="Chapter number")
 
     # crop
     p_crop = subparsers.add_parser("crop", help="Crop panels using coordinates in crops.json and package sheets.zip or panels.zip")
@@ -161,6 +170,8 @@ def main():
             dl.download_chapter(args.url, args.chapter, args.project)
         elif args.command == "mark":
             launch_panel_marker(args.project, args.chapter, config.marker)
+        elif args.command == "review":
+            run_narration_review_loop(args.project, args.chapter, config)
         elif args.command == "crop":
             cropper = CoordinateCropper(config.cropper)
             cropper.crop_chapter_from_json(args.project, args.chapter, force=args.force)

@@ -15,15 +15,82 @@ from remanga.downloader import MangaDexDownloader
 from remanga.full_recap import FullRecapCompiler, chapter_sort_key, discover_chapters
 from remanga.remix import remix_project
 from remanga.verify import verify_project
-from remanga.json_io import has_real_json_content
+from remanga.json_io import has_real_json_content, read_json_or
 from remanga.paths import (
-    ensure_memory_file, get_chapter_dir, get_panels_pdf_dir, get_panels_zip_dir, get_sheets_dir,
+    ensure_global_lessons_file, ensure_memory_file, get_chapter_dir, get_global_lessons_path,
+    get_narration_review_path, get_panels_pdf_dir, get_panels_zip_dir, get_sheets_dir,
     get_sheets_zip_dir, load_project_metadata,
 )
 from remanga.status import get_chapter_status
 from remanga.video import VideoRenderer
 from remanga.webui import launch_and_wait as launch_panel_marker
+from remanga.webui import launch_and_wait_reviewer
 from remanga.wizard_prompts import select_chapter, select_or_create_project
+
+
+def run_narration_review_loop(project: str, chapter: str, config: RemangaConfig) -> None:
+    """Opens the Narration Reviewer web UI on the chapter's current
+    narration.json, then - if the user flagged anything - walks them through
+    handing narration_review.json (plus memory.json and the global lessons
+    file) to the LLM for a fix pass, pasting the corrected narration.json (+
+    updated memory.json / narration_lessons.json) back, and reopening the
+    reviewer for another round. Repeats for as many rounds as the user wants;
+    returns as soon as a round comes back with nothing flagged (or the user
+    explicitly approves with zero flags). A no-op if narration.json isn't
+    written yet - nothing to review."""
+    chap_dir = get_chapter_dir(project, chapter)
+    narration_path = chap_dir / "narration.json"
+    if not has_real_json_content(narration_path):
+        return
+
+    memory_path = ensure_memory_file(project)
+    lessons_path = ensure_global_lessons_file()
+    review_path = get_narration_review_path(project, chapter)
+
+    while True:
+        console.print(
+            "\n[bold]Review Narration[/]\n"
+            "Opening the Narration Reviewer web UI. Flag any panel whose narration is wrong "
+            "and note what's wrong with it, then click Approve (nothing flagged) or Submit."
+        )
+        launch_and_wait_reviewer(project, chapter, config.reviewer)
+
+        if not has_real_json_content(review_path):
+            console.print("[green]✓ Narration approved - no issues flagged.[/]")
+            return
+
+        review = read_json_or(review_path, {})
+        if review.get("flagged_count", 0) == 0:
+            console.print("[green]✓ Narration approved - no issues flagged.[/]")
+            return
+
+        console.print(
+            f"\n[bold]{review['flagged_count']} panel(s) flagged.[/] Send these files to your LLM for a fix pass:\n"
+            "[dim](each already carries the project/manga/chapter identity - no need to type it in chat)[/]\n"
+        )
+        console.print("[bold]Upload:[/]")
+        console.print("  prompts/narration_review.md  [dim](the fix-pass prompt)[/]")
+        print_path(f"  {display_path(narration_path, wrap=False)}  [dim](current narration.json)[/]")
+        print_path(f"  {display_path(review_path, wrap=False)}  [dim](this round's flagged issues)[/]")
+        print_path(f"  {display_path(memory_path, wrap=False)}  [dim](story continuity)[/]")
+        print_path(f"  {display_path(lessons_path, wrap=False)}  [dim](general lessons so far, if any)[/]")
+
+        console.print(
+            "\n[bold]It replies with three JSON blocks - overwrite each file with the matching block:[/]"
+        )
+        print_path(f"  {display_path(narration_path, wrap=False)}")
+        print_path(f"  {display_path(memory_path, wrap=False)}")
+        print_path(f"  {display_path(lessons_path, wrap=False)}")
+
+        Prompt.ask("\n[bold]Press Enter once all three files are saved and ready[/]")
+
+        # The next reviewer round reopens on whatever narration.json now
+        # contains - if the LLM's fix didn't actually change a flagged
+        # panel's text, ReviewerState pre-loads that panel's flag again so
+        # it isn't silently dropped.
+        if not Confirm.ask("\n[bold]Review another round before continuing to voice synthesis?[/]", default=True):
+            console.print("[dim]Continuing with the current narration.json as final.[/]")
+            return
 
 
 def run_interactive_pipeline():
@@ -241,6 +308,15 @@ def run_interactive_pipeline():
                     f"reply to:\n{display_path(memory_path, wrap=False)}"
                 )
                 Prompt.ask("[bold]Press Enter once memory.json is saved[/]")
+
+    # =========================================================================
+    # Narration Review (narration_review.json, via the Narration Reviewer web
+    # UI) - as many rounds as the user wants before trusting the script to
+    # voice synthesis. No printed "Step N" header, same as Mark Panels and
+    # the narration.json step above - it isn't numbered in this wizard's
+    # scheme either.
+    # =========================================================================
+    run_narration_review_loop(project, chapter, config)
 
     # =========================================================================
     # Step 5: Synthesizing Vocal Audio via IndexTTS-2.5

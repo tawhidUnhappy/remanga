@@ -123,6 +123,21 @@ panels:
 
 ---
 
+## Standing Lessons from Past Reviews (`narration_lessons.json`)
+Every chapter's narration eventually gets checked by a human against the actual art (see
+`prompts/narration_review.md`), and mistakes that generalize get logged as standing rules in
+`narration_lessons.json` - a single list shared across every project this pipeline narrates, not
+just this manga. If a `narration_lessons.json` was handed to you alongside this chapter's panels,
+**read it before Pass 1 and treat every entry as an additional Golden Rule for this chapter** -
+these are mistakes an LLM has actually made before, generalized specifically so they transfer to a
+manga and cast of characters it has never seen. Weigh them the same as Section 2's Golden Rules
+below, not as optional suggestions.
+
+If no `narration_lessons.json` was included, or it's empty/placeholder, that's normal (there may be
+no lessons logged yet, or none apply) - proceed on Section 2's rules alone, don't ask for one.
+
+---
+
 ## Maximum Deliberation, Every Single Panel, No Exceptions
 Wrong narration almost never comes from a hard panel - it comes from a rushed one: skimming
 past a panel, pattern-matching to what a "typical" panel like it usually says, or carrying an
@@ -283,6 +298,11 @@ panel-by-panel in isolation.
   hasn't cleanly passed this final check.
 
 ### Rule 10: Handling a Correction + Continuation Follow-Up
+This rule covers an ad hoc, in-chat correction, not a structured review round - if you're
+instead handed `narration_review.json` (flagged panels from the Narration Reviewer web UI),
+follow `prompts/narration_review.md` instead, which covers the same fix-without-rewriting
+principle in more detail, plus updating `narration_lessons.json`.
+
 A later message in the same conversation may look like: *"Ok, this revision was good, but
 some panels' dialogue got a bit mismatched, so fix them, and here are new panels."* That's
 two requests in one — a correction to already-generated panels, and more panels continuing

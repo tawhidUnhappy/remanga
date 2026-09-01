@@ -26,7 +26,7 @@ from remanga.paths import GENERATED_KINDS, get_chapter_dir, get_generated_dir, g
 # never re-downloads unless reverify_downloads finds something missing.
 KEEP_ON_RESTART = {"pages"}
 KEEP_ON_MARKS_ONLY_RESTART = KEEP_ON_RESTART | {"crops.json"}
-KEEP_ON_SOFT_RESTART = KEEP_ON_RESTART | {"crops.json", "panels", "narration.json"}
+KEEP_ON_SOFT_RESTART = KEEP_ON_RESTART | {"crops.json", "panels", "narration.json", "narration_review.json", "narration_reviews"}
 
 RESTART_MODES = ("hard", "marks_only", "soft")
 
