@@ -11,7 +11,10 @@ from rich.table import Table
 
 from remanga.config import RemangaConfig
 from remanga.console import console, escape as _esc
-from remanga.setup import bundle_state_str, configure_vision_outputs, ensure_valid_voice_prompt, is_valid_file
+from remanga.setup import (
+    bundle_state_str, configure_vision_outputs, ensure_valid_voice_prompt, is_valid_file,
+    read_reference_text, write_reference_text,
+)
 
 
 def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
@@ -55,12 +58,17 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
             "\n[dim]audio8-tts-0.1b also wants an accurate text transcript of that reference voice clip - "
             "cloning quality depends on it, unlike indextts-2.5's audio-only cloning.[/]"
         )
-        curr_ref_text = config.tts.audio8.reference_text
+        ref_text_path = config.tts.audio8.reference_text_path
+        curr_ref_text = read_reference_text(ref_text_path)
         if curr_ref_text:
-            console.print(f"Current transcript: [green]{_esc(curr_ref_text)}[/]")
-        config.tts.audio8.reference_text = Prompt.ask(
+            console.print(f"Current transcript ({_esc(ref_text_path)}): [green]{_esc(curr_ref_text)}[/]")
+        else:
+            console.print(f"[dim]No transcript yet - will be saved to: {_esc(ref_text_path)}[/]")
+        new_text = Prompt.ask(
             "[bold]Transcript of the reference voice audio[/]", default=curr_ref_text
         ).strip()
+        saved_path = write_reference_text(ref_text_path, new_text)
+        console.print(f"[green]✓ Transcript saved to:[/] {_esc(str(saved_path))}")
 
     # 2. Vision Outputs: what to generate, what to zip/PDF for upload - see
     # remanga.setup.configure_vision_outputs, the same two-section checklist

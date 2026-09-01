@@ -156,6 +156,28 @@ def ensure_valid_voice_prompt(config: RemangaConfig, interactive: bool = True) -
             console.print(f"[bold red]✗ File not found or empty:[/] {Path(user_input).expanduser()}. Please try again.")
 
 
+def read_reference_text(path: str) -> str:
+    """Reads the audio8-tts-0.1b reference transcript from its own text file
+    (tts.audio8.reference_text_path) rather than inline config.json - see
+    that field's docstring. Missing/empty file reads as "", same as the old
+    inline-string field's own empty default; audio8_worker.py already
+    tolerates an empty transcript (degraded cloning quality, not an error),
+    so this stays a soft fallback rather than raising."""
+    p = Path((path or "").strip()).expanduser()
+    if not p.exists() or not p.is_file():
+        return ""
+    return p.read_text(encoding="utf-8").strip()
+
+
+def write_reference_text(path: str, text: str) -> Path:
+    """Writes `text` to the audio8 reference-transcript file, creating its
+    parent directory (typically global/) if needed. Returns the resolved path."""
+    p = Path((path or "").strip()).expanduser()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text((text or "").strip(), encoding="utf-8")
+    return p.resolve()
+
+
 def ensure_valid_bgm(config: RemangaConfig, interactive: bool = True) -> Optional[str]:
     if not config.audio.bgm_enabled:
         return None

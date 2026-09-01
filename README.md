@@ -164,6 +164,8 @@ Run the interactive settings wizard anytime to configure vocal reference files, 
 ./run.sh setup-config
 ```
 
+Just need to swap the reference voice WAV, BGM file, or the audio8 engine's transcript, without walking through the rest of that wizard? `./run.sh paths` shows all three (and whether each currently resolves to a real file) in one table and lets you edit any of them by number - changes save immediately, same files `setup-config` itself edits. All three live under `global/` by default (`global/voice/`, `global/bgm/`, `global/tts_reference.txt`) - one shared, gitignored location for assets that aren't tied to any single manga project.
+
 ### Key Configurable Parameters (`config.json`):
 
 ```json
@@ -465,7 +467,7 @@ remanga can drive more than one text-to-speech engine, each in its own isolated 
 
 Switch by running `./run.sh setup-config` (step 1, "TTS Engine") or editing `tts.engine` in `config.json` directly. `bootstrap.sh` already provisions both engines' isolated venvs (`.tools/venv-indextts`, `.tools/venv-audio8`) regardless of which one is active, so switching never requires re-running it — only that engine's own model weights get downloaded, and only the first time it's actually used (`checkpoints/audio8_tts_0.1b/`, ~1.7GB).
 
-`audio8-tts-0.1b` needs one extra piece of configuration `indextts-2.5` doesn't: `tts.audio8.reference_text`, an accurate transcript of whatever WAV `tts.spk_audio_prompt` points at — the setup wizard asks for this right after the reference voice file whenever this engine is selected, since this model's cloning quality depends on transcript accuracy, not just the audio itself. `tts.audio8` also holds this engine's own `temperature`/`top_p`/`max_new_tokens` sampling settings, separate from `indextts-2.5`'s own top-level `temperature`/`top_p` fields.
+`audio8-tts-0.1b` needs one extra piece of configuration `indextts-2.5` doesn't: an accurate transcript of whatever WAV `tts.spk_audio_prompt` points at — the setup wizard asks for this right after the reference voice file whenever this engine is selected, since this model's cloning quality depends on transcript accuracy, not just the audio itself. The transcript itself lives in its own text file (`tts.audio8.reference_text_path`, default `global/tts_reference.txt`) rather than inline in config.json, so an unrelated config edit can't accidentally mangle a long paragraph of free text sitting next to it - read fresh at synth time, editable directly or via the setup wizard. `tts.audio8` also holds this engine's own `temperature`/`top_p`/`max_new_tokens` sampling settings, separate from `indextts-2.5`'s own top-level `temperature`/`top_p` fields.
 
 Everything downstream — `remanga tts`, resuming, `full-recap`, `remix` — works identically regardless of which engine is active; `remanga/audio/synth.py`'s `create_synthesizer()` is the only place that picks between them.
 

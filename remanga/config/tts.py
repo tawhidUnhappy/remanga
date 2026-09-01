@@ -29,7 +29,16 @@ class Audio8Config(BaseModel):
     # tts.spk_audio_prompt - accuracy of the transcript measurably affects
     # cloning quality per the model card, so this is asked for explicitly
     # rather than guessed/auto-transcribed.
-    reference_text: str = ""
+    #
+    # The transcript itself lives in its own text file, not inline here -
+    # it's easy to fat-finger a long paragraph of free text while editing
+    # config.json for something unrelated, and a broken transcript silently
+    # degrades cloning quality rather than erroring. This field is just the
+    # path to that file (read fresh by remanga/audio/synth.py at synth
+    # start); default points at global/tts_reference.txt, alongside the
+    # other shared assets (spk_audio_prompt, bgm_path) - see
+    # remanga.setup.read_reference_text.
+    reference_text_path: str = "global/tts_reference.txt"
     use_bf16: bool = True
     temperature: float = 0.7
     top_p: float = 0.9

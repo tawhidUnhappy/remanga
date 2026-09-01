@@ -17,6 +17,7 @@ from remanga.audio.synth import create_synthesizer
 from remanga.remix import remix_project
 from remanga.verify import verify_project
 from remanga.setup_wizard import run_setup_wizard
+from remanga.paths_manager import run_paths_manager
 from remanga.status import render_status_panel
 from remanga.video import VideoRenderer
 from remanga.webui import launch_and_wait as launch_panel_marker
@@ -41,6 +42,13 @@ def main():
 
     # setup configuration
     subparsers.add_parser("setup-config", help="Walkthrough configuration setup (voice, BGM, resolution, vision format, blur)")
+
+    # asset paths
+    subparsers.add_parser(
+        "paths",
+        help="View/edit the shared asset paths (reference voice WAV, BGM file, audio8 TTS transcript) "
+             "in one place, without the full setup-config walkthrough",
+    )
 
     # setup models
     subparsers.add_parser("setup-models", help="Verify and download model weights with SHA-256 verification")
@@ -157,6 +165,8 @@ def main():
             run_interactive_pipeline()
         elif args.command == "setup-config":
             run_setup_wizard(config)
+        elif args.command == "paths":
+            run_paths_manager(config)
         elif args.command == "setup-models":
             # Only the currently-configured TTS engine's weights are fetched -
             # switching tts.engine later (setup-config) downloads the other

@@ -28,6 +28,7 @@ from remanga.config import AudioConfig, TTSConfig
 from remanga.console import console
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.models import ModelManager
+from remanga.setup import read_reference_text
 from remanga.venvs import REPO_ROOT, extract_missing_packages, get_scripts_dir, get_tool_python
 
 _MAX_AUTO_HEAL_ATTEMPTS = 8
@@ -358,10 +359,14 @@ class Audio8Synthesizer(_BaseWorkerSynthesizer):
         return self.tts_config.synth_timeout_seconds
 
     def _build_request(self, text: str, spk_prompt_path: str, output_wav: Path) -> Dict[str, Any]:
+        # Read fresh each call rather than caching at __init__ - the file is
+        # small, this runs once per panel not per token, and it means an
+        # edit to the transcript file takes effect on the very next panel
+        # without restarting the pipeline.
         return {
             "cmd": "synthesize",
             "spk_audio_prompt": spk_prompt_path,
-            "reference_text": self.engine_config.reference_text,
+            "reference_text": read_reference_text(self.engine_config.reference_text_path),
             "text": text,
             "output_path": str(output_wav.resolve()),
             "temperature": self.engine_config.temperature,

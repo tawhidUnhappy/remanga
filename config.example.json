@@ -89,7 +89,7 @@
     "audio8": {
       "hf_repo_id": "Audio8/Audio8-TTS-Preview-0.1b",
       "model_dir": "checkpoints/audio8_tts_0.1b",
-      "reference_text": "",
+      "reference_text_path": "global/tts_reference.txt",
       "use_bf16": true,
       "temperature": 0.7,
       "top_p": 0.9,
