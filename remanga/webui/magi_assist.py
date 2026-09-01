@@ -29,7 +29,8 @@ from typing import Dict, List, Optional, Set
 
 from remanga.config import MarkerConfig
 from remanga.console import console, escape as _esc
-from remanga.venvs import REPO_ROOT, extract_missing_packages, get_scripts_dir, get_tool_python
+from remanga.paths import UV_BIN
+from remanga.venvs import extract_missing_packages, get_scripts_dir, get_tool_python
 
 
 _MAX_AUTO_HEAL_ATTEMPTS = 8
@@ -58,7 +59,7 @@ def _pip_install_into_magi_env(packages: Set[str]) -> bool:
     names = sorted(packages)
     console.print(f"[yellow]Installing missing dependency into .venv-magi: {' '.join(names)}...[/]")
 
-    uv_bin = REPO_ROOT / "bin" / "uv"
+    uv_bin = UV_BIN
     magi_python = get_tool_python("magi")
     if uv_bin.exists():
         cmd = [str(uv_bin), "pip", "install", "--python", str(magi_python), *names]

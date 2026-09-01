@@ -29,7 +29,8 @@ from remanga.console import console
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.models import ModelManager
 from remanga.setup import read_reference_text
-from remanga.venvs import REPO_ROOT, extract_missing_packages, get_scripts_dir, get_tool_python
+from remanga.paths import UV_BIN
+from remanga.venvs import extract_missing_packages, get_scripts_dir, get_tool_python
 
 _MAX_AUTO_HEAL_ATTEMPTS = 8
 
@@ -44,7 +45,7 @@ def _pip_install_into_tool_env(tool_name: str, packages: set) -> bool:
     names = sorted(packages)
     console.print(f"[yellow]Installing missing dependency into .tools/venv-{tool_name}: {' '.join(names)}...[/]")
 
-    uv_bin = REPO_ROOT / "bin" / "uv"
+    uv_bin = UV_BIN
     python = get_tool_python(tool_name)
     cmd = [str(uv_bin), "pip", "install", "--python", str(python), *names] if uv_bin.exists() \
         else [str(python), "-m", "pip", "install", *names]

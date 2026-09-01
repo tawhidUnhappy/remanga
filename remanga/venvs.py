@@ -1,22 +1,24 @@
-"""Resolves the isolated per-tool virtual environments bootstrap.sh provisions
-alongside the main `.venv` - one per heavy ML dependency (IndexTTS-2.5, MAGI v3)
-so their conflicting library requirements (e.g. two different `transformers`
-pins) never have to share one Python process. The main env orchestrates these
-as subprocesses; see remanga/audio/synth.py and remanga/webui/magi_assist.py.
+"""Auto-heal helper for the isolated per-tool virtual environments
+bootstrap.sh provisions: parses "missing package" errors out of a worker
+subprocess's stderr so remanga/audio/synth.py and remanga/webui/magi_assist.py
+can pip-install the gap and retry, instead of just failing.
 
-All of them live under `.tools/` for tidy management - `.tools/venv-indextts`,
-`.tools/venv-magi`, etc. - one place to eyeball or `rm -rf` if something needs
-a clean reinstall, instead of scattered `.venv-*` siblings of the repo root.
-"""
+Path resolution for those environments themselves (REPO_ROOT, TOOLS_DIR,
+get_tool_python, get_scripts_dir) now lives in remanga/paths/ - the single
+source of truth for every path remanga resolves - and is re-exported below
+so every existing `from remanga.venvs import ...` elsewhere in the codebase
+keeps working unchanged."""
 
 from __future__ import annotations
 
 import re
-from pathlib import Path
 from typing import Set
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-TOOLS_DIR = REPO_ROOT / ".tools"
+from remanga.paths import REPO_ROOT, TOOLS_DIR, get_scripts_dir, get_tool_python
+
+__all__ = [
+    "REPO_ROOT", "TOOLS_DIR", "get_tool_python", "get_scripts_dir", "extract_missing_packages",
+]
 
 # Two shapes of "you're missing a package" error get auto-healed (see
 # extract_missing_packages() below):
@@ -52,22 +54,3 @@ def extract_missing_packages(error_text: str) -> Set[str]:
         return {_IMPORT_TO_PIP_NAME.get(top_level, top_level)}
 
     return set()
-
-
-def get_tool_python(tool_name: str) -> Path:
-    """Path to the python interpreter inside `.tools/venv-<tool_name>`."""
-    venv_dir = TOOLS_DIR / f"venv-{tool_name}"
-    candidates = [venv_dir / "bin" / "python3", venv_dir / "bin" / "python", venv_dir / "Scripts" / "python.exe"]
-    for c in candidates:
-        if c.exists():
-            return c
-    raise FileNotFoundError(
-        f"Isolated environment '.tools/venv-{tool_name}' not found at {venv_dir}.\n"
-        f"Run `bash bootstrap.sh` to provision it."
-    )
-
-
-def get_scripts_dir(package_relpath: str) -> Path:
-    """Path to a `scripts/` directory holding a standalone (no remanga-package-
-    import-required) worker script, e.g. get_scripts_dir("audio")."""
-    return REPO_ROOT / "remanga" / package_relpath / "scripts"

@@ -7,19 +7,16 @@ See server.py:launch_and_wait for how this gets started and torn down.
 from __future__ import annotations
 
 import threading
-from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
 
 from remanga.config import MarkerConfig, ShortcutsConfig
 from remanga.console import console, escape as _esc
 from remanga.json_io import write_json
+from remanga.paths import MARKER_STATIC_DIR as STATIC_DIR
 from remanga.webui.detection import run_detection
 from remanga.webui.marker_state import MarkerState
 from remanga.webui.shortcuts_store import persist_shortcuts
-
-
-STATIC_DIR = Path(__file__).parent / "static"
 
 
 def create_app(state: MarkerState, config: MarkerConfig) -> Flask:

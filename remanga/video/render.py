@@ -10,8 +10,10 @@ from remanga.config import SystemConfig, VideoConfig
 from remanga.console import console, escape as _escape_path
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.json_io import read_json
-from remanga.paths import get_audio_timing_path, get_final_video_path, get_master_audio_path, get_video_concat_path, get_video_frames_dir
-from remanga.venvs import REPO_ROOT
+from remanga.paths import (
+    BIN_DIR, get_audio_timing_path, get_final_video_path, get_master_audio_path,
+    get_video_concat_path, get_video_frames_dir,
+)
 from remanga.video.compose import FrameCompositor
 
 
@@ -52,7 +54,7 @@ class VideoRenderer:
         pipeline keeps using the isolated binary, so this doesn't compromise
         the "leaves zero footprint" guarantee - nothing is installed, only an
         already-present system binary is optionally read from."""
-        isolated_dir = str((REPO_ROOT / "bin").resolve())
+        isolated_dir = str(BIN_DIR.resolve())
         for path_dir in os.environ.get("PATH", "").split(os.pathsep):
             if not path_dir or str(Path(path_dir).resolve()) == isolated_dir:
                 continue

@@ -10,6 +10,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from remanga.json_io import read_json, write_json
+from remanga.paths import CONFIG_EXAMPLE_PATH, CONFIG_PATH
 
 from .audio import AudioConfig
 from .cropper import CropperConfig
@@ -34,14 +35,14 @@ class RemangaConfig(BaseModel):
     @classmethod
     def load(cls, config_path: Optional[Path | str] = None) -> "RemangaConfig":
         """Load configuration from JSON file or create with defaults."""
-        target_path = Path(config_path) if config_path else Path("config.json")
+        target_path = Path(config_path) if config_path else CONFIG_PATH
         if not target_path.exists():
-            target_path = Path("config.example.json")
+            target_path = CONFIG_EXAMPLE_PATH
 
         if target_path.exists():
             return cls.model_validate(read_json(target_path))
         return cls()
 
-    def save(self, output_path: Path | str = "config.json") -> None:
+    def save(self, output_path: Path | str = CONFIG_PATH) -> None:
         """Save current configuration to a JSON file."""
         write_json(output_path, self.model_dump())

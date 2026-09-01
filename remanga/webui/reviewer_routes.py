@@ -6,18 +6,15 @@ torn down.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from flask import Flask, jsonify, request, send_from_directory
 
 from remanga.config import ReviewerConfig
 from remanga.console import console, escape as _esc
 from remanga.json_io import write_json
-from remanga.paths import get_narration_review_history_dir, get_narration_review_path
+from remanga.paths import (
+    REVIEWER_STATIC_DIR, get_narration_review_history_dir, get_narration_review_path,
+)
 from remanga.webui.reviewer_state import ReviewerState
-
-
-REVIEWER_STATIC_DIR = Path(__file__).parent / "static_review"
 
 
 def create_reviewer_app(state: ReviewerState, config: ReviewerConfig, project_name: str) -> Flask:

@@ -7,15 +7,10 @@ POST /api/shortcuts, which is the only caller.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, Dict
 
 from remanga.json_io import read_json_or, write_json
-
-# Same cwd-relative file remanga.config.RemangaConfig.load()/.save() already
-# use by default.
-CONFIG_JSON_PATH = Path("config.json")
-CONFIG_EXAMPLE_PATH = Path("config.example.json")
+from remanga.paths import CONFIG_EXAMPLE_PATH, CONFIG_PATH as CONFIG_JSON_PATH
 
 
 def persist_shortcuts(shortcuts: Dict[str, Any]) -> None:
