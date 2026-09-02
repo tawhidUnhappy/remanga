@@ -40,13 +40,18 @@ def chapter_identity_fields(project_name: str, chapter_num: str) -> Dict[str, An
     write_chapter_info) and the size-capped LLM zip bundle (cropper/llm_zip.py),
     which adds its own part_index/total_parts per part on top of this same
     dict. See prompts/narration.md's "Chapter Identity" section for how the
-    LLM is expected to read whichever of those it's handed."""
+    LLM is expected to read whichever of those it's handed. `reading_direction`
+    ("right_to_left"/"left_to_right") comes from project.json's
+    `reading_direction` field (see wizard.py's project setup prompt), defaulting
+    to "right_to_left" since that's the norm for native Japanese manga - the
+    vast majority of what this pipeline imports."""
     meta = load_project_metadata(project_name)
     return {
         "project_name": project_name,
         "manga_name": meta.get("manga_title", ""),
         "manga_url": meta.get("manga_url", ""),
         "chapter": str(chapter_num),
+        "reading_direction": meta.get("reading_direction", "right_to_left"),
     }
 
 

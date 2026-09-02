@@ -20,7 +20,7 @@ from remanga.json_io import has_real_json_content, read_json_or
 from remanga.paths import (
     ensure_global_lessons_file, ensure_memory_file, get_chapter_dir, get_global_lessons_path,
     get_narration_review_path, get_panels_pdf_dir, get_panels_zip_dir, get_sheets_dir,
-    get_sheets_zip_dir, list_projects, load_project_metadata,
+    get_sheets_zip_dir, list_projects, load_project_metadata, save_project_metadata,
 )
 from remanga.status import get_chapter_status
 from remanga.video import VideoRenderer
@@ -127,6 +127,22 @@ def run_interactive_pipeline():
         return
 
     meta = load_project_metadata(project)
+
+    # Reading direction (right-to-left for native Japanese manga, left-to-right
+    # for manhwa/manhua/webtoons and most Western comics) - asked once per
+    # project and persisted to project.json, from where chapter_identity_fields
+    # threads it into every panels_pdf/panels_zip/sheets_zip chapter_info.json
+    # and info page/sheet. Native manga is the pipeline's overwhelming default,
+    # hence "right_to_left" pre-selected.
+    if "reading_direction" not in meta:
+        is_rtl = Confirm.ask(
+            "[bold]Is this manga read right-to-left[/] (Japanese manga convention - "
+            "say no for manhwa/manhua/webtoons or Western comics)?",
+            default=True,
+        )
+        meta["reading_direction"] = "right_to_left" if is_rtl else "left_to_right"
+        save_project_metadata(project, meta)
+
     saved_url = meta.get("manga_url", "")
 
     if saved_url:
