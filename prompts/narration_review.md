@@ -43,8 +43,8 @@ than guessing at a fix.
 }
 ```
 `tag` is one of: `wrong_detail`, `wrong_speaker`, `dropped_content`, `flattened_dialogue`,
-`tts_unsafe_typography`, `empty_text`, `spoiler`, `punctuation`, `word_budget`, `continuity`,
-`other`, or empty.
+`tts_unsafe_typography`, `quoted_sfx`, `empty_text`, `spoiler`, `punctuation`, `word_budget`,
+`continuity`, `other`, or empty.
 `flattened_dialogue` means a panel's line was paraphrased into third-person summary when the
 character's actual words should have been quoted instead (Rule 5 of `prompts/narration.md`) —
 fix it by rewriting the line to work the real quote in, not by rephrasing the paraphrase.
@@ -55,6 +55,12 @@ a narration-frame verb, e.g. "he stammers", per that rule's examples) without to
 anything else about the wording. If more than one or two panels this chapter got flagged with
 this tag, say so explicitly in the generalized lesson (Block 3 below) — it means the pattern
 needs reinforcing, not just this line fixing.
+`quoted_sfx` means a `text` value quotes wordless SFX/interjection lettering ("Hii!", "Gah!")
+as if it were spoken dialogue — **never valid** per Rule 5 of `prompts/narration.md`; a single
+narrator voicing that literally reads as a mispronounced word, not a scream. Fix it by
+rewriting the quote as a narrated reaction (fright, pain, a startled yelp) instead. A short
+real word shouted as an exclamation ("Stop!", "No!") is genuine dialogue, not this tag — only
+flag sounds that aren't actual words.
 `empty_text` means a panel was left with `"text": ""` — **never valid** per Rule 4 of
 `prompts/narration.md`; every panel that reaches this pipeline already passed human
 panel-relevance filtering during marking, so describe what the panel actually shows instead

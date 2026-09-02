@@ -327,6 +327,19 @@ the way the panel actually sounds, not around it:
   - ✅ *Raw dialogue, TTS-safe:* "she trails off, *'I was scared.'*"
   - ❌ *Malformed, unsafe for TTS:* "'I... I don't know,' he admits."
   - ✅ *Raw dialogue, TTS-safe:* "'I don't know,' he admits, trailing off."
+- **Wordless SFX/interjection lettering ("Hii!", "Gah!", "Aaah!", "Guh...") is not dialogue and
+  must never go in a quote.** This whole script is voiced by one narrator reading every
+  character's lines aloud - a real quoted line reads naturally in that voice ("he shouts,
+  'shut up already!'"), but a pure sound effect read out as if it were a spoken word ("the
+  blacksmith cries out, 'Hii!'") just sounds like the narrator saying a nonsense syllable, not
+  a scream. Describe what the sound conveys instead - fright, pain, a startled yelp - the same
+  way you'd narrate any other wordless reaction shown in the art (Rule 7 still requires the
+  SFX's substance survive, just as narration, not as a mimicked noise):
+  - ❌ *Reads as a mispronounced word, not a scream:* "the blacksmith cries out, 'Hii!'"
+  - ✅ *Narrated reaction, TTS-safe:* "the blacksmith lets out a frightened yelp."
+  - A short **real word** shouted as an exclamation ("Stop!", "No!", "Wait!") is still actual
+    dialogue, not SFX lettering - keep quoting those per the core rule above; this bullet is
+    only for sounds that aren't actually words in the language being narrated.
 
 ### Rule 6: Strict Sequential Panel Coverage — Every Story Panel, No Exceptions
 - Every panel image you are given (`{chapter}_001_01` through the last panel in the manifest) has **already been through story-page filtering upstream** — non-story pages (credits, ads, blank pages, duplicate spread halves) were dropped before cropping ever happened. That means **every single panel you receive is, by definition, part of the story** — there is no such thing as a supplied panel that is "not story-relevant." Never reason your way into skipping one on those grounds.
@@ -372,6 +385,10 @@ panel-by-panel in isolation.
   read-through the way a plot gap does, so it has to be checked by literally scanning for the
   pattern, not by ear. Fix any hit by normalizing the typography per Rule 5, never by leaving
   it "just this once."
+- **Re-verify no quote is actually wordless SFX/interjection lettering** (Rule 5) — same kind
+  of literal scan: any quoted text that isn't a real word in the language being narrated
+  ("Hii!", "Gah!", "Guh...") gets rewritten as a narrated reaction instead, per that rule's
+  examples.
 - **Re-verify accuracy:** every line still matches its panel's art (Rule 2) — no detail
   drifted or got paraphrased into something the panel doesn't actually show.
 - **Re-verify nothing was dropped:** every piece of dialogue, caption, and visible detail
