@@ -310,9 +310,14 @@ the way the panel actually sounds, not around it:
   synthesis (`remanga/audio/tts.py`), and neither engine does any text normalization of its
   own, so a stray hyphen or ellipsis gets synthesized as a broken half-word or a dead-air
   pause instead of a stammer. Strip only that lettering convention when quoting; everything
-  else about the line - wording, slang, sentence structure - stays exactly as spoken:
+  else about the line - wording, slang, sentence structure - stays exactly as spoken. The
+  stammer/trailing-off *itself* is real content, don't just delete it silently - carry it in
+  the narration frame around the quote (*"he stammers"*, *"she trails off"*) instead of in the
+  quoted text's typography:
   - ❌ *Unsafe for TTS, breaks synthesis:* "he stammers, *'w-what are you talking about?!'*"
   - ✅ *Raw dialogue, TTS-safe:* "he stammers, *'what are you talking about?!'*"
+  - ❌ *Unsafe for TTS, breaks synthesis:* "she says, *'I...was scared.'*"
+  - ✅ *Raw dialogue, TTS-safe:* "she trails off, *'I was scared.'*"
 
 ### Rule 6: Strict Sequential Panel Coverage — Every Story Panel, No Exceptions
 - Every panel image you are given (`{chapter}_001_01` through the last panel in the manifest) has **already been through story-page filtering upstream** — non-story pages (credits, ads, blank pages, duplicate spread halves) were dropped before cropping ever happened. That means **every single panel you receive is, by definition, part of the story** — there is no such thing as a supplied panel that is "not story-relevant." Never reason your way into skipping one on those grounds.
