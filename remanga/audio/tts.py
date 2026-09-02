@@ -7,7 +7,6 @@ from rich.progress import BarColumn, Progress, TextColumn
 
 from remanga import setup
 from remanga.audio.synth import create_synthesizer
-from remanga.audio.text_normalize import normalize_for_tts
 from remanga.config import AudioConfig, RemangaConfig, TTSConfig
 from remanga.console import console
 from remanga.json_io import read_json, read_json_or, write_json
@@ -119,7 +118,7 @@ class TTSEngine:
         # Doing it up front keeps the two phases (load, then synthesize) as two
         # clean, sequential pieces of output instead.
         needs_synthesis = any(
-            normalize_for_tts(entry.get("text", "").strip()) and not is_resumable(panel_ids[idx])
+            entry.get("text", "").strip() and not is_resumable(panel_ids[idx])
             for idx, entry in enumerate(narration_entries)
         )
         if needs_synthesis:
@@ -150,12 +149,7 @@ class TTSEngine:
             pause_after_ms = self.audio_config.pause_between_panels_ms
             for idx, entry in enumerate(narration_entries, start=1):
                 panel_id = panel_ids[idx - 1]
-                # Deterministic TTS-safety net - see audio/text_normalize.py's
-                # module docstring: strips manga lettering's stutter/ellipsis
-                # typography regardless of whether the narration LLM already
-                # did (prompts/narration.md Rule 5), so a stray "w-what" or
-                # "I...was" can never reach synthesis.
-                text = normalize_for_tts(entry.get("text", "").strip())
+                text = entry.get("text", "").strip()
 
                 raw_clip_path = audio_dir / f"{panel_id}_raw.wav"
                 processed_clip_path = audio_dir / f"{panel_id}.wav"
