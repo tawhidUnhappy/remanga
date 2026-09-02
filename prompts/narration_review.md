@@ -43,10 +43,18 @@ than guessing at a fix.
 }
 ```
 `tag` is one of: `wrong_detail`, `wrong_speaker`, `dropped_content`, `flattened_dialogue`,
-`empty_text`, `spoiler`, `punctuation`, `word_budget`, `continuity`, `other`, or empty.
+`tts_unsafe_typography`, `empty_text`, `spoiler`, `punctuation`, `word_budget`, `continuity`,
+`other`, or empty.
 `flattened_dialogue` means a panel's line was paraphrased into third-person summary when the
 character's actual words should have been quoted instead (Rule 5 of `prompts/narration.md`) —
 fix it by rewriting the line to work the real quote in, not by rephrasing the paraphrase.
+`tts_unsafe_typography` means a `text` value still has manga lettering's stutter-hyphen or
+ellipsis typography in it ("w-what", "I...was") — **never valid** per Rule 5 of
+`prompts/narration.md`; fix it by normalizing that one line (keep the stammer/trailing-off as
+a narration-frame verb, e.g. "he stammers", per that rule's examples) without touching
+anything else about the wording. If more than one or two panels this chapter got flagged with
+this tag, say so explicitly in the generalized lesson (Block 3 below) — it means the pattern
+needs reinforcing, not just this line fixing.
 `empty_text` means a panel was left with `"text": ""` — **never valid** per Rule 4 of
 `prompts/narration.md`; every panel that reaches this pipeline already passed human
 panel-relevance filtering during marking, so describe what the panel actually shows instead

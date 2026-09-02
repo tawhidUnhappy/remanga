@@ -301,23 +301,32 @@ the way the panel actually sounds, not around it:
     two rhetorical questions reads better condensed than quoted whole).
   - Within the word budget (Rule 4), lean toward spending it on the character's real words for
     a panel's key line rather than on extra narrator scene-setting the art already shows.
-- **Preserve the raw dialogue as-is, but make it TTS-safe.** Quoting close to verbatim (Rule
-  5's core rule above) means keeping the character's actual words, tone, and phrasing intact -
-  don't paraphrase or clean up how they talk. The one exception is manga lettering's own
-  stutter/trailing-off typography (hyphens, ellipses: "w-what", "I... I don't know",
-  "t-thank you"), which is a visual/SFX convention, not something meant to be read character-
-  for-character - the narration.json text goes straight into IndexTTS-2.5/audio8 speech
-  synthesis (`remanga/audio/tts.py`), and neither engine does any text normalization of its
-  own, so a stray hyphen or ellipsis gets synthesized as a broken half-word or a dead-air
-  pause instead of a stammer. Strip only that lettering convention when quoting; everything
-  else about the line - wording, slang, sentence structure - stays exactly as spoken. The
-  stammer/trailing-off *itself* is real content, don't just delete it silently - carry it in
-  the narration frame around the quote (*"he stammers"*, *"she trails off"*) instead of in the
-  quoted text's typography:
-  - ❌ *Unsafe for TTS, breaks synthesis:* "he stammers, *'w-what are you talking about?!'*"
+- **Preserve the raw dialogue as-is, but make it TTS-safe — this is a hard requirement, not a
+  style preference.** Quoting close to verbatim (Rule 5's core rule above) means keeping the
+  character's actual words, tone, and phrasing intact - don't paraphrase or clean up how they
+  talk. The one exception is manga lettering's own stutter/trailing-off typography (hyphens,
+  ellipses), which is a visual/SFX convention, not something meant to be read character-for-
+  character - the narration.json text goes straight into IndexTTS-2.5/audio8 speech synthesis
+  (`remanga/audio/tts.py`), and neither engine does any text normalization of its own, so a
+  stray hyphen or ellipsis gets synthesized as a broken half-word or a dead-air pause instead
+  of a stammer.
+  - **A `text` value containing a hyphen splitting a repeated/partial syllable ("w-what",
+    "T-t-thank", "N-No") or two-or-more dots/an ellipsis character ("...", "…") anywhere
+    inside quoted dialogue is malformed output, full stop** - the same tier of error as a
+    wrong `panel_id` (Rule 6) or an empty `text` (Rule 4), not a nuance to weigh against
+    keeping the quote verbatim. There is no panel where leaving the raw typography in is the
+    right call.
+  - Strip only that lettering convention when quoting; everything else about the line -
+    wording, slang, sentence structure - stays exactly as spoken.
+  - The stammer/trailing-off *itself* is real content, don't just delete it silently - carry
+    it in the narration frame around the quote (*"he stammers"*, *"she trails off"*) instead
+    of in the quoted text's typography.
+  - ❌ *Malformed, unsafe for TTS:* "he stammers, *'w-what are you talking about?!'*"
   - ✅ *Raw dialogue, TTS-safe:* "he stammers, *'what are you talking about?!'*"
-  - ❌ *Unsafe for TTS, breaks synthesis:* "she says, *'I...was scared.'*"
+  - ❌ *Malformed, unsafe for TTS:* "she says, *'I...was scared.'*"
   - ✅ *Raw dialogue, TTS-safe:* "she trails off, *'I was scared.'*"
+  - ❌ *Malformed, unsafe for TTS:* "'I... I don't know,' he admits."
+  - ✅ *Raw dialogue, TTS-safe:* "'I don't know,' he admits, trailing off."
 
 ### Rule 6: Strict Sequential Panel Coverage — Every Story Panel, No Exceptions
 - Every panel image you are given (`{chapter}_001_01` through the last panel in the manifest) has **already been through story-page filtering upstream** — non-story pages (credits, ads, blank pages, duplicate spread halves) were dropped before cropping ever happened. That means **every single panel you receive is, by definition, part of the story** — there is no such thing as a supplied panel that is "not story-relevant." Never reason your way into skipping one on those grounds.
@@ -356,6 +365,13 @@ panel-by-panel in isolation.
   "read it like a viewer": a wrong `panel_id` produces no gap or jump a listening pass would
   ever catch (the *text* is fine, only the id is broken), so it has to be checked by literally
   comparing strings, not by ear.
+- **Re-verify no `text` value contains stutter-hyphen or ellipsis typography** (Rule 5) — a
+  distinct, literal scan across every `text` string in the finished script for a hyphen
+  splitting a repeated/partial syllable ("w-what") or two-or-more dots/an ellipsis character
+  ("...", "…"), same as the `panel_id` string check above: this doesn't announce itself to a
+  read-through the way a plot gap does, so it has to be checked by literally scanning for the
+  pattern, not by ear. Fix any hit by normalizing the typography per Rule 5, never by leaving
+  it "just this once."
 - **Re-verify accuracy:** every line still matches its panel's art (Rule 2) — no detail
   drifted or got paraphrased into something the panel doesn't actually show.
 - **Re-verify nothing was dropped:** every piece of dialogue, caption, and visible detail
