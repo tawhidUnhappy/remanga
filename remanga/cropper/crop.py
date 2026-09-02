@@ -16,7 +16,7 @@ from remanga.cropper.crop_page import crop_page
 from remanga.cropper.crop_report import ensure_panel_folders_generated, ensure_sheets_generated, package_outputs, print_crop_summary, write_manifest
 from remanga.cropper.llm_bundles import build_llm_bundles, is_up_to_date
 from remanga.json_io import has_real_json_content, read_json
-from remanga.paths import get_chapter_dir, read_manifest
+from remanga.paths import get_chapter_dir, load_project_metadata, read_manifest
 
 
 class CoordinateCropper:
@@ -44,6 +44,26 @@ class CoordinateCropper:
             raise FileNotFoundError(
                 f"Pages directory is empty: {pages_dir}\n"
                 f"Please download the chapter pages first."
+            )
+
+        # reading_direction feeds every panels_pdf/panels_zip/sheets_zip
+        # chapter_info.json via chapter_identity_fields (see
+        # remanga.paths.metadata) - required before packaging runs below, not
+        # just cosmetic. `remanga interactive` asks for it once per project
+        # and saves it to project.json; this direct/scripted `crop` entry
+        # point has no prompt UI of its own, so it fails clearly instead of
+        # silently defaulting or shipping a bundle with a guessed direction.
+        # This is the pattern to follow for any future required-but-missing
+        # project.json/config.json field: interactive callers prompt and
+        # save it up front, non-interactive callers fail fast here with
+        # exactly what's missing and how to fix it.
+        if "reading_direction" not in load_project_metadata(project_name):
+            raise ValueError(
+                f"Missing 'reading_direction' for project '{project_name}' - required before "
+                f"panels_pdf/panels_zip/sheets_zip can be packaged. Set it by running "
+                f"`remanga interactive` once for this project (it will ask and save it), or add "
+                f"\"reading_direction\": \"right_to_left\" (or \"left_to_right\") directly to "
+                f"projects/{project_name}/project.json."
             )
 
         # RESUME CHECK: If panels already exist and force=False, verify and skip
