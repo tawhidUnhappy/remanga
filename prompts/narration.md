@@ -12,6 +12,23 @@ PDFs (`panels_1.pdf`, `panels_2.pdf`, ..., one panel per page). A chapter that f
 file is still just a single part - `panels_1.zip`, `sheets_1.zip`, or `panels_1.pdf` on its
 own, nothing to combine.
 
+**A `panels_N.zip` upload is the highest-risk format for silently drifting out of sync** -
+it's dozens or hundreds of individually-named loose image files, with no contact-sheet grid
+or PDF page order visually forcing you through every one in sequence the way `sheets_N.zip`
+and `panels_N.pdf` do. The failure mode this causes isn't a missing entry (Rule 6 already
+catches that by count and by string-diffing `panel_id` against `full_manifest`) - it's
+**content drift**: every `panel_id` in your output is present and correctly spelled, but one
+image got skipped or read out of order partway through, so panel N's narration entry
+actually describes what panel N+1 (or N-1) shows. A count check and an id-string check both
+pass cleanly on a drifted script - the ids are all there and all correctly spelled, only
+which *image* each entry's text actually describes has shifted. Guard against this
+mechanically, not by trying to "be careful": open and narrate each image file **strictly in
+filename order** (the same `{chapter}_{page}_{panel}` sequence `full_manifest` lists them
+in), one at a time, immediately writing that panel's entry before moving to the next file -
+never skim/batch multiple images from memory and write several entries at once. See Rule 6's
+content-alignment check and Rule 9's matching final-pass bullet for how this gets verified
+before output.
+
 **Panel/page naming:** every panel image and cell label follows
 `{chapter}_{page}_{panel}` - zero-padded chapter, zero-padded page number, and a panel
 number that **resets to 1 at the start of every page** (it counts "which panel on this
@@ -357,6 +374,16 @@ the way the panel actually sounds, not around it:
   string-for-string, not just by count** — every single one must match exactly, in order. Fix
   any mismatch by copying the manifest's exact string, never by adjusting the manifest's
   padding to match what you wrote.
+- **A correct `panel_id` does not by itself prove the entry describes the right image** — this
+  is the content-drift failure a `panels_N.zip` upload is prone to (see the callout in the
+  Role & Mission section above): a skipped or reordered image mid-upload leaves every id
+  correctly spelled and in the right count, while the *text* attached to each id has shifted
+  to the panel before or after the one it's actually labeled as. Check this separately from
+  the id-string diff: for every panel, re-open that specific image by its `panel_id` and
+  confirm the entry's text is what *that exact image* shows — not what you remember narrating
+  around that point in the sequence. If a shift turns up, don't just patch the one entry -
+  re-check every subsequent entry after it, since a single skip drags every following panel's
+  content one position out of alignment with its id until it's corrected.
 
 ### Rule 7: Complete Dialogue & Action Coverage (ZERO OMISSION)
 Every panel must be fully accounted for — do not silently drop content because it's inconvenient to fit, redundant-seeming, or not the "main" beat of the panel.
@@ -378,6 +405,14 @@ panel-by-panel in isolation.
   "read it like a viewer": a wrong `panel_id` produces no gap or jump a listening pass would
   ever catch (the *text* is fine, only the id is broken), so it has to be checked by literally
   comparing strings, not by ear.
+- **Re-verify each entry's text against its own `panel_id`'s actual image, not just against
+  neighboring entries** (Rule 6) — a content-drift shift from a skipped/reordered image (the
+  `panels_N.zip` risk described in Role & Mission) reads perfectly fine start-to-finish as a
+  story, since every panel's content is still in there *somewhere*, just one position off
+  from the id it's filed under - a read-through alone will not catch it. Spot-check by
+  re-opening a sample of images against their claimed entries (every one if the chapter is
+  short enough), and if a shift is found, walk forward from that point re-checking every
+  following entry, not just the one that was caught.
 - **Re-verify no `text` value contains stutter-hyphen or ellipsis typography** (Rule 5) — a
   distinct, literal scan across every `text` string in the finished script for a hyphen
   splitting a repeated/partial syllable ("w-what") or two-or-more dots/an ellipsis character

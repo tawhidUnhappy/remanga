@@ -43,8 +43,8 @@ than guessing at a fix.
 }
 ```
 `tag` is one of: `wrong_detail`, `wrong_speaker`, `dropped_content`, `flattened_dialogue`,
-`tts_unsafe_typography`, `quoted_sfx`, `empty_text`, `spoiler`, `punctuation`, `word_budget`,
-`continuity`, `other`, or empty.
+`tts_unsafe_typography`, `quoted_sfx`, `content_shift`, `empty_text`, `spoiler`, `punctuation`,
+`word_budget`, `continuity`, `other`, or empty.
 `flattened_dialogue` means a panel's line was paraphrased into third-person summary when the
 character's actual words should have been quoted instead (Rule 5 of `prompts/narration.md`) —
 fix it by rewriting the line to work the real quote in, not by rephrasing the paraphrase.
@@ -61,6 +61,15 @@ narrator voicing that literally reads as a mispronounced word, not a scream. Fix
 rewriting the quote as a narrated reaction (fright, pain, a startled yelp) instead. A short
 real word shouted as an exclamation ("Stop!", "No!") is genuine dialogue, not this tag — only
 flag sounds that aren't actual words.
+`content_shift` means this panel's `panel_id` is correctly spelled, but the text describes a
+*different* panel's art — usually the one right before or after it — because an image got
+skipped or read out of order during scriptwriting (Rule 6 of `prompts/narration.md`), most
+common on `panels_N.zip` uploads. This is different from `wrong_detail`: a wrong-detail flag
+means one fact in an otherwise-right-panel entry is off, `content_shift` means the whole
+entry belongs to the wrong panel. Fixing one instance likely means every following panel
+shifted too - re-check the panels after the flagged one, not just the one flagged, and note
+in the general lesson (Block 3) if more than one showed up, since it means the drift needs
+correcting at its source panel, not patched one at a time.
 `empty_text` means a panel was left with `"text": ""` — **never valid** per Rule 4 of
 `prompts/narration.md`; every panel that reaches this pipeline already passed human
 panel-relevance filtering during marking, so describe what the panel actually shows instead
