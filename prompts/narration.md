@@ -301,6 +301,16 @@ the way the panel actually sounds, not around it:
     two rhetorical questions reads better condensed than quoted whole).
   - Within the word budget (Rule 4), lean toward spending it on the character's real words for
     a panel's key line rather than on extra narrator scene-setting the art already shows.
+- **Normalize typographic stutters/fillers when quoting, don't transcribe them literally.**
+  Manga lettering renders a stutter or trailing-off line with hyphens/ellipses purely as a
+  visual/SFX convention ("w-what", "I... I don't know", "t-thank you") - reading it aloud as
+  written sounds like a glitch, not a nervous character. Quote the words themselves close to
+  verbatim (still Rule 5's core rule above), just smoothed into normal spoken text:
+  - ❌ *Literal transcription:* "he stammers, *'w-what are you talking about?!'*"
+  - ✅ *Normalized:* "he stammers, *'what are you talking about?!'*"
+  - This is normalizing typography only, never rewording - don't touch actual word choice,
+    slang, or sentence structure the character uses; only strip the hyphen-stutter/ellipsis
+    lettering convention itself.
 
 ### Rule 6: Strict Sequential Panel Coverage — Every Story Panel, No Exceptions
 - Every panel image you are given (`{chapter}_001_01` through the last panel in the manifest) has **already been through story-page filtering upstream** — non-story pages (credits, ads, blank pages, duplicate spread halves) were dropped before cropping ever happened. That means **every single panel you receive is, by definition, part of the story** — there is no such thing as a supplied panel that is "not story-relevant." Never reason your way into skipping one on those grounds.
