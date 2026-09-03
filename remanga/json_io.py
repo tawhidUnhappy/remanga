@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -22,11 +24,26 @@ def read_json_or(path: Path | str, default: Any = None) -> Any:
 
 
 def write_json(path: Path | str, data: Any, indent: int = 2) -> None:
-    """Serializes `data` as indented JSON, creating parent directories as needed."""
+    """Serializes `data` as indented JSON, creating parent directories as needed.
+    Writes to a temp file in the same directory, then atomically renames it over
+    the target (os.replace) - a write-in-place here would leave `path` holding a
+    truncated/corrupt file if the process is killed mid-write, which matters more
+    now that narration.json gets autosaved on close to every keystroke pause in
+    the Narration Writer (see webui/writer_routes.py) rather than only on an
+    explicit Save."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=indent)
+    fd, tmp_path = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=indent)
+        os.replace(tmp_path, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 # Minimum byte size a real, LLM-pasted JSON file is expected to clear. Blank

@@ -109,6 +109,12 @@ main { max-width: 900px; margin: 0 auto; padding: 20px; }
 }
 .status-pill.is-written { border-color: var(--ok); color: var(--ok); }
 .status-pill.is-empty { background: var(--danger); border-color: var(--danger); color: var(--danger-ink); }
+/* Autosave to narration.json failed for this panel (server unreachable/
+   killed) - a border, not a background swap, so it layers over is-written/
+   is-empty instead of hiding that state. Cleared on the next successful
+   autosave for this panel. */
+.status-pill.save-failed { box-shadow: 0 0 0 2px #f5a623 inset; }
+.status-pill.save-failed::after { content: " ⚠ not saved"; }
 
 .text-label { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
 .panel-body textarea {
