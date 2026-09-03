@@ -4,18 +4,18 @@ or, in full-recap mode, compiling a whole project's chapters into one continuous
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable, Dict
 
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from remanga import setup
+from remanga.commands import COMMAND_REGISTRY, Param
 from remanga.config import RemangaConfig
 from remanga.console import console, display_path, print_path, wrap_at_slashes
 from remanga.cropper import CoordinateCropper
-from remanga.full_recap import FullRecapCompiler, chapter_sort_key, discover_chapters
+from remanga.full_recap import discover_chapters
 from remanga.pipeline import load_pipeline, run_pipeline
-from remanga.remix import remix_project
 from remanga.verify import verify_project
 from remanga.json_io import has_real_json_content, read_json_or
 from remanga.paths import (
@@ -228,49 +228,39 @@ def run_narration_step(project: str, chapter: str, config: RemangaConfig) -> Non
                 Prompt.ask("[bold]Press Enter once memory.json is saved[/]")
 
 
-def _main_menu() -> "list[tuple[str, Callable[[str, RemangaConfig], None]]]":
-    """The main menu, as data instead of a hardcoded print-block +
-    if/elif chain: each entry is (label, handler). Printed order == dispatch
-    order == display number, so adding/removing/reordering a mode means
-    editing this list only - nothing else in run_interactive_pipeline needs
-    to change. Every handler takes (project, config) uniformly;
-    `_run_full_chapter_pipeline` (mode 1) just happens to be the one that
-    also asks for a chapter/URL/etc. first, same as any other handler is
-    free to prompt for whatever it needs. A function (not a module-level
-    list) purely so it can be defined here, at the top of the file where the
-    menu belongs, while still referencing handlers that are defined further
-    down - it's only ever called after the whole module has finished
-    loading."""
-    return [
-        (
-            "Process a chapter (full pipeline: download → mark → crop → narrate → review → TTS → mix → render)",
-            _run_full_chapter_pipeline,
-        ),
-        (
-            "Mark/re-mark panels, then hand-write narration yourself (no LLM, stops there)",
-            _run_mark_then_write,
-        ),
-        (
-            "Review narration only (no other stage runs before or after)",
-            _run_review_only,
-        ),
-        (
-            "Compile the whole project into one continuous video (full-recap)",
-            _run_full_recap,
-        ),
-        (
-            "Change background music/volume and rebuild video(s) only (no re-narration)",
-            _run_remix,
-        ),
-        (
-            "Verify audio/video files are complete, not corrupt/truncated",
-            lambda project, config: _run_verify(project),
-        ),
-        (
-            "Edit this project's pipeline (which steps run, and in what order)",
-            edit_pipeline_steps,
-        ),
-    ]
+# Wizard-only extras: capabilities the old 7-item hardcoded menu offered that
+# don't map 1:1 onto a single COMMAND_REGISTRY entry (a full chapter run
+# needs its reading-direction/URL/status-overview/verify preamble around
+# run_pipeline; mark-then-write is two stages stopping short of narration
+# review; editing pipeline.json isn't a real CLI subcommand). Appended after
+# the registry-driven list so every remanga command is still listed first.
+# "Review narration only", "Compile into one video", "Change BGM and
+# rebuild", and "Verify audio/video" from the old menu are now just the
+# registry's own review/full-recap/remix/verify commands - no wizard-only
+# wrapper needed for those anymore.
+_WIZARD_EXTRAS: "list[tuple[str, Callable[[str, RemangaConfig], None]]]" = []  # filled in below, after the handlers are defined
+
+
+def _prompt_param(param: Param, project: str):
+    """Prompts for one Command param's value, matching its type/choices/
+    default/help the way the old per-mode prompts did. `project` is only used
+    for a `chapter`/`chapters` param's helper listings - the project itself is
+    never prompted for here, it's already resolved by project selection."""
+    if param.type == "bool":
+        return Confirm.ask(f"[bold]{param.help}[/]", default=bool(param.default))
+    if param.name == "chapter":
+        return select_chapter(project)
+    if param.name == "chapters":
+        chapters = discover_chapters(project)
+        if chapters:
+            console.print(f"[dim]Chapters found: {', '.join(chapters)}[/]")
+        raw = Prompt.ask(f"[bold]{param.help}[/]", default="").strip()
+        return raw or None
+    if param.type == "choice":
+        return Prompt.ask(f"[bold]{param.help}[/]", choices=param.choices, default=param.default)
+    default_str = "" if param.default is None else str(param.default)
+    raw = Prompt.ask(f"[bold]{param.help}[/]" + (" (optional)" if not param.required else ""), default=default_str).strip()
+    return raw or None
 
 
 def run_interactive_pipeline():
@@ -282,18 +272,34 @@ def run_interactive_pipeline():
     # 1. Project Selection / Creation / Settings
     project = select_or_create_project(config)
 
-    # 2. Full pipeline for one chapter, one of its stages standalone, or a
-    # whole-project/maintenance mode - driven by _main_menu() above instead
-    # of a hardcoded print + if/elif chain.
-    menu = _main_menu()
+    # 2. Every remanga command (COMMAND_REGISTRY - the same list cli.py's
+    # argparse is built from), plus a handful of wizard-only extras appended
+    # after it, so this menu can never drift out of sync with what `remanga
+    # <cmd> --help` actually offers.
     console.print()
-    for idx, (label, _handler) in enumerate(menu, start=1):
+    idx = 0
+    for cmd in COMMAND_REGISTRY:
+        idx += 1
+        console.print(f"[bold]{idx}.[/] {cmd.name} [dim]— {cmd.help}[/]")
+    extra_start = idx
+    for label, _handler in _WIZARD_EXTRAS:
+        idx += 1
         console.print(f"[bold]{idx}.[/] {label}")
     console.print()
-    choices = [str(i) for i in range(1, len(menu) + 1)]
-    mode = Prompt.ask("[bold]Choose[/]", choices=choices, default="1")
-    _label, handler = menu[int(mode) - 1]
-    handler(project, config)
+
+    choices = [str(i) for i in range(1, idx + 1)]
+    choice = Prompt.ask("[bold]Choose[/]", choices=choices, default="1")
+    choice_idx = int(choice)
+
+    if choice_idx <= len(COMMAND_REGISTRY):
+        cmd = COMMAND_REGISTRY[choice_idx - 1]
+        params: Dict[str, Any] = {}
+        for param in cmd.params:
+            params[param.name] = project if param.name == "project" else _prompt_param(param, project)
+        cmd.handler(params, config)
+    else:
+        _label, handler = _WIZARD_EXTRAS[choice_idx - extra_start - 1]
+        handler(project, config)
 
 
 def _run_full_chapter_pipeline(project: str, config: RemangaConfig) -> None:
@@ -380,85 +386,6 @@ def _run_full_chapter_pipeline(project: str, config: RemangaConfig) -> None:
         verify_project(project, chapters=[chapter], check_video=True)
 
 
-def _run_full_recap(project: str, config: RemangaConfig) -> None:
-    """Full-recap mode: no per-chapter download/mark/crop walkthrough - every
-    chapter is expected to already have cropped panels and a narration.json
-    (write those with the regular per-chapter flow first). This just picks
-    which chapters to include, validates voice/BGM, and compiles."""
-    chapters = discover_chapters(project)
-    if not chapters:
-        console.print(f"[bold red]No chapters found for '{project}'.[/]")
-        return
-
-    console.print(f"\n[dim]Chapters found: {', '.join(chapters)}[/]")
-    choice = Prompt.ask(
-        "[bold]Compile all of them, or a subset? (comma-separated chapter numbers, or Enter for all)[/]",
-        default="",
-    ).strip()
-    selected = sorted({c.strip() for c in choice.split(",") if c.strip()}, key=chapter_sort_key) if choice else chapters
-
-    setup.ensure_valid_voice_prompt(config, interactive=True)
-    setup.ensure_valid_bgm(config, interactive=True)
-
-    force = Confirm.ask("Force a full recompile even if already compiled?", default=False)
-
-    console.print(f"\n[bold]Compiling {len(selected)} chapter(s) into one continuous video[/]")
-    compiler = FullRecapCompiler(config)
-    compiler.compile_full_manga(project, force=force, chapters=selected)
-
-
-def _run_remix(project: str, config: RemangaConfig) -> None:
-    """Remix mode: re-mixes and re-renders already-rendered chapter(s) after
-    a BGM/volume change - never touches TTS or frame compositing. See
-    remix.py's module docstring."""
-    chapters = discover_chapters(project)
-    if not chapters:
-        console.print(f"[bold red]No chapters found for '{project}'.[/]")
-        return
-
-    console.print(f"\n[dim]Chapters found: {', '.join(chapters)}[/]")
-    choice = Prompt.ask(
-        "[bold]Remix all of them, or a subset? (comma-separated chapter numbers, or Enter for all)[/]",
-        default="",
-    ).strip()
-    selected = sorted({c.strip() for c in choice.split(",") if c.strip()}, key=chapter_sort_key) if choice else chapters
-
-    change_bgm = Confirm.ask("Change the background music file for this remix?", default=False)
-    bgm_override = None
-    if change_bgm:
-        bgm_override = Prompt.ask("[bold]Path to the new BGM audio file[/]").strip().strip("'\"")
-    else:
-        # Volume-only tweaks (or leaving BGM as-is entirely) go through
-        # config.json directly - offer to jump into setup-config now if the
-        # user actually wants to adjust bgm_volume_db before remixing.
-        if Confirm.ask("Adjust BGM volume (dB) or other settings in setup-config before remixing?", default=False):
-            from remanga.setup_wizard import run_setup_wizard
-            run_setup_wizard(config)
-
-    rejoin = Confirm.ask("Re-join the full-recap video too, if one exists?", default=True)
-
-    remix_project(project, config, chapters=selected, bgm_override=bgm_override, rejoin=rejoin)
-
-
-def _run_verify(project: str) -> None:
-    """Verify mode: strictly checks every chapter's audio/video is complete
-    and decodable, not just present - see verify.py's module docstring."""
-    chapters = discover_chapters(project)
-    if not chapters:
-        console.print(f"[bold red]No chapters found for '{project}'.[/]")
-        return
-
-    console.print(f"\n[dim]Chapters found: {', '.join(chapters)}[/]")
-    choice = Prompt.ask(
-        "[bold]Verify all of them, or a subset? (comma-separated chapter numbers, or Enter for all)[/]",
-        default="",
-    ).strip()
-    selected = sorted({c.strip() for c in choice.split(",") if c.strip()}, key=chapter_sort_key) if choice else chapters
-
-    check_video = Confirm.ask("Also verify rendered videos (slower - audio only if no)?", default=True)
-    verify_project(project, chapters=selected, check_video=check_video)
-
-
 def _run_mark_then_write(project: str, config: RemangaConfig) -> None:
     """Standalone entry that covers exactly two stages, then stops: mark (or
     re-mark) panels, then hand-write narration.json yourself in the
@@ -540,49 +467,21 @@ def _run_mark_then_write(project: str, config: RemangaConfig) -> None:
     )
 
 
-def _run_review_only(project: str, config: RemangaConfig) -> None:
-    """Standalone entry into the Narration Review stage: pick a chapter and
-    jump straight into the Narration Reviewer, then stop - no
-    download/mark/crop step before it, no TTS/mix/render after it, whether
-    or not this chapter already has those. For going back to do another
-    review round on a chapter you already moved past (Option 1's "Process a
-    chapter" always runs the review loop as one step among the rest, which
-    then falls straight through to voice synthesis the moment you approve
-    or run out of flags - this mode never falls through to anything)."""
-    project_info = next((p for p in list_projects() if p["name"] == project), None)
-    chapters = project_info["chapters"] if project_info else []
-    if not chapters:
-        console.print(f"[bold red]No chapters found for '{project}'.[/]")
-        return
-
-    table = Table(title=f"Chapters for '{project}'", show_edge=False)
-    table.add_column("#", width=4)
-    table.add_column("Chapter")
-    table.add_column("Status")
-    for idx, ch in enumerate(chapters, start=1):
-        status = get_chapter_status(project, ch)
-        table.add_row(str(idx), f"Chapter {ch}", status["summary"])
-    console.print(table)
-
-    default_ch = chapters[-1]
-    choice = Prompt.ask("[bold]Enter chapter number to review[/]", default=str(default_ch)).strip()
-    if choice.isdigit() and 1 <= int(choice) <= len(chapters):
-        chapter = chapters[int(choice) - 1]
-    else:
-        chapter = choice
-
-    narration_path = get_chapter_dir(project, chapter) / "narration.json"
-    if not has_real_json_content(narration_path):
-        console.print(
-            f"[bold red]Chapter {chapter} has no narration.json yet[/] - nothing to review. "
-            "Process this chapter first (option 1) to write narration before reviewing it."
-        )
-        return
-
-    run_narration_review_loop(project, chapter, config)
-    console.print(
-        f"\n[green]✓ Review session for Chapter {chapter} finished.[/] "
-        "[dim]Not continuing to any other stage - re-run the wizard (option 1) when you're "
-        "ready for voice synthesis/mix/render, or come back here for another review round "
-        "any time.[/]"
-    )
+# Populated here (after the handlers above are defined) rather than as a
+# module-level literal at the top of the file where _WIZARD_EXTRAS is
+# declared - keeps the menu's list of labels next to run_interactive_pipeline
+# while still being able to reference handlers defined further down.
+_WIZARD_EXTRAS.extend([
+    (
+        "Process a chapter (full pipeline: download → mark → crop → narrate → review → TTS → mix → render)",
+        _run_full_chapter_pipeline,
+    ),
+    (
+        "Mark/re-mark panels, then hand-write narration yourself (no LLM, stops there)",
+        _run_mark_then_write,
+    ),
+    (
+        "Edit this project's pipeline (which steps run, and in what order)",
+        edit_pipeline_steps,
+    ),
+])
