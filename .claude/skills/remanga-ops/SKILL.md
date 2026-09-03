@@ -62,6 +62,25 @@ reintroduce:
   (`snapshot_download`'s `max_retries` kwarg doesn't exist in this
   `huggingface_hub` version).
 
+## DeepSeek-OCR-2 (`config.json` → `ocr`, weights-only for now)
+
+`deepseek-ai/DeepSeek-OCR-2` is wired into `remanga setup-models` exactly
+like IndexTTS-2.5 (`config/ocr.py`, `models/scripts/download_deepseek_ocr.py`
+- ModelScope first, HF Hub fallback, via a `ModelManager` built inline in
+`commands.py:_h_setup_models`), downloading to `checkpoints/deepseek_ocr_2`
+via its own isolated `.tools/venv-deepseek-ocr` (provisioned in
+`bootstrap.sh`, `huggingface-hub`+`modelscope` only - no torch/transformers
+yet). No pipeline step actually runs OCR inference yet - this is
+download-only plumbing, ready for whenever a real OCR step gets built.
+`ModelManager`'s `expected_files=("config.json", "model.safetensors")` is a
+guess at the repo's actual file layout (unverified - the real repo wasn't
+reachable while building this), not confirmed against the live repo; if the
+real weights ship sharded (`model-0000X-of-0000Y.safetensors`) the
+skip-if-present check just never short-circuits (redundant re-check each
+`setup-models` run, not a correctness bug - `snapshot_download` still
+skips/resumes correctly either way) - fix the filenames here once the repo's
+actual tree is confirmed.
+
 Building the fused kernels in `bootstrap.sh` (best-effort, non-fatal):
 nvcc must match `torch.version.cuda` **major** (minor mismatch = warning
 only) → install `nvidia-cuda-nvcc` into `venv-audio8` itself, don't rely on

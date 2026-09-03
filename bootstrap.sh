@@ -13,6 +13,7 @@ VENV_DIR="$SCRIPT_DIR/.venv"
 INDEXTTS_VENV_DIR="$TOOLS_DIR/venv-indextts"
 AUDIO8_VENV_DIR="$TOOLS_DIR/venv-audio8"
 MAGI_VENV_DIR="$TOOLS_DIR/venv-magi"
+DEEPSEEK_OCR_VENV_DIR="$TOOLS_DIR/venv-deepseek-ocr"
 
 mkdir -p "$BIN_DIR" "$CACHE_DIR/uv" "$CACHE_DIR/huggingface" "$CACHE_DIR/torch" "$TOOLS_DIR" assets/voices assets/bgm projects
 
@@ -91,15 +92,18 @@ if [ ! -f "$BIN_DIR/ffmpeg" ] || [ ! -f "$BIN_DIR/ffprobe" ]; then
     fi
 fi
 
-# 3. Provision standalone Python 3.11 & create the four isolated virtual
+# 3. Provision standalone Python 3.11 & create the five isolated virtual
 # environments: the main env (remanga's own lightweight core) at the repo
 # root, plus one per heavy ML dependency, tucked under .tools/ for easy
 # management, so their conflicting requirements never have to share a
 # resolution - IndexTTS-2.5, Audio8 TTS, and MAGI v3 each pin their own
 # torch/transformers stack, sometimes incompatibly (MAGI v3 needs
 # transformers<4.52; Audio8 needs transformers>=4.57; nothing guarantees any
-# two of them would ever agree on one shared resolution). The storage
-# trade-off (four venvs instead of one) buys permanent isolation
+# two of them would ever agree on one shared resolution). DeepSeek-OCR-2's
+# own venv is lighter (weights-download only for now - see its own section
+# below) but still separate, for the same reason once it needs a real
+# inference stack. The storage trade-off (five venvs instead of one) buys
+# permanent isolation
 # instead of a pin that has to be re-asserted and re-verified by hand every
 # time one tool's install could clobber another's. Nothing "activates" these -
 # the main env only ever invokes `.tools/venv-<tool>/bin/python` directly as a
@@ -184,6 +188,20 @@ echo "[+] Creating isolated MAGI v3 environment ($MAGI_VENV_DIR)..."
 # auto-install anything still missing on first load, but listing the ones
 # already known here saves that extra round-trip.
 "$BIN_DIR/uv" pip install --python "$MAGI_VENV_DIR" torch "transformers<4.52.0" timm shapely pytorch-metric-learning huggingface-hub pillow numpy einops matplotlib
+
+# DeepSeek-OCR-2 (https://huggingface.co/deepseek-ai/DeepSeek-OCR-2) - weights
+# only for now, same reasoning as remanga/config/ocr.py's docstring: no
+# pipeline step actually runs inference with this model yet, so this venv
+# only gets what snapshot_download() itself needs (modelscope/huggingface-hub),
+# not a full torch/transformers inference stack - that gets added here once an
+# actual OCR step is built on top of it, the same way Audio8's own isolated
+# venv above only exists because something real consumes it. `setup-models`
+# still fetches/verifies the weights unconditionally, exactly like
+# IndexTTS-2.5/MAGI v3 do, so they're already sitting in checkpoints/ ready
+# for that.
+echo "[+] Creating isolated DeepSeek-OCR-2 environment ($DEEPSEEK_OCR_VENV_DIR)..."
+"$BIN_DIR/uv" venv "$DEEPSEEK_OCR_VENV_DIR" --python 3.11 --allow-existing
+"$BIN_DIR/uv" pip install --python "$DEEPSEEK_OCR_VENV_DIR" huggingface-hub modelscope
 
 # 4. Initialize config.json from config.example.json if missing
 if [ ! -f "config.json" ]; then

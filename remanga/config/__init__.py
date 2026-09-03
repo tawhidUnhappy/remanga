@@ -14,6 +14,7 @@ from .audio import AudioConfig
 from .cropper import CropperConfig, PackageConfig
 from .downloader import DownloaderConfig
 from .marker import MarkerConfig, ShortcutsConfig
+from .ocr import OCRConfig
 from .reviewer import ReviewerConfig
 from .root import RemangaConfig
 from .system import SystemConfig
@@ -27,6 +28,7 @@ __all__ = [
     "CropperConfig",
     "DownloaderConfig",
     "MarkerConfig",
+    "OCRConfig",
     "PackageConfig",
     "RemangaConfig",
     "ReviewerConfig",

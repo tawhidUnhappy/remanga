@@ -97,6 +97,10 @@
       "sample_rate": 44100
     }
   },
+  "ocr": {
+    "hf_repo_id": "deepseek-ai/DeepSeek-OCR-2",
+    "model_dir": "checkpoints/deepseek_ocr_2"
+  },
   "audio": {
     "sample_rate": 44100,
     "edge_fade_ms": 35,

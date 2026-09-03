@@ -16,6 +16,7 @@ from .audio import AudioConfig
 from .cropper import CropperConfig
 from .downloader import DownloaderConfig
 from .marker import MarkerConfig
+from .ocr import OCRConfig
 from .reviewer import ReviewerConfig
 from .system import SystemConfig
 from .tts import TTSConfig
@@ -31,6 +32,7 @@ class RemangaConfig(BaseModel):
     reviewer: ReviewerConfig = Field(default_factory=ReviewerConfig)
     writer: WriterConfig = Field(default_factory=WriterConfig)
     tts: TTSConfig = Field(default_factory=TTSConfig)
+    ocr: OCRConfig = Field(default_factory=OCRConfig)
     audio: AudioConfig = Field(default_factory=AudioConfig)
     video: VideoConfig = Field(default_factory=VideoConfig)
 
