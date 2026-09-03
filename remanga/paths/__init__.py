@@ -42,7 +42,7 @@ from .projects import (
 from .review import get_narration_review_history_dir, get_narration_review_path
 from .roots import BIN_DIR, CONFIG_EXAMPLE_PATH, CONFIG_PATH, GLOBAL_DIR, REPO_ROOT, TOOLS_DIR, UV_BIN
 from .tools import get_scripts_dir, get_tool_python
-from .webui_static import MARKER_STATIC_DIR, REVIEWER_STATIC_DIR
+from .webui_static import MARKER_STATIC_DIR, REVIEWER_STATIC_DIR, WRITER_STATIC_DIR
 
 __all__ = [
     # roots
@@ -50,7 +50,7 @@ __all__ = [
     # tools
     "get_tool_python", "get_scripts_dir",
     # webui static
-    "MARKER_STATIC_DIR", "REVIEWER_STATIC_DIR",
+    "MARKER_STATIC_DIR", "REVIEWER_STATIC_DIR", "WRITER_STATIC_DIR",
     # projects/chapters
     "get_projects_dir", "get_project_dir", "get_chapter_dir", "GENERATED_KINDS", "get_generated_dir",
     "get_pages_zip_path", "get_sheets_dir", "get_sheets_zip_dir", "get_sheets_folders_dir",

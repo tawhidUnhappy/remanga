@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Narration Writer</title>
+<style>
+:root {
+  --bg: #15131a;
+  --surface: #1c1922;
+  --surface-2: #26212e;
+  --surface-3: #302a3a;
+  --border: #37303f;
+  --text: #ece7f2;
+  --text-dim: #9c93ac;
+  --text-faint: #6b6479;
+  --accent: #ff5d3a;
+  --accent-ink: #2a120c;
+  --ok: #4fd1c5;
+  --ok-ink: #0c211f;
+  --danger: #ff5d5d;
+  --danger-ink: #2a0c0c;
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Manrope", system-ui, sans-serif;
+  min-height: 100vh;
+}
+header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+header h1 { font-size: 15px; margin: 0; font-weight: 700; }
+header .meta { font-size: 12px; color: var(--text-dim); }
+header .spacer { flex: 1; }
+header .counts { font-size: 12px; color: var(--text-dim); }
+header .counts b { color: var(--accent); }
+
+button {
+  font-family: inherit;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+button:hover { background: var(--surface-3); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+button.primary:hover { filter: brightness(1.08); }
+
+main { max-width: 900px; margin: 0 auto; padding: 20px; }
+
+/* Panel image on top, full card width, tall enough to actually read manga
+   art/text at a glance (most panels are portrait-oriented) - the narration
+   text field sits below it. Click the image for a true full-size lightbox
+   on top of that. */
+.panel-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+.panel-card.empty { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger) inset; }
+.panel-thumb {
+  width: 100%;
+  max-height: 78vh;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+}
+.panel-thumb img { max-width: 100%; max-height: 78vh; width: auto; height: auto; display: block; cursor: zoom-in; }
+.panel-thumb .missing { font-size: 12px; color: var(--text-faint); padding: 24px; text-align: center; line-height: 1.6; }
+
+.panel-body { display: flex; flex-direction: column; gap: 8px; }
+.panel-id-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.panel-id { font-family: ui-monospace, monospace; font-size: 12px; color: var(--text-dim); }
+
+.status-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.status-pill.is-written { border-color: var(--ok); color: var(--ok); }
+.status-pill.is-empty { background: var(--danger); border-color: var(--danger); color: var(--danger-ink); }
+
+.text-label { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+.panel-body textarea {
+  font-family: inherit;
+  font-size: 13px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  resize: vertical;
+  min-height: 70px;
+}
+.panel-card.empty textarea { border-color: var(--danger); }
+
+footer {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 14px 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.hint { font-size: 12px; color: var(--text-faint); margin: 0 0 14px; }
+#loading { padding: 40px; text-align: center; color: var(--text-dim); }
+
+/* Full-size lightbox: click any panel image to see it at its true
+   resolution instead of whatever the card's max-height happened to fit -
+   scrolls if it's still taller than the viewport. */
+#lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(10, 9, 13, 0.92);
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+  padding: 40px 20px;
+  cursor: zoom-out;
+}
+#lightbox.open { display: flex; }
+#lightbox img { max-width: none; width: auto; height: auto; box-shadow: var(--shadow); border-radius: 4px; }
+#lightbox .lightbox-hint {
+  position: fixed;
+  top: 14px;
+  right: 20px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Narration Writer</h1>
+  <span class="meta" id="chapter-meta">loading…</span>
+  <div class="spacer"></div>
+  <span class="counts" id="counts"></span>
+</header>
+
+<main>
+  <div id="loading">Loading panels…</div>
+  <p class="hint" id="hint" style="display:none">
+    Every panel below shows its cropped image and a text field - type the narration line for that panel. Click an
+    image for a full-size lightbox (Esc or click to close). Leaving a field empty is allowed (a silent beat), but
+    stays marked below. Save writes everything to <code>narration.json</code>; you can reopen this UI later to
+    keep filling it in.
+  </p>
+  <div id="panel-list"></div>
+</main>
+
+<footer id="footer" style="display:none">
+  <button id="btn-save" class="primary">Save narration.json</button>
+</footer>
+
+<div id="lightbox">
+  <span class="lightbox-hint">click anywhere to close</span>
+  <img id="lightbox-img" alt="">
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

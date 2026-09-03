@@ -21,6 +21,7 @@ from remanga.paths_manager import run_paths_manager
 from remanga.status import render_status_panel
 from remanga.video import VideoRenderer
 from remanga.webui import launch_and_wait as launch_panel_marker
+from remanga.webui import launch_and_wait_writer
 from remanga.wizard import run_interactive_pipeline, run_narration_review_loop
 
 
@@ -72,6 +73,17 @@ def main():
     )
     p_review.add_argument("--project", "-p", required=True, help="Project name")
     p_review.add_argument("--chapter", "-c", required=True, help="Chapter number")
+
+    # write
+    p_write = subparsers.add_parser(
+        "write",
+        help="Launch the Narration Writer web UI to hand-write narration.json yourself, instead of "
+             "an LLM - same panel-by-panel layout as the Narration Reviewer, but each field is the "
+             "narration text itself. Generates an empty narration.json, then fills it in from what "
+             "you type as you save",
+    )
+    p_write.add_argument("--project", "-p", required=True, help="Project name")
+    p_write.add_argument("--chapter", "-c", required=True, help="Chapter number")
 
     # crop
     p_crop = subparsers.add_parser("crop", help="Crop panels using coordinates in crops.json and package sheets.zip or panels.zip")
@@ -182,6 +194,8 @@ def main():
             launch_panel_marker(args.project, args.chapter, config.marker)
         elif args.command == "review":
             run_narration_review_loop(args.project, args.chapter, config)
+        elif args.command == "write":
+            launch_and_wait_writer(args.project, args.chapter, config.writer)
         elif args.command == "crop":
             cropper = CoordinateCropper(config.cropper)
             cropper.crop_chapter_from_json(args.project, args.chapter, force=args.force)

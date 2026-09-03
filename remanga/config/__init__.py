@@ -19,6 +19,7 @@ from .root import RemangaConfig
 from .system import SystemConfig
 from .tts import TTS_ENGINES, Audio8Config, TTSConfig
 from .video import VideoConfig
+from .writer import WriterConfig
 
 __all__ = [
     "AudioConfig",
@@ -34,4 +35,5 @@ __all__ = [
     "TTSConfig",
     "TTS_ENGINES",
     "VideoConfig",
+    "WriterConfig",
 ]
