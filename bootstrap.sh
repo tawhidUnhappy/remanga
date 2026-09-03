@@ -198,7 +198,7 @@ echo "[+] Creating isolated MAGI v3 environment ($MAGI_VENV_DIR)..."
 # in checkpoints/ before the button is ever clicked.
 echo "[+] Creating isolated DeepSeek-OCR-2 environment ($DEEPSEEK_OCR_VENV_DIR)..."
 "$BIN_DIR/uv" venv "$DEEPSEEK_OCR_VENV_DIR" --python 3.11 --allow-existing
-"$BIN_DIR/uv" pip install --python "$DEEPSEEK_OCR_VENV_DIR" torch transformers accelerate pillow huggingface-hub modelscope einops addict easydict
+"$BIN_DIR/uv" pip install --python "$DEEPSEEK_OCR_VENV_DIR" torch transformers accelerate pillow huggingface-hub "hf_transfer>=0.1.4" modelscope einops addict easydict
 
 # 4. Initialize config.json from config.example.json if missing
 if [ ! -f "config.json" ]; then

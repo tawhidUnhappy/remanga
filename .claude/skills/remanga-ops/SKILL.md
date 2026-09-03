@@ -65,12 +65,28 @@ reintroduce:
 ## DeepSeek-OCR-2 (`config.json` → `ocr`) - powers the Narration Writer's OCR button
 
 `deepseek-ai/DeepSeek-OCR-2` weights download via `remanga setup-models`
-exactly like IndexTTS-2.5 (`config/ocr.py`, `models/scripts/
-download_deepseek_ocr.py` - ModelScope first, HF Hub fallback, via a
-`ModelManager` built inline in `commands.py:_h_setup_models`), into
+(`config/ocr.py`, `models/scripts/download_deepseek_ocr.py`, via
+`OCREngine(config.ocr).model_manager` - `commands.py:_h_setup_models` reuses
+`OCREngine`'s own `ModelManager` rather than building a second one), into
 `checkpoints/deepseek_ocr_2`, with its own isolated `.tools/venv-deepseek-ocr`
 (provisioned in `bootstrap.sh` with a real torch/transformers inference
-stack, not download-only).
+stack, not download-only). Real repo layout (confirmed by an actual run):
+17 files, the weights themselves a single ~6.8GB
+`model-00001-of-000001.safetensors` (not sharded) - `ModelManager`'s
+`expected_files` uses that exact name now.
+
+**HF Hub first, hf_transfer enabled, ModelScope fallback** - the opposite
+priority from `download_indextts.py` (ModelScope first). Flipped because a
+real run against this exact repo saw ModelScope's mirror stall over an hour
+on that one big shard (repeated read-timeouts, one hash-validation retry
+alone took 90+ min) at ~1MB/s. `hf_transfer` (HF's own official Rust
+multi-connection client - legitimate, not ToS-adjacent) is what actually
+makes this fast; it needs the `hf_transfer` package in this venv
+specifically (bootstrap.sh) and `HF_HUB_ENABLE_HF_TRANSFER=1` (this script
+only - `download_indextts.py` deliberately leaves it `"0"`, don't change
+that one, it doesn't have the package installed). If ModelScope turns out
+fine on a different network this isn't a permanent verdict - just what
+happened on that one run.
 
 Inference itself lives in `remanga/ocr/engine.py` (`OCREngine`) +
 `remanga/ocr/scripts/deepseek_ocr_worker.py` - a persistent worker

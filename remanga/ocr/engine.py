@@ -64,7 +64,7 @@ class OCREngine:
         self.model_manager = ModelManager(
             ocr_config.model_dir, ocr_config.hf_repo_id,
             tool_name=TOOL_NAME, download_script="download_deepseek_ocr.py",
-            expected_files=("config.json", "model.safetensors"), display_name=DISPLAY_NAME,
+            expected_files=("config.json", "model-00001-of-000001.safetensors"), display_name=DISPLAY_NAME,
         )
         self._proc: Optional[subprocess.Popen] = None
         self._stderr_tail: collections.deque = collections.deque(maxlen=_STDERR_TAIL_LINES)

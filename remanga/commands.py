@@ -109,15 +109,12 @@ def _h_setup_models(params: Dict[str, Any], config: RemangaConfig) -> None:
     from remanga.webui.magi_assist import ensure_weights_downloaded
     ensure_weights_downloaded(config.marker)
 
-    # DeepSeek-OCR-2 - download-only for now (see config/ocr.py's docstring):
-    # no pipeline step consumes it yet, this just fetches/verifies the
-    # weights into checkpoints/ the same way IndexTTS-2.5/MAGI v3 above do.
-    from remanga.models.weights import ModelManager
-    ModelManager(
-        config.ocr.model_dir, config.ocr.hf_repo_id,
-        tool_name="deepseek-ocr", download_script="download_deepseek_ocr.py",
-        expected_files=("config.json", "model.safetensors"), display_name="DeepSeek-OCR-2",
-    ).ensure_model()
+    # DeepSeek-OCR-2 (powers the Narration Writer's "OCR this panel" button -
+    # see remanga/ocr/engine.py). Reuses OCREngine's own ModelManager instead
+    # of building a second one here, so the expected_files/repo_id live in
+    # exactly one place.
+    from remanga.ocr import OCREngine
+    OCREngine(config.ocr).model_manager.ensure_model()
 
 
 def _h_download(params: Dict[str, Any], config: RemangaConfig) -> None:
