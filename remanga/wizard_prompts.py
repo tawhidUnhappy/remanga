@@ -140,12 +140,17 @@ def offer_chapter_restart(project_name: str, chapter_num: str) -> None:
         console.print(f"[dim]Restart cancelled. Resuming Chapter {chapter_num} from its current progress instead.[/]\n")
 
 
-def edit_pipeline_steps(project_name: str) -> None:
+def edit_pipeline_steps(project_name: str, config: RemangaConfig) -> None:
     """Lets the user redefine this project's pipeline.json - which steps
     run, and in what order - as a comma-separated ordered list, checked
-    against STEP_REGISTRY. Deferred import (remanga.pipeline pulls in the
-    audio/video/webui/downloader/cropper modules, same reasoning as
-    offer_chapter_restart's deferred launch_panel_marker import above)."""
+    against STEP_REGISTRY. If `crop` ends up in the chosen list, also offers
+    the existing 'what to generate/zip' checklist (sheets/pdf/panels_zip/
+    none of them) right here, so adjusting the pipeline and adjusting what
+    the crop step actually produces are one stop instead of two (the same
+    checklist remains reachable separately via `remanga setup-config`).
+    Deferred import (remanga.pipeline pulls in the audio/video/webui/
+    downloader/cropper modules, same reasoning as offer_chapter_restart's
+    deferred launch_panel_marker import above)."""
     from remanga.pipeline import STEP_REGISTRY, load_pipeline
 
     console.print(f"\n[bold]Pipeline steps for '{project_name}'[/]\n[dim]Available steps, in their usual order:[/]")
@@ -173,6 +178,20 @@ def edit_pipeline_steps(project_name: str) -> None:
 
     write_json(get_pipeline_path(project_name), {"steps": chosen})
     console.print(f"[green]✓ Saved pipeline for '{project_name}':[/] {', '.join(chosen)}")
+
+    if "crop" in chosen:
+        package = config.cropper.package
+        current_state = ", ".join(
+            name for name in ("sheets", "sheets_zip", "sheets_folders", "pdf", "panels_zip")
+            if getattr(package, name)
+        ) or "nothing (panels/ only)"
+        console.print(f"\n[dim]crop currently also generates:[/] {current_state}")
+        if Confirm.ask(
+            "[bold]Adjust what the crop step generates (sheets/zip/pdf/none)?[/]", default=False
+        ):
+            from remanga.setup import configure_vision_outputs
+
+            configure_vision_outputs(config)
 
 
 def select_chapter(project_name: str) -> str:

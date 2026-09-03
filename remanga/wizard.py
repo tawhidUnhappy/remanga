@@ -265,7 +265,7 @@ def run_interactive_pipeline():
         _run_verify(project)
         return
     if mode == "7":
-        edit_pipeline_steps(project)
+        edit_pipeline_steps(project, config)
         return
 
     meta = load_project_metadata(project)
