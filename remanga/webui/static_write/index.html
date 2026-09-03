@@ -65,6 +65,48 @@ button.primary:hover { filter: brightness(1.08); }
 
 main { max-width: 900px; margin: 0 auto; padding: 20px; }
 
+/* Right-side panel navigator: one small dot per panel (colored by written/
+   empty), click to jump straight to it. Fixed so it stays put while
+   #panel-list scrolls; hidden on narrow viewports where it'd overlap the
+   centered main column instead of sitting clear of it. */
+#panel-nav {
+  position: fixed;
+  top: 68px;
+  right: 10px;
+  bottom: 66px;
+  width: 30px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 0;
+  z-index: 5;
+  scrollbar-width: thin;
+}
+.nav-dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--danger);
+  opacity: 0.5;
+  cursor: pointer;
+  transition: transform 0.1s, opacity 0.1s;
+}
+.nav-dot.is-written { background: var(--ok); }
+.nav-dot:hover { opacity: 1; transform: scale(1.3); }
+.nav-dot.active { opacity: 1; box-shadow: 0 0 0 2px var(--text); }
+@media (max-width: 1180px) {
+  #panel-nav { display: none; }
+}
+
+/* Zero-height markers the virtual sliding window watches with
+   IntersectionObserver to know when to load more panels (or unload the
+   far, off-screen end) - see app.js. Never actually visible. */
+.scroll-sentinel { height: 1px; }
+
 /* Panel image on top, full card width, tall enough to actually read manga
    art/text at a glance (most panels are portrait-oriented) - the narration
    text field sits below it. Click the image for a true full-size lightbox
@@ -187,10 +229,13 @@ footer {
     Every panel below shows its cropped image and a text field - type the narration line for that panel. Click an
     image for a full-size lightbox (Esc or click to close). Leaving a field empty is allowed (a silent beat), but
     stays marked below. Save writes everything to <code>narration.json</code>; you can reopen this UI later to
-    keep filling it in.
+    keep filling it in. Use the dots on the right to jump straight to any panel - a written one is
+    highlighted <span style="color:var(--ok)">teal</span>, empty is <span style="color:var(--danger)">red</span>.
   </p>
   <div id="panel-list"></div>
 </main>
+
+<nav id="panel-nav" aria-label="Jump to panel"></nav>
 
 <footer id="footer" style="display:none">
   <button id="btn-save" class="primary">Save narration.json</button>
