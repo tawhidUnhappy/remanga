@@ -227,8 +227,6 @@ def run_narration_step(project: str, chapter: str, config: RemangaConfig) -> Non
 # edit-pipeline (editing pipeline.json isn't a bare CLI subcommand, so it
 # can't live in COMMAND_REGISTRY the way every other command does).
 _PIPELINE_CATEGORY = "Pipeline"
-_BACK_LABEL = "← Back to main menu"
-_QUIT_LABEL = "Quit"
 
 
 def _group_by_category() -> "Dict[str, List]":
@@ -269,24 +267,25 @@ def _run_command(cmd, project: str, config: RemangaConfig) -> None:
 
 
 def _run_category_menu(category: str, cmds: "List", project: str, config: RemangaConfig) -> None:
-    """One category's submenu: its commands, plus 'back to main menu'. Stays
-    in this submenu after running a command (so running several commands
-    from the same category - e.g. mark, then crop, then write - doesn't mean
-    re-picking the category each time) until 'back' is chosen explicitly."""
+    """One category's submenu: its commands, plus '0' for back to main menu -
+    always 0, never a numbered item that shifts depending on how many
+    commands this category has. Stays in this submenu after running a
+    command (so running several commands from the same category - e.g.
+    mark, then crop, then write - doesn't mean re-picking the category each
+    time) until '0' is chosen."""
     is_pipeline = category == _PIPELINE_CATEGORY
     while True:
         console.print(f"\n[bold]{category}[/]")
         if is_pipeline:
             console.print("[bold]1.[/] edit-pipeline [dim]— Edit this project's pipeline (which steps run, and in what order)[/]")
-            total = 2
+            total = 1
         else:
             for i, cmd in enumerate(cmds, start=1):
                 console.print(f"[bold]{i}.[/] {cmd.name} [dim]— {cmd.help}[/]")
-            total = len(cmds) + 1
-        console.print(f"[bold]{total}.[/] {_BACK_LABEL}")
+            total = len(cmds)
 
-        choice_idx = ask_index(f"Choose ({category})", total)
-        if choice_idx == total:
+        choice_idx = ask_index(f"Choose ({category})", total, zero_label="Back to main menu")
+        if choice_idx == 0:
             return  # back to main menu
 
         if is_pipeline:
@@ -318,11 +317,9 @@ def run_interactive_pipeline():
         console.print(f"\n[bold]remanga — {project}[/]")
         for i, category in enumerate(categories, start=1):
             console.print(f"[bold]{i}.[/] {category}")
-        total = len(categories) + 1
-        console.print(f"[bold]{total}.[/] {_QUIT_LABEL}")
 
-        choice_idx = ask_index("Choose a category", total)
-        if choice_idx == total:
+        choice_idx = ask_index("Choose a category", len(categories), zero_label="Quit")
+        if choice_idx == 0:
             return
 
         category = categories[choice_idx - 1]

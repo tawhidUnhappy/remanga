@@ -128,10 +128,12 @@ interactive wizard's menu are built from it. The wizard has no curated
 nested menu: main menu = each `Command.category` ("Setup" / "Chapter
 Production" / "Project-wide", plus wizard-only "Pipeline" for
 edit-pipeline), grouped by `wizard._group_by_category()`; picking one opens
-that category's own submenu of commands + "← Back to main menu" (always the
-last item, via `console.ask_index`). Running a command re-shows the same
-submenu (so chaining mark → crop → write is just picking them one after
-another within "Chapter Production") until Back or Quit is chosen. Adding a
+that category's own submenu of commands. `0` is always "back"/"quit" at
+every level (`console.ask_index(..., zero_label="Back to main menu")`) -
+fixed, not a numbered item that shifts depending on how many entries that
+particular menu has, so the same key backs out anywhere. Running a command
+re-shows the same submenu (so chaining mark → crop → write is just picking
+them one after another within "Chapter Production") until `0` is chosen. Adding a
 command means one `Command` entry (with a `category`) in `commands.py` -
 nothing in `wizard.py` needs to change; adding a *category* means giving a
 command a new `category` string, nothing to register separately.
@@ -148,6 +150,9 @@ everything else. Multi-choice prompts with more than a few options use
 `console.ask_index()` (loops on invalid input) instead of Rich's
 `Prompt.ask(..., choices=[...])`, which echoes every choice inline
 (`[1/2/.../20]`) and gets unreadable past a handful of options.
+`ask_index`'s `zero_label` param is what makes `0` a fixed back/quit shortcut
+- pass it whenever a menu needs a "back out" option instead of appending one
+as item N+1.
 
 ## GPU/ffmpeg
 

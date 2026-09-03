@@ -29,18 +29,28 @@ from rich.prompt import Prompt
 console = Console()
 
 
-def ask_index(prompt: str, count: int, default: int = 1) -> int:
+def ask_index(prompt: str, count: int, default: int = 1, zero_label: str = None) -> int:
     """Prompts for a 1-based menu index without Rich's usual `choices=[...]`
     behavior of echoing every valid choice inline (fine for 3-4 options,
     unreadable for a menu with a dozen-plus - e.g. "[1/2/3/4/5/6/7/8/9/10/
     11/12/13/14/15/16/17/18/19/20]"). Loops on anything that isn't a valid
     in-range integer instead of letting Prompt.ask print/validate the list
-    itself. Returns the chosen index (1..count)."""
+    itself. Returns the chosen index (1..count).
+
+    `zero_label` (e.g. "Back to main menu", "Quit") makes 0 a permanent,
+    always-available shortcut on top of that range - the same key at every
+    menu level, regardless of how many numbered items that particular menu
+    has, so "0 always backs out" never has to be re-learned per screen.
+    Returns 0 when chosen."""
+    lo = 0 if zero_label else 1
+    hint = f"0-{count}" if zero_label else f"1-{count}"
+    if zero_label:
+        console.print(f"[dim]0.[/] {zero_label}")
     while True:
-        raw = Prompt.ask(f"[bold]{prompt}[/] [dim](1-{count})[/]", default=str(default)).strip()
-        if raw.isdigit() and 1 <= int(raw) <= count:
+        raw = Prompt.ask(f"[bold]{prompt}[/] [dim]({hint})[/]", default=str(default)).strip()
+        if raw.isdigit() and lo <= int(raw) <= count:
             return int(raw)
-        console.print(f"[bold red]Enter a number from 1 to {count}.[/]")
+        console.print(f"[bold red]Enter a number from {lo} to {count}.[/]")
 
 
 def wrap_at_slashes(text: str) -> str:
