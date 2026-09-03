@@ -75,18 +75,32 @@ stack, not download-only). Real repo layout (confirmed by an actual run):
 `model-00001-of-000001.safetensors` (not sharded) - `ModelManager`'s
 `expected_files` uses that exact name now.
 
-**HF Hub first, hf_transfer enabled, ModelScope fallback** - the opposite
-priority from `download_indextts.py` (ModelScope first). Flipped because a
-real run against this exact repo saw ModelScope's mirror stall over an hour
-on that one big shard (repeated read-timeouts, one hash-validation retry
-alone took 90+ min) at ~1MB/s. `hf_transfer` (HF's own official Rust
-multi-connection client - legitimate, not ToS-adjacent) is what actually
-makes this fast; it needs the `hf_transfer` package in this venv
-specifically (bootstrap.sh) and `HF_HUB_ENABLE_HF_TRANSFER=1` (this script
-only - `download_indextts.py` deliberately leaves it `"0"`, don't change
-that one, it doesn't have the package installed). If ModelScope turns out
-fine on a different network this isn't a permanent verdict - just what
-happened on that one run.
+**HF Hub first (classic HTTP/LFS, Xet explicitly disabled), ModelScope
+fallback** - opposite priority from `download_indextts.py` (ModelScope
+first). Flipped because a real run against this exact repo saw ModelScope's
+mirror stall over an hour on that one big shard (repeated read-timeouts,
+one hash-validation retry alone took 90+ min) at ~1MB/s.
+
+Two dead ends on the way to this, both confirmed live, not guessed:
+- `HF_HUB_ENABLE_HF_TRANSFER=1` (the old `hf_transfer` package/env var):
+  this `huggingface_hub` version (1.30.0) has dropped it entirely - warns
+  and silently ignores it, "Please use `HF_XET_HIGH_PERFORMANCE` instead".
+- `HF_XET_HIGH_PERFORMANCE=1` (the suggested replacement, Xet-based
+  chunked transfer): hung at 0 bytes / 0% for 45+ seconds in a live test
+  against this repo (process alive, ~2% CPU, no progress at all) - not
+  just slow, stuck. Might be this specific sandbox's network blocking
+  Xet's CAS-server endpoint rather than a universal problem, but a hang is
+  worse than merely-slow, so don't flip the default without testing first.
+
+What actually works, also confirmed live: plain `snapshot_download()` with
+`HF_HUB_DISABLE_XET=1` (this script's actual default now) started moving
+real bytes within ~2 seconds and kept progressing steadily. Still throttled
+somewhat (single-connection HTTP, unauthenticated - the Hub's own warning:
+"set a HF_TOKEN to enable higher rate limits and faster downloads" - a real
+lever if this is still too slow for someone) but categorically better than
+"stuck at zero." If ModelScope turns out fine on a different network, or
+Xet stops hanging there, neither is a permanent verdict - just what
+happened on these specific runs.
 
 Inference itself lives in `remanga/ocr/engine.py` (`OCREngine`) +
 `remanga/ocr/scripts/deepseek_ocr_worker.py` - a persistent worker
