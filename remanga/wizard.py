@@ -4,6 +4,8 @@ or, in full-recap mode, compiling a whole project's chapters into one continuous
 
 from __future__ import annotations
 
+from typing import Callable
+
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
@@ -226,6 +228,51 @@ def run_narration_step(project: str, chapter: str, config: RemangaConfig) -> Non
                 Prompt.ask("[bold]Press Enter once memory.json is saved[/]")
 
 
+def _main_menu() -> "list[tuple[str, Callable[[str, RemangaConfig], None]]]":
+    """The main menu, as data instead of a hardcoded print-block +
+    if/elif chain: each entry is (label, handler). Printed order == dispatch
+    order == display number, so adding/removing/reordering a mode means
+    editing this list only - nothing else in run_interactive_pipeline needs
+    to change. Every handler takes (project, config) uniformly;
+    `_run_full_chapter_pipeline` (mode 1) just happens to be the one that
+    also asks for a chapter/URL/etc. first, same as any other handler is
+    free to prompt for whatever it needs. A function (not a module-level
+    list) purely so it can be defined here, at the top of the file where the
+    menu belongs, while still referencing handlers that are defined further
+    down - it's only ever called after the whole module has finished
+    loading."""
+    return [
+        (
+            "Process a chapter (full pipeline: download → mark → crop → narrate → review → TTS → mix → render)",
+            _run_full_chapter_pipeline,
+        ),
+        (
+            "Mark/re-mark panels, then hand-write narration yourself (no LLM, stops there)",
+            _run_mark_then_write,
+        ),
+        (
+            "Review narration only (no other stage runs before or after)",
+            _run_review_only,
+        ),
+        (
+            "Compile the whole project into one continuous video (full-recap)",
+            _run_full_recap,
+        ),
+        (
+            "Change background music/volume and rebuild video(s) only (no re-narration)",
+            _run_remix,
+        ),
+        (
+            "Verify audio/video files are complete, not corrupt/truncated",
+            lambda project, config: _run_verify(project),
+        ),
+        (
+            "Edit this project's pipeline (which steps run, and in what order)",
+            edit_pipeline_steps,
+        ),
+    ]
+
+
 def run_interactive_pipeline():
     """Master interactive production wizard with project discovery, resume guards, and setup option."""
     console.print("[bold]remanga[/] [dim]— interactive recap production[/]\n")
@@ -236,38 +283,23 @@ def run_interactive_pipeline():
     project = select_or_create_project(config)
 
     # 2. Full pipeline for one chapter, one of its stages standalone, or a
-    # whole-project/maintenance mode. Grouped so every "just this one stage"
-    # option (mark+write, review) sits together, and full-project modes
-    # (full-recap, remix, verify) sit together after.
-    console.print(
-        "\n[bold]1.[/] Process a chapter (full pipeline: download → mark → crop → narrate → review → TTS → mix → render)\n"
-        "[bold]2.[/] Mark/re-mark panels, then hand-write narration yourself (no LLM, stops there)\n"
-        "[bold]3.[/] Review narration only (no other stage runs before or after)\n"
-        "[bold]4.[/] Compile the whole project into one continuous video (full-recap)\n"
-        "[bold]5.[/] Change background music/volume and rebuild video(s) only (no re-narration)\n"
-        "[bold]6.[/] Verify audio/video files are complete, not corrupt/truncated\n"
-        "[bold]7.[/] Edit this project's pipeline (which steps run, and in what order)\n"
-    )
-    mode = Prompt.ask("[bold]Choose[/]", choices=["1", "2", "3", "4", "5", "6", "7"], default="1")
-    if mode == "2":
-        _run_mark_then_write(project, config)
-        return
-    if mode == "3":
-        _run_review_only(project, config)
-        return
-    if mode == "4":
-        _run_full_recap(project, config)
-        return
-    if mode == "5":
-        _run_remix(project, config)
-        return
-    if mode == "6":
-        _run_verify(project)
-        return
-    if mode == "7":
-        edit_pipeline_steps(project, config)
-        return
+    # whole-project/maintenance mode - driven by _main_menu() above instead
+    # of a hardcoded print + if/elif chain.
+    menu = _main_menu()
+    console.print()
+    for idx, (label, _handler) in enumerate(menu, start=1):
+        console.print(f"[bold]{idx}.[/] {label}")
+    console.print()
+    choices = [str(i) for i in range(1, len(menu) + 1)]
+    mode = Prompt.ask("[bold]Choose[/]", choices=choices, default="1")
+    _label, handler = menu[int(mode) - 1]
+    handler(project, config)
 
+
+def _run_full_chapter_pipeline(project: str, config: RemangaConfig) -> None:
+    """Mode 1: the full per-chapter pipeline - reading direction, MangaDex
+    URL, chapter pick, voice/BGM validation, status overview, then whatever
+    steps this project's pipeline.json (or the default order) lists."""
     meta = load_project_metadata(project)
 
     # Reading direction (right-to-left for native Japanese manga, left-to-right
