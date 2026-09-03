@@ -75,32 +75,43 @@ stack, not download-only). Real repo layout (confirmed by an actual run):
 `model-00001-of-000001.safetensors` (not sharded) - `ModelManager`'s
 `expected_files` uses that exact name now.
 
-**HF Hub first (classic HTTP/LFS, Xet explicitly disabled), ModelScope
-fallback** - opposite priority from `download_indextts.py` (ModelScope
-first). Flipped because a real run against this exact repo saw ModelScope's
-mirror stall over an hour on that one big shard (repeated read-timeouts,
-one hash-validation retry alone took 90+ min) at ~1MB/s.
+**Three attempts, in order, self-supervised - not a static env-var guess.**
+`download_deepseek_ocr.py` runs each `snapshot_download()` attempt as its
+own child subprocess (`_run_hf_attempt()`) so it can watch and kill one that
+stalls instead of just picking a transfer mode and hoping:
+1. **HF Hub, Xet enabled** (HF's official high-performance transfer -
+   genuinely much faster when it works). Watched: polls total bytes across
+   every `*.incomplete` file under `<model_dir>/.cache/huggingface/download/`
+   every `POLL_INTERVAL_SECONDS`; if that total hasn't grown for
+   `XET_STALL_TIMEOUT_SECONDS` (after an initial `XET_STALL_GRACE_SECONDS`
+   warm-up), it's killed and attempt 2 runs. Confirmed live, repeatedly:
+   Xet hangs at 0 bytes/0% in this sandbox (process alive, ~2% CPU, no
+   progress) - possibly this sandbox's network blocking Xet's transfer
+   endpoint specifically, not a fact about every machine, which is exactly
+   why this earns a real supervised shot each run instead of a permanent
+   disable.
+2. **HF Hub, Xet explicitly disabled** (classic HTTP/LFS) - confirmed live
+   to make steady, unstalled progress once attempt 1 is killed. Not
+   stall-watched the same way; `MAX_ATTEMPTS` retries on outright failure/
+   exception instead (dropped connection etc.), same reasoning
+   `download_audio8.py`'s own retry loop uses. Still single-connection and
+   throttled - unauthenticated ~1-3MB/s observed - the Hub's own warning
+   ("set a HF_TOKEN...") is a real lever, see the HF-token section above.
+3. **ModelScope mirror**, last resort - a real run once saw *its* mirror
+   stall over an hour on the one big shard (repeated read-timeouts, one
+   hash-validation retry alone took 90+ min), which is why it's last here,
+   opposite priority from `download_indextts.py` (ModelScope first).
 
-Two dead ends on the way to this, both confirmed live, not guessed:
-- `HF_HUB_ENABLE_HF_TRANSFER=1` (the old `hf_transfer` package/env var):
-  this `huggingface_hub` version (1.30.0) has dropped it entirely - warns
-  and silently ignores it, "Please use `HF_XET_HIGH_PERFORMANCE` instead".
-- `HF_XET_HIGH_PERFORMANCE=1` (the suggested replacement, Xet-based
-  chunked transfer): hung at 0 bytes / 0% for 45+ seconds in a live test
-  against this repo (process alive, ~2% CPU, no progress at all) - not
-  just slow, stuck. Might be this specific sandbox's network blocking
-  Xet's CAS-server endpoint rather than a universal problem, but a hang is
-  worse than merely-slow, so don't flip the default without testing first.
+Every attempt's subprocess output is relayed live, raw bytes straight
+through (`os.write(1, chunk)`), which is what makes the stall-then-fallback
+actually visible instead of another silent gap - see the `-u`/buffering
+note above; this script's *own* invocation needs `-u` too (`weights.py`
+already passes it) or none of this relaying reaches the terminal either.
 
-What actually works, also confirmed live: plain `snapshot_download()` with
-`HF_HUB_DISABLE_XET=1` (this script's actual default now) started moving
-real bytes within ~2 seconds and kept progressing steadily. Still throttled
-somewhat (single-connection HTTP, unauthenticated - the Hub's own warning:
-"set a HF_TOKEN to enable higher rate limits and faster downloads" - a real
-lever if this is still too slow for someone) but categorically better than
-"stuck at zero." If ModelScope turns out fine on a different network, or
-Xet stops hanging there, neither is a permanent verdict - just what
-happened on these specific runs.
+Dead end already ruled out, confirmed live: `HF_HUB_ENABLE_HF_TRANSFER=1`
+(the old `hf_transfer` package/env var) - this `huggingface_hub` version
+(1.30.0) has dropped it entirely, warns and silently ignores it ("Please
+use `HF_XET_HIGH_PERFORMANCE` instead").
 
 Inference itself lives in `remanga/ocr/engine.py` (`OCREngine`) +
 `remanga/ocr/scripts/deepseek_ocr_worker.py` - a persistent worker
