@@ -3,10 +3,14 @@
 `.venv-indextts` environment (that's where `modelscope`/`huggingface_hub` now
 live; see remanga/venvs.py). Zero dependency on the `remanga` package itself.
 
-Usage: download_indextts.py <model_dir> <repo_id>
+Usage: download_indextts.py <model_dir> <repo_id> [hf_token]
 Tries the ModelScope CDN mirror first (usually much faster), falls back to
 the Hugging Face Hub. Exits 0 on success, non-zero with a message on stderr
 on failure - the caller (remanga/models/weights.py) just needs the exit code.
+
+`hf_token` is optional (see remanga/hf_token.py) - only used for the HF Hub
+fallback, never ModelScope (a different service, different token scheme -
+passing an HF token there wouldn't do anything useful).
 """
 
 from __future__ import annotations
@@ -25,11 +29,12 @@ logging.getLogger("urllib3").setLevel(logging.ERROR)
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        print("Usage: download_indextts.py <model_dir> <repo_id>", file=sys.stderr)
+    if len(sys.argv) not in (3, 4):
+        print("Usage: download_indextts.py <model_dir> <repo_id> [hf_token]", file=sys.stderr)
         return 2
 
     model_dir, repo_id = sys.argv[1], sys.argv[2]
+    hf_token = sys.argv[3] if len(sys.argv) == 4 else None
 
     try:
         from modelscope import snapshot_download as ms_download
@@ -47,6 +52,7 @@ def main() -> int:
             local_dir_use_symlinks=False,
             resume_download=True,
             max_retries=10,
+            token=hf_token,
         )
         print(f">> Downloaded via Hugging Face Hub to {model_dir}")
         return 0

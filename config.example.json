@@ -4,7 +4,8 @@
     "gpu_codec": "h264_nvenc",
     "fallback_codec": "libx264",
     "threads": 4,
-    "log_level": "INFO"
+    "log_level": "INFO",
+    "hf_token_path": ""
   },
   "downloader": {
     "language": "en",

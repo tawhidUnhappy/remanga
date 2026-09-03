@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Sequence
 
 from remanga.console import console
+from remanga.hf_token import resolve_hf_token
 from remanga.proc_io import stream_subprocess
 from remanga.venvs import get_scripts_dir, get_tool_python
 
@@ -47,6 +48,14 @@ class ModelManager:
         python = get_tool_python(self.tool_name)
         script = get_scripts_dir("models") / self.download_script
 
+        # Optional 3rd positional arg every download script accepts (see
+        # remanga/hf_token.py) - None/empty stays fully backward compatible
+        # with a script that ignores a missing arg entirely.
+        token = resolve_hf_token()
+        cmd = [str(python), str(script), str(self.model_dir.resolve()), self.repo_id]
+        if token:
+            cmd.append(token)
+
         console.print(f"[bold cyan]Downloading {self.display_name} model weights ({self.repo_id})...[/]")
         # Streamed live (not capture_output=True) - huggingface_hub's own
         # snapshot_download() progress bars (tqdm, one per file) live on
@@ -57,9 +66,7 @@ class ModelManager:
         # (and only on failure). stream_subprocess overwrites tqdm's
         # \r-terminated redraws in place (like a real terminal would) instead
         # of flooding the console with one new line per refresh.
-        returncode, output = stream_subprocess(
-            [str(python), str(script), str(self.model_dir.resolve()), self.repo_id],
-        )
+        returncode, output = stream_subprocess(cmd)
 
         if returncode != 0:
             tail = output.strip()

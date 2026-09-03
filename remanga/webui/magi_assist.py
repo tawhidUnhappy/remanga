@@ -29,6 +29,7 @@ from typing import Dict, List, Optional, Set
 
 from remanga.config import MarkerConfig
 from remanga.console import console, escape as _esc
+from remanga.hf_token import resolve_hf_token
 from remanga.paths import UV_BIN
 from remanga.venvs import extract_missing_packages, get_scripts_dir, get_tool_python
 
@@ -154,8 +155,14 @@ def ensure_weights_downloaded(config: MarkerConfig) -> Optional[Path]:
     model_dir = Path(config.magi_model_dir)
     model_dir.mkdir(parents=True, exist_ok=True)
 
+    # Optional 3rd positional arg - see remanga/hf_token.py.
+    token = resolve_hf_token()
+    cmd = [str(python), str(script), str(model_dir.resolve()), config.magi_repo_id]
+    if token:
+        cmd.append(token)
+
     with console.status(f"[bold cyan]Fetching MAGI v3 weights ({config.magi_repo_id})...[/]", spinner="dots", refresh_per_second=4):
-        result = subprocess.run([str(python), str(script), str(model_dir.resolve()), config.magi_repo_id], capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         console.print(f"[bold red]Error downloading MAGI v3 weights:[/] {result.stderr.strip()}")
         raise RuntimeError(f"MAGI v3 weight download failed: {result.stderr.strip()}")

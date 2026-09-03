@@ -153,6 +153,36 @@ silently broke this once). Set `TORCH_CUDA_ARCH_LIST` from
 `nvidia-smi --query-gpu=compute_cap`. Always wrap in
 `(set -e; ...) && ok || warn-and-continue` - never let this abort bootstrap.
 
+## Optional HF token for every model download (`config.json` → `system.hf_token_path`)
+
+`remanga/hf_token.py`'s `resolve_hf_token()` is the one place this is
+resolved - points at a JSON file (`{"token": "hf_..."}`), not a raw token
+value, so the actual secret never has to sit in `config.json` itself. Empty
+by default (unauthenticated, today's behavior unchanged); missing file,
+malformed JSON, or no `"token"` key all fall back to unauthenticated with a
+yellow warning, never a hard failure - a bad token *file* should never break
+a download that would otherwise work fine anonymously.
+
+Wired into every model download the same way: `ModelManager.ensure_model()`
+(`models/weights.py` - covers IndexTTS-2.5, Audio8 TTS, DeepSeek-OCR-2, i.e.
+every `Command`/synthesizer that goes through `ModelManager`) and MAGI v3's
+own separate subprocess call (`webui/magi_assist.py:ensure_weights_downloaded`,
+doesn't use `ModelManager`) both call `resolve_hf_token()` and append it as
+an optional 4th positional CLI arg (`<model_dir> <repo_id> [hf_token]`) to
+their download script - every `download_*.py` script accepts it now
+(`models/scripts/download_{indextts,audio8,deepseek_ocr}.py`,
+`webui/scripts/download_magi.py`), passed straight through to
+`huggingface_hub.snapshot_download(..., token=hf_token)`. Deliberately HF
+Hub only, never ModelScope (a different service/token scheme - passing an
+HF token there wouldn't do anything). Visible to `ps`/`/proc/<pid>/cmdline`
+on a shared machine for the download's duration (plain positional arg, same
+as every other one these scripts take) - fine for remanga's single-user
+local-machine use case.
+
+Add a new model download later? Call `resolve_hf_token()` in whatever builds
+that subprocess command and accept the same optional 4th arg in its
+download script - don't invent a second token-resolution path.
+
 ## Subprocess output: use `remanga/proc_io.py`, never plain line iteration
 
 `for line in proc.stdout` (text mode) translates `\r`→`\n`, so any process

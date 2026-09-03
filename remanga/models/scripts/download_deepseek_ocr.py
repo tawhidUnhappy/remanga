@@ -3,7 +3,10 @@
 `.venv-deepseek-ocr` environment (that's where `modelscope`/`huggingface_hub`
 live; see remanga/venvs.py). Zero dependency on the `remanga` package itself.
 
-Usage: download_deepseek_ocr.py <model_dir> <repo_id>
+Usage: download_deepseek_ocr.py <model_dir> <repo_id> [hf_token]
+
+`hf_token` is optional (see remanga/hf_token.py) - only used for the HF Hub
+attempt, never ModelScope (a different service/token scheme).
 
 Tries the Hugging Face Hub first (classic HTTP/LFS transfer, Xet explicitly
 disabled - see below), falls back to the ModelScope mirror if that fails.
@@ -61,18 +64,19 @@ MAX_ATTEMPTS = 5
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        print("Usage: download_deepseek_ocr.py <model_dir> <repo_id>", file=sys.stderr)
+    if len(sys.argv) not in (3, 4):
+        print("Usage: download_deepseek_ocr.py <model_dir> <repo_id> [hf_token]", file=sys.stderr)
         return 2
 
     model_dir, repo_id = sys.argv[1], sys.argv[2]
+    hf_token = sys.argv[3] if len(sys.argv) == 4 else None
 
     from huggingface_hub import snapshot_download as hf_download
 
     last_error: Exception | None = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            hf_download(repo_id=repo_id, local_dir=model_dir)
+            hf_download(repo_id=repo_id, local_dir=model_dir, token=hf_token)
             print(f">> Downloaded via Hugging Face Hub to {model_dir}")
             return 0
         except Exception as e:

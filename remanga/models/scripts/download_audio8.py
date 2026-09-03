@@ -5,9 +5,11 @@ see remanga/venvs.py). Zero dependency on the `remanga` package itself -
 mirrors remanga/models/scripts/download_indextts.py's shape exactly, minus
 the ModelScope-mirror-first step (Audio8 isn't mirrored there).
 
-Usage: download_audio8.py <model_dir> <repo_id>
+Usage: download_audio8.py <model_dir> <repo_id> [hf_token]
 Exits 0 on success, non-zero with a message on stderr on failure - the
 caller (remanga/models/weights.py) just needs the exit code.
+
+`hf_token` is optional (see remanga/hf_token.py).
 """
 
 from __future__ import annotations
@@ -33,11 +35,12 @@ MAX_ATTEMPTS = 5
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        print("Usage: download_audio8.py <model_dir> <repo_id>", file=sys.stderr)
+    if len(sys.argv) not in (3, 4):
+        print("Usage: download_audio8.py <model_dir> <repo_id> [hf_token]", file=sys.stderr)
         return 2
 
     model_dir, repo_id = sys.argv[1], sys.argv[2]
+    hf_token = sys.argv[3] if len(sys.argv) == 4 else None
 
     from huggingface_hub import snapshot_download as hf_download
 
@@ -47,6 +50,7 @@ def main() -> int:
             hf_download(
                 repo_id=repo_id,
                 local_dir=model_dir,
+                token=hf_token,
             )
             print(f">> Downloaded via Hugging Face Hub to {model_dir}")
             return 0
