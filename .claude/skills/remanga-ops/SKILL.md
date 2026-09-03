@@ -123,14 +123,18 @@ still works unchanged - `run` just wraps the same underlying calls.
 
 `remanga/commands.py`'s `COMMAND_REGISTRY` is the single source of truth for
 every remanga command - both `cli.py`'s argparse subcommands and the
-interactive wizard's menu are built from it (plus one wizard-only
-`edit-pipeline` item appended after it, since editing pipeline.json isn't a
-bare CLI subcommand). The wizard has no curated "process a chapter" /
-"mark-then-write" combo modes anymore - it loops over the full command list,
-runs whichever one is picked once, then asks "run another command?" so
-chaining several (mark → write → run) is just picking them in sequence, not
-a separate hardcoded flow. Adding a step means adding one `Command` entry to
-`commands.py` - nothing in `wizard.py` needs to change.
+interactive wizard's menu are built from it. The wizard has no curated
+"process a chapter" / "mark-then-write" combo modes - it's a two-level
+nested menu: main menu = each `Command.category` ("Setup" / "Chapter
+Production" / "Project-wide", plus wizard-only "Pipeline" for
+edit-pipeline), grouped by `wizard._group_by_category()`; picking one opens
+that category's own submenu of commands + "← Back to main menu" (always the
+last item, via `console.ask_index`). Running a command re-shows the same
+submenu (so chaining mark → crop → write is just picking them one after
+another within "Chapter Production") until Back or Quit is chosen. Adding a
+command means one `Command` entry (with a `category`) in `commands.py` -
+nothing in `wizard.py` needs to change; adding a *category* means giving a
+command a new `category` string, nothing to register separately.
 
 `select_chapter` (wizard_prompts.py) is a pure picker now - it used to also
 call `offer_chapter_restart` (a "resume or pick a restart tier" gate) on

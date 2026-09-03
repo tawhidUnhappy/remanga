@@ -4,7 +4,7 @@ or, in full-recap mode, compiling a whole project's chapters into one continuous
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from rich.prompt import Confirm, Prompt
 
@@ -220,14 +220,23 @@ def run_narration_step(project: str, chapter: str, config: RemangaConfig) -> Non
                 Prompt.ask("[bold]Press Enter once memory.json is saved[/]")
 
 
-# Editing pipeline.json isn't a real CLI subcommand (nothing to invoke it
-# with from bare `remanga ...`), so it's the one item appended after
-# COMMAND_REGISTRY's own list instead of living in the registry itself.
-# Every other former "mode" (process a chapter, mark-then-write, review-only,
-# full-recap, remix, verify, restart, ...) is now just picking that command
-# directly and running it once, then landing back on this same menu to pick
-# the next one - no separate hardcoded combo modes to keep in sync.
-_EXTRA_LABEL = "edit-pipeline — Edit this project's pipeline (which steps run, and in what order)"
+# Every remanga command groups into one of these categories via its own
+# `category` field (see commands.py) - the wizard just reads that grouping,
+# it never hardcodes which command goes where. "Pipeline" isn't a real
+# category any Command carries; it's appended here as its own submenu for
+# edit-pipeline (editing pipeline.json isn't a bare CLI subcommand, so it
+# can't live in COMMAND_REGISTRY the way every other command does).
+_PIPELINE_CATEGORY = "Pipeline"
+_BACK_LABEL = "← Back to main menu"
+_QUIT_LABEL = "Quit"
+
+
+def _group_by_category() -> "Dict[str, List]":
+    groups: Dict[str, List] = {}
+    for cmd in COMMAND_REGISTRY:
+        groups.setdefault(cmd.category, []).append(cmd)
+    groups[_PIPELINE_CATEGORY] = []  # handled specially in _run_category_menu below
+    return groups
 
 
 def _prompt_param(param: Param, project: str):
@@ -252,11 +261,47 @@ def _prompt_param(param: Param, project: str):
     return raw or None
 
 
+def _run_command(cmd, project: str, config: RemangaConfig) -> None:
+    params: Dict[str, Any] = {}
+    for param in cmd.params:
+        params[param.name] = project if param.name == "project" else _prompt_param(param, project)
+    cmd.handler(params, config)
+
+
+def _run_category_menu(category: str, cmds: "List", project: str, config: RemangaConfig) -> None:
+    """One category's submenu: its commands, plus 'back to main menu'. Stays
+    in this submenu after running a command (so running several commands
+    from the same category - e.g. mark, then crop, then write - doesn't mean
+    re-picking the category each time) until 'back' is chosen explicitly."""
+    is_pipeline = category == _PIPELINE_CATEGORY
+    while True:
+        console.print(f"\n[bold]{category}[/]")
+        if is_pipeline:
+            console.print("[bold]1.[/] edit-pipeline [dim]— Edit this project's pipeline (which steps run, and in what order)[/]")
+            total = 2
+        else:
+            for i, cmd in enumerate(cmds, start=1):
+                console.print(f"[bold]{i}.[/] {cmd.name} [dim]— {cmd.help}[/]")
+            total = len(cmds) + 1
+        console.print(f"[bold]{total}.[/] {_BACK_LABEL}")
+
+        choice_idx = ask_index(f"Choose ({category})", total)
+        if choice_idx == total:
+            return  # back to main menu
+
+        if is_pipeline:
+            edit_pipeline_steps(project, config)
+        else:
+            _run_command(cmds[choice_idx - 1], project, config)
+
+
 def run_interactive_pipeline():
     """Master interactive production wizard: project discovery once, then a
-    loop over every remanga command - run one, land back here, run another,
-    or quit. No hardcoded multi-step "modes"; chaining commands (e.g. mark,
-    then write, then run) is just picking them one after another."""
+    simple two-level nested menu - pick a category, pick a command within
+    it, run it, land back on that category's submenu (or back out to the
+    main category menu, or quit). No hardcoded multi-step "modes"; chaining
+    commands (e.g. mark, then write, then run) is just picking them one
+    after another."""
     console.print("[bold]remanga[/] [dim]— interactive recap production[/]\n")
 
     config = RemangaConfig.load()
@@ -264,31 +309,22 @@ def run_interactive_pipeline():
     # 1. Project Selection / Creation / Settings
     project = select_or_create_project(config)
 
-    # 2. Every remanga command (COMMAND_REGISTRY - the same list cli.py's
-    # argparse is built from), plus edit-pipeline appended after it, so this
-    # menu can never drift out of sync with what `remanga <cmd> --help`
-    # actually offers. Loops back here after each command instead of exiting,
-    # so running several commands in a row ("just one tool, or a lot of
-    # them") doesn't mean relaunching the wizard each time.
+    # 2. Category menu, grouping COMMAND_REGISTRY (the same list cli.py's
+    # argparse is built from) by its own `category` field, so this can never
+    # drift out of sync with what `remanga <cmd> --help` actually offers.
+    groups = _group_by_category()
+    categories = list(groups.keys())
     while True:
-        console.print()
-        for i, cmd in enumerate(COMMAND_REGISTRY, start=1):
-            console.print(f"[bold]{i}.[/] {cmd.name} [dim]— {cmd.help}[/]")
-        total = len(COMMAND_REGISTRY) + 1
-        console.print(f"[bold]{total}.[/] {_EXTRA_LABEL}")
-        console.print()
+        console.print(f"\n[bold]remanga — {project}[/]")
+        for i, category in enumerate(categories, start=1):
+            console.print(f"[bold]{i}.[/] {category}")
+        total = len(categories) + 1
+        console.print(f"[bold]{total}.[/] {_QUIT_LABEL}")
 
-        choice_idx = ask_index(f"Choose a command for '{project}'", total)
-
-        if choice_idx <= len(COMMAND_REGISTRY):
-            cmd = COMMAND_REGISTRY[choice_idx - 1]
-            params: Dict[str, Any] = {}
-            for param in cmd.params:
-                params[param.name] = project if param.name == "project" else _prompt_param(param, project)
-            cmd.handler(params, config)
-        else:
-            edit_pipeline_steps(project, config)
-
-        if not Confirm.ask("\n[bold]Run another command for this project?[/]", default=True):
+        choice_idx = ask_index("Choose a category", total)
+        if choice_idx == total:
             return
+
+        category = categories[choice_idx - 1]
+        _run_category_menu(category, groups[category], project, config)
 

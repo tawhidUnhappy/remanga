@@ -59,6 +59,11 @@ class Command:
     help: str
     handler: Callable[[Dict[str, Any], RemangaConfig], None]
     params: List[Param] = field(default_factory=list)
+    # Purely a grouping hint for the wizard's nested menu (Setup / Chapter
+    # Production / Project-wide) - cli.py's argparse ignores it entirely, so
+    # this can never make the CLI and the wizard drift: both still read every
+    # other field off the same Command.
+    category: str = "General"
 
 
 def add_param_to_parser(parser, param: Param) -> None:
@@ -225,17 +230,20 @@ COMMAND_REGISTRY: List[Command] = [
         "setup-config",
         "Walkthrough configuration setup (voice, BGM, resolution, vision format, blur)",
         _h_setup_config,
+        category="Setup",
     ),
     Command(
         "paths",
         "View/edit the shared asset paths (reference voice WAV, BGM file, audio8 TTS transcript) "
         "in one place, without the full setup-config walkthrough",
         _h_paths,
+        category="Setup",
     ),
     Command(
         "setup-models",
         "Verify and download model weights with SHA-256 verification",
         _h_setup_models,
+        category="Setup",
     ),
     Command(
         "download",
@@ -247,12 +255,14 @@ COMMAND_REGISTRY: List[Command] = [
             Param("url", ["--url", "-u"], required=False, default=None,
                   help="Manga title or MangaDex URL/UUID (optional if saved)"),
         ],
+        category="Chapter Production",
     ),
     Command(
         "mark",
         "Launch the Panel Marker web UI to mark panels (writes crops.json)",
         _h_mark,
         [_PROJECT("Project name"), _CHAPTER()],
+        category="Chapter Production",
     ),
     Command(
         "review",
@@ -260,6 +270,7 @@ COMMAND_REGISTRY: List[Command] = [
         "looping for as many rounds as you want before continuing to voice synthesis",
         _h_review,
         [_PROJECT("Project name"), _CHAPTER()],
+        category="Chapter Production",
     ),
     Command(
         "write",
@@ -269,6 +280,7 @@ COMMAND_REGISTRY: List[Command] = [
         "you type as you save",
         _h_write,
         [_PROJECT("Project name"), _CHAPTER()],
+        category="Chapter Production",
     ),
     Command(
         "crop",
@@ -278,6 +290,7 @@ COMMAND_REGISTRY: List[Command] = [
             _PROJECT("Project name"), _CHAPTER(),
             Param("force", ["--force", "-f"], type="bool", default=False, help="Force re-cropping even if panels exist"),
         ],
+        category="Chapter Production",
     ),
     Command(
         "tts",
@@ -288,6 +301,7 @@ COMMAND_REGISTRY: List[Command] = [
             Param("voice", ["--voice", "-v"], required=False, default=None, help="Override reference speaker WAV path"),
             Param("force", ["--force", "-f"], type="bool", default=False, help="Force re-synthesis of all panels"),
         ],
+        category="Chapter Production",
     ),
     Command(
         "mix",
@@ -297,6 +311,7 @@ COMMAND_REGISTRY: List[Command] = [
             _PROJECT("Project name"), _CHAPTER(),
             Param("bgm", ["--bgm", "-b"], required=False, default=None, help="Override background music audio path"),
         ],
+        category="Chapter Production",
     ),
     Command(
         "render",
@@ -306,6 +321,7 @@ COMMAND_REGISTRY: List[Command] = [
             _PROJECT("Project name"), _CHAPTER(),
             Param("force", ["--force", "-f"], type="bool", default=False, help="Force re-rendering video"),
         ],
+        category="Chapter Production",
     ),
     Command(
         "full-recap",
@@ -318,6 +334,7 @@ COMMAND_REGISTRY: List[Command] = [
                   help="Comma-separated chapter numbers to include, in any order (default: every chapter found, in order)"),
             Param("force", ["--force", "-f"], type="bool", default=False, help="Force a full recompile even if already compiled"),
         ],
+        category="Project-wide",
     ),
     Command(
         "remix",
@@ -332,6 +349,7 @@ COMMAND_REGISTRY: List[Command] = [
             Param("no_rejoin", ["--no-rejoin"], type="bool", default=False,
                   help="Don't recompile the full-recap video even if one exists"),
         ],
+        category="Project-wide",
     ),
     Command(
         "run",
@@ -346,12 +364,14 @@ COMMAND_REGISTRY: List[Command] = [
                        "pipeline.json). Default: this project's saved pipeline.json, or the full default "
                        f"order if it has none ({', '.join(s.name for s in STEP_REGISTRY)})."),
         ],
+        category="Chapter Production",
     ),
     Command(
         "status",
         "Inspect chapter production status",
         _h_status,
         [_PROJECT("Project name"), _CHAPTER()],
+        category="Project-wide",
     ),
     Command(
         "verify",
@@ -365,6 +385,7 @@ COMMAND_REGISTRY: List[Command] = [
             Param("no_video", ["--no-video"], type="bool", default=False,
                   help="Skip verifying rendered videos, audio only (faster)"),
         ],
+        category="Project-wide",
     ),
     Command(
         "restart",
@@ -384,6 +405,7 @@ COMMAND_REGISTRY: List[Command] = [
             Param("no_reverify", ["--no-reverify"], type="bool", default=False,
                   help="Skip re-checking/re-fetching downloaded pages afterward"),
         ],
+        category="Project-wide",
     ),
 ]
 
