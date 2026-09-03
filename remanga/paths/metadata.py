@@ -63,6 +63,16 @@ def save_project_metadata(project_name: str, data: Dict[str, Any]) -> None:
     ensure_memory_file(project_name)
 
 
+def get_pipeline_path(project_name: str) -> Path:
+    """{manga}/pipeline.json - that project's ordered list of pipeline step
+    names (see remanga.pipeline). Just a path lookup here, same as every
+    other per-project metadata file in this module - the default-steps
+    fallback and the "write it if missing" helper live in remanga.pipeline
+    itself, since they need STEP_REGISTRY's default order, which this
+    low-level paths package deliberately knows nothing about."""
+    return get_project_dir(project_name) / "pipeline.json"
+
+
 def get_manifest_path(project_name: str) -> Path:
     """{manga}/manifest.json - ONE file for the whole project carrying the
     informational bookkeeping that used to be three separate, never-read-back

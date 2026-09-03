@@ -8,12 +8,11 @@ from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from remanga import setup
-from remanga.audio import AudioProcessor, TTSEngine
 from remanga.config import RemangaConfig
 from remanga.console import console, display_path, print_path, wrap_at_slashes
 from remanga.cropper import CoordinateCropper
-from remanga.downloader import MangaDexDownloader
 from remanga.full_recap import FullRecapCompiler, chapter_sort_key, discover_chapters
+from remanga.pipeline import load_pipeline, run_pipeline
 from remanga.remix import remix_project
 from remanga.verify import verify_project
 from remanga.json_io import has_real_json_content, read_json_or
@@ -23,10 +22,9 @@ from remanga.paths import (
     get_sheets_zip_dir, list_projects, load_project_metadata, save_project_metadata,
 )
 from remanga.status import get_chapter_status
-from remanga.video import VideoRenderer
 from remanga.webui import launch_and_wait as launch_panel_marker
 from remanga.webui import launch_and_wait_reviewer, launch_and_wait_writer
-from remanga.wizard_prompts import select_chapter, select_or_create_project
+from remanga.wizard_prompts import edit_pipeline_steps, select_chapter, select_or_create_project
 
 
 def run_narration_review_loop(project: str, chapter: str, config: RemangaConfig) -> None:
@@ -94,133 +92,16 @@ def run_narration_review_loop(project: str, chapter: str, config: RemangaConfig)
             return
 
 
-def run_interactive_pipeline():
-    """Master interactive production wizard with project discovery, resume guards, and setup option."""
-    console.print("[bold]remanga[/] [dim]— interactive recap production[/]\n")
-
-    config = RemangaConfig.load()
-
-    # 1. Project Selection / Creation / Settings
-    project = select_or_create_project(config)
-
-    # 2. Full pipeline for one chapter, one of its stages standalone, or a
-    # whole-project/maintenance mode. Grouped so every "just this one stage"
-    # option (mark+write, review) sits together, and full-project modes
-    # (full-recap, remix, verify) sit together after.
-    console.print(
-        "\n[bold]1.[/] Process a chapter (full pipeline: download → mark → crop → narrate → review → TTS → mix → render)\n"
-        "[bold]2.[/] Mark/re-mark panels, then hand-write narration yourself (no LLM, stops there)\n"
-        "[bold]3.[/] Review narration only (no other stage runs before or after)\n"
-        "[bold]4.[/] Compile the whole project into one continuous video (full-recap)\n"
-        "[bold]5.[/] Change background music/volume and rebuild video(s) only (no re-narration)\n"
-        "[bold]6.[/] Verify audio/video files are complete, not corrupt/truncated\n"
-    )
-    mode = Prompt.ask("[bold]Choose[/]", choices=["1", "2", "3", "4", "5", "6"], default="1")
-    if mode == "2":
-        _run_mark_then_write(project, config)
-        return
-    if mode == "3":
-        _run_review_only(project, config)
-        return
-    if mode == "4":
-        _run_full_recap(project, config)
-        return
-    if mode == "5":
-        _run_remix(project, config)
-        return
-    if mode == "6":
-        _run_verify(project)
-        return
-
-    meta = load_project_metadata(project)
-
-    # Reading direction (right-to-left for native Japanese manga, left-to-right
-    # for manhwa/manhua/webtoons and most Western comics) - asked once per
-    # project and persisted to project.json, from where chapter_identity_fields
-    # threads it into every panels_pdf/panels_zip/sheets_zip chapter_info.json
-    # and info page/sheet. Native manga is the pipeline's overwhelming default,
-    # hence "right_to_left" pre-selected.
-    if "reading_direction" not in meta:
-        is_rtl = Confirm.ask(
-            "[bold]Is this manga read right-to-left[/] (Japanese manga convention - "
-            "say no for manhwa/manhua/webtoons or Western comics)?",
-            default=True,
-        )
-        meta["reading_direction"] = "right_to_left" if is_rtl else "left_to_right"
-        save_project_metadata(project, meta)
-
-    saved_url = meta.get("manga_url", "")
-
-    if saved_url:
-        console.print(f"[dim]Saved MangaDex URL:[/] {wrap_at_slashes(saved_url)}")
-        use_saved = Confirm.ask("Use saved MangaDex URL?", default=True)
-        url = saved_url if use_saved else Prompt.ask("[bold]Enter MangaDex title URL/ID[/]").strip()
-    else:
-        url = Prompt.ask("[bold]Enter MangaDex title URL/ID[/]").strip()
-
-    # 3. Chapter Selection
-    chapter = select_chapter(project)
+def run_narration_step(project: str, chapter: str, config: RemangaConfig) -> None:
+    """Generates narration.json + memory.json via the LLM copy/paste flow -
+    packages whatever vision upload format is active (PDF/zip/sheets zip,
+    falling back to raw sheets/panels), prints exactly what to upload and
+    where to save the LLM's reply, and blocks until narration.json (and, from
+    chapter 2 on, memory.json) actually has content. A no-op if narration.json
+    already has real content - re-running the pipeline never re-prompts for
+    an already-written chapter."""
     chap_dir = get_chapter_dir(project, chapter)
-
-    # 4. Reference Voice and BGM Validation
-    setup.ensure_valid_voice_prompt(config, interactive=True)
-    setup.ensure_valid_bgm(config, interactive=True)
-
-    # 5. Status Overview
-    status = get_chapter_status(project, chapter)
     package = config.cropper.package
-
-    console.print()
-    print_path(f"[bold]Workspace:[/] {display_path(chap_dir, wrap=False)}")
-    console.print(f"[bold]Status:[/] {status['summary']}")
-    console.print(f"[dim]Generate: panels (always) + sheets {'on' if package.sheets else 'off'}[/]")
-    console.print(
-        f"[dim]Package: "
-        f"panels_zip {setup.bundle_state_str(package, package.panels_zip, package.panels_zip_splites)} | "
-        f"pdf {'on' if package.pdf else 'off'} | pdf_splite {'on' if package.pdf_splite else 'off'} | "
-        f"pdf_zip {'on' if package.pdf_zip else 'off'} | "
-        f"pdf_zip_splite {'on' if package.pdf_zip_splite else 'off'} | "
-        f"sheets_zip {'on' if package.sheets_zip else 'off'}[/]"
-    )
-    console.print(f"[dim]Render output: {config.video.width}x{config.video.height} ({config.video.background_style.title()} canvas)[/]\n")
-
-    # What gets generated/zipped/PDF'd comes straight from config.json's
-    # cropper.package settings (shown above) - it's a project-wide setting
-    # like voice/BGM, not something to re-confirm every chapter. Run
-    # `remanga setup-config` to change it.
-
-    # =========================================================================
-    # Step 1: Download Pages
-    # =========================================================================
-    console.print(f"[bold]Step 1 — Downloading Chapter {chapter}[/]")
-    dl = MangaDexDownloader(config.downloader)
-    dl.download_chapter(url, chapter, project)
-
-    # =========================================================================
-    # Step 2: Mark Panels (crops.json, via the Panel Marker web UI)
-    # =========================================================================
-    crops_path = chap_dir / "crops.json"
-    if not has_real_json_content(crops_path):
-        console.print(
-            "\n[bold]Mark Panels[/]\n"
-            "Opening the Panel Marker web UI. Mark each panel on every story page "
-            f"(MAGI v3 pre-fills what it can find), then press "
-            f"{'⌘S' if config.marker.auto_open_browser else 'Ctrl+S'} or click "
-            "Save & Continue in the browser tab.\n"
-        )
-        launch_panel_marker(project, chapter, config.marker)
-        console.print("[green]✓ Panels marked and crops.json saved.[/]")
-
-    # =========================================================================
-    # Step 3: Cropping Panels & Packaging Vision Uploads
-    # =========================================================================
-    console.print("\n[bold]Step 2 — Cropping Panels & Packaging Vision Uploads[/]")
-    cropper = CoordinateCropper(config.cropper)
-    cropper.crop_chapter_from_json(project, chapter)
-
-    # =========================================================================
-    # Step 4: Narration Script + Continuity Memory (narration.json + memory.json)
-    # =========================================================================
     narration_path = chap_dir / "narration.json"
     panels_pdf_dir = get_panels_pdf_dir(project, chapter, create=False)
     llm_pdf_parts = sorted(panels_pdf_dir.glob("panels_*.pdf")) + sorted(panels_pdf_dir.glob("panels_*.zip")) if package.pdf_active else []
@@ -344,38 +225,117 @@ def run_interactive_pipeline():
                 )
                 Prompt.ask("[bold]Press Enter once memory.json is saved[/]")
 
-    # =========================================================================
-    # Narration Review (narration_review.json, via the Narration Reviewer web
-    # UI) - as many rounds as the user wants before trusting the script to
-    # voice synthesis. No printed "Step N" header, same as Mark Panels and
-    # the narration.json step above - it isn't numbered in this wizard's
-    # scheme either.
-    # =========================================================================
-    run_narration_review_loop(project, chapter, config)
+
+def run_interactive_pipeline():
+    """Master interactive production wizard with project discovery, resume guards, and setup option."""
+    console.print("[bold]remanga[/] [dim]— interactive recap production[/]\n")
+
+    config = RemangaConfig.load()
+
+    # 1. Project Selection / Creation / Settings
+    project = select_or_create_project(config)
+
+    # 2. Full pipeline for one chapter, one of its stages standalone, or a
+    # whole-project/maintenance mode. Grouped so every "just this one stage"
+    # option (mark+write, review) sits together, and full-project modes
+    # (full-recap, remix, verify) sit together after.
+    console.print(
+        "\n[bold]1.[/] Process a chapter (full pipeline: download → mark → crop → narrate → review → TTS → mix → render)\n"
+        "[bold]2.[/] Mark/re-mark panels, then hand-write narration yourself (no LLM, stops there)\n"
+        "[bold]3.[/] Review narration only (no other stage runs before or after)\n"
+        "[bold]4.[/] Compile the whole project into one continuous video (full-recap)\n"
+        "[bold]5.[/] Change background music/volume and rebuild video(s) only (no re-narration)\n"
+        "[bold]6.[/] Verify audio/video files are complete, not corrupt/truncated\n"
+        "[bold]7.[/] Edit this project's pipeline (which steps run, and in what order)\n"
+    )
+    mode = Prompt.ask("[bold]Choose[/]", choices=["1", "2", "3", "4", "5", "6", "7"], default="1")
+    if mode == "2":
+        _run_mark_then_write(project, config)
+        return
+    if mode == "3":
+        _run_review_only(project, config)
+        return
+    if mode == "4":
+        _run_full_recap(project, config)
+        return
+    if mode == "5":
+        _run_remix(project, config)
+        return
+    if mode == "6":
+        _run_verify(project)
+        return
+    if mode == "7":
+        edit_pipeline_steps(project)
+        return
+
+    meta = load_project_metadata(project)
+
+    # Reading direction (right-to-left for native Japanese manga, left-to-right
+    # for manhwa/manhua/webtoons and most Western comics) - asked once per
+    # project and persisted to project.json, from where chapter_identity_fields
+    # threads it into every panels_pdf/panels_zip/sheets_zip chapter_info.json
+    # and info page/sheet. Native manga is the pipeline's overwhelming default,
+    # hence "right_to_left" pre-selected.
+    if "reading_direction" not in meta:
+        is_rtl = Confirm.ask(
+            "[bold]Is this manga read right-to-left[/] (Japanese manga convention - "
+            "say no for manhwa/manhua/webtoons or Western comics)?",
+            default=True,
+        )
+        meta["reading_direction"] = "right_to_left" if is_rtl else "left_to_right"
+        save_project_metadata(project, meta)
+
+    saved_url = meta.get("manga_url", "")
+
+    if saved_url:
+        console.print(f"[dim]Saved MangaDex URL:[/] {wrap_at_slashes(saved_url)}")
+        use_saved = Confirm.ask("Use saved MangaDex URL?", default=True)
+        url = saved_url if use_saved else Prompt.ask("[bold]Enter MangaDex title URL/ID[/]").strip()
+    else:
+        url = Prompt.ask("[bold]Enter MangaDex title URL/ID[/]").strip()
+
+    # 3. Chapter Selection
+    chapter = select_chapter(project)
+    chap_dir = get_chapter_dir(project, chapter)
+
+    # 4. Reference Voice and BGM Validation
+    setup.ensure_valid_voice_prompt(config, interactive=True)
+    setup.ensure_valid_bgm(config, interactive=True)
+
+    # 5. Status Overview
+    status = get_chapter_status(project, chapter)
+    package = config.cropper.package
+
+    console.print()
+    print_path(f"[bold]Workspace:[/] {display_path(chap_dir, wrap=False)}")
+    console.print(f"[bold]Status:[/] {status['summary']}")
+    console.print(f"[dim]Generate: panels (always) + sheets {'on' if package.sheets else 'off'}[/]")
+    console.print(
+        f"[dim]Package: "
+        f"panels_zip {setup.bundle_state_str(package, package.panels_zip, package.panels_zip_splites)} | "
+        f"pdf {'on' if package.pdf else 'off'} | pdf_splite {'on' if package.pdf_splite else 'off'} | "
+        f"pdf_zip {'on' if package.pdf_zip else 'off'} | "
+        f"pdf_zip_splite {'on' if package.pdf_zip_splite else 'off'} | "
+        f"sheets_zip {'on' if package.sheets_zip else 'off'}[/]"
+    )
+    console.print(f"[dim]Render output: {config.video.width}x{config.video.height} ({config.video.background_style.title()} canvas)[/]\n")
+
+    # What gets generated/zipped/PDF'd comes straight from config.json's
+    # cropper.package settings (shown above) - it's a project-wide setting
+    # like voice/BGM, not something to re-confirm every chapter. Run
+    # `remanga setup-config` to change it.
 
     # =========================================================================
-    # Step 5: Synthesizing Vocal Audio via IndexTTS-2.5
+    # Steps: download -> mark -> crop -> narration -> review -> tts -> mix ->
+    # render, driven by this project's pipeline.json (or, absent one, today's
+    # exact default order) - see pipeline.py. The resolved `url` above is
+    # saved to project.json first so the download step's run(project,
+    # chapter, config) signature (no url param - uniform across every step)
+    # can resolve it the same way MangaDexDownloader.download_chapter's own
+    # no-url fallback already does.
     # =========================================================================
-    console.print("\n[bold]Step 3 — Synthesizing Vocal Audio via IndexTTS-2.5[/]")
-    tts = TTSEngine(config.tts, config.audio)
-    tts.generate_narration_audio(project, chapter, interactive=True)
-
-    # =========================================================================
-    # Step 6: Mixing Master Audio Track & Loudnorm
-    # =========================================================================
-    console.print("\n[bold]Step 4 — Mixing Master Audio Track[/]")
-    mixer = AudioProcessor(config.audio)
-    mixer.mix_master_audio(project, chapter, interactive=True)
-
-    # =========================================================================
-    # Step 7: Render Final Video (1080p / 2K / 4K)
-    # =========================================================================
-    console.print(f"\n[bold]Step 5 — Rendering Final {config.video.height}p Recap Video[/]")
-    renderer = VideoRenderer(config.system, config.video)
-    final_video = renderer.render_video(project, chapter)
-
-    console.print(f"\n[bold green]✓ Recap video complete[/] [dim]({config.video.width}x{config.video.height}, {config.video.background_style.title()} canvas)[/]")
-    print_path(f"  {display_path(final_video, wrap=False)}")
+    save_project_metadata(project, {"manga_url": url})
+    run_pipeline(project, chapter, config, load_pipeline(project))
 
     # =========================================================================
     # Optional: Verify this chapter's audio/video (real ffprobe decode

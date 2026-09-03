@@ -9,7 +9,8 @@ from rich.table import Table
 from remanga import reset
 from remanga.config import RemangaConfig
 from remanga.console import console
-from remanga.paths import list_projects
+from remanga.json_io import write_json
+from remanga.paths import get_pipeline_path, list_projects
 from remanga.setup_wizard import run_setup_wizard
 from remanga.status import get_chapter_status
 
@@ -137,6 +138,41 @@ def offer_chapter_restart(project_name: str, chapter_num: str) -> None:
             console.print(f"[green]✓ Marks for Chapter {chapter_num} updated and saved.[/]\n")
     else:
         console.print(f"[dim]Restart cancelled. Resuming Chapter {chapter_num} from its current progress instead.[/]\n")
+
+
+def edit_pipeline_steps(project_name: str) -> None:
+    """Lets the user redefine this project's pipeline.json - which steps
+    run, and in what order - as a comma-separated ordered list, checked
+    against STEP_REGISTRY. Deferred import (remanga.pipeline pulls in the
+    audio/video/webui/downloader/cropper modules, same reasoning as
+    offer_chapter_restart's deferred launch_panel_marker import above)."""
+    from remanga.pipeline import STEP_REGISTRY, load_pipeline
+
+    console.print(f"\n[bold]Pipeline steps for '{project_name}'[/]\n[dim]Available steps, in their usual order:[/]")
+    for step in STEP_REGISTRY:
+        console.print(f"  [bold]{step.name}[/] [dim]— {step.description}[/]")
+
+    current = load_pipeline(project_name)
+    console.print(f"\n[dim]Current pipeline:[/] {', '.join(current)}")
+
+    valid_names = {step.name for step in STEP_REGISTRY}
+    while True:
+        raw = Prompt.ask(
+            "\n[bold]Enter the steps to run, comma-separated, in order[/]",
+            default=", ".join(current),
+        ).strip()
+        chosen = [s.strip() for s in raw.split(",") if s.strip()]
+        unknown = [s for s in chosen if s not in valid_names]
+        if unknown:
+            console.print(f"[bold red]Unknown step(s):[/] {', '.join(unknown)}. [dim]Valid: {', '.join(sorted(valid_names))}[/]")
+            continue
+        if not chosen:
+            console.print("[bold red]At least one step is required.[/]")
+            continue
+        break
+
+    write_json(get_pipeline_path(project_name), {"steps": chosen})
+    console.print(f"[green]✓ Saved pipeline for '{project_name}':[/] {', '.join(chosen)}")
 
 
 def select_chapter(project_name: str) -> str:

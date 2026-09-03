@@ -107,6 +107,18 @@ Run `verify` after a crash/kill, not routinely.
 6. Sanity-check via `remanga status --project <p> --chapter <n>` and
    `remanga.paths.list_projects()` before running anything expensive.
 
+## Pipeline step registry (`remanga/pipeline.py`)
+
+The wizard's step order (download→mark→crop→narration→review→tts→mix→render)
+lives in `STEP_REGISTRY`, not hardcoded per-project. Each project can have
+`projects/<name>/pipeline.json` = `{"steps": ["download", "mark", ...]}`;
+missing/empty falls back to `DEFAULT_STEPS` (that exact order) unchanged.
+Edit it via wizard option 7, or `remanga run -p <p> -c <c>` (uses
+pipeline.json) / `remanga run -p <p> -c <c> -s crop,narration` (one-off
+explicit subset, doesn't touch pipeline.json). Every existing single-step
+subcommand (`download`/`mark`/`crop`/`write`/`review`/`tts`/`mix`/`render`)
+still works unchanged - `run` just wraps the same underlying calls.
+
 ## GPU/ffmpeg
 
 Bundled `bin/ffmpeg` (pinned BtbN build) has working `h264_nvenc` on this

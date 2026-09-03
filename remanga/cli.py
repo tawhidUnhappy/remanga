@@ -18,6 +18,7 @@ from remanga.remix import remix_project
 from remanga.verify import verify_project
 from remanga.setup_wizard import run_setup_wizard
 from remanga.paths_manager import run_paths_manager
+from remanga.pipeline import STEP_REGISTRY, load_pipeline, run_pipeline
 from remanga.status import render_status_panel
 from remanga.video import VideoRenderer
 from remanga.webui import launch_and_wait as launch_panel_marker
@@ -137,6 +138,22 @@ def main():
     p_remix.add_argument("--bgm", "-b", required=False, default=None, help="Override background music audio path")
     p_remix.add_argument("--no-rejoin", action="store_true", help="Don't recompile the full-recap video even if one exists")
 
+    # run (step-registry pipeline)
+    p_run = subparsers.add_parser(
+        "run",
+        help="Run this project's pipeline.json (or the full default step order, if it has none) for "
+             "one chapter, or an explicit --steps subset/order instead - 'just one tool', 'a lot of "
+             f"them', or a full custom pipeline. Steps: {', '.join(s.name for s in STEP_REGISTRY)}",
+    )
+    p_run.add_argument("--project", "-p", required=True, help="Project name")
+    p_run.add_argument("--chapter", "-c", required=True, help="Chapter number")
+    p_run.add_argument(
+        "--steps", "-s", required=False, default=None,
+        help="Comma-separated step names to run, in order (one-off override - doesn't touch "
+             "pipeline.json). Default: this project's saved pipeline.json, or the full default "
+             f"order if it has none ({', '.join(s.name for s in STEP_REGISTRY)}).",
+    )
+
     # status
     p_stat = subparsers.add_parser("status", help="Inspect chapter production status")
     p_stat.add_argument("--project", "-p", required=True, help="Project name")
@@ -219,6 +236,9 @@ def main():
             if args.chapters:
                 chapters = sorted({c.strip() for c in args.chapters.split(",") if c.strip()}, key=chapter_sort_key)
             remix_project(args.project, config, chapters=chapters, bgm_override=args.bgm, rejoin=not args.no_rejoin)
+        elif args.command == "run":
+            steps = [s.strip() for s in args.steps.split(",") if s.strip()] if args.steps else load_pipeline(args.project)
+            run_pipeline(args.project, args.chapter, config, steps)
         elif args.command == "status":
             console.print(render_status_panel(args.project, args.chapter))
         elif args.command == "verify":

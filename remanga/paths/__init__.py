@@ -27,8 +27,8 @@ from __future__ import annotations
 from .global_assets import ensure_global_lessons_file, get_global_lessons_path
 from .metadata import (
     chapter_identity_fields, ensure_memory_file, get_manifest_path, get_memory_path,
-    get_project_metadata_path, list_projects, load_project_metadata, read_manifest,
-    save_project_metadata, update_manifest_chapter,
+    get_pipeline_path, get_project_metadata_path, list_projects, load_project_metadata,
+    read_manifest, save_project_metadata, update_manifest_chapter,
 )
 from .projects import (
     GENERATED_KINDS, get_audio_dir, get_audio_timing_path, get_chapter_dir,
@@ -62,7 +62,7 @@ __all__ = [
     # metadata
     "get_project_metadata_path", "get_memory_path", "ensure_memory_file", "load_project_metadata",
     "chapter_identity_fields", "save_project_metadata", "get_manifest_path", "read_manifest",
-    "update_manifest_chapter", "list_projects",
+    "update_manifest_chapter", "list_projects", "get_pipeline_path",
     # review
     "get_narration_review_path", "get_narration_review_history_dir",
     # global assets
