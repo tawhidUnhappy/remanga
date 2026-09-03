@@ -34,6 +34,12 @@ def create_writer_app(state: WriterState, config: WriterConfig, project_name: st
     def post_text(panel_id: str):
         body = request.get_json(force=True) or {}
         state.set_text(panel_id, body.get("text", ""))
+        # Persist to disk on every keystroke-save, not just on Finish - so a
+        # closed tab, killed server, or crash mid-session loses nothing.
+        # Re-running `remanga write` on this chapter then resumes from
+        # exactly what was typed (WriterState reloads this file on start)
+        # instead of the placeholder-empty narration.json going untouched.
+        write_json(state.narration_path, state.build_narration_json())
         return jsonify({"ok": True})
 
     @app.post("/api/finish")
