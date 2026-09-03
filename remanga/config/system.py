@@ -15,7 +15,11 @@ class SystemConfig(BaseModel):
     # Path to a small JSON file holding {"token": "hf_..."} - used by every
     # model download (IndexTTS-2.5, Audio8 TTS, MAGI v3, DeepSeek-OCR-2) to
     # raise Hugging Face Hub's unauthenticated rate limit/speed, if set. See
-    # remanga/hf_token.py for the full contract. Empty by default - every
-    # download just stays unauthenticated exactly like today until this is
-    # actually pointed at a real file.
-    hf_token_path: str = ""
+    # remanga/hf_token.py for the full contract. Defaults to global/hf_token.json
+    # - remanga/paths/global_assets.py:ensure_hf_token_file() creates it with
+    # a blank {"token": ""} the first time any model download runs, so
+    # there's always a real place to drop a token in without editing
+    # config.json first. A blank "token" value there is silently treated as
+    # "not configured" (unauthenticated, today's behavior) - only a
+    # malformed file or one missing the "token" key entirely warns.
+    hf_token_path: str = "global/hf_token.json"

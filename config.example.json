@@ -5,7 +5,7 @@
     "fallback_codec": "libx264",
     "threads": 4,
     "log_level": "INFO",
-    "hf_token_path": ""
+    "hf_token_path": "global/hf_token.json"
   },
   "downloader": {
     "language": "en",

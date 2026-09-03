@@ -157,11 +157,21 @@ silently broke this once). Set `TORCH_CUDA_ARCH_LIST` from
 
 `remanga/hf_token.py`'s `resolve_hf_token()` is the one place this is
 resolved - points at a JSON file (`{"token": "hf_..."}`), not a raw token
-value, so the actual secret never has to sit in `config.json` itself. Empty
-by default (unauthenticated, today's behavior unchanged); missing file,
-malformed JSON, or no `"token"` key all fall back to unauthenticated with a
-yellow warning, never a hard failure - a bad token *file* should never break
-a download that would otherwise work fine anonymously.
+value, so the actual secret never has to sit in `config.json` itself.
+Defaults to `global/hf_token.json`, auto-created (blank `"token"` + a
+self-documenting `"_hint"` field, via `paths/global_assets.py:
+ensure_hf_token_file()`) the first time any model download runs - so
+there's a real file to drop a token into from the start, no manual setup
+step first. A **blank** token there is the normal "nothing configured yet"
+state and falls back to unauthenticated silently, no warning; a genuinely
+broken file (malformed JSON, or missing the `"token"` field/wrong type)
+does warn - the distinction matters, don't collapse it back into one
+"anything wrong → warn" check. Pointing `hf_token_path` at a *custom* path
+instead is also supported, but that one is never auto-created - missing
+there is treated as a real misconfiguration (warns), not the default
+unconfigured state. Either way it's a soft fallback, never a hard failure -
+a bad token setup should never break a download that would work fine
+unauthenticated.
 
 Wired into every model download the same way: `ModelManager.ensure_model()`
 (`models/weights.py` - covers IndexTTS-2.5, Audio8 TTS, DeepSeek-OCR-2, i.e.

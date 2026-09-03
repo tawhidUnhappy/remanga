@@ -24,7 +24,9 @@ path this package doesn't have yet, add it here first."""
 
 from __future__ import annotations
 
-from .global_assets import ensure_global_lessons_file, get_global_lessons_path
+from .global_assets import (
+    ensure_global_lessons_file, ensure_hf_token_file, get_global_lessons_path, get_hf_token_path,
+)
 from .metadata import (
     chapter_identity_fields, ensure_memory_file, get_manifest_path, get_memory_path,
     get_pipeline_path, get_project_metadata_path, list_projects, load_project_metadata,
@@ -67,4 +69,5 @@ __all__ = [
     "get_narration_review_path", "get_narration_review_history_dir",
     # global assets
     "get_global_lessons_path", "ensure_global_lessons_file",
+    "get_hf_token_path", "ensure_hf_token_file",
 ]
