@@ -204,6 +204,29 @@ that must collapse to one line). Use `stream_subprocess()` /
 `\n`. Never use bare `capture_output=True` for anything long-running either
 (silent until exit, looks hung).
 
+**Also always pass `-u` (unbuffered) to a spawned `python`**, not just
+piping it through `stream_subprocess()` - `ModelManager.ensure_model()`
+(`models/weights.py`) was missing it (worker spawns elsewhere - indextts_
+worker/audio8_worker/deepseek_ocr_worker - already had it right) and it
+looked hung: `Downloading DeepSeek-OCR-2 model weights...` printed, then
+nothing for a long stretch, even though the download was actually
+progressing fine underneath (confirmed live: the on-disk `.incomplete` file
+was growing the whole time). Root cause: CPython switches stdout from
+line-buffered to block-buffered the instant it isn't a real terminal - which
+`subprocess.PIPE` always makes true - so tqdm's small `\r` updates sit in a
+buffer instead of reaching the parent process until it happens to fill.
+Fixed by adding `-u` to that one Popen call too.
+
+One separate, *not-a-bug* thing to know about `snapshot_download()`
+specifically once that fix is in: its progress reporting is file-count-level
+(`Fetching N files: X%`), not byte-level - once every small file is done and
+only the one big multi-GB shard is left, the counter just sits at e.g.
+`14/16` with zero visible movement until that file fully lands, no matter
+how unbuffered anything is. The `.incomplete` file under
+`<model_dir>/.cache/huggingface/download/` is the only way to see it's
+actually still moving during that stretch - don't mistake that quiet phase
+for a hang and go re-diagnosing buffering again.
+
 ## Verify vs. normal runs
 
 `remanga verify` (pipeline option 4) does real ffprobe decode checks on

@@ -52,7 +52,16 @@ class ModelManager:
         # remanga/hf_token.py) - None/empty stays fully backward compatible
         # with a script that ignores a missing arg entirely.
         token = resolve_hf_token()
-        cmd = [str(python), str(script), str(self.model_dir.resolve()), self.repo_id]
+        # -u (unbuffered stdout/stderr): without it, CPython switches from
+        # line-buffered to block-buffered the moment stdout isn't a real
+        # terminal (i.e. always, once piped through subprocess.PIPE here) -
+        # tqdm's own small \r-updates then sit in that buffer instead of
+        # actually reaching this process, so the console looks completely
+        # stalled ("Downloading..." and then nothing) even though the
+        # download is progressing fine underneath. Same reasoning every
+        # worker subprocess spawn elsewhere already applies (indextts_worker/
+        # audio8_worker/deepseek_ocr_worker's own -u flag).
+        cmd = [str(python), "-u", str(script), str(self.model_dir.resolve()), self.repo_id]
         if token:
             cmd.append(token)
 
