@@ -113,11 +113,37 @@ The wizard's step order (download→mark→crop→narration→review→tts→mix
 lives in `STEP_REGISTRY`, not hardcoded per-project. Each project can have
 `projects/<name>/pipeline.json` = `{"steps": ["download", "mark", ...]}`;
 missing/empty falls back to `DEFAULT_STEPS` (that exact order) unchanged.
-Edit it via wizard option 7, or `remanga run -p <p> -c <c>` (uses
-pipeline.json) / `remanga run -p <p> -c <c> -s crop,narration` (one-off
+Edit it via the wizard's `edit-pipeline` item, or `remanga run -p <p> -c <c>`
+(uses pipeline.json) / `remanga run -p <p> -c <c> -s crop,narration` (one-off
 explicit subset, doesn't touch pipeline.json). Every existing single-step
 subcommand (`download`/`mark`/`crop`/`write`/`review`/`tts`/`mix`/`render`)
 still works unchanged - `run` just wraps the same underlying calls.
+
+## Wizard menu is registry-driven, no hardcoded "modes"
+
+`remanga/commands.py`'s `COMMAND_REGISTRY` is the single source of truth for
+every remanga command - both `cli.py`'s argparse subcommands and the
+interactive wizard's menu are built from it (plus one wizard-only
+`edit-pipeline` item appended after it, since editing pipeline.json isn't a
+bare CLI subcommand). The wizard has no curated "process a chapter" /
+"mark-then-write" combo modes anymore - it loops over the full command list,
+runs whichever one is picked once, then asks "run another command?" so
+chaining several (mark → write → run) is just picking them in sequence, not
+a separate hardcoded flow. Adding a step means adding one `Command` entry to
+`commands.py` - nothing in `wizard.py` needs to change.
+
+`select_chapter` (wizard_prompts.py) is a pure picker now - it used to also
+call `offer_chapter_restart` (a "resume or pick a restart tier" gate) on
+every chapter selection, which fired for *any* command needing a chapter,
+including single-tool ones like `write` - selecting a chapter to hand-write
+narration for would bounce into a restart menu that had nothing to do with
+what was being run. `offer_chapter_restart`/`_RESTART_MENU` were deleted
+entirely; that capability is just the standalone `restart` command
+(`--mode hard/marks_only/remark/soft`), reachable from the same menu like
+everything else. Multi-choice prompts with more than a few options use
+`console.ask_index()` (loops on invalid input) instead of Rich's
+`Prompt.ask(..., choices=[...])`, which echoes every choice inline
+(`[1/2/.../20]`) and gets unreadable past a handful of options.
 
 ## GPU/ffmpeg
 

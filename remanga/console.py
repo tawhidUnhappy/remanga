@@ -24,8 +24,23 @@ from pathlib import Path
 
 from rich.console import Console
 from rich.markup import escape
+from rich.prompt import Prompt
 
 console = Console()
+
+
+def ask_index(prompt: str, count: int, default: int = 1) -> int:
+    """Prompts for a 1-based menu index without Rich's usual `choices=[...]`
+    behavior of echoing every valid choice inline (fine for 3-4 options,
+    unreadable for a menu with a dozen-plus - e.g. "[1/2/3/4/5/6/7/8/9/10/
+    11/12/13/14/15/16/17/18/19/20]"). Loops on anything that isn't a valid
+    in-range integer instead of letting Prompt.ask print/validate the list
+    itself. Returns the chosen index (1..count)."""
+    while True:
+        raw = Prompt.ask(f"[bold]{prompt}[/] [dim](1-{count})[/]", default=str(default)).strip()
+        if raw.isdigit() and 1 <= int(raw) <= count:
+            return int(raw)
+        console.print(f"[bold red]Enter a number from 1 to {count}.[/]")
 
 
 def wrap_at_slashes(text: str) -> str:
