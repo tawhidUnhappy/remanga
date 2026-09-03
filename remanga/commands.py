@@ -137,7 +137,7 @@ def _h_review(params: Dict[str, Any], config: RemangaConfig) -> None:
 
 
 def _h_write(params: Dict[str, Any], config: RemangaConfig) -> None:
-    launch_and_wait_writer(params["project"], params["chapter"], config.writer)
+    launch_and_wait_writer(params["project"], params["chapter"], config.writer, config.ocr)
 
 
 def _h_crop(params: Dict[str, Any], config: RemangaConfig) -> None:

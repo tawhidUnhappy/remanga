@@ -172,6 +172,37 @@ main { max-width: 900px; margin: 0 auto; padding: 20px; }
 }
 .panel-card.empty textarea { border-color: var(--danger); }
 
+/* "OCR this panel" (DeepSeek-OCR-2, see remanga/ocr/) - reads the panel's
+   own cropped image and offers the recognized text as a starting draft
+   instead of the user retyping dialogue by hand. */
+.ocr-row { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
+.ocr-btn {
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 7px;
+}
+.ocr-btn:disabled { opacity: 0.55; cursor: default; }
+.ocr-status { font-size: 11px; color: var(--text-faint); }
+.ocr-status.ocr-ok { color: var(--ok); }
+.ocr-status.ocr-failed { color: var(--danger); }
+
+.ocr-result {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ocr-result-text { font-size: 13px; white-space: pre-wrap; color: var(--text); }
+.ocr-result-actions { display: flex; gap: 8px; }
+.ocr-mini {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
 footer {
   position: sticky;
   bottom: 0;
@@ -231,6 +262,10 @@ footer {
     stays marked below. Save writes everything to <code>narration.json</code>; you can reopen this UI later to
     keep filling it in. Use the dots on the right to jump straight to any panel - a written one is
     highlighted <span style="color:var(--ok)">teal</span>, empty is <span style="color:var(--danger)">red</span>.
+    Click <b>🔎 OCR this panel</b> to have DeepSeek-OCR-2 read any text in that panel's image - it fills an
+    empty field directly, or offers Replace/Append/Dismiss if you've already typed something (never
+    overwrites without asking). The first click each session loads the model (can take a bit, downloading
+    it first if needed); every click after that is fast.
   </p>
   <div id="panel-list"></div>
 </main>

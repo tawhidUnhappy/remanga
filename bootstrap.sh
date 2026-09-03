@@ -99,11 +99,10 @@ fi
 # resolution - IndexTTS-2.5, Audio8 TTS, and MAGI v3 each pin their own
 # torch/transformers stack, sometimes incompatibly (MAGI v3 needs
 # transformers<4.52; Audio8 needs transformers>=4.57; nothing guarantees any
-# two of them would ever agree on one shared resolution). DeepSeek-OCR-2's
-# own venv is lighter (weights-download only for now - see its own section
-# below) but still separate, for the same reason once it needs a real
-# inference stack. The storage trade-off (five venvs instead of one) buys
-# permanent isolation
+# two of them would ever agree on one shared resolution). DeepSeek-OCR-2
+# gets its own venv for the same reason - its own trust_remote_code modeling
+# code and dependency pins, isolated from the other three's. The storage
+# trade-off (five venvs instead of one) buys permanent isolation
 # instead of a pin that has to be re-asserted and re-verified by hand every
 # time one tool's install could clobber another's. Nothing "activates" these -
 # the main env only ever invokes `.tools/venv-<tool>/bin/python` directly as a
@@ -189,19 +188,17 @@ echo "[+] Creating isolated MAGI v3 environment ($MAGI_VENV_DIR)..."
 # already known here saves that extra round-trip.
 "$BIN_DIR/uv" pip install --python "$MAGI_VENV_DIR" torch "transformers<4.52.0" timm shapely pytorch-metric-learning huggingface-hub pillow numpy einops matplotlib
 
-# DeepSeek-OCR-2 (https://huggingface.co/deepseek-ai/DeepSeek-OCR-2) - weights
-# only for now, same reasoning as remanga/config/ocr.py's docstring: no
-# pipeline step actually runs inference with this model yet, so this venv
-# only gets what snapshot_download() itself needs (modelscope/huggingface-hub),
-# not a full torch/transformers inference stack - that gets added here once an
-# actual OCR step is built on top of it, the same way Audio8's own isolated
-# venv above only exists because something real consumes it. `setup-models`
-# still fetches/verifies the weights unconditionally, exactly like
-# IndexTTS-2.5/MAGI v3 do, so they're already sitting in checkpoints/ ready
-# for that.
+# DeepSeek-OCR-2 (https://huggingface.co/deepseek-ai/DeepSeek-OCR-2) - powers
+# the Narration Writer's "OCR this panel" button (remanga/ocr/engine.py,
+# remanga/ocr/scripts/deepseek_ocr_worker.py) the same way IndexTTS-2.5/
+# Audio8 power TTS synthesis: its own isolated venv, a persistent worker
+# subprocess loaded once per session, GPU preferred (falls back to CPU) -
+# see deepseek_ocr_worker.py's own device selection. `setup-models` still
+# fetches/verifies the weights unconditionally here too, so they're already
+# in checkpoints/ before the button is ever clicked.
 echo "[+] Creating isolated DeepSeek-OCR-2 environment ($DEEPSEEK_OCR_VENV_DIR)..."
 "$BIN_DIR/uv" venv "$DEEPSEEK_OCR_VENV_DIR" --python 3.11 --allow-existing
-"$BIN_DIR/uv" pip install --python "$DEEPSEEK_OCR_VENV_DIR" huggingface-hub modelscope
+"$BIN_DIR/uv" pip install --python "$DEEPSEEK_OCR_VENV_DIR" torch transformers accelerate pillow huggingface-hub modelscope einops addict easydict
 
 # 4. Initialize config.json from config.example.json if missing
 if [ ! -f "config.json" ]; then

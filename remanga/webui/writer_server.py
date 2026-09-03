@@ -20,8 +20,9 @@ from pathlib import Path
 
 from werkzeug.serving import make_server
 
-from remanga.config import WriterConfig
+from remanga.config import OCRConfig, WriterConfig
 from remanga.console import console
+from remanga.ocr import OCREngine
 from remanga.paths import get_chapter_dir
 from remanga.webui.writer_routes import create_writer_app
 from remanga.webui.writer_state import WriterState
@@ -29,13 +30,18 @@ from remanga.webui.writer_state import WriterState
 logging.getLogger("werkzeug").setLevel(logging.WARNING)
 
 
-def launch_and_wait_writer(project_name: str, chapter_num: str, config: WriterConfig) -> Path:
+def launch_and_wait_writer(project_name: str, chapter_num: str, config: WriterConfig, ocr_config: OCRConfig) -> Path:
     """Starts the Narration Writer web UI, opens the browser, and blocks
     until the user saves. Returns the path to narration.json it wrote."""
     chapter_dir = get_chapter_dir(project_name, chapter_num)
     state = WriterState(chapter_dir, chapter_num)
+    # Lazy by design (see OCREngine's docstring): building this costs nothing
+    # until the user actually clicks "OCR this panel" - the GPU/model-load
+    # cost (and, on a fresh machine, the weight download itself) only
+    # happens on that first click, never just from opening this UI.
+    ocr_engine = OCREngine(ocr_config)
 
-    httpd = make_server(config.host, config.port, create_writer_app(state, config, project_name))
+    httpd = make_server(config.host, config.port, create_writer_app(state, config, project_name, ocr_engine))
     server_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
 
     def shutdown_soon():
@@ -56,5 +62,10 @@ def launch_and_wait_writer(project_name: str, chapter_num: str, config: WriterCo
     console.print("[yellow]Waiting for you to write the narration and save...[/]")
     state.finished.wait()
     server_thread.join(timeout=5)
+    # Frees the GPU/worker process promptly instead of leaving it idle until
+    # the whole `remanga` process exits - this session might be one command
+    # in a longer wizard loop (see wizard.py's nested menu), not the last
+    # thing that runs.
+    ocr_engine.shutdown()
 
     return state.narration_path

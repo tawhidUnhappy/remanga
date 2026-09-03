@@ -62,24 +62,56 @@ reintroduce:
   (`snapshot_download`'s `max_retries` kwarg doesn't exist in this
   `huggingface_hub` version).
 
-## DeepSeek-OCR-2 (`config.json` → `ocr`, weights-only for now)
+## DeepSeek-OCR-2 (`config.json` → `ocr`) - powers the Narration Writer's OCR button
 
-`deepseek-ai/DeepSeek-OCR-2` is wired into `remanga setup-models` exactly
-like IndexTTS-2.5 (`config/ocr.py`, `models/scripts/download_deepseek_ocr.py`
-- ModelScope first, HF Hub fallback, via a `ModelManager` built inline in
-`commands.py:_h_setup_models`), downloading to `checkpoints/deepseek_ocr_2`
-via its own isolated `.tools/venv-deepseek-ocr` (provisioned in
-`bootstrap.sh`, `huggingface-hub`+`modelscope` only - no torch/transformers
-yet). No pipeline step actually runs OCR inference yet - this is
-download-only plumbing, ready for whenever a real OCR step gets built.
-`ModelManager`'s `expected_files=("config.json", "model.safetensors")` is a
-guess at the repo's actual file layout (unverified - the real repo wasn't
-reachable while building this), not confirmed against the live repo; if the
-real weights ship sharded (`model-0000X-of-0000Y.safetensors`) the
-skip-if-present check just never short-circuits (redundant re-check each
-`setup-models` run, not a correctness bug - `snapshot_download` still
-skips/resumes correctly either way) - fix the filenames here once the repo's
-actual tree is confirmed.
+`deepseek-ai/DeepSeek-OCR-2` weights download via `remanga setup-models`
+exactly like IndexTTS-2.5 (`config/ocr.py`, `models/scripts/
+download_deepseek_ocr.py` - ModelScope first, HF Hub fallback, via a
+`ModelManager` built inline in `commands.py:_h_setup_models`), into
+`checkpoints/deepseek_ocr_2`, with its own isolated `.tools/venv-deepseek-ocr`
+(provisioned in `bootstrap.sh` with a real torch/transformers inference
+stack, not download-only).
+
+Inference itself lives in `remanga/ocr/engine.py` (`OCREngine`) +
+`remanga/ocr/scripts/deepseek_ocr_worker.py` - a persistent worker
+subprocess mirroring `audio/synth.py`'s `_BaseWorkerSynthesizer` lifecycle
+(spawn, ready-handshake, auto-heal a missing dependency, bounded-timeout
+request/response, stderr draining, clean shutdown), NOT subclassed from it
+(TTS-specific interface) but hand-copied with the same reasoning. GPU
+preferred: `device = "cuda" if torch.cuda.is_available() else "cpu"` in the
+worker, same pattern as `audio8_worker.py`.
+
+Wired into the Narration Writer web UI: each panel card has a
+"🔎 OCR this panel" button (`app.js:runOcr()`) hitting
+`POST /api/ocr/<panel_id>` (`writer_routes.py`) - fills an empty field
+directly, or offers Replace/Append/Dismiss if the field already has text
+(never silently overwrites). `launch_and_wait_writer` now takes an
+`OCRConfig` too (`config.ocr`, threaded from `commands.py:_h_write`) and
+builds one `OCREngine` per Narration Writer session, shut down explicitly
+when that session ends (`writer_server.py`) rather than left idle until the
+whole `remanga` process exits - a wizard session can run several commands
+back to back (see the nested-menu section above), so this frees the
+GPU/worker between commands instead of holding it the whole time.
+
+`OCREngine`/worker are lazy: nothing model-related happens just from opening
+the Narration Writer - the first "OCR this panel" click is what triggers
+`ensure_model()` (downloading the weights first if `setup-models` was never
+run) and spawns the worker; every click after that in the same session reuses
+the already-loaded model.
+
+**Unverified, flag if it breaks**: DeepSeek-OCR-2's actual HF repo/API
+wasn't reachable while building this. The worker calls
+`model.infer(tokenizer, prompt=, image_file=, output_path=, base_size=1024,
+image_size=640, crop_mode=True, save_results=True)` and falls back to
+reading a `.md`/`.mmd`/`.txt` file from `output_path` if `.infer()` doesn't
+return text directly - this mirrors DeepSeek-OCR (v1)'s published model
+card, assumed (not confirmed) to carry over to v2. `ModelManager`'s
+`expected_files=("config.json", "model.safetensors")` is similarly a guess
+at the repo's file layout; if the real weights ship sharded
+(`model-0000X-of-0000Y.safetensors`) the skip-if-present check just never
+short-circuits (redundant re-check each `setup-models` run, not a
+correctness bug - `snapshot_download` still skips/resumes correctly either
+way). Fix both once the real repo/API is confirmed.
 
 Building the fused kernels in `bootstrap.sh` (best-effort, non-fatal):
 nvcc must match `torch.version.cuda` **major** (minor mismatch = warning
