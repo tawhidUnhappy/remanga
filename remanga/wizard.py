@@ -25,7 +25,7 @@ from remanga.paths import (
 from remanga.status import get_chapter_status
 from remanga.video import VideoRenderer
 from remanga.webui import launch_and_wait as launch_panel_marker
-from remanga.webui import launch_and_wait_reviewer
+from remanga.webui import launch_and_wait_reviewer, launch_and_wait_writer
 from remanga.wizard_prompts import select_chapter, select_or_create_project
 
 
@@ -103,27 +103,33 @@ def run_interactive_pipeline():
     # 1. Project Selection / Creation / Settings
     project = select_or_create_project(config)
 
-    # 2. Single chapter, the whole manga joined into one video, or just a
-    # BGM/volume remix of what's already been rendered?
+    # 2. Full pipeline for one chapter, one of its stages standalone, or a
+    # whole-project/maintenance mode. Grouped so every "just this one stage"
+    # option (mark+write, review) sits together, and full-project modes
+    # (full-recap, remix, verify) sit together after.
     console.print(
-        "\n[bold]1.[/] Process a chapter\n"
-        "[bold]2.[/] Compile the whole project into one continuous video (full-recap)\n"
-        "[bold]3.[/] Change background music/volume and rebuild video(s) only (no re-narration)\n"
-        "[bold]4.[/] Verify audio/video files are complete, not corrupt/truncated\n"
-        "[bold]5.[/] Review narration only (no other stage runs before or after)\n"
+        "\n[bold]1.[/] Process a chapter (full pipeline: download → mark → crop → narrate → review → TTS → mix → render)\n"
+        "[bold]2.[/] Mark/re-mark panels, then hand-write narration yourself (no LLM, stops there)\n"
+        "[bold]3.[/] Review narration only (no other stage runs before or after)\n"
+        "[bold]4.[/] Compile the whole project into one continuous video (full-recap)\n"
+        "[bold]5.[/] Change background music/volume and rebuild video(s) only (no re-narration)\n"
+        "[bold]6.[/] Verify audio/video files are complete, not corrupt/truncated\n"
     )
-    mode = Prompt.ask("[bold]Choose[/]", choices=["1", "2", "3", "4", "5"], default="1")
+    mode = Prompt.ask("[bold]Choose[/]", choices=["1", "2", "3", "4", "5", "6"], default="1")
     if mode == "2":
-        _run_full_recap(project, config)
+        _run_mark_then_write(project, config)
         return
     if mode == "3":
-        _run_remix(project, config)
+        _run_review_only(project, config)
         return
     if mode == "4":
-        _run_verify(project)
+        _run_full_recap(project, config)
         return
     if mode == "5":
-        _run_review_only(project, config)
+        _run_remix(project, config)
+        return
+    if mode == "6":
+        _run_verify(project)
         return
 
     meta = load_project_metadata(project)
@@ -371,6 +377,16 @@ def run_interactive_pipeline():
     console.print(f"\n[bold green]✓ Recap video complete[/] [dim]({config.video.width}x{config.video.height}, {config.video.background_style.title()} canvas)[/]")
     print_path(f"  {display_path(final_video, wrap=False)}")
 
+    # =========================================================================
+    # Optional: Verify this chapter's audio/video (real ffprobe decode
+    # checks, not just exists/size - see verify.py). Off by default since
+    # ffmpeg writes non-atomically and a normal successful run never leaves
+    # a truncated/corrupt file - only worth turning on after a crash/kill,
+    # so it's asked here rather than always run.
+    # =========================================================================
+    if Confirm.ask("\n[bold]Verify this chapter's audio/video now?[/] (slower - only needed after a crash/kill)", default=False):
+        verify_project(project, chapters=[chapter], check_video=True)
+
 
 def _run_full_recap(project: str, config: RemangaConfig) -> None:
     """Full-recap mode: no per-chapter download/mark/crop walkthrough - every
@@ -449,6 +465,87 @@ def _run_verify(project: str) -> None:
 
     check_video = Confirm.ask("Also verify rendered videos (slower - audio only if no)?", default=True)
     verify_project(project, chapters=selected, check_video=check_video)
+
+
+def _run_mark_then_write(project: str, config: RemangaConfig) -> None:
+    """Standalone entry that covers exactly two stages, then stops: mark (or
+    re-mark) panels, then hand-write narration.json yourself in the
+    Narration Writer web UI instead of the usual upload-to-an-LLM flow. No
+    download before it (pages must already exist - use option 1 first if
+    they don't), no crop/TTS/mix/render after it. For chapters where an LLM
+    narration pass isn't wanted at all, or to go back and keep filling in a
+    hand-written draft."""
+    project_info = next((p for p in list_projects() if p["name"] == project), None)
+    chapters = project_info["chapters"] if project_info else []
+
+    if chapters:
+        table = Table(title=f"Chapters for '{project}'", show_edge=False)
+        table.add_column("#", width=4)
+        table.add_column("Chapter")
+        table.add_column("Status")
+        for idx, ch in enumerate(chapters, start=1):
+            status = get_chapter_status(project, ch)
+            table.add_row(str(idx), f"Chapter {ch}", status["summary"])
+        console.print(table)
+        default_ch = chapters[-1]
+        choice = Prompt.ask("[bold]Enter chapter number to mark/write[/]", default=str(default_ch)).strip()
+        if choice.isdigit() and 1 <= int(choice) <= len(chapters):
+            chapter = chapters[int(choice) - 1]
+        else:
+            chapter = choice
+    else:
+        chapter = Prompt.ask("[bold]Enter chapter number to mark/write[/]", default="1").strip()
+
+    chap_dir = get_chapter_dir(project, chapter)
+    pages_dir = chap_dir / "pages"
+    pages_count = len([p for p in pages_dir.iterdir() if p.is_file()]) if pages_dir.exists() else 0
+    if pages_count == 0:
+        console.print(
+            f"[bold red]Chapter {chapter} has no downloaded pages yet[/] - nothing to mark. "
+            "Download it first (option 1) before marking/writing."
+        )
+        return
+
+    # ---- Mark or re-mark panels (crops.json) ----------------------------
+    crops_path = chap_dir / "crops.json"
+    if has_real_json_content(crops_path):
+        remark = not Confirm.ask(
+            f"\n[bold]Chapter {chapter} already has marks.[/] Keep the existing marks?",
+            default=True,
+        )
+    else:
+        remark = True  # nothing to keep - mark from scratch
+
+    if remark:
+        console.print(
+            "\n[bold]Mark Panels[/]\n"
+            "Opening the Panel Marker web UI. Existing marks (if any) are pre-loaded - adjust "
+            f"anything, then press {'⌘S' if config.marker.auto_open_browser else 'Ctrl+S'} or "
+            "click Save & Continue in the browser tab.\n"
+        )
+        launch_panel_marker(project, chapter, config.marker)
+        console.print("[green]✓ Panels marked and crops.json saved.[/]")
+
+    # ---- Crop (panels/ - the Narration Writer needs actual images) ------
+    panels_dir = chap_dir / "panels"
+    panels_count = len([p for p in panels_dir.iterdir() if p.is_file()]) if panels_dir.exists() else 0
+    if remark or panels_count == 0:
+        console.print("\n[bold]Cropping Panels[/]")
+        cropper = CoordinateCropper(config.cropper)
+        cropper.crop_chapter_from_json(project, chapter)
+
+    # ---- Hand-write narration.json ---------------------------------------
+    console.print(
+        "\n[bold]Write Narration[/]\n"
+        "Opening the Narration Writer web UI. Type the narration line for each panel "
+        "(leave a field empty for a silent beat), then click Save.\n"
+    )
+    launch_and_wait_writer(project, chapter, config.writer)
+    console.print(
+        f"\n[green]✓ narration.json for Chapter {chapter} saved.[/] "
+        "[dim]Not continuing to any other stage - re-run the wizard (option 1) when you're "
+        "ready for narration review/TTS/mix/render, or come back here to keep editing.[/]"
+    )
 
 
 def _run_review_only(project: str, config: RemangaConfig) -> None:
