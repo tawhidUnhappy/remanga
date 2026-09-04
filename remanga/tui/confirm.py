@@ -11,7 +11,7 @@ from remanga.tui import fallback, keys
 from remanga.tui.choices import Choice
 from remanga.tui.loop import MenuState, run_menu
 
-FOOTER = "↑↓ move · y/n · enter confirm"
+FOOTER = "↑↓ move · y/n · enter confirm · ctrl+q exit"
 
 
 def confirm(

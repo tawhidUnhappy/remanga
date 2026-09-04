@@ -129,7 +129,10 @@ def ensure_reading_direction(project_name: str) -> None:
         ],
         default="right_to_left",
         note="asked once per project - downloading a chapter usually answers it automatically",
-        back_label=None,
+        # Escapable: this has a sensible default and is re-asked next time,
+        # so trapping someone in it (the only question in the wizard with no
+        # way back) buys nothing.
+        back_label="Ask me later",
     )
     if is_cancel(picked):
         return

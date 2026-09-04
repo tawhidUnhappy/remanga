@@ -140,6 +140,13 @@ class _PosixReader:
         self._saved = termios.tcgetattr(self._fd)
         mode = termios.tcgetattr(self._fd)
         mode[3] &= ~(termios.ECHO | termios.ICANON | termios.ISIG)
+        # IXON/IXOFF off: with software flow control enabled, the tty driver
+        # swallows Ctrl+S (XOFF) and Ctrl+Q (XON) for its own purposes and
+        # they never reach the program - which would silently break ctrl+q,
+        # the "quit from any menu" binding. Turning it off also removes the
+        # classic "terminal froze" trap where a stray Ctrl+S suspends output
+        # mid-menu.
+        mode[0] &= ~(termios.IXON | termios.IXOFF)
         mode[6][termios.VMIN] = 1
         mode[6][termios.VTIME] = 0
         termios.tcsetattr(self._fd, termios.TCSADRAIN, mode)

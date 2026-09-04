@@ -8,10 +8,15 @@ get a purpose-built prompt instead of a blank text box:
 
     chapter/chapters - the chapters this project actually has, with status
     keep             - the files this chapter actually has right now
+    formats          - the packaging formats, as a checklist
     steps            - the pipeline steps, as an ordered checklist
     voice/bgm        - the audio files already sitting in global/
     mode             - the restart presets, each with what it keeps
     url              - not asked at all once project.json has a source
+
+`keep` and `formats` additionally open pre-checked with whatever this
+project chose last time (remembered in project.json - see
+settings/project_prefs.py), so answering them once per project is enough.
 
 That last one is the rule the rest follow: if remanga can find the answer,
 it shouldn't be a question."""
@@ -20,11 +25,15 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from remanga.commands import Command, DEFAULT_WIPE_KEEP, Param
+from remanga.commands import Command, Param, resolve_wipe_keep
 from remanga.config import RemangaConfig
 from remanga.console import console, display_path
 from remanga.reset import RESTART_MODE_BY_NAME, wipeable_entries
 from remanga.settings import AUDIO_EXTENSIONS, discover_files
+from remanga.settings.project_prefs import (
+    active_package_formats, remembered_package_formats, remembered_wipe_keep,
+)
+from remanga.settings.vision import package_choices
 from remanga.tui import CANCEL, Choice, ask_path, ask_text, confirm, is_cancel, multiselect, select
 from remanga.wizard.chapters import select_chapter, select_chapters
 
@@ -94,20 +103,60 @@ def _prompt_keep(param: Param, project: str, config: RemangaConfig, values: Dict
         console.print(f"[dim]Nothing exists yet for chapter {chapter} - nothing to wipe.[/]")
         return "none"
 
-    rows = [
-        Choice(
-            label=entry.name,
-            hint=("directory" if entry.is_dir() else "file") + (
-                " · kept by default" if entry.name in DEFAULT_WIPE_KEEP else ""),
-            detail=display_path(entry, wrap=False),
-            value=entry.name,
-            checked=entry.name in DEFAULT_WIPE_KEEP,
-        )
-        for entry in entries
-    ]
+    # Pre-checked with this project's remembered keep-list when it has one,
+    # so the second chapter's wipe is Enter rather than the same nine
+    # decisions again.
+    remembered = remembered_wipe_keep(project)
+    keep_now = resolve_wipe_keep(None, project)
+    source = "kept last time" if remembered is not None else "kept by default"
+
+    # One row per NAME, not per path: wipe keeps by name (see
+    # reset.wipe_chapter), and every generated directory for this chapter is
+    # literally called "chapter_<n>" - so panels_zip/chapter_1 and
+    # audio/chapter_1 are one decision, not two. Showing them as separate
+    # rows would imply you could keep one and drop the other.
+    grouped: Dict[str, list] = {}
+    for entry in entries:
+        grouped.setdefault(entry.name, []).append(entry)
+
+    rows = []
+    for name, paths in grouped.items():
+        kind = "directory" if paths[0].is_dir() else "file"
+        where = ", ".join(sorted(p.parent.name for p in paths)) if len(paths) > 1 or paths[0].parent.name != f"chapter_{chapter}" else ""
+        hint = kind + (f" · in {where}" if where else "") + (f" · {source}" if name in keep_now else "")
+        rows.append(Choice(
+            label=name,
+            hint=hint,
+            detail=" · ".join(display_path(p, wrap=False) for p in paths),
+            value=name,
+            checked=name in keep_now,
+        ))
     picked = multiselect(
         param.label, rows,
-        note=f"checked survives · everything unchecked is deleted from chapter {chapter}",
+        note=(f"checked survives · everything unchecked is deleted from chapter {chapter}"
+              " · this choice is remembered for the project"),
+    )
+    if is_cancel(picked):
+        return CANCEL
+    return ",".join(picked) if picked else "none"
+
+
+def _prompt_formats(param: Param, project: str, config: RemangaConfig, values: Dict[str, Any]) -> Any:
+    """Which upload formats to build, as a checklist - the same one the
+    settings screen uses, opened on what this project builds right now
+    (its remembered choice, else config.json's switches). Whatever comes
+    back is remembered by the handler, so the next chapter doesn't ask."""
+    active = set(active_package_formats(config, project))
+    rows = package_choices(config)
+    for row in rows:
+        row.checked = row.value in active
+
+    remembered = remembered_package_formats(project)
+    origin = ("remembered for this project" if remembered is not None
+              else "from config.json's defaults")
+    picked = multiselect(
+        param.label, rows,
+        note=f"{origin} · your choice here is remembered for the next chapter",
     )
     if is_cancel(picked):
         return CANCEL
@@ -189,6 +238,7 @@ _SPECIAL = {
     "chapter": _prompt_chapter,
     "chapters": _prompt_chapters,
     "keep": _prompt_keep,
+    "formats": _prompt_formats,
     "steps": _prompt_steps,
     "url": _prompt_url,
     "mode": _prompt_mode,

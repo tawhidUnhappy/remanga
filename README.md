@@ -121,7 +121,7 @@ The easiest way to produce a recap video is through the interactive terminal wiz
 
 ### How the menus work
 
-Every screen is an arrow-key menu — **↑/↓** to move, **Enter** to pick, **type to filter**, **Esc** to back out one level. Checklists add **Space** to toggle (**Ctrl+A** all, **Ctrl+R** none), and confirmations take **y**/**n** as well as Enter. Whatever is currently configured is pre-highlighted, so Enter alone is always "leave it as it is". Nothing has to be typed from memory: the wizard lists what's actually there.
+Every screen is an arrow-key menu — **↑/↓** to move, **Enter** to pick, **type to filter**, **Esc** to back out one level, **Ctrl+Q** (or the **Exit remanga** row every menu ends with) to quit outright from wherever you are, however deep. Checklists add **Space** to toggle (**Ctrl+A** all, **Ctrl+R** none), and confirmations take **y**/**n** as well as Enter. Whatever is currently configured is pre-highlighted, so Enter alone is always "leave it as it is". Nothing has to be typed from memory: the wizard lists what's actually there.
 
 ```
 ? remanga — MyProject
@@ -131,7 +131,8 @@ Every screen is an arrow-key menu — **↑/↓** to move, **Enter** to pick, **
   Pipeline             download → mark → crop → narration → review → tts → mix → render
   Switch project       currently: MyProject
   Quit
-  ↑↓ move · enter select · type to filter · esc back
+  Exit remanga         quit from here
+  ↑↓ move · enter select · type to filter · esc back · ctrl+q exit
 ```
 
 Picking a category opens its commands, and running one lands you back in the same list — chaining `mark` → `crop` → `write` is picking three rows in a row. The menu is generated from the command registry, so every command `remanga --help` lists is here too, described the same way.
@@ -144,7 +145,8 @@ Picking a category opens its commands, and running one lands you back in the sam
 | Which manga/URL? | `project.json`'s saved source — asked once, on the first download |
 | Which way does it read? | MangaDex's `originalLanguage` (`ja` → right-to-left, `ko`/`zh` → left-to-right) |
 | Reference voice / BGM path? | The audio files already sitting in `global/voice/`, `global/bgm/` — pick a row, or type a path for one elsewhere |
-| What to keep when wiping? | A checklist of exactly what that chapter has on disk right now |
+| What to keep when wiping? | A checklist of exactly what that chapter has on disk right now — and what you picked last time, remembered per project |
+| What to package for the LLM? | A checklist of every format, opened on what this project builds — your pick is remembered for the next chapter |
 | Which pipeline steps? | An ordered checklist of the real step registry — the number shown is the run order |
 | Which restart mode? | The four presets, each row saying what survives it |
 
@@ -279,6 +281,13 @@ Launches the **Panel Marker** web UI: MAGI v3 pre-fills every page's panel boxes
 ```
 *Creates:* `chapters/chapter_<num>/panels/` (source), this chapter's `panels` entry in the project's shared `manifest.json`, and - all under the project-level generated tree, not the chapter's source folder - `sheets/chapter_<num>/` (whenever it's actually needed - `package.sheets` on by default, or `package.sheets_zip` active), and whichever of `panels_zip/chapter_<num>/panels_1.zip`, `panels_pdf/chapter_<num>/panels_1.pdf` (or its zipped/split variants), `sheets_zip/chapter_<num>/sheets_1.zip`, and `sheets_folders/chapter_<num>/` (all off by default) are active per `cropper.package` (see [Vision Outputs](#vision-outputs-what-to-generate-what-to-zip) below).
 
+### 3b. (Re)build Just the Upload Formats
+Already cropped, and now you want a different upload format — or the same ones again after changing the size cap? `package` rebuilds them straight from `panels/`, no re-crop:
+```bash
+./run.sh package --project "my_manga" --chapter "1" --formats sheets,panels_zip
+```
+Whatever you pass is **remembered for that project** (in its `project.json`), so the next chapter builds the same set without being asked — and so does `crop`'s own packaging step. Leave `--formats` off to use that remembered choice, falling back to `config.json`'s `cropper.package` switches for a project that has never chosen. `--formats none` builds nothing. In the wizard this is a checklist rather than a flag, opened on what the project currently builds.
+
 ### 4. Generate and Place `narration.json` + `memory.json`
 Upload **any one** of your generated vision archives — whichever package formats are active (`panels_zip`, `pdf`, `sheets_zip`) — and `prompts/narration.md` to your LLM, attaching the project's current `memory.json` too, once it has real content, so continuity carries across chapters. **From chapter 2 onward, `memory.json` isn't optional** — the interactive wizard blocks and re-prompts until it has real content, since it's the only thing carrying character/plot continuity forward from the previous chapter. The prompt asks for **exactly two fenced JSON code blocks and nothing else** (no commentary before/after), so the LLM's reply can be copy-pasted straight into each file. The interactive wizard prints every archive actually available to upload this run as a ctrl+click-openable path (VS Code and similar editors), and both destination paths, when it gets to this step:
 ```text
@@ -358,7 +367,7 @@ Composites frames onto the chosen background canvas and renders hardware-acceler
 ```bash
 ./run.sh restart --project "my_manga" --chapter "1" --mode marks_only
 ```
-Add `-f`/`--force` to skip the confirmation prompt, or `--no-reverify` to skip re-checking the downloaded pages afterward. `remark` still opens the Panel Marker and waits for you to save even with `--force` — that flag only skips the deletion confirmation, not the marking step itself. In the wizard, `restart` presents the same four levels as a menu, each row spelling out what survives it.
+Add `-f`/`--force` to skip the confirmation prompt, or `--no-reverify` to skip re-checking the downloaded pages afterward. `remark` still opens the Panel Marker and waits for you to save even with `--force` — that flag only skips the deletion confirmation, not the marking step itself. In the wizard, `restart` presents the same four levels as a menu, each row spelling out what survives it. `wipe`'s keep-list is a checklist of what the chapter actually has, and — like `package`'s formats — the set you choose is remembered for the project, so the next chapter's wipe opens with it already ticked.
 
 Reopening the Panel Marker on a chapter that already has marks — via `remark`, or by just running `remanga mark` again — always pre-loads the existing `crops.json` instead of starting blank, and flags every page it loaded marks for as already-reviewed so MAGI's background assist won't overwrite them.
 

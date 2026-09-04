@@ -33,6 +33,10 @@ class Choice:
     disabled - shown, greyed out, and skipped by the cursor: use it to keep
                an option visible with a reason attached rather than making
                it silently vanish.
+    plain    - render without a checkbox even inside a checklist, for a row
+               that is an action rather than one of the things being
+               selected (the Exit row). Without it, a checklist's quit row
+               shows an empty ○ and reads as something you could tick.
     """
 
     label: str
@@ -42,6 +46,7 @@ class Choice:
     value: Any = None
     disabled: bool = False
     checked: bool = False
+    plain: bool = False
 
     def __post_init__(self) -> None:
         if self.value is None:

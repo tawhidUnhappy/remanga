@@ -62,11 +62,23 @@ def parse_chapter_selection(raw: str, project_name: str) -> List[str]:
     return sorted(result, key=chapter_sort_key)
 
 
-def resolve_wipe_keep(keep_raw: Optional[str]) -> set:
-    """None (flag left unset) -> DEFAULT_WIPE_KEEP; 'none'/'nothing' -> wipe
-    absolutely everything; anything else -> that comma list, verbatim."""
-    if keep_raw is None:
-        return set(DEFAULT_WIPE_KEEP)
-    if keep_raw.strip().lower() in ("none", "nothing"):
-        return set()
-    return {n.strip() for n in keep_raw.split(",") if n.strip()}
+def resolve_wipe_keep(keep_raw: Optional[str], project_name: Optional[str] = None) -> set:
+    """What a wipe keeps: 'none'/'nothing' -> absolutely everything goes;
+    any other value -> that comma list, verbatim.
+
+    Left unset (None) falls back to what this project chose last time
+    (remembered in project.json - see settings/project_prefs.py), and only
+    then to DEFAULT_WIPE_KEEP. So the second chapter of a project wipes the
+    way the first one did, without being asked again."""
+    if keep_raw is not None:
+        if keep_raw.strip().lower() in ("none", "nothing"):
+            return set()
+        return {n.strip() for n in keep_raw.split(",") if n.strip()}
+
+    if project_name:
+        from remanga.settings.project_prefs import remembered_wipe_keep
+
+        remembered = remembered_wipe_keep(project_name)
+        if remembered is not None:
+            return remembered
+    return set(DEFAULT_WIPE_KEEP)

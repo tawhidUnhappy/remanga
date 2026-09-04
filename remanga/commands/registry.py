@@ -21,6 +21,7 @@ from remanga.commands.selection import DEFAULT_WIPE_KEEP
 from remanga.commands.spec import Command, Param, chapter_param, force_param, project_param
 from remanga.pipeline import STEP_REGISTRY
 from remanga.reset import RESTART_MODES
+from remanga.settings.vision import package_switch_names
 
 
 @dataclass(frozen=True)
@@ -121,11 +122,22 @@ COMMAND_REGISTRY: List[Command] = [
     Command(
         "package",
         "Build/rebuild sheets, sheets.zip, panels.zip, and/or panels.pdf from an already-cropped "
-        "chapter's panels, per config.json's cropper.package switches - no re-crop needed",
+        "chapter's panels - pick the formats per run, no re-crop needed",
         chapter_handlers.package,
-        [project_param(), chapter_param()],
+        [
+            project_param(), chapter_param(),
+            Param(
+                "formats", ["--formats"], required=False, default=None,
+                prompt="What to build for this chapter",
+                help="Comma-separated package formats to build - any of: "
+                     f"{', '.join(package_switch_names())}, or 'none'. The wizard offers this as a "
+                     "checklist. Whatever you pick is remembered for the project, so later chapters "
+                     "build the same thing without asking. Left unset: this project's remembered "
+                     "choice, or config.json's cropper.package switches if it has never chosen.",
+            ),
+        ],
         category="Chapter Production",
-        detail="what to run right after turning a packaging format on in the settings",
+        detail="pick the upload formats for this chapter; the choice sticks for the project",
     ),
     Command(
         "tts",

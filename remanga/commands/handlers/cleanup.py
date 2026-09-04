@@ -16,6 +16,7 @@ from remanga import reset
 from remanga.commands.selection import parse_chapter_selection, resolve_wipe_keep
 from remanga.config import RemangaConfig
 from remanga.console import console, display_path
+from remanga.settings.project_prefs import remember_wipe_keep
 from remanga.tui import confirm
 from remanga.webui import launch_and_wait as launch_panel_marker
 
@@ -72,6 +73,18 @@ def _confirm_and_delete(
     return True
 
 
+def _remember_keep_choice(project: str, params: Dict[str, Any], keep_names: set, wiped: bool) -> None:
+    """Saves an explicitly-chosen keep-list to the project so the next
+    chapter's wipe opens with it already selected.
+
+    Only on an explicit choice that actually ran: a cancelled confirmation
+    is usually someone noticing the list was wrong, and a run that just
+    accepted the existing default has nothing new to record."""
+    if wiped and params.get("keep") is not None:
+        remember_wipe_keep(project, keep_names)
+        console.print(f"[dim]Keep-list remembered for '{project}' - the next wipe starts from it.[/]")
+
+
 def restart(params: Dict[str, Any], config: RemangaConfig) -> None:
     project, chapter = params["project"], params["chapter"]
     mode = reset.RESTART_MODE_BY_NAME[params.get("mode") or "hard"]
@@ -100,10 +113,10 @@ def restart(params: Dict[str, Any], config: RemangaConfig) -> None:
 
 def wipe(params: Dict[str, Any], config: RemangaConfig) -> None:
     project, chapter = params["project"], params["chapter"]
-    keep_names = resolve_wipe_keep(params.get("keep"))
+    keep_names = resolve_wipe_keep(params.get("keep"), project)
     candidates = [e for e in reset.wipeable_entries(project, chapter) if e.name not in keep_names]
 
-    _confirm_and_delete(
+    wiped = _confirm_and_delete(
         per_chapter={chapter: candidates},
         kept=", ".join(sorted(keep_names)) or "(nothing - full wipe)",
         force=bool(params.get("force")),
@@ -114,11 +127,12 @@ def wipe(params: Dict[str, Any], config: RemangaConfig) -> None:
         nothing_message="Nothing to wipe - everything here is already in the keep list.",
         done_message=f"Chapter {chapter} wipe complete. Downloaded pages re-verified.",
     )
+    _remember_keep_choice(project, params, keep_names, wiped)
 
 
 def wipe_chapters(params: Dict[str, Any], config: RemangaConfig) -> None:
     project = params["project"]
-    keep_names = resolve_wipe_keep(params.get("keep"))
+    keep_names = resolve_wipe_keep(params.get("keep"), project)
     chapters = parse_chapter_selection(params["chapters"], project)
     if not chapters:
         console.print(f"[dim]No chapters matched '{params['chapters']}' for project '{project}'.[/]")
@@ -129,7 +143,7 @@ def wipe_chapters(params: Dict[str, Any], config: RemangaConfig) -> None:
         for chapter in chapters
     }
 
-    _confirm_and_delete(
+    wiped = _confirm_and_delete(
         per_chapter=per_chapter,
         kept=", ".join(sorted(keep_names)) or "(nothing - full wipe)",
         force=bool(params.get("force")),
@@ -137,3 +151,4 @@ def wipe_chapters(params: Dict[str, Any], config: RemangaConfig) -> None:
         nothing_message="Nothing to wipe across the selected chapter(s) - everything is already in the keep list.",
         done_message="Wipe complete for chapter(s) {chapters}. Downloaded pages re-verified.",
     )
+    _remember_keep_choice(project, params, keep_names, wiped)

@@ -52,7 +52,9 @@ def _row(choice: Choice, *, active: bool, checkable: bool, order: Optional[int])
     line = Text()
     line.append(f"{POINTER} " if active else "  ", style=_STYLE_MARK if active else "")
 
-    if checkable:
+    if checkable and choice.plain:
+        line.append("  ")  # an action row, not one of the selectable items
+    elif checkable:
         if order is not None:
             # Ordered checklists (pipeline steps) show the run position
             # instead of a plain tick - the number IS the information.

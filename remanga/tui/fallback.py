@@ -19,7 +19,14 @@ from rich.prompt import Confirm, Prompt
 
 from remanga.console import console
 from remanga.tui.choices import Choice
-from remanga.tui.result import CANCEL
+from remanga.tui.result import CANCEL, PromptExit
+
+
+class _ExitRow:
+    """Sentinel value for the fallback's own numbered Exit entry."""
+
+
+_EXIT_ROW = _ExitRow()
 
 
 def _print_choices(title: str, choices: Sequence[Choice], back_label: Optional[str]) -> None:
@@ -56,17 +63,24 @@ def ask_index(prompt: str, count: int, default: int = 1, zero_label: Optional[st
 
 
 def select(title: str, choices: Sequence[Choice], *, default_index: int = 0,
-           back_label: Optional[str] = None, **_ignored) -> Any:
+           back_label: Optional[str] = None, exit_label: Optional[str] = None, **_ignored) -> Any:
     selectable = [c for c in choices if not c.disabled]
     if not selectable:
         console.print(f"[dim]{_safe(title)}: nothing to choose from.[/]")
         return CANCEL
-    _print_choices(title, selectable, back_label)
-    idx = ask_index("Choose", len(selectable), default=min(default_index + 1, len(selectable)),
+    rows = list(selectable)
+    if exit_label:
+        # Numbered, not a key chord: there's no keypress reader on this path.
+        rows.append(Choice(label=exit_label, hint="quit remanga", value=_EXIT_ROW))
+    _print_choices(title, rows, back_label)
+    idx = ask_index("Choose", len(rows), default=min(default_index + 1, len(rows)),
                     zero_label=back_label)
     if idx == 0:
         return CANCEL
-    return selectable[idx - 1].value
+    picked = rows[idx - 1].value
+    if picked is _EXIT_ROW:
+        raise PromptExit
+    return picked
 
 
 def multiselect(title: str, choices: Sequence[Choice], *, back_label: Optional[str] = None,

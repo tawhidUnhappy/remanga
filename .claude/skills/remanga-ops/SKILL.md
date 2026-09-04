@@ -319,9 +319,22 @@ never a hand-rolled `console.print` loop, and never Rich markup in a label
 tag). Cancellation is the `CANCEL` sentinel (`is_cancel()`), never `None` -
 `None` is a real answer for optional params.
 
+Every menu ends with an **Exit remanga** row, and **ctrl+q** does the same
+from any prompt at any depth: both raise `PromptExit`, which is a
+*BaseException* on purpose - every `except Exception` in between (the
+wizard's own "command failed, back to the menu" guard included) would
+otherwise swallow the user's request to leave. `cli.main` catches it. Note
+`tui/keys.py` clears IXON/IXOFF: with flow control on, the tty eats ctrl+q
+(XON) and it never reaches the program.
+
+Filtering ranks label matches above hint matches (typing "package" + Enter
+must run `package`, not `crop`, whose description mentions the word), and
+Space types a space in single-select menus but toggles in checklists.
+
 Non-tty stdin (piped, CI, an editor output pane) auto-falls back to the old
-numbered prompts (`tui/fallback.py`, `0` = back/quit at every level) -
-`keys.is_interactive()` decides, so both paths stay live.
+numbered prompts (`tui/fallback.py`, `0` = back/quit at every level, Exit as
+its own numbered row) - `keys.is_interactive()` decides, so both paths stay
+live.
 
 `tui/keys.py` owns the only raw-tty code: cbreak with ISIG off (so Ctrl+C
 arrives as `\x03` and `cli.main` catches `KeyboardInterrupt` with the
@@ -351,6 +364,14 @@ keeps), reachable from the menu like everything else.
 - `package` (Chapter Production): (re)builds sheets/zips/pdf from an
   already-cropped chapter's panels/, standalone from `crop` - previously
   only happened as a side effect of crop's resume-check top-up.
+- Per-project choices (`settings/project_prefs.py`, stored in that project's
+  `project.json`): `package_formats` and `wipe_keep`. Precedence everywhere
+  is explicit answer > project memory > `config.json` - a project-scoped
+  choice never rewrites the global defaults. `package --formats a,b` and the
+  wizard's checklist both write it; `crop` reads it too (via
+  `cropper_config_for`, which returns a *copy* of CropperConfig - never
+  mutate the shared one), so a project's chosen upload formats apply to
+  every chapter without re-asking.
 - `wipe` (Chapter Production, single chapter) / `wipe-chapters`
   (Project-wide, comma list and/or 'N-M' ranges): fully dynamic counterpart
   to `restart`'s 3 fixed modes - keeps whatever `--keep` names, default

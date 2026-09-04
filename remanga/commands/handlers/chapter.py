@@ -12,9 +12,14 @@ from typing import Any, Dict
 
 from remanga.audio import AudioProcessor, TTSEngine
 from remanga.config import RemangaConfig
+from remanga.console import console
 from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
 from remanga.pipeline import load_pipeline, run_pipeline
+from remanga.settings import package_summary
+from remanga.settings.project_prefs import (
+    cropper_config_for, parse_package_formats, remember_package_formats,
+)
 from remanga.video import VideoRenderer
 from remanga.webui import launch_and_wait as launch_panel_marker
 from remanga.webui import launch_and_wait_writer
@@ -43,19 +48,28 @@ def review(params: Dict[str, Any], config: RemangaConfig) -> None:
 
 
 def crop(params: Dict[str, Any], config: RemangaConfig) -> None:
-    CoordinateCropper(config.cropper).crop_chapter_from_json(
-        params["project"], params["chapter"], force=bool(params.get("force"))
+    """Crops, then packages whatever formats are active for this project -
+    the ones chosen the last time `package` ran here, falling back to
+    config.json's global switches (see settings/project_prefs.py)."""
+    project = params["project"]
+    CoordinateCropper(cropper_config_for(config, project)).crop_chapter_from_json(
+        project, params["chapter"], force=bool(params.get("force"))
     )
 
 
 def package(params: Dict[str, Any], config: RemangaConfig) -> None:
-    """Rebuilds every currently-enabled package format from an already-cropped
-    chapter's panels/.
+    """Builds the chosen package formats from an already-cropped chapter's
+    panels/.
 
     Deliberately separate from `crop` (which only tops a format up if it's
-    missing entirely - see CoordinateCropper's resume check): this is what
-    you run right after flipping a format on in the settings, without
-    forcing a full re-crop just to pick it up."""
+    missing entirely - see CoordinateCropper's resume check): this rebuilds
+    what you ask for, right after deciding you want it.
+
+    `--formats` (the wizard offers it as a checklist of every format) picks
+    what to build for this run, and that choice is then remembered for the
+    project - so the next chapter builds the same thing without asking. With
+    no --formats, it builds whatever this project already chose, or
+    config.json's switches if it never has."""
     from remanga.cropper.crop_report import package_outputs
     from remanga.paths import get_chapter_dir
 
@@ -67,7 +81,23 @@ def package(params: Dict[str, Any], config: RemangaConfig) -> None:
             f"No cropped panels found for chapter {chapter_num}: {panels_dir}\n"
             f"Run `crop` for this chapter first."
         )
-    package_outputs(config.cropper, panel_paths, project_name, chapter_num)
+
+    formats = parse_package_formats(params.get("formats"))
+    cropper = cropper_config_for(config, project_name, formats)
+    active = package_summary(cropper.package)
+    if active == "panels only":
+        console.print(
+            "[yellow]No package format selected - nothing to build.[/] "
+            "[dim]panels/ already exists; pick at least one format to package it into.[/]"
+        )
+        return
+
+    console.print(f"[cyan]Building:[/] {active}")
+    package_outputs(cropper, panel_paths, project_name, chapter_num)
+
+    if formats is not None:
+        remember_package_formats(project_name, formats)
+        console.print(f"[dim]Remembered for '{project_name}' - the next chapter builds the same.[/]")
 
 
 def tts(params: Dict[str, Any], config: RemangaConfig) -> None:

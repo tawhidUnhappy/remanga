@@ -22,7 +22,12 @@ from remanga.tui import Choice, ask_number, is_cancel, multiselect
 _SPLIT_SUFFIXES = ("_splite", "_splites")
 
 
-def _boolean_fields() -> List[str]:
+def package_switch_names() -> List[str]:
+    """Every packaging switch, in model order - the one list of what a
+    "format" can be. Read off PackageConfig itself so a new format needs no
+    second registration anywhere (this screen, the summary line, the
+    per-project override in settings/project_prefs.py and the `package`
+    command's --formats validation all read it)."""
     return [
         name for name, field in PackageConfig.model_fields.items()
         if field.annotation is bool
@@ -41,7 +46,7 @@ def package_choices(config: RemangaConfig) -> List[Choice]:
     something the user has to go look up."""
     package = config.cropper.package
     rows: List[Choice] = []
-    for name in _boolean_fields():
+    for name in package_switch_names():
         field = PackageConfig.model_fields[name]
         extra = field.json_schema_extra or {}
         produces = str(extra.get("produces", ""))
@@ -61,7 +66,7 @@ def package_summary(package: PackageConfig) -> str:
     """The active formats as one line, e.g. "sheets, panels_zip (split at
     50MB)". Built from whatever is on, so it can't fall out of step with the
     switches themselves."""
-    active = [name for name in _boolean_fields() if getattr(package, name)]
+    active = [name for name in package_switch_names() if getattr(package, name)]
     if not active:
         return "panels only"
     line = ", ".join(active)
@@ -84,7 +89,7 @@ def configure_vision_outputs(config: RemangaConfig) -> None:
     if is_cancel(picked):
         return
 
-    for name in _boolean_fields():
+    for name in package_switch_names():
         setattr(package, name, name in picked)
 
     if any(is_split_switch(name) for name in picked):

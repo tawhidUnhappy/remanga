@@ -17,12 +17,16 @@ from remanga.console import console
 from remanga.tui import keys
 from remanga.tui.choices import Choice
 from remanga.tui.frame import answer_line, menu_frame
-from remanga.tui.result import is_cancel
+from remanga.tui.result import PromptExit, is_cancel
 
 # Leaves room for the title, the note/filter line, the two "N more" markers,
 # the highlighted row's detail line and the footer, so a menu never grows
 # taller than the window and starts scrolling the terminal itself.
 _CHROME_LINES = 7
+# Quit from any prompt, at any depth, without walking back out level by
+# level. Not a plain letter: every menu filters as you type, so "q" has to
+# stay available as a search character.
+_EXIT_KEYS = ("ctrl-q",)
 _MIN_PAGE = 3
 _MAX_PAGE = 14
 
@@ -38,13 +42,17 @@ class MenuState:
     at a row nobody can see."""
 
     def __init__(self, choices: Sequence[Choice], *, cursor: int = 0, page_size: Optional[int] = None,
-                 filterable: bool = True):
+                 filterable: bool = True, space_filters: bool = False):
         self.choices: List[Choice] = list(choices)
         self.query = ""
         # A two-row yes/no menu has nothing worth filtering, and swallowing
         # "y"/"n" into a filter box there would break the very shortcuts
         # that make it fast (see remanga.tui.confirm).
         self.filterable = filterable
+        # Whether Space types a space into the filter. True for single-select
+        # menus, where filtering "Chapter Production" is impossible without
+        # it; False for checklists, where Space is the toggle key.
+        self.space_filters = space_filters
         self.page_size = page_size or default_page_size()
         self._visible: List[Choice] = list(self.choices)
         self.cursor = self._clamp(cursor)
@@ -73,10 +81,20 @@ class MenuState:
         previous = self.current
         if self.query:
             needle = self.query.casefold()
-            self._visible = [
-                c for c in self.choices
-                if needle in f"{c.label} {c.hint} {c.badge}".casefold()
-            ]
+            # Label matches first, then rows that only match on their hint or
+            # badge. Hints are searchable on purpose ("blur", "zip", "gutter"
+            # find the right row without knowing its name), but a row whose
+            # *name* is what you typed must never sit below one that merely
+            # mentions it in passing - typing "package" and pressing Enter
+            # has to land on the `package` command, not on `crop`, whose
+            # description happens to contain the word.
+            by_label, by_text = [], []
+            for choice in self.choices:
+                if needle in choice.label.casefold():
+                    by_label.append(choice)
+                elif needle in f"{choice.hint} {choice.badge}".casefold():
+                    by_text.append(choice)
+            self._visible = by_label + by_text
         else:
             self._visible = list(self.choices)
         if previous is not None and previous in self._visible:
@@ -125,6 +143,12 @@ class MenuState:
             self.move_to(0)
         elif key == keys.END:
             self.move_to(len(self._visible) - 1)
+        elif key == keys.SPACE and self.filterable and self.space_filters and self.query:
+            # Only mid-query: a bare Space on an untouched menu is a stray
+            # keypress far more often than the start of a search for a name
+            # beginning with a space.
+            self.query += " "
+            self._refilter()
         elif key == keys.BACKSPACE and self.filterable:
             if self.query:
                 self.query = self.query[:-1]
@@ -187,6 +211,8 @@ def run_menu(
                 key = reader.read_key()
                 if key == keys.CTRL_C:
                     raise KeyboardInterrupt
+                if key in _EXIT_KEYS:
+                    raise PromptExit
                 if key == keys.UNKNOWN:
                     continue  # mouse report/unsupported sequence - never a keystroke
 

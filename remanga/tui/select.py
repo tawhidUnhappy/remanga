@@ -11,9 +11,9 @@ from typing import Any, Optional, Sequence
 from remanga.tui import fallback, keys
 from remanga.tui.choices import Choice, index_of_value
 from remanga.tui.loop import MenuState, run_menu
-from remanga.tui.result import CANCEL
+from remanga.tui.result import CANCEL, EXIT, PromptExit
 
-FOOTER = "↑↓ move · enter select · type to filter · esc back"
+FOOTER = "↑↓ move · enter select · type to filter · esc back · ctrl+q exit"
 
 
 def select(
@@ -25,6 +25,7 @@ def select(
     note: str = "",
     footer: str = FOOTER,
     back_label: Optional[str] = "Back",
+    exit_label: Optional[str] = "Exit remanga",
     echo: bool = True,
 ) -> Any:
     """Returns the chosen Choice's `value`, or CANCEL if the user backed out.
@@ -35,6 +36,10 @@ def select(
     backing out (None removes it, for a question that must be answered);
     Esc does the same thing, after first clearing an active filter.
 
+    `exit_label` adds the always-present quit row (ctrl+q does the same),
+    which raises PromptExit rather than returning - see remanga.tui.result.
+    Pass None only for a prompt where quitting outright makes no sense.
+
     Falls back to a numbered prompt on a non-tty stdin - see
     remanga.tui.fallback."""
     rows = list(choices)
@@ -44,9 +49,12 @@ def select(
     start = index_of_value(rows, default, fallback=default_index) if default is not None else default_index
     if back_label:
         rows = rows + [Choice(label=back_label, value=CANCEL, hint="")]
+    if exit_label:
+        rows = rows + [Choice(label=exit_label, value=EXIT, hint="quit from here")]
 
     if not keys.is_interactive():
-        return fallback.select(title, choices, default_index=start, back_label=back_label)
+        return fallback.select(title, choices, default_index=start, back_label=back_label,
+                               exit_label=exit_label)
 
     def on_key(state: MenuState, key: str):
         if key == keys.ENTER:
@@ -62,11 +70,14 @@ def select(
             return (CANCEL,)
         return None
 
-    return run_menu(
-        MenuState(rows, cursor=start), title=title, footer=footer, note=note,
+    picked = run_menu(
+        MenuState(rows, cursor=start, space_filters=True), title=title, footer=footer, note=note,
         on_key=on_key,
         echo=(lambda value: _echo_label(rows, value)) if echo else None,
     )
+    if picked is EXIT:
+        raise PromptExit
+    return picked
 
 
 def _echo_label(rows: Sequence[Choice], value: Any) -> str:

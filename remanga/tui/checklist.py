@@ -17,10 +17,11 @@ from typing import Any, Dict, List, Optional, Sequence
 from remanga.tui import fallback, keys
 from remanga.tui.choices import Choice
 from remanga.tui.loop import MenuState, run_menu
-from remanga.tui.result import CANCEL
+from remanga.tui.result import CANCEL, EXIT, PromptExit
 
-FOOTER = "↑↓ move · space toggle · ctrl+a all · ctrl+r none · enter confirm · esc back"
-ORDERED_FOOTER = "↑↓ move · space add (order = run order) · ctrl+r clear · enter confirm · esc back"
+FOOTER = "↑↓ move · space toggle · ctrl+a all · ctrl+r none · enter confirm · esc back · ctrl+q exit"
+ORDERED_FOOTER = ("↑↓ move · space add (order = run order) · ctrl+r clear · enter confirm · "
+                  "esc back · ctrl+q exit")
 
 
 def multiselect(
@@ -32,6 +33,7 @@ def multiselect(
     footer: Optional[str] = None,
     allow_empty: bool = True,
     back_label: Optional[str] = "Back",
+    exit_label: Optional[str] = "Exit remanga",
     echo: bool = True,
 ) -> Any:
     """Returns the checked values as a list (in check order when `ordered`,
@@ -44,7 +46,7 @@ def multiselect(
     pipeline with no steps)."""
     rows = [
         Choice(label=c.label, hint=c.hint, detail=c.detail, badge=c.badge,
-               value=c.value, disabled=c.disabled, checked=c.checked)
+               value=c.value, disabled=c.disabled, checked=c.checked, plain=c.plain)
         for c in choices
     ]
     if not rows:
@@ -53,12 +55,18 @@ def multiselect(
     if not keys.is_interactive():
         return fallback.multiselect(title, rows, back_label=back_label, ordered=ordered)
 
+    # The quit row rides along as an ordinary row so it's visible and
+    # reachable with the arrow keys, but it is never checkable: Space and
+    # Enter on it quit, ctrl+a skips it, and it can't end up in the result.
+    if exit_label:
+        rows = rows + [Choice(label=exit_label, hint="quit from here", value=EXIT, plain=True)]
+
     # Check order, which is the run order in `ordered` mode. Seeded from
     # whatever arrived pre-checked so an existing pipeline keeps its order.
     order: List[Any] = [c.value for c in rows if c.checked]
 
     def toggle(choice: Choice) -> None:
-        if choice.disabled:
+        if choice.disabled or choice.value is EXIT:
             return
         choice.checked = not choice.checked
         if choice.checked:
@@ -70,7 +78,7 @@ def multiselect(
     def set_all(checked: bool) -> None:
         order.clear()
         for choice in rows:
-            if choice.disabled:
+            if choice.disabled or choice.value is EXIT:
                 continue
             choice.checked = checked
             if checked:
@@ -85,10 +93,12 @@ def multiselect(
     def result() -> List[Any]:
         if ordered:
             return list(order)
-        return [c.value for c in rows if c.checked]
+        return [c.value for c in rows if c.checked and c.value is not EXIT]
 
     def on_key(menu: MenuState, key: str):
         current = menu.current
+        if current is not None and current.value is EXIT and key in (keys.ENTER, keys.SPACE, keys.RIGHT):
+            raise PromptExit
         if key == keys.SPACE and current is not None:
             toggle(current)
             return None

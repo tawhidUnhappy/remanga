@@ -7,6 +7,7 @@ import sys
 from remanga.commands import COMMAND_BY_NAME, COMMAND_REGISTRY, add_param_to_parser, params_from_namespace
 from remanga.config import RemangaConfig
 from remanga.console import console, escape as _esc
+from remanga.tui import PromptExit
 from remanga.wizard import run_interactive_pipeline
 
 
@@ -57,6 +58,18 @@ def main():
                 parser.error(f"unknown command: {args.command}")
                 return
             cmd.handler(params_from_namespace(cmd, args), config)
+    except PromptExit:
+        # The Exit row / ctrl+q, from any prompt at any depth (see
+        # remanga.tui.result.PromptExit). Not an error, and not a pause -
+        # the user asked to leave.
+        console.print("\n[dim]Bye.[/]")
+        sys.exit(0)
+    except EOFError:
+        # Scripted/non-tty run whose piped input ran out mid-prompt. Not a
+        # crash - say what happened instead of surfacing readline's own
+        # "EOF when reading a line".
+        console.print("\n[yellow]Input ended before the prompt was answered - stopping here.[/]")
+        sys.exit(1)
     except KeyboardInterrupt:
         # Raised out of an interactive menu (see the note on
         # graceful_sigint_handler above), with the terminal already restored.
