@@ -16,9 +16,11 @@ sitting there."""
 
 from __future__ import annotations
 
+from typing import Optional
+
 from remanga.config import RemangaConfig
 from remanga.console import console
-from remanga.json_io import has_real_json_content
+from remanga.json_io import has_real_json_content, read_json_or
 from remanga.paths import (
     ensure_memory_file, ensure_youtube_format_file, get_chapter_dir, get_youtube_format_path,
     get_youtube_path,
@@ -29,15 +31,57 @@ from remanga.wizard.handoff import pause, print_paths, print_section
 PROMPT_FILE = "prompts/youtube_metadata.md"
 
 
+def _same_chapter(written: str, chapter: str) -> bool:
+    """"01" and "1" are the same chapter. A label that isn't a number at all
+    (a special, an omake) compares as text instead."""
+    try:
+        return float(written) == float(chapter)
+    except ValueError:
+        return written.casefold() == str(chapter).casefold()
+
+
+def _block_problem(path, expected_name: str, chapter: Optional[str] = None) -> str:
+    """What's wrong with the file at `path`, as one line to show the user -
+    empty when it looks like the block it should be.
+
+    Both blocks open with `file` and `chapter` (see prompts/
+    youtube_metadata.md) exactly so the two can be told apart mechanically:
+    they're the same shape at a glance, and pasting each into the other's path
+    is the easy mistake.
+
+    `chapter` is checked only when the caller passes one, which means
+    youtube.json and never the format lock: the lock is series-wide, and its
+    `chapter` records the last chapter it was applied to - legitimately an
+    older one while this chapter's reply is still being written, and
+    legitimately a newer one when an early chapter gets re-run. Missing keys
+    are never an error either: a reply that predates them is still perfectly
+    good metadata."""
+    if not has_real_json_content(path):
+        return f"{expected_name} is still empty/missing"
+    data = read_json_or(path, None)
+    if not isinstance(data, dict):
+        return f"{expected_name} isn't valid JSON - paste the whole block, braces included"
+    named = str(data.get("file", "")).strip()
+    if named and named != expected_name:
+        return f"{expected_name} holds the {named} block - the two blocks got swapped"
+    written = str(data.get("chapter", "")).strip()
+    if chapter is not None and written and not _same_chapter(written, chapter):
+        return f"{expected_name} was written for chapter {written}, not chapter {chapter}"
+    return ""
+
+
 def run_youtube_metadata_step(project: str, chapter: str, config: RemangaConfig) -> None:
     youtube_path = get_youtube_path(project, chapter)
     # Looked up rather than ensured: a chapter that turns out to have no
     # narration yet bails out below, and a step that can't run shouldn't have
     # left a placeholder in the project behind it.
     format_path = get_youtube_format_path(project)
-    have_metadata = has_real_json_content(youtube_path)
-    have_format = has_real_json_content(format_path)
-    if have_metadata and have_format:
+    # "Done" means each file holds the block it should, not merely that both
+    # are non-empty: two blocks pasted into each other's path read as written
+    # by size alone, which is the mistake the `file` key exists to catch.
+    metadata_problem = _block_problem(youtube_path, "youtube.json", chapter)
+    format_problem = _block_problem(format_path, "youtube_format.json")
+    if not metadata_problem and not format_problem:
         return
 
     narration_path = get_chapter_dir(project, chapter) / "narration.json"
@@ -56,6 +100,10 @@ def run_youtube_metadata_step(project: str, chapter: str, config: RemangaConfig)
     memory_path = ensure_memory_file(project)
     ensure_youtube_format_file(project)
     memory_has_content = has_real_json_content(memory_path)
+    have_metadata = has_real_json_content(youtube_path)
+    # A lock holding the wrong block is worse than no lock: uploading it would
+    # hand the LLM a "format" that is really another chapter's metadata.
+    have_format = not format_problem
 
     # The blank placeholder - totally empty, not `{}`, same as narration.json
     # and memory.json - so the file exists to paste into and reads as "not
@@ -66,11 +114,11 @@ def run_youtube_metadata_step(project: str, chapter: str, config: RemangaConfig)
         youtube_path.write_text("", encoding="utf-8")
 
     print_section("Write the YouTube title, description + thumbnail brief")
-    if have_metadata and not have_format:
+    if not metadata_problem and format_problem:
         console.print(
-            "[dim]This chapter's youtube.json is already written - only the series format lock "
-            "is missing. If you still have the LLM's reply, save its second block; otherwise "
-            "run the prompt again below and keep the format block.[/]"
+            f"[dim]This chapter's youtube.json is already written - {format_problem}. If you "
+            "still have the LLM's reply, save its second block; otherwise run the prompt again "
+            "below and keep the format block.[/]"
         )
     format_clause = (
         "2. It replies with two JSON blocks - save each into the matching path below.\n"
@@ -97,29 +145,35 @@ def run_youtube_metadata_step(project: str, chapter: str, config: RemangaConfig)
         uploads.append((format_path, "this series' format - the reply must follow it"))
     print_paths(uploads)
 
-    console.print("\n[bold]Save its reply into:[/]")
-    console.print("  youtube.json")
+    console.print(
+        "\n[bold]Save its reply into:[/] [dim](every block opens with a \"file\" key naming "
+        "which of these it is, so the two can't be told apart by guesswork)[/]"
+    )
+    console.print('  Block 1 - [dim]"file": [/]"youtube.json"')
     print_paths([(youtube_path, "")], indent="    ")
-    console.print("  youtube_format.json")
+    console.print('  Block 2 - [dim]"file": [/]"youtube_format.json"')
     print_paths([(format_path, "")], indent="    ")
 
     pause("Press Enter once both files are saved and ready")
 
     while True:
-        missing = [
-            (path, name) for path, name in
-            ((youtube_path, "youtube.json"), (format_path, "youtube_format.json"))
-            if not has_real_json_content(path)
-        ]
-        if not missing:
+        problems = []
+        for path, name, for_chapter in (
+            (youtube_path, "youtube.json", chapter), (format_path, "youtube_format.json", None),
+        ):
+            complaint = _block_problem(path, name, for_chapter)
+            if complaint:
+                problems.append((path, complaint))
+        if not problems:
             break
-        names = " and ".join(name for _, name in missing)
+        console.print("\n[bold red]Not ready yet:[/]")
+        for path, complaint in problems:
+            console.print(f"  [yellow]•[/] {complaint}")
+            print_paths([(path, "")], indent="    ")
         console.print(
-            f"\n[bold red]{names} still empty/missing.[/] [dim]Both blocks of the reply are "
-            "needed - youtube_format.json is what keeps every later chapter formatted the same "
-            "way as this one.[/] Save it to:"
+            "[dim]Both blocks of the reply are needed - youtube_format.json is what keeps every "
+            "later chapter formatted the same way as this one.[/]"
         )
-        print_paths([(path, "") for path, _ in missing])
         if not confirm("Check again?", default=True):
             console.print(
                 "[dim]Left as-is - run `youtube` for this chapter once the reply is saved.[/]"

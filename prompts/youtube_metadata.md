@@ -46,9 +46,11 @@ path and value below straight from it. **Never ask the user which project, serie
 this is, and never guess it from the chat context** — it is already in the files you were given.
 
 ### Language
-Write every field in **the same language `narration.json`'s `text` values are written in** —
-that's the language the audience hears, so it's the language they search in. The one exception
-is the series title itself, which stays exactly as `manga_name`/`series_title` spells it.
+**Write every field in English** — title, description, beat list, tags, hashtags, thumbnail text
+and thumbnail prompt — even when `narration.json`'s narration is in another language. Two things
+stay as they are: the series title keeps exactly the spelling `manga_name`/`series_title` gives
+it, and a term the chapter establishes with no ordinary English equivalent (an honorific, a
+named technique) stays as the chapter spells it. `language` is `"en"` in both output files.
 
 ---
 
@@ -69,7 +71,7 @@ fixed block must still read correctly on a chapter whose content you know nothin
 - Change the lock itself **only** when the user explicitly asked for a change in this
   conversation, or when a template is genuinely broken (e.g. it references a slot that doesn't
   exist). If you do change it, change the minimum and keep everything else identical.
-- Always bump `last_chapter_processed` to this chapter, and always re-emit the whole file.
+- Always set its `chapter` to the chapter you just wrote, and always re-emit the whole file.
 
 ---
 
@@ -210,19 +212,22 @@ low contrast, and this chapter's spoiler beat.
 ## Rule 8: Final Verification Pass (do this last, as its own read-through)
 Before you output anything, check every one of these — mechanically, not by feel:
 
-1. **Counts.** Title ≤ 100 (counted, not estimated). Description ≤ 5,000. All tags together
+1. **Identity.** Both blocks open with `file` then `chapter`; `file` names the right filename
+   for that block, and both `chapter` values are this run's chapter, not the previous one's.
+2. **Counts.** Title ≤ 100 (counted, not estimated). Description ≤ 5,000. All tags together
    ≤ 500 characters. Exactly 3 hashtags. Thumbnail text ≤ 4 words.
-2. **Format match.** If you were given a `youtube_format.json`, put its fixed blocks side by side
+3. **Format match.** If you were given a `youtube_format.json`, put its fixed blocks side by side
    with yours and confirm they are character-identical. Confirm the title matches
    `title_template` slot for slot.
-3. **Traceability.** Every claim in the description maps to a specific entry in
+4. **Traceability.** Every claim in the description maps to a specific entry in
    `narration.json`. Anything you can't point at is invention — cut it.
-4. **Horizon.** No name that isn't yet introduced, no event past this chapter, no resolution of
+5. **Horizon.** No name that isn't yet introduced, no event past this chapter, no resolution of
    the chapter's final beat in the title, the first 150 characters, the thumbnail text, or the
    thumbnail image.
-5. **No fabrications.** No timestamps, no links you weren't given, no author you weren't told.
-6. **Language.** Everything except the series title is in `narration.json`'s language.
-7. **Rollover.** The title still fits when the chapter number gains a digit.
+6. **No fabrications.** No timestamps, no links you weren't given, no author you weren't told.
+7. **Language.** Everything is in English except the series title and any term the chapter
+   itself establishes.
+8. **Rollover.** The title still fits when the chapter number gains a digit.
 
 ---
 
@@ -281,12 +286,24 @@ Both blocks must be the **complete, literal content of one file** — not a diff
 never truncated with "...". Standard JSON only: double-quoted keys and string values, `\n`
 escapes for line breaks, no trailing commas, no comments.
 
+**Every block opens with the same two keys, in this order: `file`, then `chapter`.**
+- `file` is the filename that block is to be saved as — `"youtube.json"` or
+  `"youtube_format.json"`. It's there so whoever is pasting can tell at a glance which block goes
+  where, without reading the rest of it, and so the pipeline can catch two blocks pasted into
+  each other's file.
+- `chapter` is the chapter **this run** is for, identically in both blocks — read straight from
+  the chapter identity fields, never guessed.
+
+Emit the blocks in this fixed order every time: `youtube.json` first, `youtube_format.json`
+second.
+
 `"01"`-style values are illustrative placeholders — substitute this run's real chapter value.
 
 ### Block 1: `youtube.json`
 Save to: `projects/<project_name>/chapters/chapter_<num>/youtube.json`
 ```json
 {
+  "file": "youtube.json",
   "chapter": "01",
   "language": "en",
   "title": "Series Title | Chapter 01 — Hook Goes Here",
@@ -316,12 +333,14 @@ real `panel_id` from this chapter's `narration.json`.
 Save to: `projects/<project_name>/youtube_format.json`
 
 On the first chapter you create this file. On every chapter after, you were given it: re-emit it
-with `last_chapter_processed` bumped and everything else unchanged, unless the user explicitly
-asked for a change (Rule 1).
+with `chapter` set to this chapter and everything else unchanged, unless the user explicitly
+asked for a change (Rule 1). `chapter` here doubles as "the last chapter this format was applied
+to", which is how a later run can tell where the series left off.
 ```json
 {
+  "file": "youtube_format.json",
+  "chapter": "01",
   "series_title": "Series Title",
-  "last_chapter_processed": "01",
   "language": "en",
   "title_template": "{series} | Chapter {chapter} — {hook}",
   "title_rules": "Hook 4-8 words, no emoji, sentence case, 100 characters hard maximum.",
