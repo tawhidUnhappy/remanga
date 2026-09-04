@@ -289,6 +289,20 @@ def _prompt_param(param: Param, project: str, params_so_far: Dict[str, Any]):
         return Confirm.ask(f"[bold]{param.help}[/]", default=bool(param.default))
     if param.name == "chapter":
         return select_chapter(project)
+    if param.name == "url":
+        # download's manga source: MangaDexDownloader.download_chapter
+        # already falls back to project.json's saved manga_url/manga_id
+        # whenever this is None (see remanga.downloader.mangadex), so once a
+        # project has downloaded a chapter before, there's nothing to ask -
+        # re-prompting for the same URL/title every single time was the
+        # actual complaint here. Only asks when nothing's saved yet.
+        from remanga.paths import load_project_metadata
+        meta = load_project_metadata(project)
+        saved = meta.get("manga_url") or meta.get("manga_id")
+        if saved:
+            console.print(f"[dim]Using saved manga source: {saved}[/]")
+            return None
+        return Prompt.ask(f"[bold]{param.help}[/]", default="").strip() or None
     if param.name == "keep" and "chapter" in params_so_far:
         return _prompt_keep_items(project, params_so_far["chapter"])
     if param.name == "chapters":
