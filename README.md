@@ -148,10 +148,10 @@ Picking a category opens its commands, and running one lands you back in the sam
 | Which reference voice / music file? | When you *do* change one: the audio files already in `global/voice/` or `global/bgm/` — each picker searches only its own folder — or type a path for one elsewhere |
 | What to keep when wiping? | A checklist of exactly what that chapter has on disk right now — and what you picked last time, remembered per project |
 | What to package for the LLM? | A checklist of every format, opened on what this project builds — your pick is remembered for the next chapter |
-| Which pipeline steps? | An ordered checklist of the real step registry — the number shown is the run order |
+| Which pipeline steps? | An ordered checklist of the real step registry — the number shown is the run order, and it opens on the steps you ran last time |
 | Which restart mode? | The four presets, each row saying what survives it |
 
-Chapter production runs in order — download → mark panels → crop → package → narration → review → TTS → mix → render — either step by step from the menu, or in one go with `run` (which follows this project's `pipeline.json`).
+Chapter production runs in order — download → mark panels → crop → package → narration → review → TTS → mix → render — either step by step from the menu, or in one go with `run` (which follows this project's `pipeline.json`). `run`'s checklist opens on whatever you ran last — remembered per project in its `project.json`, so re-running the tail of a pipeline that died at TTS is Enter, not nine boxes again — and picking a subset still never rewrites `pipeline.json`.
 
 If stdin isn't a terminal (a piped script, CI, an editor's output pane), every menu falls back to the plain numbered prompts remanga has always had, with `0` as back/quit at each level.
 
@@ -622,7 +622,7 @@ remanga/
 │   └── narration.md  # Master objective scriptwriter prompt
 ├── projects/
 │   └── <project_name>/
-│       ├── project.json        # Saved MangaDex URL and chapter index
+│       ├── project.json        # Saved MangaDex URL, chapter index, and remembered per-project choices
 │       ├── memory.json         # Story continuity state across chapters
 │       ├── manifest.json       # Per-chapter pages/panels bookkeeping, one shared file (informational only)
 │       ├── chapters/

@@ -15,8 +15,8 @@ get a purpose-built prompt instead of a blank text box:
     engine/voice/bgm - not asked at all: what's configured is stated and
                        used (all three are set once and kept for months)
 
-`keep` and `formats` additionally open pre-checked with whatever this
-project chose last time (remembered in project.json - see
+`keep`, `formats` and `steps` additionally open pre-checked with whatever
+this project chose last time (remembered in project.json - see
 settings/project_prefs.py), so answering them once per project is enough.
 
 That last one is the rule the rest follow: if remanga can find the answer,
@@ -31,7 +31,8 @@ from remanga.config import RemangaConfig
 from remanga.console import console, display_path
 from remanga.reset import wipeable_entries
 from remanga.settings.project_prefs import (
-    active_package_formats, remembered_package_formats, remembered_wipe_keep,
+    active_package_formats, remember_run_steps, remembered_package_formats,
+    remembered_run_steps, remembered_wipe_keep,
 )
 from remanga.settings.vision import package_choices
 from remanga.tui import CANCEL, Choice, ask_text, confirm, is_cancel, multiselect, select
@@ -164,25 +165,40 @@ def _prompt_formats(param: Param, project: str, config: RemangaConfig, values: D
 
 
 def _prompt_steps(param: Param, project: str, config: RemangaConfig, values: Dict[str, Any]) -> Any:
-    """The pipeline steps for a one-off run, pre-checked with this project's
-    saved pipeline and ordered by how they're checked. Confirming it
-    unchanged returns None, which means "use the saved pipeline.json" -
-    the same thing leaving --steps off does."""
+    """The pipeline steps for a one-off run, pre-checked - in order - with
+    whatever this project ran last time, falling back to its saved pipeline
+    the first time it's asked. Confirming a selection that matches the saved
+    pipeline returns None, which means "use the saved pipeline.json" - the
+    same thing leaving --steps off does.
+
+    The pick is remembered (in project.json, not pipeline.json) as soon as
+    it's made rather than after the run finishes, unlike wipe's keep-list:
+    the run that dies at tts, or that you interrupt after render starts, is
+    precisely the one you're about to repeat with the same subset ticked."""
     from remanga.pipeline import STEP_REGISTRY, load_pipeline
 
     saved = load_pipeline(project)
+    known = {step.name for step in STEP_REGISTRY}
+    # A remembered step that no longer exists (a renamed/removed step in a
+    # newer STEP_REGISTRY) is dropped rather than carried as a dead row.
+    remembered = [name for name in (remembered_run_steps(project) or []) if name in known]
+    start = remembered or saved
+
     rows = [
-        Choice(label=step.name, hint=step.description, value=step.name, checked=step.name in saved)
+        Choice(label=step.name, hint=step.description, value=step.name, checked=step.name in start)
         for step in STEP_REGISTRY
     ]
-    rows.sort(key=lambda row: saved.index(row.value) if row.value in saved else len(saved))
+    rows.sort(key=lambda row: start.index(row.value) if row.value in start else len(start))
 
-    picked = multiselect(
-        param.label, rows, ordered=True, allow_empty=False,
-        note=f"this project's pipeline: {', '.join(saved)}",
-    )
+    # Opening on the last run already says the pick is remembered, so only
+    # the first-time note (where it isn't obvious yet) spells it out.
+    note = f"this project's pipeline: {', '.join(saved)}"
+    note += (" · checked as you last ran it" if remembered and remembered != saved
+             else " · your choice here is remembered for the next run")
+    picked = multiselect(param.label, rows, ordered=True, allow_empty=False, note=note)
     if is_cancel(picked):
         return CANCEL
+    remember_run_steps(project, picked)
     return None if picked == saved else ",".join(picked)
 
 

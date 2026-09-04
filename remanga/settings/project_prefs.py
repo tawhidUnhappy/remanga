@@ -2,11 +2,11 @@
 
 config.json holds the defaults for every project on this machine. A few
 choices, though, belong to *one manga*: which upload formats that project's
-LLM workflow wants built, and what a wipe should keep for it. Re-answering
-those identically for chapter after chapter is exactly the kind of question
-this pipeline shouldn't be asking twice, so the answer is written to that
-project's project.json the first time it's given and pre-selected from then
-on.
+LLM workflow wants built, what a wipe should keep for it, and which pipeline
+steps its last `run` actually ran. Re-answering those identically for chapter
+after chapter is exactly the kind of question this pipeline shouldn't be
+asking twice, so the answer is written to that project's project.json the
+first time it's given and pre-selected from then on.
 
 Precedence, everywhere both exist: an explicit answer for this run (a CLI
 flag, or the wizard's checklist) beats the project's remembered choice,
@@ -24,6 +24,7 @@ from remanga.settings.vision import package_switch_names
 
 PACKAGE_FORMATS_KEY = "package_formats"
 WIPE_KEEP_KEY = "wipe_keep"
+RUN_STEPS_KEY = "run_steps"
 
 # What a user types (or the wizard sends) to mean "none of them" - an empty
 # selection is a real answer for both settings: build nothing extra, or keep
@@ -116,3 +117,20 @@ def remembered_wipe_keep(project_name: str) -> Optional[Set[str]]:
 
 def remember_wipe_keep(project_name: str, keep_names: Iterable[str]) -> None:
     save_project_metadata(project_name, {WIPE_KEEP_KEY: sorted(keep_names)})
+
+
+# --- last run's pipeline steps ---------------------------------------------
+
+
+def remembered_run_steps(project_name: str) -> Optional[List[str]]:
+    """The step list this project's last `run` was given from the wizard, in
+    the order it ran them - or None if it has never been asked.
+
+    Deliberately NOT pipeline.json: that file is the project's pipeline, and
+    a one-off run ("just tts, mix, render, the render died") must not
+    redefine it. This is only what the next run's checklist opens on."""
+    return _stored_list(project_name, RUN_STEPS_KEY)
+
+
+def remember_run_steps(project_name: str, steps: Sequence[str]) -> None:
+    save_project_metadata(project_name, {RUN_STEPS_KEY: list(steps)})
