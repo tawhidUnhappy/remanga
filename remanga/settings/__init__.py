@@ -29,6 +29,7 @@ from __future__ import annotations
 from remanga.settings.assets import (
     ASSETS, ensure_valid_bgm, ensure_valid_voice_prompt, run_asset_menu,
 )
+from remanga.settings.engine import configure_engine, configure_language
 from remanga.settings.fields import get_field, set_field
 from remanga.settings.files import (
     AUDIO_EXTENSIONS, discover_files, is_valid_file, read_reference_text, write_reference_text,
@@ -41,6 +42,8 @@ from remanga.settings.wizard import run_setup_wizard
 __all__ = [
     "ASSETS",
     "AUDIO_EXTENSIONS",
+    "configure_engine",
+    "configure_language",
     "configure_vision_outputs",
     "discover_files",
     "ensure_valid_bgm",

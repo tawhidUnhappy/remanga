@@ -566,7 +566,7 @@ remanga can drive more than one text-to-speech engine, each in its own isolated 
 | `indextts-2.5` (default) | Reference voice WAV only | Zero-shot - infers its own emotion/prosody from `narration.json`'s text and punctuation (see below) |
 | `audio8-tts-0.1b` | Reference voice WAV **+ a text transcript of it** | [Audio8/Audio8-TTS-Preview-0.1b](https://huggingface.co/Audio8/Audio8-TTS-Preview-0.1b) - a ~170M-parameter Falcon-H1-based cloning model with its own 44.1kHz codec decoder |
 
-Switch by running `./run.sh setup-config` (step 1, "TTS Engine") or editing `tts.engine` in `config.json` directly. `bootstrap.sh` already provisions both engines' isolated venvs (`.tools/venv-indextts`, `.tools/venv-audio8`) regardless of which one is active, so switching never requires re-running it — only that engine's own model weights get downloaded, and only the first time it's actually used (`checkpoints/audio8_tts_0.1b/`, ~1.7GB).
+Switch by running `./run.sh tts-engine` — its own command, so it's one row in the wizard's Setup menu rather than a step inside `setup-config`, and the engines come up as a numbered list you answer with one keystroke. It's separate from `tts`, which synthesizes a chapter with whatever engine is set here (`tts --engine` overrides it for one run without changing the setting). `./run.sh setup-config` (the "TTS engine" row) and editing `tts.engine` in `config.json` both still work. `bootstrap.sh` already provisions both engines' isolated venvs (`.tools/venv-indextts`, `.tools/venv-audio8`) regardless of which one is active, so switching never requires re-running it — only that engine's own model weights get downloaded, and only the first time it's actually used (`checkpoints/audio8_tts_0.1b/`, ~1.7GB).
 
 `audio8-tts-0.1b` needs one extra piece of configuration `indextts-2.5` doesn't: an accurate transcript of whatever WAV `tts.spk_audio_prompt` points at — the setup wizard asks for this right after the reference voice file whenever this engine is selected, since this model's cloning quality depends on transcript accuracy, not just the audio itself. The transcript itself lives in its own text file (`tts.audio8.reference_text_path`, default `global/tts_reference.txt`) rather than inline in config.json, so an unrelated config edit can't accidentally mangle a long paragraph of free text sitting next to it - read fresh at synth time, editable directly or via the setup wizard. `tts.audio8` also holds this engine's own `temperature`/`top_p`/`max_new_tokens` sampling settings, separate from `indextts-2.5`'s own top-level `temperature`/`top_p` fields.
 
@@ -610,6 +610,7 @@ In short: if a chapter's TTS run gets interrupted or a worker locks up, just re-
 
 # Configuration & Hardware Setup
 ./run.sh setup-config
+./run.sh tts-engine
 ./run.sh setup-models
 
 # Step-by-Step Production Commands

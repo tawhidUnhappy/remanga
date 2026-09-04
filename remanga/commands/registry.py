@@ -64,6 +64,18 @@ COMMAND_REGISTRY: List[Command] = [
         detail="picks from the audio files already in global/ instead of asking you to type a path",
     ),
     Command(
+        "tts-engine",
+        "Choose which engine speaks the narration, as a numbered list - "
+        + ", ".join(spec.display_name for spec in TTS_ENGINE_SPECS) + ". Saves it to config.json's "
+        "tts.engine for every chapter from here on; the engine you pick downloads its own weights "
+        "the first time it's used. Separate from `tts`, which synthesizes one chapter with "
+        "whichever engine is set here (`tts --engine` overrides it for a single run without "
+        "changing this).",
+        setup_handlers.tts_engine,
+        category="Setup",
+        detail="type the number to switch engines - what `tts` uses from then on",
+    ),
+    Command(
         "setup-models",
         "Verify and download model weights with SHA-256 verification",
         setup_handlers.setup_models,

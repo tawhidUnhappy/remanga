@@ -1,16 +1,23 @@
-"""Handlers for the Setup commands: settings, shared asset paths, and model
-weights."""
+"""Handlers for the Setup commands: settings, the TTS engine, shared asset
+paths, and model weights."""
 
 from __future__ import annotations
 
 from typing import Any, Dict
 
 from remanga.config import RemangaConfig
-from remanga.settings import run_paths_manager, run_setup_wizard
+from remanga.settings import configure_engine, run_paths_manager, run_setup_wizard
 
 
 def setup_config(params: Dict[str, Any], config: RemangaConfig) -> None:
     run_setup_wizard(config)
+
+
+def tts_engine(params: Dict[str, Any], config: RemangaConfig) -> None:
+    """Picks the engine and stops - synthesizing with it is `tts`, a separate
+    command, run per chapter. Same screen the settings menu's "TTS engine"
+    row opens, reachable in one step instead of three."""
+    configure_engine(config)
 
 
 def paths(params: Dict[str, Any], config: RemangaConfig) -> None:
