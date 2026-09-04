@@ -309,6 +309,32 @@ everything else. Multi-choice prompts with more than a few options use
 - pass it whenever a menu needs a "back out" option instead of appending one
 as item N+1.
 
+## New commands/checks added post-writeup (keep COMMAND_REGISTRY the source of truth, this is just a pointer)
+
+- `package` (Chapter Production): (re)builds sheets/zips/pdf from an
+  already-cropped chapter's panels/, standalone from `crop` - previously
+  only happened as a side effect of crop's resume-check top-up.
+- `wipe` (Chapter Production, single chapter) / `wipe-chapters`
+  (Project-wide, comma list and/or 'N-M' ranges): fully dynamic counterpart
+  to `restart`'s 3 fixed modes - keeps whatever `--keep` names, default
+  (unset) keeps `pages,crops.json,narration.json` (`DEFAULT_WIPE_KEEP` in
+  commands.py), `--keep none` for an absolute full wipe. Always
+  re-verifies/re-fetches downloads afterward regardless of what was kept.
+- Every model downloader (`models/scripts/download_{indextts,audio8,
+  deepseek_ocr}.py`, `webui/scripts/download_magi.py`) now verifies each
+  LFS file's sha256 against the Hub's own recorded hash after downloading
+  (`models/scripts/_hash_verify.py`) - `snapshot_download()`'s own check is
+  size-only, never a real hash compare. One retry (delete+re-fetch just the
+  bad file(s)) before hard-failing.
+- Wizard: skips re-prompting `download`'s manga URL/title once one's saved
+  in project.json (was asking every time even though download_chapter
+  already falls back to the saved source on `None`). Also now auto-runs
+  `verify.project_panel_narration_mismatches()` the instant a project is
+  selected (cheap - dir listing + one JSON read, no ffprobe) and warns if
+  any chapter's panels/ and narration.json panel_id sets have drifted apart
+  (post-recrop/post-rewrite skew) - same check feeds the `verify` command
+  too, one implementation for both.
+
 ## GPU/ffmpeg
 
 Bundled `bin/ffmpeg` (pinned BtbN build) has working `h264_nvenc` on this
