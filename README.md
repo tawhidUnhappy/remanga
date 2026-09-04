@@ -119,52 +119,67 @@ The easiest way to produce a recap video is through the interactive terminal wiz
 ```
 *(or run `./run.sh interactive`)*
 
-### Wizard Step-by-Step Flow:
+### How the menus work
 
-After picking a project, the wizard asks which of five things you want to do:
+Every screen is an arrow-key menu — **↑/↓** to move, **Enter** to pick, **type to filter**, **Esc** to back out one level. Checklists add **Space** to toggle (**Ctrl+A** all, **Ctrl+R** none), and confirmations take **y**/**n** as well as Enter. Whatever is currently configured is pre-highlighted, so Enter alone is always "leave it as it is". Nothing has to be typed from memory: the wizard lists what's actually there.
 
 ```
-1. Process a chapter
-2. Compile the whole project into one continuous video (full-recap)
-3. Change background music/volume and rebuild video(s) only (no re-narration)
-4. Verify audio/video files are complete, not corrupt/truncated
-5. Review narration only (no other stage runs before or after)
+? remanga — MyProject
+❯ Setup                settings, shared assets, and model weights
+  Chapter Production   one chapter, from download to rendered video
+  Project-wide         whole-project compile, status, verify, and cleanup
+  Pipeline             download → mark → crop → narration → review → tts → mix → render
+  Switch project       currently: MyProject
+  Quit
+  ↑↓ move · enter select · type to filter · esc back
 ```
 
-**Option 1** (the normal per-chapter flow):
-```
-┌─────────────────────────────────────────────────────────────┐
-│ 1. Select or Create Project & Chapter                       │
-│ 2. Verify Reference Voice WAV & BGM                         │
-│ 3. Review/Adjust Vision Outputs (generate + zip checklist)  │
-│ 4. Download Chapter Pages from MangaDex                     │
-│ 5. Mark Panels (Panel Marker web UI, MAGI v3-assisted)      │
-│ 6. Crop panels & package vision uploads                     │
-│ 7. Prompt for narration.json (+ memory.json)                │
-│ 8. Review Narration (Narration Reviewer web UI, N rounds)   │
-│ 9. Synthesize Voice                                         │
-│ 10. Mix Master Audio with EBU R128 Normalization             │
-│ 11. Render Final 1080p / 2K / 4K MP4 Video                  │
-└─────────────────────────────────────────────────────────────┘
-```
+Picking a category opens its commands, and running one lands you back in the same list — chaining `mark` → `crop` → `write` is picking three rows in a row. The menu is generated from the command registry, so every command `remanga --help` lists is here too, described the same way.
 
-**Option 2** (`full-recap`, see below) walks you through picking which chapters to include, then builds and keeps each chapter's own MP4 before joining all of them into one continuous video with a single BGM pass and a single loudness pass.
+**The wizard doesn't ask for anything it can find out:**
 
-**Option 3** (`remix`, see below) is the fast path for "I just want different music, or a different volume" - pick which chapters, optionally point it at a new BGM file (or hop into `setup-config` first to change `bgm_volume_db`), and it re-mixes + re-renders just those chapters (and re-joins the full-recap video, if one exists) - no re-marking, no re-narrating, no re-synthesizing voice.
+| Question | Where the answer comes from instead |
+| --- | --- |
+| Which chapter? | The chapters this project has, each row showing its production status; "New chapter…" suggests the next number |
+| Which manga/URL? | `project.json`'s saved source — asked once, on the first download |
+| Which way does it read? | MangaDex's `originalLanguage` (`ja` → right-to-left, `ko`/`zh` → left-to-right) |
+| Reference voice / BGM path? | The audio files already sitting in `global/voice/`, `global/bgm/` — pick a row, or type a path for one elsewhere |
+| What to keep when wiping? | A checklist of exactly what that chapter has on disk right now |
+| Which pipeline steps? | An ordered checklist of the real step registry — the number shown is the run order |
+| Which restart mode? | The four presets, each row saying what survives it |
 
-**Option 5** (`remanga review`, see [4b](#4b-review-the-narration-narration-reviewer-web-ui)) jumps straight into the Narration Reviewer for one chapter and stops there - no download/mark/crop before it, no TTS/mix/render after it, unlike Option 1 where the review step is one stage among the rest and falls straight through to voice synthesis the moment you approve or run out of flags. Use this to go back and do another review round on a chapter you already moved past, without re-running (or being forced into) anything else.
+Chapter production runs in the same order it always has — download → mark panels → crop/package → narration → review → TTS → mix → render — either step by step from the menu, or in one go with `run` (which follows this project's `pipeline.json`).
+
+If stdin isn't a terminal (a piped script, CI, an editor's output pane), every menu falls back to the plain numbered prompts remanga has always had, with `0` as back/quit at each level.
 
 ---
 
 ## Configuration & Settings Wizard
 
-Run the interactive settings wizard anytime to configure vocal reference files, background music, video resolution, canvas blur, and vision outputs (what to generate, what to zip/PDF for upload):
+Run the settings screen anytime to configure the TTS engine, vocal reference files, background music, narration language, video resolution, canvas background, GPU preference, and vision outputs (what to generate, what to zip/PDF for upload):
 
 ```bash
 ./run.sh setup-config
 ```
 
-Just need to swap the reference voice WAV, BGM file, or the audio8 engine's transcript, without walking through the rest of that wizard? `./run.sh paths` shows all three (and whether each currently resolves to a real file) in one table and lets you edit any of them by number - changes save immediately, same files `setup-config` itself edits. All three live under `global/` by default (`global/voice/`, `global/bgm/`, `global/tts_reference.txt`) - one shared, gitignored location for assets that aren't tied to any single manga project.
+Every row shows what that setting is **right now**, so the screen doubles as a place to check your configuration rather than only change it — open one to change just that one, or pick **Walk through every section** for a first-time setup that covers all of them in order. Each change saves to `config.json` immediately, so backing out never loses an answer you already gave.
+
+```
+? Settings
+  changes save immediately
+❯ TTS engine                              Audio8 TTS
+  Assets (voice, BGM, transcript)         voice: ok, bgm: ok, transcript: set
+  Narration language                      English (EN)
+  Vision outputs (what to generate/zip)   sheets, panels_zip (split at 50MB)
+  Video resolution                        1080p Full HD (1920x1080)
+  Canvas background                       Bokeh canvas blur
+  Hardware acceleration                   h264_nvenc preferred
+  Walk through every section              first-time setup, in order
+  Show full summary                       everything config.json holds
+  Done
+```
+
+Just need to swap the reference voice WAV, BGM file, or the audio8 engine's transcript? `./run.sh paths` opens that same Assets screen on its own — each asset with whether it currently resolves to a real file, and a picker listing the audio files already in `global/voice/` and `global/bgm/` so you rarely have to type a path at all. All three live under `global/` by default (`global/voice/`, `global/bgm/`, `global/tts_reference.txt`) — one shared, gitignored location for assets that aren't tied to any single manga project.
 
 ### Key Configurable Parameters (`config.json`):
 
@@ -343,7 +358,7 @@ Composites frames onto the chosen background canvas and renders hardware-acceler
 ```bash
 ./run.sh restart --project "my_manga" --chapter "1" --mode marks_only
 ```
-Add `-f`/`--force` to skip the confirmation prompt, or `--no-reverify` to skip re-checking the downloaded pages afterward. `remark` still opens the Panel Marker and waits for you to save even with `--force` — that flag only skips the deletion confirmation, not the marking step itself. The interactive wizard offers the same four levels (plus "Resume") whenever you pick a chapter that already has progress.
+Add `-f`/`--force` to skip the confirmation prompt, or `--no-reverify` to skip re-checking the downloaded pages afterward. `remark` still opens the Panel Marker and waits for you to save even with `--force` — that flag only skips the deletion confirmation, not the marking step itself. In the wizard, `restart` presents the same four levels as a menu, each row spelling out what survives it.
 
 Reopening the Panel Marker on a chapter that already has marks — via `remark`, or by just running `remanga mark` again — always pre-loads the existing `crops.json` instead of starting blank, and flags every page it loaded marks for as already-reviewed so MAGI's background assist won't overwrite them.
 
@@ -402,8 +417,8 @@ See `prompts/narration.md`'s **Chapter Identity** section for exactly how the LL
 | `max_mb` | `50.0` | Size cap per part, in MB — shared by every format, only used when its `*splite*` switch is on. |
 
 Every key's name says exactly what it does: `pdf` = single raw file, `pdf_splite` = split raw files (no zip), `pdf_zip` = single file zipped, `pdf_zip_splite` = split files, each zipped — same pattern for `panels_zip`/`panels_zip_splites`. So "only the PDF, nothing else" is exactly `pdf: true` with every other flag `false` — nothing else gets built, full stop. Whenever any `*splite*` switch for a format is on, every active switch for that format uses the split form (checking `pdf` and `pdf_zip_splite` together still only produces split output, not extra single-file output too). Reach this checklist two ways:
-- `./run.sh setup-config` (step 2), the full settings walkthrough, **or**
-- the main interactive wizard's own **"Adjust what gets generated/zipped for this chapter?"** prompt each run (defaults to No, so it never interrupts a normal run uninvited) — the same checklist, without needing to know `setup-config` exists separately.
+- `./run.sh setup-config` → **Vision outputs**, **or**
+- the wizard's **Pipeline** editor, which offers the same checklist right after saving a pipeline that includes `crop` (defaults to No, so it never interrupts uninvited) — without needing to know `setup-config` exists separately.
 
 How each package format stays lossless:
 - **panels_zip / sheets_zip:** every image re-encoded as an optimized PNG and as a lossless WEBP, keeping whichever comes out smaller. Manga line art/halftones typically shrink 30-50% this way.
@@ -469,7 +484,7 @@ Switch by running `./run.sh setup-config` (step 1, "TTS Engine") or editing `tts
 
 `audio8-tts-0.1b` needs one extra piece of configuration `indextts-2.5` doesn't: an accurate transcript of whatever WAV `tts.spk_audio_prompt` points at — the setup wizard asks for this right after the reference voice file whenever this engine is selected, since this model's cloning quality depends on transcript accuracy, not just the audio itself. The transcript itself lives in its own text file (`tts.audio8.reference_text_path`, default `global/tts_reference.txt`) rather than inline in config.json, so an unrelated config edit can't accidentally mangle a long paragraph of free text sitting next to it - read fresh at synth time, editable directly or via the setup wizard. `tts.audio8` also holds this engine's own `temperature`/`top_p`/`max_new_tokens` sampling settings, separate from `indextts-2.5`'s own top-level `temperature`/`top_p` fields.
 
-Everything downstream — `remanga tts`, resuming, `full-recap`, `remix` — works identically regardless of which engine is active; `remanga/audio/synth.py`'s `create_synthesizer()` is the only place that picks between them.
+Everything downstream — `remanga tts`, resuming, `full-recap`, `remix` — works identically regardless of which engine is active; `remanga/audio/synth/`'s `create_synthesizer()` is the only place that picks between them.
 
 ---
 
@@ -477,7 +492,7 @@ Everything downstream — `remanga tts`, resuming, `full-recap`, `remix` — wor
 
 The narration audio is meant to sound like an actual person reading the script, not a flat robotic monotone — so the pipeline lets IndexTTS-2.5 infer its own emotion and prosody directly from each panel's text, instead of forcing every panel into the same fixed emotional register:
 
-1. **No Forced Emotion Vector:** `audio/synth.py` sends no `emo_vector` to IndexTTS-2.5 at all. With none supplied, the model reads the pacing, emphasis, and rising/falling tone straight out of `narration.json`'s `text` and its own punctuation — an exclamation mark lands as a shout or outburst, a question mark as an actual question, an ellipsis as hesitation — so the delivery matches what the panel actually calls for instead of one flat register for every panel.
+1. **No Forced Emotion Vector:** `audio/synth/` sends no `emo_vector` to IndexTTS-2.5 at all. With none supplied, the model reads the pacing, emphasis, and rising/falling tone straight out of `narration.json`'s `text` and its own punctuation — an exclamation mark lands as a shout or outburst, a question mark as an actual question, an ellipsis as hesitation — so the delivery matches what the panel actually calls for instead of one flat register for every panel.
 2. **Punctuate For It:** `prompts/narration.md` (Rule 3) has the LLM write real punctuation — `!`, `?`, `...` — wherever the panel genuinely is exclamatory, interrogative, or hesitant, and plain measured prose everywhere else. That punctuation *is* the emotion cue now; there's no separate emotion field in `narration.json` — each entry is just `panel_id` + `text`.
 3. **Natural Autoregressive Sampling:** `temperature`/`top_p` are left at IndexTTS-2.5's own recommended defaults (`0.8`/`0.8`, not artificially lowered) — this governs how natural a single reading *sounds* (pitch/pacing variation), on top of whatever emotion the text itself inferred. Lowering these trades that naturalness away for a flatter, more robotic-sounding delivery; raising them adds more variation, at some risk of instability on longer lines.
 4. **Reference Voice Sample Criteria:**
@@ -570,30 +585,44 @@ remanga/
 │           │   └── <project>_ch<num>_recap.mp4      # This chapter's own video (kept - see `remix` below)
 │           ├── _work/                               # full-recap's own master audio/concat list
 │           └── <project>_full_recap.mp4             # `full-recap`'s whole-manga joined video
-├── remanga/                    # Python core pipeline package
-│   ├── audio/                  # synth.py (talks to the .tools/venv-indextts worker) & mix.py (master audio mixer)
-│   │   └── scripts/             # indextts_worker.py - runs inside .tools/venv-indextts, not the main env
-│   ├── cropper/                # crop.py (coordinate cropper) & sheets.py (contact sheet generator)
-│   ├── downloader/             # mangadex.py (MangaDex client)
-│   ├── models/                 # weights.py (talks to .tools/venv-indextts to fetch/verify weights)
-│   │   └── scripts/             # download_indextts.py - runs inside .tools/venv-indextts
+├── remanga/                    # Python core pipeline package - one directory per concern,
+│   │                           # each file small enough to read top to bottom
+│   ├── tui/                    # Interactive terminal: arrow-key menus, checklists, confirmations
+│   │                           # keys.py (raw tty + mouse/paste immunity), select.py, checklist.py,
+│   │                           # confirm.py, text.py, frame.py (how a menu looks), fallback.py (non-tty)
+│   ├── commands/               # Every subcommand, shared by the CLI and the wizard:
+│   │   │                       # spec.py (Command/Param + argparse glue), registry.py (the list),
+│   │   │                       # selection.py (chapter/keep-list parsing)
+│   │   └── handlers/            # setup.py, chapter.py, project.py, cleanup.py - the handlers themselves
+│   ├── wizard/                 # The interactive session: app.py (menus), projects.py, chapters.py,
+│   │                           # params.py (prompts a command's parameters), pipeline_edit.py,
+│   │                           # narration.py + review.py + uploads.py + handoff.py (LLM hand-offs)
+│   ├── settings/               # Everything that reads/writes config.json: assets.py (voice/BGM/transcript),
+│   │                           # vision.py (packaging checklist), presets.py, engine.py, video.py,
+│   │                           # sections.py (every setting as one list), wizard.py, paths_ui.py
+│   ├── audio/                  # tts.py + mix.py; synth/ = one module per engine over a shared worker base
+│   │   └── scripts/             # indextts_worker.py / audio8_worker.py - run inside their own venvs
+│   ├── cropper/                # crop.py (coordinate cropper), sheets.py, gutter/ (edge snapping), ...
+│   ├── downloader/             # mangadex.py (MangaDex client) & resolve.py (id/title/language lookup)
+│   ├── models/                 # weights.py (talks to the isolated venvs to fetch/verify weights)
+│   │   └── scripts/             # download_indextts.py, download_audio8.py, download_deepseek_ocr.py
 │   ├── webui/                  # Panel Marker: server.py (entry point/lifecycle), routes.py (Flask app/API),
 │   │   │                       # marker_state.py (session state), detection.py + magi_assist.py (MAGI v3),
 │   │   │                       # shortcuts_store.py (Shortcuts menu persistence)
 │   │   ├── static/js/           # Frontend: render/drag-resize/draw/zoom-pan/shortcuts/magi/page-nav modules
 │   │   └── scripts/             # magi_worker.py, download_magi.py - run inside .tools/venv-magi
 │   ├── video/                  # compose.py (frame compositor) & render.py (GPU/CPU renderer)
-│   ├── venvs.py                 # Locates the .tools/venv-indextts / .tools/venv-magi isolated environments
+│   ├── full_recap/             # discovery.py, timeline.py (one continuous audio timeline), compiler.py
+│   ├── verify/                 # models.py, panels.py, probe.py, runner.py, report.py
+│   ├── reset/                  # modes.py (restart presets), entries.py (what exists), actions.py (deletes)
+│   ├── status/                 # compute.py (what's on disk) & panel.py (the printed report)
+│   ├── config/                 # Pydantic configuration schemas, one file per subsystem
+│   ├── paths/                  # Project/chapter directory layout & metadata persistence
+│   ├── venvs.py                 # Locates the .tools/venv-* isolated environments
 │   ├── console.py               # The one shared Rich Console every module prints through
-│   ├── config.py                # Pydantic configuration schemas (load/save only)
-│   ├── paths.py                 # Project/chapter directory layout & metadata persistence
-│   ├── status.py                # Chapter production-status computation & display
-│   ├── reset.py                 # Chapter restart/reset (hard / marks_only / soft)
-│   ├── setup.py                 # Interactive Rich setup-wizard prompts
 │   ├── json_io.py               # Shared JSON read/write helpers
 │   ├── ffmpeg_io.py             # Shared ffmpeg subprocess helper
-│   ├── wizard.py                # Interactive step-by-step production wizard
-│   ├── wizard_prompts.py        # Project/chapter picker & resume-vs-restart prompts
+│   ├── pipeline.py              # The step registry and per-project pipeline.json
 │   └── cli.py                   # CLI command dispatcher
 ├── config.json                 # Active user production settings
 ├── bootstrap.sh                # Zero-dependency sandbox environment installer
@@ -628,7 +657,7 @@ Contact sheets (`sheets`) are on by default; `panels_zip` is off. To get individ
 - Or set `"package": {"sheets": false, "panels_zip": true}` directly under `"cropper"` in `config.json`.
 
 ### 4b. What are the `panels_zip/`/`panels_pdf/`/`sheets_zip/` folders, and how do I configure them?
-They're the [Vision Outputs](#vision-outputs-what-to-generate-what-to-zip) package formats — controllable as a checklist of exactly what you want built, e.g. "only the PDF" is a real, fully-supported answer. **`sheets` is on by default**; every zip/PDF format (`sheets_zip`, `pdf`, `pdf_splite`, `pdf_zip`, `pdf_zip_splite`, `panels_zip`, `panels_zip_splites`) is off. None replace `panels/`, and building any of them doesn't cost quality anywhere. Easiest way to change any of them: `./run.sh setup-config` step 2, **or** the main interactive wizard's own "Adjust what gets generated/zipped for this chapter?" prompt each run — both ask yes/no for each switch, plus the size cap when a split switch is on, no manual editing needed. Or edit `config.json` directly — every setting lives under one `"package"` object in the `"cropper"` section:
+They're the [Vision Outputs](#vision-outputs-what-to-generate-what-to-zip) package formats — controllable as a checklist of exactly what you want built, e.g. "only the PDF" is a real, fully-supported answer. **`sheets` is on by default**; every zip/PDF format (`sheets_zip`, `pdf`, `pdf_splite`, `pdf_zip`, `pdf_zip_splite`, `panels_zip`, `panels_zip_splites`) is off. None replace `panels/`, and building any of them doesn't cost quality anywhere. Easiest way to change any of them: `./run.sh setup-config` → **Vision outputs**, **or** the wizard's Pipeline editor, which offers the same screen whenever `crop` is part of the pipeline — one checklist, Space to toggle each format, plus the size cap when a split format is on, no manual editing needed. Or edit `config.json` directly — every setting lives under one `"package"` object in the `"cropper"` section:
 ```json
 "cropper": {
   "package": {

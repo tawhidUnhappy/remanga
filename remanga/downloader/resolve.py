@@ -90,15 +90,33 @@ class MangaDexResolver:
         console.print(f"[green]Found:[/] {found_title} [dim]({manga_id})[/]")
         return manga_id
 
-    def get_manga_title(self, manga_id: str) -> str:
-        """Fetch a manga's display title straight from its MangaDex ID. Resolving an
-        ID/URL directly (parse_manga_id's title-URL/UUID branches) never otherwise learns
-        the manga's actual title along the way - only a title *search* does - so this is
-        what lets downloader/mangadex.py persist a human-readable `manga_title` in
-        project.json regardless of which form the user originally gave it in."""
+    def get_manga_info(self, manga_id: str) -> Dict[str, str]:
+        """Fetch the facts about a manga that remanga persists in
+        project.json, in one request: its display title and its original
+        language.
+
+        Resolving an ID/URL directly (parse_manga_id's title-URL/UUID
+        branches) never otherwise learns anything about the manga along the
+        way - only a title *search* does - so this is what lets
+        downloader/mangadex.py record a human-readable `manga_title`
+        regardless of which form the user originally gave it in.
+
+        `original_language` ("ja", "ko", "zh", ...) is what the reading
+        direction is derived from (see remanga/wizard/projects.py): native
+        Japanese manga reads right-to-left, Korean/Chinese webtoons
+        left-to-right. It's already in this response, so asking a user which
+        way their manga reads - when MangaDex has just told us - is a
+        question with a known answer."""
         res = self.request_with_retry("GET", f"{BASE_URL}/manga/{manga_id}")
         attrs = res.json().get("data", {}).get("attributes", {})
-        return self._pick_title(attrs.get("title", {}))
+        return {
+            "title": self._pick_title(attrs.get("title", {})),
+            "original_language": str(attrs.get("originalLanguage") or "").lower(),
+        }
+
+    def get_manga_title(self, manga_id: str) -> str:
+        """Just the display title - see get_manga_info."""
+        return self.get_manga_info(manga_id)["title"]
 
     def list_chapters(self, manga_id: str) -> List[Dict[str, Any]]:
         """Fetch all chapters for a manga filtered by language with pagination and polite pacing."""

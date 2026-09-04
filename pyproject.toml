@@ -9,7 +9,7 @@ dependencies = [
     # modelscope, timm, shapely, pytorch-metric-learning, ...) live in their own
     # isolated environments per tool - .venv-indextts and .venv-magi, provisioned
     # by bootstrap.sh - and are only ever reached via subprocess. See
-    # remanga/venvs.py, remanga/audio/synth.py, remanga/webui/magi_assist.py.
+    # remanga/venvs.py, remanga/audio/synth/, remanga/webui/magi_assist.py.
     "numpy>=1.24.0",
     "scipy>=1.11.0",
     "pillow>=10.4.0",

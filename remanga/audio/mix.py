@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from pydub import AudioSegment
 
-from remanga import setup
+from remanga import settings
 from remanga.config import AudioConfig, RemangaConfig
 from remanga.console import console, escape as _esc
 from remanga.ffmpeg_io import run_ffmpeg
@@ -63,7 +63,7 @@ class AudioProcessor:
             self.config.bgm_path = bgm_override
             self.config.bgm_enabled = True
 
-        valid_bgm = setup.ensure_valid_bgm(full_config, interactive=interactive)
+        valid_bgm = settings.ensure_valid_bgm(full_config, interactive=interactive)
         if valid_bgm:
             self.config.bgm_path = valid_bgm
             self.config.bgm_enabled = True

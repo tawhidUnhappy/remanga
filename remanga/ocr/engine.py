@@ -1,7 +1,7 @@
 """OCREngine: owns one long-lived `.tools/venv-deepseek-ocr` worker subprocess
 (remanga/ocr/scripts/deepseek_ocr_worker.py), spoken to over stdin/stdout so
 DeepSeek-OCR-2 loads onto the GPU once per Narration Writer session instead
-of once per "OCR this panel" click. Mirrors remanga/audio/synth.py's
+of once per "OCR this panel" click. Mirrors remanga/audio/synth/'s
 _BaseWorkerSynthesizer lifecycle (spawn, ready-handshake, auto-heal a missing
 dependency, bounded-timeout request/response, stderr draining so a wedged
 worker can't deadlock, clean shutdown) - written standalone rather than
@@ -189,6 +189,6 @@ class OCREngine:
             proc.wait(timeout=5)
         except BaseException:
             # BaseException, not Exception - see _BaseWorkerSynthesizer.shutdown()
-            # in audio/synth.py for why (a second Ctrl+C landing mid-wait here
+            # in audio/synth/base.py for why (a second Ctrl+C landing mid-wait here
             # must still reach proc.terminate() instead of orphaning the worker).
             proc.terminate()

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Standalone Audio8-TTS-Preview-0.1b synthesis worker - runs inside the
 isolated `.venv-audio8` environment as a long-lived subprocess, spoken to by
-remanga/audio/synth.py (in the main env) over the same line-delimited JSON
+remanga/audio/synth/ (in the main env) over the same line-delimited JSON
 protocol indextts_worker.py uses. Deliberately has ZERO dependency on the
 `remanga` package itself - only `transformers`/`torch`/`soundfile` and the
 stdlib - so it works regardless of what's importable in the caller's

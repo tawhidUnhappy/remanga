@@ -47,7 +47,7 @@ class MarkerState:
 
     def _load_existing_crops(self) -> None:
         """If crops.json already has real content - e.g. a marks_only/"remark"
-        restart (see reset.py) deliberately kept it, or the marker is just
+        restart (see remanga/reset/) deliberately kept it, or the marker is just
         being reopened on an already-marked chapter - load it as this
         session's starting marks instead of the blank slate MAGI would
         otherwise fill in. Every page that has an entry in crops.json's `pages`

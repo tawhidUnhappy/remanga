@@ -59,14 +59,20 @@ class MangaDexDownloader:
         # already-downloaded chapter.
         existing_meta = load_project_metadata(project_name)
         manga_title = existing_meta.get("manga_title", "")
-        if not manga_title or existing_meta.get("manga_id") != manga_id:
-            manga_title = self.resolver.get_manga_title(manga_id)
+        original_language = existing_meta.get("original_language", "")
+        if not manga_title or not original_language or existing_meta.get("manga_id") != manga_id:
+            info = self.resolver.get_manga_info(manga_id)
+            manga_title = info["title"] or manga_title
+            original_language = info["original_language"] or original_language
 
         save_project_metadata(project_name, {
             "project_name": project_name,
             "manga_url": manga_id_or_url,
             "manga_id": manga_id,
             "manga_title": manga_title,
+            # Where the wizard derives reading_direction from instead of
+            # asking - see remanga/wizard/projects.py.
+            "original_language": original_language,
             "last_chapter": str(chapter_num)
         })
 

@@ -42,7 +42,8 @@ def chapter_identity_fields(project_name: str, chapter_num: str) -> Dict[str, An
     dict. See prompts/narration.md's "Chapter Identity" section for how the
     LLM is expected to read whichever of those it's handed. `reading_direction`
     ("right_to_left"/"left_to_right") comes from project.json's
-    `reading_direction` field (see wizard.py's project setup prompt), defaulting
+    `reading_direction` field (see remanga/wizard/projects.py, which derives it from MangaDex's
+    originalLanguage when a chapter has been downloaded), defaulting
     to "right_to_left" since that's the norm for native Japanese manga - the
     vast majority of what this pipeline imports."""
     meta = load_project_metadata(project_name)

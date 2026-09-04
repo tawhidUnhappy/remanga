@@ -19,8 +19,15 @@ pure local experiments the user didn't ask to keep.
 
 ```
 .venv, .tools/venv-{indextts,audio8,magi}   # 4 hermetic uv venvs, own torch/transformers pin each
-remanga/                                     # package: paths.py, config.py, ffmpeg_io.py, proc_io.py, full_recap.py, verify.py, ...
-  audio/{tts.py,mix.py,synth.py,scripts/*_worker.py}
+remanga/                                     # package: json_io.py, ffmpeg_io.py, proc_io.py, humanize.py, pipeline.py, ...
+  tui/                                       # arrow-key menus (select/multiselect/confirm) + non-tty fallback
+  commands/{spec,selection,registry}.py + handlers/{setup,chapter,project,cleanup}.py
+  wizard/{app,projects,chapters,params,narration,review,uploads,handoff,pipeline_edit,checks}.py
+  settings/{files,fields,assets,vision,presets,engine,video,sections,summary,wizard,paths_ui}.py
+  full_recap/{discovery,timeline,compiler}.py   verify/{models,panels,probe,runner,report}.py
+  reset/{modes,entries,actions}.py              status/{compute,panel}.py
+  audio/{tts.py,mix.py,synth/{base,indextts,audio8}.py,scripts/*_worker.py}
+  cropper/{crop*.py,gutter/{sampling,bands,refine}.py,...}
   video/{compose.py,render.py}
   models/{weights.py,scripts/download_*.py}
 projects/<name>/
@@ -268,7 +275,8 @@ The wizard's step order (download→mark→crop→narration→review→tts→mix
 lives in `STEP_REGISTRY`, not hardcoded per-project. Each project can have
 `projects/<name>/pipeline.json` = `{"steps": ["download", "mark", ...]}`;
 missing/empty falls back to `DEFAULT_STEPS` (that exact order) unchanged.
-Edit it via the wizard's `edit-pipeline` item, or `remanga run -p <p> -c <c>`
+Edit it via the wizard's "Pipeline" menu row (an ordered checklist -
+check order is run order), or `remanga run -p <p> -c <c>`
 (uses pipeline.json) / `remanga run -p <p> -c <c> -s crop,narration` (one-off
 explicit subset, doesn't touch pipeline.json). Every existing single-step
 subcommand (`download`/`mark`/`crop`/`write`/`review`/`tts`/`mix`/`render`)
@@ -276,38 +284,67 @@ still works unchanged - `run` just wraps the same underlying calls.
 
 ## Wizard menu is registry-driven, no hardcoded "modes"
 
-`remanga/commands.py`'s `COMMAND_REGISTRY` is the single source of truth for
-every remanga command - both `cli.py`'s argparse subcommands and the
-interactive wizard's menu are built from it. The wizard has no curated
-"process a chapter" / "mark-then-write" combo modes - it's a two-level
-nested menu: main menu = each `Command.category` ("Setup" / "Chapter
-Production" / "Project-wide", plus wizard-only "Pipeline" for
-edit-pipeline), grouped by `wizard._group_by_category()`; picking one opens
-that category's own submenu of commands. `0` is always "back"/"quit" at
-every level (`console.ask_index(..., zero_label="Back to main menu")`) -
-fixed, not a numbered item that shifts depending on how many entries that
-particular menu has, so the same key backs out anywhere. Running a command
-re-shows the same submenu (so chaining mark → crop → write is just picking
-them one after another within "Chapter Production") until `0` is chosen. Adding a
-command means one `Command` entry (with a `category`) in `commands.py` -
-nothing in `wizard.py` needs to change; adding a *category* means giving a
-command a new `category` string, nothing to register separately.
+`remanga/commands/registry.py`'s `COMMAND_REGISTRY` is the single source of
+truth for every remanga command - both `cli.py`'s argparse subcommands and
+the wizard's menus are built from it. The wizard has no curated combo modes:
+main menu = each `Category` (`CATEGORIES` in that module, ordered and
+described) via `commands_by_category()`, plus a "Pipeline" row (the step
+editor) and "Switch project"; picking a category opens its command submenu,
+which stays open after running one (chaining mark → crop → write is picking
+them one after another). Adding a command is one `Command` entry with a
+`category`; nothing under `remanga/wizard/` changes. Adding a *category*
+means giving a command a new category string - an unknown one still gets its
+own group rather than vanishing.
 
-`select_chapter` (wizard_prompts.py) is a pure picker now - it used to also
-call `offer_chapter_restart` (a "resume or pick a restart tier" gate) on
+Command parameters are prompted from their own `Param` specs
+(`remanga/wizard/params.py`), so new flags become wizard questions for free.
+The `_SPECIAL` table there overrides the generic prompt for the parameters
+whose answer is discoverable: `chapter`/`chapters` (this project's chapters +
+status), `keep` (what the chapter actually has on disk, as a checklist),
+`steps` (ordered checklist of `STEP_REGISTRY`), `voice`/`bgm` (audio files
+found under `global/`), `mode` (restart presets with what each keeps), and
+`url` (not asked at all once project.json has a manga source). Rule when
+adding a parameter: if remanga can find the answer, don't ask for it.
+
+## Interactive terminal: `remanga/tui/`
+
+All interactive input goes through `remanga.tui` - `select` (arrow keys,
+type-to-filter, Esc backs out), `multiselect` (space toggles; `ordered=True`
+makes check order = run order, used by the pipeline editor), `confirm`, and
+`ask_text`/`ask_number`/`ask_path`. Menus render transiently via Rich `Live`
+and leave one `✓ question  answer` line behind. Build screens as `Choice`
+lists (label/hint/detail/badge, `checked` pre-selected from current state) -
+never a hand-rolled `console.print` loop, and never Rich markup in a label
+(labels carry filenames; `frame.py` builds `Text` so `[` can't be parsed as a
+tag). Cancellation is the `CANCEL` sentinel (`is_cancel()`), never `None` -
+`None` is a real answer for optional params.
+
+Non-tty stdin (piped, CI, an editor output pane) auto-falls back to the old
+numbered prompts (`tui/fallback.py`, `0` = back/quit at every level) -
+`keys.is_interactive()` decides, so both paths stay live.
+
+`tui/keys.py` owns the only raw-tty code: cbreak with ISIG off (so Ctrl+C
+arrives as `\x03` and `cli.main` catches `KeyboardInterrupt` with the
+terminal already restored), OPOST left ON (turning it off, as `tty.setraw`
+does, staircases Rich output), and reads via `os.read` on the raw fd - NOT
+`sys.stdin.read`, whose buffering swallows the rest of an escape sequence and
+makes every arrow key read as a bare Esc (i.e. Down silently backs out).
+Mouse input is actively neutralized: it disables mouse reporting (`?1000/
+?1002/?1003/?1006/?1015`) on entry and fully consumes-and-ignores X10
+(`ESC[M`+3 raw bytes) and SGR (`ESC[<…M/m`) reports plus bracketed pastes.
+That's the "clicking the scroll wheel crashes the terminal" bug: a mouse
+report's raw coordinate bytes land in the input stream as fake keystrokes
+(one of them being `\r` = Enter, or `\x03` = Ctrl+C), and X11 middle-click
+additionally pastes the PRIMARY selection - newlines included - straight
+into stdin. Never parse escape sequences outside this module.
+
+`select_chapter` (`remanga/wizard/chapters.py`) is a pure picker - it used to
+also call `offer_chapter_restart` (a "resume or pick a restart tier" gate) on
 every chapter selection, which fired for *any* command needing a chapter,
-including single-tool ones like `write` - selecting a chapter to hand-write
-narration for would bounce into a restart menu that had nothing to do with
-what was being run. `offer_chapter_restart`/`_RESTART_MENU` were deleted
-entirely; that capability is just the standalone `restart` command
-(`--mode hard/marks_only/remark/soft`), reachable from the same menu like
-everything else. Multi-choice prompts with more than a few options use
-`console.ask_index()` (loops on invalid input) instead of Rich's
-`Prompt.ask(..., choices=[...])`, which echoes every choice inline
-(`[1/2/.../20]`) and gets unreadable past a handful of options.
-`ask_index`'s `zero_label` param is what makes `0` a fixed back/quit shortcut
-- pass it whenever a menu needs a "back out" option instead of appending one
-as item N+1.
+including single-tool ones like `write`. That capability is just the
+standalone `restart` command (`--mode hard/marks_only/remark/soft`, presets
+defined once in `remanga/reset/modes.py` with their labels and what each
+keeps), reachable from the menu like everything else.
 
 ## New commands/checks added post-writeup (keep COMMAND_REGISTRY the source of truth, this is just a pointer)
 
@@ -318,7 +355,7 @@ as item N+1.
   (Project-wide, comma list and/or 'N-M' ranges): fully dynamic counterpart
   to `restart`'s 3 fixed modes - keeps whatever `--keep` names, default
   (unset) keeps `pages,crops.json,narration.json` (`DEFAULT_WIPE_KEEP` in
-  commands.py), `--keep none` for an absolute full wipe. Always
+  `commands/selection.py`), `--keep none` for an absolute full wipe. Always
   re-verifies/re-fetches downloads afterward regardless of what was kept.
 - Every model downloader (`models/scripts/download_{indextts,audio8,
   deepseek_ocr}.py`, `webui/scripts/download_magi.py`) now verifies each

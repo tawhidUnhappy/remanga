@@ -4,7 +4,7 @@ WAV, BGM file, and the audio8 TTS transcript path also default under
 global/ (global/voice/, global/bgm/, global/tts_reference.txt) but are
 user-configurable paths in config.json (remanga/config/tts.py,
 remanga/config/audio.py) rather than fixed locations, so they're managed
-via remanga/paths_manager.py (`remanga paths`), not fixed getters here."""
+via remanga/settings/ (`remanga paths`), not fixed getters here."""
 
 from __future__ import annotations
 

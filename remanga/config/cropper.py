@@ -66,25 +66,64 @@ class PackageConfig(BaseModel):
     about any format individually.
 
     Interactively editable as a checklist any time, not just during initial
-    setup - `remanga setup-config` (step 3) and the "adjust what gets
-    generated/zipped" prompt in the main interactive wizard both call
-    remanga.setup.configure_vision_outputs for this."""
+    setup - `remanga setup-config` and the "adjust what gets generated/
+    zipped" prompt in the main interactive wizard both call
+    remanga.settings.configure_vision_outputs for this. That checklist is
+    built from the Field metadata below, so this model is the only place
+    any of these switches is described."""
 
-    sheets: bool = True
-    sheets_zip: bool = False
-    sheets_folders: bool = False
-    pdf: bool = False
-    pdf_splite: bool = False
-    pdf_zip: bool = False
-    pdf_zip_splite: bool = False
-    panels_zip: bool = False
-    panels_zip_splites: bool = False
+    # Each switch carries its own menu text (title/what it produces/the fine
+    # print), so the interactive checklist that edits these is *generated*
+    # from this model rather than being a second hand-written list of the
+    # same nine switches that has to be kept in step with it - see
+    # remanga/settings/vision.py:package_toggles. `produces` is the example
+    # output path shown next to the switch; `group` only orders the list.
+    sheets: bool = Field(
+        True, title="sheets", description="2x2 labeled grid composites, merged at full original resolution - fewer, denser images for lower LLM vision-token cost",
+        json_schema_extra={"produces": "sheets/sheet_1.___, sheet_2.___, ...", "group": "sheets"},
+    )
+    sheets_zip: bool = Field(
+        False, title="sheets_zip", description="Zips those contact sheets; builds sheets/ automatically even when `sheets` itself is off",
+        json_schema_extra={"produces": "sheets_zip/sheets_1.zip", "group": "sheets"},
+    )
+    sheets_folders: bool = Field(
+        False, title="sheets_folders", description="No compositing at all - each panel crop copied as-is into small numbered subfolders",
+        json_schema_extra={"produces": "sheets_folders/folder_1/ .. folder_N/", "group": "sheets"},
+    )
+    pdf: bool = Field(
+        False, title="pdf", description="Individual panels, one per PDF page, as a single file",
+        json_schema_extra={"produces": "panels_pdf/panels_1.pdf", "group": "pdf"},
+    )
+    pdf_splite: bool = Field(
+        False, title="pdf_splite", description="That same PDF content split into size-capped raw .pdf files, not zipped",
+        json_schema_extra={"produces": "panels_pdf/panels_1.pdf, panels_2.pdf, ...", "group": "pdf"},
+    )
+    pdf_zip: bool = Field(
+        False, title="pdf_zip", description="That same single PDF, wrapped in a zip - for upload interfaces that only accept zips",
+        json_schema_extra={"produces": "panels_pdf/panels_1.zip", "group": "pdf"},
+    )
+    pdf_zip_splite: bool = Field(
+        False, title="pdf_zip_splite", description="The PDF split into size-capped parts, each zipped separately",
+        json_schema_extra={"produces": "panels_pdf/panels_1.zip, panels_2.zip, ...", "group": "pdf"},
+    )
+    panels_zip: bool = Field(
+        False, title="panels_zip", description="Individual panel crops, one file per panel, as a single zip",
+        json_schema_extra={"produces": "panels_zip/panels_1.zip", "group": "panels"},
+    )
+    panels_zip_splites: bool = Field(
+        False, title="panels_zip_splites", description="That same panels zip, split into size-capped parts",
+        json_schema_extra={"produces": "panels_zip/panels_1.zip, panels_2.zip, ...", "group": "panels"},
+    )
     # Only consulted when a `_zip_splite`/`_splites` switch above is on: each
     # part is kept at or under this size by splitting on image/page
     # boundaries. A single image larger than this on its own still gets its
     # own (oversized) part rather than being split or dropped. Shared by
     # every format.
-    max_mb: float = 50.0
+    max_mb: float = Field(
+        50.0, title="max_mb",
+        description="Size cap per part for every split format above, in MB",
+        json_schema_extra={"group": "limits"},
+    )
 
     @property
     def sheets_zip_active(self) -> bool:
@@ -132,7 +171,7 @@ class CropperConfig(BaseModel):
     package: PackageConfig = Field(default_factory=PackageConfig)
 
     # Gutter-snap refinement: treats the LLM's crops.json box as a best guess and
-    # corrects each edge against real pixel evidence (see remanga/cropper/gutter.py)
+    # corrects each edge against real pixel evidence (see remanga/cropper/gutter/)
     # before margin_padding_pixels is applied. The actual search radius used per page
     # is adaptive: max(gutter_search_radius_pixels, page's longer side * fraction) -
     # a flat pixel floor undershoots badly on large scans when the LLM's guess is off
@@ -149,7 +188,7 @@ class CropperConfig(BaseModel):
     # jointly instead of independently, so neither panel can undershoot (a visible
     # gutter gap) while the other overshoots into it (bleeding the neighbor's tail
     # into its own crop) - both symptoms of one wrong seam. See
-    # remanga/cropper/gutter.py:reconcile_adjacent_seams.
+    # remanga/cropper/seams.py:reconcile_adjacent_seams.
     reconcile_panel_seams: bool = True
     seam_max_gap_fraction: float = 0.15           # ignore pairs whose facing edges are this far apart (not really adjacent)
     seam_min_axis_overlap_fraction: float = 0.5   # how much of the shared axis must overlap to count as "stacked/side-by-side"

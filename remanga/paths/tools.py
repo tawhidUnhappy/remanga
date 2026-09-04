@@ -2,7 +2,7 @@
 (`.tools/venv-indextts`, `.tools/venv-audio8`, `.tools/venv-magi`, ...) and
 their standalone worker scripts - one dependency-isolated environment per
 heavy ML engine so their conflicting library pins never have to share one
-Python process. See remanga/audio/synth.py and remanga/webui/magi_assist.py
+Python process. See remanga/audio/synth/ and remanga/webui/magi_assist.py
 for the subprocess machinery that actually drives these."""
 
 from __future__ import annotations

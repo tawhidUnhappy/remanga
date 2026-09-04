@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 from pydub import AudioSegment
 from rich.progress import BarColumn, Progress, TextColumn
 
-from remanga import setup
+from remanga import settings
 from remanga.audio.synth import create_synthesizer
 from remanga.config import AudioConfig, RemangaConfig, TTSConfig
 from remanga.console import console
@@ -36,7 +36,7 @@ class TTSEngine:
             full_config.tts.spk_audio_prompt = voice_override
             self.tts_config.spk_audio_prompt = voice_override
 
-        spk_prompt_path = setup.ensure_valid_voice_prompt(full_config, interactive=interactive)
+        spk_prompt_path = settings.ensure_valid_voice_prompt(full_config, interactive=interactive)
         self.tts_config.spk_audio_prompt = spk_prompt_path
 
         chapter_dir = get_chapter_dir(project_name, chapter_num)

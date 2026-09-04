@@ -1,6 +1,6 @@
 """Auto-heal helper for the isolated per-tool virtual environments
 bootstrap.sh provisions: parses "missing package" errors out of a worker
-subprocess's stderr so remanga/audio/synth.py and remanga/webui/magi_assist.py
+subprocess's stderr so remanga/audio/synth/ and remanga/webui/magi_assist.py
 can pip-install the gap and retry, instead of just failing.
 
 Path resolution for those environments themselves (REPO_ROOT, TOOLS_DIR,

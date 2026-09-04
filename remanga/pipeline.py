@@ -8,11 +8,11 @@ projects/<name>/pipeline.json instead of code.
 
 Each step's actual work is NOT reimplemented here - every _run_* function
 below is a thin wrapper around the exact same downloader/cropper/audio/video/
-webui calls (and, for narration/review, the exact same wizard.py functions)
+webui calls (and, for narration/review, the exact same remanga/wizard/ functions)
 the interactive wizard has always used, including their console messages -
 so the default step list run through run_pipeline() behaves identically to
-today's wizard. See wizard.py's run_interactive_pipeline for how mode 1 now
-just calls run_pipeline(project, chapter, config, load_pipeline(project))."""
+today's wizard. The wizard's own "run the pipeline" path is just the `run`
+command, which calls run_pipeline(project, chapter, config, load_pipeline(project))."""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def _run_download(project: str, chapter: str, config: RemangaConfig) -> None:
     dl = MangaDexDownloader(config.downloader)
     # None -> MangaDexDownloader.download_chapter falls back to this
     # project's saved manga_url/manga_id (project.json) - the wizard writes
-    # that field before calling into the pipeline (see wizard.py), and every
+    # that field before calling into the pipeline (see remanga/wizard/), and every
     # subsequent run reuses it the same way `remanga download` without --url
     # already does.
     dl.download_chapter(None, chapter, project)
@@ -80,9 +80,9 @@ def _run_crop(project: str, chapter: str, config: RemangaConfig) -> None:
 
 
 def _run_narration(project: str, chapter: str, config: RemangaConfig) -> None:
-    # Deferred import: wizard.py imports run_pipeline/load_pipeline from this
+    # Deferred import: remanga/wizard/ imports run_pipeline/load_pipeline from this
     # module for its own "run everything" path, so a top-level import here
-    # would be circular. Only resolved at call time, same trick reset.py's
+    # would be circular. Only resolved at call time, same trick remanga/reset/'s
     # "remark" restart path already uses for launch_panel_marker.
     from remanga.wizard import run_narration_step
     run_narration_step(project, chapter, config)

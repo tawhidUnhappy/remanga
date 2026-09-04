@@ -1,7 +1,7 @@
 """Remix: re-run just the audio mix + video encode for a project's
 chapter(s) - the cheap steps - after a BGM/volume-only change, without
 re-running TTS or frame compositing. This is what makes "keep each
-chapter's own video, then join them" (see full_recap.py) actually useful
+chapter's own video, then join them" (see remanga/full_recap/) actually useful
 day to day: change config.json's bgm_path/bgm_volume_db (or pass --bgm),
 run this, and only the audio mix and the final ffmpeg encode redo - per
 chapter and, if asked, for the whole-manga joined video too.

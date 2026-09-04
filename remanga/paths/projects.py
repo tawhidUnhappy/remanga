@@ -43,7 +43,7 @@ def get_chapter_dir(project_name: str, chapter_num: str) -> Path:
 #      (downloads, crops, narration) - not fifteen kinds of byproduct sitting
 #      next to the source, regardless of what config.json's package toggles
 #      or production stage happen to be active.
-#   2. `reset.py` can wipe every generated artifact for a chapter (or a whole
+#   2. `remanga/reset/` can wipe every generated artifact for a chapter (or a whole
 #      project) by clearing these directories, without ever touching, or
 #      needing to know the shape of, the source folder next to them.
 GENERATED_KINDS = (
@@ -165,11 +165,11 @@ def get_final_video_path(project_name: str, chapter_num: str, create: bool = Tru
     """A single chapter's own final rendered MP4 - kept around (not a
     throwaway intermediate) specifically so a later BGM/volume-only change
     can rebuild just the mix + this file without re-running TTS or frame
-    compositing. See full_recap.py, which builds these before joining them."""
+    compositing. See remanga/full_recap/, which builds these before joining them."""
     clean_chap = _clean_chapter(chapter_num)
     return get_generated_dir(project_name, "video", chapter_num, create=create) / f"{project_name}_ch{clean_chap}_recap.mp4"
 
 
 def get_full_recap_video_path(project_name: str) -> Path:
-    """The whole-manga joined video - see full_recap.py."""
+    """The whole-manga joined video - see remanga/full_recap/."""
     return get_project_video_dir(project_name) / f"{project_name}_full_recap.mp4"

@@ -64,7 +64,7 @@ def launch_and_wait_writer(project_name: str, chapter_num: str, config: WriterCo
     server_thread.join(timeout=5)
     # Frees the GPU/worker process promptly instead of leaving it idle until
     # the whole `remanga` process exits - this session might be one command
-    # in a longer wizard loop (see wizard.py's nested menu), not the last
+    # in a longer wizard loop (see remanga/wizard/'s nested menu), not the last
     # thing that runs.
     ocr_engine.shutdown()
 

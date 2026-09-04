@@ -1,17 +1,13 @@
-"""Low-level speech synthesis, one class per supported TTS engine
-(TTSConfig.engine - see remanga/config.py's TTS_ENGINES), each spawning and
-talking to its own isolated `.tools/venv-<tool>` worker process
-(remanga/audio/scripts/*_worker.py) so no two engines' dependency pins ever
-have to share a Python process or a dependency resolution with each other or
-with MAGI v3's isolated environment. See remanga/venvs.py for how those
-environments are located.
+"""The worker-process machinery every TTS engine shares.
 
-Both synthesizer classes share the exact same worker-process lifecycle
-(spawn, ready-handshake, auto-heal a missing dependency, bounded-timeout
-request/response, stderr draining so a wedged worker can't deadlock, clean
-shutdown) via `_BaseWorkerSynthesizer` below - only the process command line
-and the per-request JSON payload actually differ per engine. Adding a third
-engine later means subclassing that base, not re-implementing all of this."""
+One class owns the whole lifecycle of an isolated-venv worker: spawn it,
+wait for its ready handshake, auto-heal a dependency its own install
+didn't pin, send bounded-timeout requests, drain its stderr so it can't
+deadlock on a full pipe, and shut it down cleanly. An engine subclass fills
+in only what actually differs between engines - the command line and the
+per-request payload - which is what keeps adding a third engine to a small
+file (see indextts.py and audio8.py, both under 70 lines) rather than a
+fourth copy of all of this."""
 
 from __future__ import annotations
 
@@ -22,15 +18,14 @@ import select
 import subprocess
 import threading
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-from remanga.config import AudioConfig, TTSConfig
+from remanga.config import AudioConfig
 from remanga.console import console
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.models import ModelManager
-from remanga.setup import read_reference_text
 from remanga.paths import UV_BIN
-from remanga.venvs import extract_missing_packages, get_scripts_dir, get_tool_python
+from remanga.venvs import extract_missing_packages, get_tool_python
 
 _MAX_AUTO_HEAL_ATTEMPTS = 8
 
@@ -58,7 +53,7 @@ def _pip_install_into_tool_env(tool_name: str, packages: set) -> bool:
     return True
 
 
-class _BaseWorkerSynthesizer:
+class BaseWorkerSynthesizer:
     """Owns one long-lived isolated-venv worker subprocess and speaks to it
     over stdin/stdout for every synthesize() call, so the model loads onto
     the GPU once per production run instead of once per panel. Subclasses
@@ -259,136 +254,3 @@ class _BaseWorkerSynthesizer:
             proc.terminate()
 
 
-class IndexTTSSynthesizer(_BaseWorkerSynthesizer):
-    """IndexTTS-2.5 - talks to `.tools/venv-indextts`/indextts_worker.py."""
-
-    tool_name = "indextts"
-    display_name = "IndexTTS-2.5"
-
-    def __init__(self, tts_config: TTSConfig, audio_config: AudioConfig):
-        self.tts_config = tts_config
-        super().__init__(audio_config, ModelManager(
-            tts_config.model_dir, tts_config.hf_repo_id,
-            tool_name="indextts", download_script="download_indextts.py",
-            expected_files=("gpt.pth", "s2mel.pth"), display_name="IndexTTS-2.5",
-        ))
-
-    def _spawn_worker(self, model_dir: Path) -> subprocess.Popen:
-        python = get_tool_python("indextts")
-        script = get_scripts_dir("audio") / "indextts_worker.py"
-
-        cmd: List[str] = [
-            str(python), "-u", str(script),
-            "--cfg_path", str(Path(self.tts_config.cfg_path).resolve()),
-            "--model_dir", str(model_dir.resolve()),
-        ]
-        if self.tts_config.use_bf16:
-            cmd.append("--use_bf16")
-
-        return subprocess.Popen(
-            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, bufsize=1,
-        )
-
-    def _synth_timeout_seconds(self) -> float:
-        return self.tts_config.synth_timeout_seconds
-
-    def _build_request(self, text: str, spk_prompt_path: str, output_wav: Path) -> Dict[str, Any]:
-        """Deliberately sends no emo_vector: IndexTTS-2.5 infers its own
-        emotion/prosody straight from `text`'s own wording and punctuation
-        ("!"/"?"/"..." etc - see prompts/narration.md Rule 3) when none is
-        supplied, which is what makes narration sound naturally expressive
-        instead of a forced-flat reading of whatever the text actually
-        says. Temperature/top_p (TTSConfig) are left at IndexTTS-2.5's own
-        recommended defaults for natural prosody within that inferred
-        emotion."""
-        request: Dict[str, Any] = {
-            "cmd": "synthesize",
-            "spk_audio_prompt": spk_prompt_path,
-            "text": text,
-            "lang": (self.tts_config.lang or "EN").strip().upper(),
-            "output_path": str(output_wav.resolve()),
-            "temperature": self.tts_config.temperature,
-            "top_p": self.tts_config.top_p,
-        }
-        if abs(self.tts_config.speed - 1.0) >= 0.02:
-            request["duration_factor"] = round(1.0 / self.tts_config.speed, 3)
-        return request
-
-    def _post_synthesize(self, output_wav: Path, request: Dict[str, Any]) -> None:
-        # duration_factor already handles speed on the model side when supported;
-        # only fall back to the ffmpeg post-process if the worker couldn't use it
-        # (older IndexTTS checkouts without a duration_factor parameter).
-        if "duration_factor" not in request and abs(self.tts_config.speed - 1.0) >= 0.02:
-            self._adjust_audio_speed(output_wav, self.tts_config.speed)
-
-
-class Audio8Synthesizer(_BaseWorkerSynthesizer):
-    """Audio8/Audio8-TTS-Preview-0.1b - talks to `.tools/venv-audio8`/
-    audio8_worker.py. See config.Audio8Config for its settings and
-    audio8_worker.py's module docstring for the model itself."""
-
-    tool_name = "audio8"
-    display_name = "Audio8 TTS"
-
-    def __init__(self, tts_config: TTSConfig, audio_config: AudioConfig):
-        self.tts_config = tts_config
-        self.engine_config = tts_config.audio8
-        super().__init__(audio_config, ModelManager(
-            self.engine_config.model_dir, self.engine_config.hf_repo_id,
-            tool_name="audio8", download_script="download_audio8.py",
-            expected_files=("model.safetensors", "codec.pth"), display_name="Audio8 TTS",
-        ))
-
-    def _spawn_worker(self, model_dir: Path) -> subprocess.Popen:
-        python = get_tool_python("audio8")
-        script = get_scripts_dir("audio") / "audio8_worker.py"
-
-        cmd: List[str] = [
-            str(python), "-u", str(script),
-            "--model_dir", str(model_dir.resolve()),
-        ]
-        if self.engine_config.use_bf16:
-            cmd.append("--use_bf16")
-
-        return subprocess.Popen(
-            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, bufsize=1,
-        )
-
-    def _synth_timeout_seconds(self) -> float:
-        return self.tts_config.synth_timeout_seconds
-
-    def _build_request(self, text: str, spk_prompt_path: str, output_wav: Path) -> Dict[str, Any]:
-        # Read fresh each call rather than caching at __init__ - the file is
-        # small, this runs once per panel not per token, and it means an
-        # edit to the transcript file takes effect on the very next panel
-        # without restarting the pipeline.
-        return {
-            "cmd": "synthesize",
-            "spk_audio_prompt": spk_prompt_path,
-            "reference_text": read_reference_text(self.engine_config.reference_text_path),
-            "text": text,
-            "output_path": str(output_wav.resolve()),
-            "temperature": self.engine_config.temperature,
-            "top_p": self.engine_config.top_p,
-            "max_new_tokens": self.engine_config.max_new_tokens,
-        }
-
-    def _post_synthesize(self, output_wav: Path, request: Dict[str, Any]) -> None:
-        # No model-side speed control for this engine - fall back to the
-        # shared ffmpeg-atempo path whenever tts.speed isn't 1.0.
-        if abs(self.tts_config.speed - 1.0) >= 0.02:
-            self._adjust_audio_speed(output_wav, self.tts_config.speed)
-
-
-def create_synthesizer(tts_config: TTSConfig, audio_config: AudioConfig) -> _BaseWorkerSynthesizer:
-    """Picks the Synthesizer matching `tts_config.engine` (see
-    config.TTS_ENGINES) - the one place that mapping is made, so callers
-    (audio/tts.py) never need to know about individual engine classes."""
-    engine = (tts_config.engine or "indextts-2.5").strip().lower()
-    if engine == "audio8-tts-0.1b":
-        return Audio8Synthesizer(tts_config, audio_config)
-    if engine != "indextts-2.5":
-        console.print(f"[yellow]Unknown tts.engine {engine!r} - falling back to indextts-2.5.[/]")
-    return IndexTTSSynthesizer(tts_config, audio_config)

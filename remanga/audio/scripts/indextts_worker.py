@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Standalone IndexTTS-2.5 synthesis worker - runs inside the isolated
 `.venv-indextts` environment as a long-lived subprocess, spoken to by
-remanga/audio/synth.py (in the main env) over a line-delimited JSON protocol
+remanga/audio/synth/ (in the main env) over a line-delimited JSON protocol
 on stdin/stdout. Deliberately has ZERO dependency on the `remanga` package
 itself - only `indextts` and the stdlib - so it works regardless of what's
 importable in the caller's environment.
@@ -16,7 +16,7 @@ Protocol (newline-delimited JSON, one message per line):
                      "lang": ..., "output_path": ..., "temperature": ...,
                      "top_p": ..., "duration_factor": ...}
   `emo_vector` is still accepted (see below) if a future caller ever wants to
-  force a specific emotion again, but remanga/audio/synth.py deliberately
+  force a specific emotion again, but remanga/audio/synth/ deliberately
   never sends one - with none supplied, IndexTTS-2.5 infers its own emotion
   and prosody straight from `text`'s wording and punctuation, which is what
   makes narration sound naturally expressive.
