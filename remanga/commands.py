@@ -259,15 +259,56 @@ def _h_restart(params: Dict[str, Any], config: RemangaConfig) -> None:
 DEFAULT_WIPE_KEEP = {"pages", "crops.json", "narration.json"}
 
 
+def _resolve_wipe_keep(keep_raw: Optional[str]) -> set:
+    """Shared by the single- and multi-chapter wipe handlers below. None
+    (flag left unset) -> DEFAULT_WIPE_KEEP; 'none'/'nothing' -> wipe
+    absolutely everything; anything else -> that comma list, verbatim."""
+    if keep_raw is None:
+        return set(DEFAULT_WIPE_KEEP)
+    if keep_raw.strip().lower() in ("none", "nothing"):
+        return set()
+    return {n.strip() for n in keep_raw.split(",") if n.strip()}
+
+
+def _parse_chapter_selection(raw: str, project_name: str) -> List[str]:
+    """Comma-separated chapter numbers and/or numeric ranges ('N-M') for the
+    multi-chapter `wipe-chapters` command - e.g. '1,3,7-9'. A range expands
+    only against chapters this project actually has (full_recap.
+    discover_chapters), so '1-24' doesn't manufacture chapter numbers that
+    were never downloaded; a plain (non-range) token is passed through
+    literally even if it doesn't exist yet, matching _split_chapters'
+    existing permissiveness elsewhere - wipe naturally no-ops on one that
+    isn't there."""
+    from remanga.full_recap import discover_chapters
+
+    existing = discover_chapters(project_name)
+    result: set = set()
+    for token in raw.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        if "-" in token:
+            lo_s, _, hi_s = token.partition("-")
+            try:
+                lo, hi = float(lo_s), float(hi_s)
+            except ValueError:
+                result.add(token)  # not a numeric range (e.g. a literal label with a dash) - keep as-is
+                continue
+            for ch in existing:
+                try:
+                    val = float(ch)
+                except ValueError:
+                    continue
+                if lo <= val <= hi:
+                    result.add(ch)
+            continue
+        result.add(token)
+    return sorted(result, key=chapter_sort_key)
+
+
 def _h_wipe(params: Dict[str, Any], config: RemangaConfig) -> None:
     project, chapter = params["project"], params["chapter"]
-    keep_raw = params.get("keep")
-    if keep_raw is None:
-        keep_names = set(DEFAULT_WIPE_KEEP)
-    elif keep_raw.strip().lower() in ("none", "nothing"):
-        keep_names = set()
-    else:
-        keep_names = {n.strip() for n in keep_raw.split(",") if n.strip()}
+    keep_names = _resolve_wipe_keep(params.get("keep"))
     candidates = [e for e in reset.wipeable_entries(project, chapter) if e.name not in keep_names]
     if not candidates:
         console.print("[dim]Nothing to wipe - everything here is already in the keep list.[/]")
@@ -285,6 +326,44 @@ def _h_wipe(params: Dict[str, Any], config: RemangaConfig) -> None:
         # up re-downloaded rather than just missing (see reset.wipe_chapter).
         reset.wipe_chapter(project, chapter, keep_names, reverify_downloads=True)
         console.print(f"[bold green]✓ Chapter {chapter} wipe complete. Downloaded pages re-verified.[/]")
+    else:
+        console.print("[dim]Wipe cancelled.[/]")
+
+
+def _h_wipe_chapters(params: Dict[str, Any], config: RemangaConfig) -> None:
+    project = params["project"]
+    keep_names = _resolve_wipe_keep(params.get("keep"))
+    chapters = _parse_chapter_selection(params["chapters"], project)
+    if not chapters:
+        console.print(f"[dim]No chapters matched '{params['chapters']}' for project '{project}'.[/]")
+        return
+
+    per_chapter: Dict[str, List] = {}
+    total = 0
+    for ch in chapters:
+        candidates = [e for e in reset.wipeable_entries(project, ch) if e.name not in keep_names]
+        if candidates:
+            per_chapter[ch] = candidates
+            total += len(candidates)
+
+    if not total:
+        console.print("[dim]Nothing to wipe across the selected chapter(s) - everything is already in the keep list.[/]")
+        return
+
+    console.print(f"[bold red]Wipe: the following will be permanently deleted across {len(per_chapter)} chapter(s):[/]")
+    for ch, candidates in per_chapter.items():
+        console.print(f"[bold]Chapter {ch}:[/]")
+        for c in candidates:
+            console.print(f"  [dim]- {c}[/]")
+    console.print(f"[dim]Kept: {', '.join(sorted(keep_names)) or '(nothing - full wipe)'}.[/]")
+    if params.get("force") or Confirm.ask(
+        f"[bold red]Confirm: permanently delete these {total} item(s) across {len(per_chapter)} chapter(s)? "
+        f"This cannot be undone.[/]",
+        default=False,
+    ):
+        for ch in per_chapter:
+            reset.wipe_chapter(project, ch, keep_names, reverify_downloads=True)
+        console.print(f"[bold green]✓ Wipe complete for chapter(s) {', '.join(per_chapter)}. Downloaded pages re-verified.[/]")
     else:
         console.print("[dim]Wipe cancelled.[/]")
 
@@ -365,6 +444,28 @@ COMMAND_REGISTRY: List[Command] = [
         "chapter's panels, per config.json's cropper.package switches - no re-crop needed",
         _h_package,
         [_PROJECT("Project name"), _CHAPTER()],
+        category="Chapter Production",
+    ),
+    Command(
+        "wipe",
+        "Wipe everything for a chapter (source files and generated sheets/zips/audio/video) except "
+        "whatever you choose to keep - unlike restart's fixed modes, any combination can be kept. "
+        "Downloaded pages are always re-verified/re-fetched afterward. See wipe-chapters (Project-wide) "
+        "for multiple chapters at once.",
+        _h_wipe,
+        [
+            _PROJECT("Project name"), _CHAPTER(),
+            Param(
+                "keep", ["--keep", "-k"], required=False, default=None,
+                help="Comma-separated names of items to keep (e.g. pages,narration.json) - see the "
+                     "wizard's numbered listing for what actually exists on a given chapter, or run "
+                     "`status`/look in the chapter's folder. Left unset (the default): keeps "
+                     f"{', '.join(sorted(DEFAULT_WIPE_KEEP))} - the downloaded pages, marks, and "
+                     "narration script, wiping only what's cheaply regenerated from them. Pass 'none' "
+                     "to wipe absolutely everything instead.",
+            ),
+            Param("force", ["--force", "-f"], type="bool", default=False, help="Skip the confirmation prompt"),
+        ],
         category="Chapter Production",
     ),
     Command(
@@ -483,21 +584,22 @@ COMMAND_REGISTRY: List[Command] = [
         category="Project-wide",
     ),
     Command(
-        "wipe",
-        "Wipe everything for a chapter (source files and generated sheets/zips/audio/video) except "
-        "whatever you choose to keep - unlike restart's fixed modes, any combination can be kept. "
-        "Downloaded pages are always re-verified/re-fetched afterward.",
-        _h_wipe,
+        "wipe-chapters",
+        "Wipe multiple chapters at once (comma list and/or 'N-M' ranges, e.g. '1,3,7-9') - same "
+        "dynamic keep-anything behavior as `wipe`, one confirmation covering every selected chapter.",
+        _h_wipe_chapters,
         [
-            _PROJECT("Project name"), _CHAPTER(),
+            _PROJECT("Project name"),
+            Param(
+                "chapters", ["--chapters", "-c"], required=True,
+                help="Chapter numbers to wipe: comma-separated, numeric ranges allowed (e.g. '1,3,7-9'). "
+                     "A range only expands against chapters this project actually has.",
+            ),
             Param(
                 "keep", ["--keep", "-k"], required=False, default=None,
-                help="Comma-separated names of items to keep (e.g. pages,narration.json) - see the "
-                     "wizard's numbered listing for what actually exists on a given chapter, or run "
-                     "`status`/look in the chapter's folder. Left unset (the default): keeps "
-                     f"{', '.join(sorted(DEFAULT_WIPE_KEEP))} - the downloaded pages, marks, and "
-                     "narration script, wiping only what's cheaply regenerated from them. Pass 'none' "
-                     "to wipe absolutely everything instead.",
+                help="Same as `wipe`'s --keep - comma-separated names to keep, or 'none' for a full wipe. "
+                     f"Left unset (the default): keeps {', '.join(sorted(DEFAULT_WIPE_KEEP))} in every "
+                     "selected chapter.",
             ),
             Param("force", ["--force", "-f"], type="bool", default=False, help="Skip the confirmation prompt"),
         ],
