@@ -75,6 +75,7 @@ MAX_ATTEMPTS = 5
 XET_STALL_GRACE_SECONDS = 15
 XET_STALL_TIMEOUT_SECONDS = 20
 POLL_INTERVAL_SECONDS = 2
+REPORT_INTERVAL_SECONDS = 3
 
 # The actual snapshot_download() call, run in its own subprocess (not
 # imported/called directly here) so it can be killed cleanly if it stalls,
@@ -86,6 +87,15 @@ _DOWNLOAD_CODE = (
     "from huggingface_hub import snapshot_download\n"
     "snapshot_download(repo_id=sys.argv[1], local_dir=sys.argv[2], token=(sys.argv[3] or None))\n"
 )
+
+
+def _fmt_bytes(n: float) -> str:
+    """Human-readable byte count (e.g. '1.4GB') for the progress line below."""
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024 or unit == "TB":
+            return f"{n:.1f}{unit}"
+        n /= 1024
+    return f"{n:.1f}TB"  # unreachable, keeps type checkers happy
 
 
 def _incomplete_bytes(model_dir: str) -> int:
@@ -127,6 +137,8 @@ def _run_hf_attempt(
     start = time.time()
     last_bytes = _incomplete_bytes(model_dir)
     last_growth = start
+    last_report = start
+    reported_any = False
 
     while True:
         ready, _, _ = select.select([proc.stdout], [], [], POLL_INTERVAL_SECONDS)
@@ -145,13 +157,34 @@ def _run_hf_attempt(
         if cur_bytes > last_bytes:
             last_bytes = cur_bytes
             last_growth = now
-        elif stall_timeout is not None and now - start > XET_STALL_GRACE_SECONDS \
+
+        # Byte-level progress line, independent of whatever (if anything)
+        # the child's own tqdm/Xet output is printing. Needed because
+        # snapshot_download's own "Fetching N files" bar only tracks
+        # file-COUNT completion - for a repo dominated by one giant shard
+        # (N=1, exactly DeepSeek-OCR-2 and IndexTTS-2.5's case) that bar sits
+        # at "0/1" for the entire multi-GB transfer, so without this the
+        # console goes dark for however long that takes. Throttled to once
+        # every REPORT_INTERVAL_SECONDS so it doesn't fight the child's own
+        # \r-redraws for the line.
+        if now - last_report >= REPORT_INTERVAL_SECONDS:
+            elapsed = now - start
+            rate = cur_bytes / elapsed if elapsed > 0 else 0
+            print(f"\r>> [{label}] {_fmt_bytes(cur_bytes)} downloaded ({_fmt_bytes(rate)}/s)"
+                  + " " * 10, end="", flush=True)
+            last_report = now
+            reported_any = True
+
+        if stall_timeout is not None and now - start > XET_STALL_GRACE_SECONDS \
                 and now - last_growth > stall_timeout:
             print(f"\n>> [{label}] no download progress for {stall_timeout:.0f}s - "
                   f"giving up on this path and trying the next one...", file=sys.stderr)
             proc.kill()
             proc.wait(timeout=5)
             return False
+
+    if reported_any:
+        print()  # leave our last \r-progress line intact instead of letting the next print overwrite it
 
     return proc.wait() == 0
 
