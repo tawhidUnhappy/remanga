@@ -446,6 +446,8 @@ Composites frames onto the chosen background canvas and renders hardware-acceler
 ```
 *Output File:* `projects/my_manga/chapters/chapter_1/my_manga_ch1_recap.mp4`
 
+Re-running `download` for a chapter that's already there re-checks it rather than re-fetching it: every page must exist, be non-empty, and match what MangaDex reports for that chapter *right now* — same chapter id, same page count, same image quality. That record lives in the project's `manifest.json` and is rewritten on every download attempt, marked `verified` only once every page is actually on disk, so a run killed mid-download resumes instead of reporting a complete chapter. If the chapter has changed since it was last fetched here (re-uploaded under a new id, or you switched `image_quality`), the old pages are cleared and every page is re-fetched — they were images of something else.
+
 ### Check Workspace Status Anytime
 ```bash
 ./run.sh status --project "my_manga" --chapter "1"

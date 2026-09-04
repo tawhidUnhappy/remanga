@@ -114,9 +114,26 @@ class MangaDexDownloader:
         # project's shared manifest.json (see paths.update_manifest_chapter)
         # instead of a per-chapter pages_metadata.json file, since this is
         # the only thing that ever reads it back.
+        #
+        # Read before it's replaced below: the point of the record is to be
+        # compared against what the API says *now*, so it has to be the
+        # previous attempt's, not this one's.
         all_present = True
         cached_meta = read_manifest(project_name).get("chapters", {}).get(str(chapter_num), {}).get("pages")
-        if cached_meta and cached_meta.get("total_pages") == len(filenames) and cached_meta.get("chapter_id") == chapter_id:
+        if (
+            cached_meta
+            # Absent on entries written before this field existed, and those
+            # were only ever written after a completed download - so missing
+            # means verified, not unverified.
+            and cached_meta.get("verified", True)
+            and cached_meta.get("total_pages") == len(filenames)
+            and cached_meta.get("chapter_id") == chapter_id
+            # A chapter re-fetched at a different image_quality is a different
+            # set of images, even when the page count and chapter id are
+            # identical - without this, switching quality kept whatever was
+            # already on disk and reported it as verified.
+            and cached_meta.get("quality") == quality_key
+        ):
             for idx, fn in enumerate(filenames, start=1):
                 page_ext = Path(fn).suffix or ".png"
                 p_file = dest_dir / f"{page_stem(chapter_num, idx)}{page_ext}"
@@ -126,12 +143,64 @@ class MangaDexDownloader:
         else:
             all_present = False
 
+        # Replaced on every attempt, from the at-home response this attempt
+        # just resolved - never carried over from a previous one. A record
+        # left behind by an earlier attempt describes a chapter that may no
+        # longer be the one being downloaded (re-uploaded with a new
+        # chapter_id, a different image_quality, more or fewer pages), and it
+        # is exactly what the check above trusts next time.
+        #
+        # `verified` is what keeps that honest: written False before the first
+        # page is fetched and True only once every page is actually on disk,
+        # so a run killed mid-download leaves a record saying so rather than
+        # one claiming a complete chapter.
+        # A record that disagrees with this attempt means the pages on disk
+        # were fetched for something else - a re-upload under a new
+        # chapter_id, a different image_quality, a different page count - so
+        # they are not a resumable partial download of what's being fetched
+        # now, and reusing them would quietly keep the old images and then
+        # record them as verified. Cleared, rather than skipped over.
+        #
+        # An unverified record is NOT this case: same chapter, interrupted
+        # partway, and every page already on disk is still exactly right.
+        # Neither is a missing record - nothing says the pages are wrong, and
+        # re-fetching a whole chapter on a hunch is worse than trusting them.
+        if cached_meta and not all_present and (
+            cached_meta.get("chapter_id") != chapter_id
+            or cached_meta.get("quality") != quality_key
+            or cached_meta.get("total_pages") != len(filenames)
+        ):
+            for page in dest_dir.iterdir():
+                if page.is_file():
+                    page.unlink()
+            console.print(
+                "[yellow]This chapter isn't the one that was downloaded here before[/] "
+                "[dim](re-uploaded, or a different image quality) - re-fetching every page.[/]"
+            )
+
+        def record_pages(verified: bool) -> None:
+            # Just enough for the resume-check above (chapter_id, page count,
+            # quality); actual page presence/integrity is always re-verified
+            # against the real files in pages_dir, never trusted from this
+            # alone. No per-page list - filename/source_file/size_bytes for
+            # every page would just repeat what pages_dir itself shows.
+            update_manifest_chapter(project_name, chapter_num, "pages", {
+                "chapter_id": chapter_id,
+                "manga_id": manga_id,
+                "total_pages": len(filenames),
+                "quality": quality_key,
+                "timestamp": time.time(),
+                "verified": verified,
+            })
+
         if all_present:
+            record_pages(True)
             console.print(f"[bold green]✓ All {len(filenames)} pages verified and already downloaded! Skipping download.[/]")
             if self.config.zip_pages_enabled:
                 self._create_pages_zip(project_name, chapter_num, dest_dir)
             return dest_dir
 
+        record_pages(False)
         console.print(f"[green]Downloading {len(filenames)} pages politely to:[/] {_esc(str(dest_dir))}")
 
         # refresh_per_second=4 (Rich's default is ~10): a long-lived Progress
@@ -171,19 +240,7 @@ class MangaDexDownloader:
 
                 progress.advance(dl_task)
 
-        # Save verification metadata into this project's shared manifest.json -
-        # just enough for the resume-check above (total_pages + chapter_id);
-        # actual page presence/integrity is always re-verified against the
-        # real files in pages_dir, never trusted from this alone. No per-page
-        # list here - filename/source_file/size_bytes for every single page
-        # would just be repeating what pages_dir itself already shows.
-        update_manifest_chapter(project_name, chapter_num, "pages", {
-            "chapter_id": chapter_id,
-            "manga_id": manga_id,
-            "total_pages": len(filenames),
-            "quality": quality_key,
-            "timestamp": time.time(),
-        })
+        record_pages(True)
 
         console.print(f"[bold green]✓ Successfully downloaded and verified all {len(filenames)} pages![/]")
 
