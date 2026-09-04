@@ -18,7 +18,9 @@ def render_status_panel(project: str, chapter: str) -> str:
     meta = load_project_metadata(project)
     saved_url = wrap_at_slashes(meta.get("manga_url") or meta.get("manga_id", "Not set"))
 
-    config = RemangaConfig.load()
+    # This project's settings, not the machine's - the panel says what a
+    # render of THIS chapter would use.
+    config = RemangaConfig.load().for_project(project)
     voice_path = Path(config.tts.spk_audio_prompt).expanduser() if config.tts.spk_audio_prompt else None
     voice_status = f"[green]Configured ({display_path(voice_path)})[/]" if (voice_path and voice_path.exists()) else f"[yellow]Not set / Missing ({display_path(voice_path) if voice_path else 'n/a'})[/]"
 

@@ -89,9 +89,10 @@ def run_command_menu(cmd: Command, project: str, config: RemangaConfig) -> None:
                    detail=action.detail, value=action)
             for action in actions
         ]
+        scope = f" · saved for {config.project}" if config.project else ""
         picked = select(
             cmd.name, rows, numbered=True, back_label="Back",
-            note=f"{_short(cmd.help)} · or change what it runs with",
+            note=f"{_short(cmd.help)} · or change what it runs with{scope}",
         )
         if is_cancel(picked):
             return
@@ -141,10 +142,15 @@ def main_menu(project: str, config: RemangaConfig) -> Any:
 def run_interactive_pipeline() -> None:
     console.print("[bold]remanga[/] [dim]— interactive recap production[/]")
 
-    config = RemangaConfig.load()
-    project = select_or_create_project(config)
+    machine_config = RemangaConfig.load()
+    project = select_or_create_project(machine_config)
     if is_cancel(project):
         return
+    # From here on the session runs on this manga's own settings (see
+    # RemangaConfig.for_project): every command, every menu and every settings
+    # screen sees what this project uses, and saving one writes it back to
+    # this project rather than to every project on the machine.
+    config = machine_config.for_project(project)
     warn_panel_narration_mismatches(project)
 
     while True:
@@ -152,9 +158,10 @@ def run_interactive_pipeline() -> None:
         if action is None:
             return
         if action == _SWITCH_PROJECT:
-            switched = select_or_create_project(config)
+            switched = select_or_create_project(machine_config)
             if not is_cancel(switched):
                 project = switched
+                config = machine_config.for_project(project)
                 warn_panel_narration_mismatches(project)
             continue
         if action == _PIPELINE:

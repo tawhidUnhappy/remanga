@@ -192,6 +192,18 @@ If stdin isn't a terminal (a piped script, CI, an editor's output pane), every m
 
 ## Configuration & Settings Wizard
 
+**config.json is this machine; each manga can disagree with it.** Where ffmpeg lives, whether to prefer the GPU, which port the web UIs open on — those describe your PC, so they live in `config.json` and apply everywhere. But the narrator's voice, the background music, the resolution, the canvas style and the crop settings describe *the work*, and a dark fantasy series shouldn't have to sound like the school comedy you set up last month. Change any of those from inside a project — the wizard, or any CLI command that takes `-p` — and they're saved as that project's own, in its `project.json`:
+
+```json
+"settings": {
+  "tts.spk_audio_prompt": "global/voice/gravelly.wav",
+  "audio.bgm_path": "global/bgm/Dread.wav",
+  "video.height": 1440
+}
+```
+
+Only what you actually changed is stored; everything else follows `config.json`, so raising the global resolution moves every project that never picked its own. Put a setting back to the machine value and it stops being an override. `tts.*`, `audio.*`, `video.*` and `cropper.*` work this way; machine-wide settings edited from inside a project still go to `config.json`, and the packaging formats keep their own per-project list (`package_formats`, see [3b](#3b-package-the-upload-formats)). Nothing is migrated: a project with no `settings` block behaves exactly as it did.
+
 Run the settings screen anytime to configure the TTS engine, vocal reference files, background music, narration language, video resolution, canvas background, GPU preference, and vision outputs (what to generate, what to zip/PDF for upload):
 
 ```bash
@@ -665,7 +677,7 @@ remanga/
 │   └── youtube.md           # Title/description/thumbnail for the upload, in plain text
 ├── projects/
 │   └── <project_name>/
-│       ├── project.json        # Saved MangaDex URL, chapter index, and every per-project choice (pipeline steps, upload formats, wipe keep-list)
+│       ├── project.json        # Saved MangaDex URL, chapter index, and everything this manga has chosen (its settings, pipeline steps, upload formats, wipe keep-list)
 │       ├── memory.json         # Story continuity state across chapters
 │       ├── manifest.json       # Per-chapter pages/panels bookkeeping, one shared file (informational only)
 │       ├── chapters/

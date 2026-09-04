@@ -56,7 +56,9 @@ class AudioProcessor:
         changed) would silently re-mix and re-render every chapter it
         touches, every single time, for no reason.
         """
-        full_config = RemangaConfig.load()
+        # Scoped to the project: the validator below reads the BGM out of this
+        # config, and it has to be the one this manga uses.
+        full_config = RemangaConfig.load().for_project(project_name)
         if bgm_override:
             full_config.audio.bgm_path = bgm_override
             full_config.audio.bgm_enabled = True

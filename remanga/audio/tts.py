@@ -31,7 +31,9 @@ class TTSEngine:
         Synthesizes narration audio per panel with IndexTTS-2.5.
         Resumes automatically by checking existing panel WAV clips.
         """
-        full_config = RemangaConfig.load()
+        # Scoped to the project: the validator below reads the voice out of this
+        # config, and it has to be the one this manga uses.
+        full_config = RemangaConfig.load().for_project(project_name)
         if voice_override:
             full_config.tts.spk_audio_prompt = voice_override
             self.tts_config.spk_audio_prompt = voice_override

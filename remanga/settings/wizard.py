@@ -53,8 +53,16 @@ def run_setup_wizard(config: RemangaConfig) -> RemangaConfig:
         note = "changes save immediately"
         if missing:
             note = f"not configured yet: {', '.join(missing)}"
+        # Opened from inside a project, the voice/music/video answers are that
+        # manga's; the machine-wide ones still aren't (see
+        # RemangaConfig.save). Worth one clause, since the same screen does
+        # both depending on where you opened it from.
+        title = "Settings"
+        if config.project:
+            title = f"Settings — {config.project}"
+            note += " · for this manga; GPU/web-UI settings stay machine-wide"
 
-        picked = select("Settings", rows, note=note, back_label="Done")
+        picked = select(title, rows, note=note, back_label="Done")
         if is_cancel(picked):
             return config
 

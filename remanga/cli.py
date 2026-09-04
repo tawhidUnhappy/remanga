@@ -57,7 +57,14 @@ def main():
             if cmd is None:
                 parser.error(f"unknown command: {args.command}")
                 return
-            cmd.handler(params_from_namespace(cmd, args), config)
+            params = params_from_namespace(cmd, args)
+            # Every command that names a project runs on that project's
+            # settings - its voice, its music, its resolution - falling back
+            # to config.json for everything it hasn't overridden. A command
+            # with no project (setup-config, paths, setup-models) edits the
+            # machine's own configuration, as it always did.
+            project = params.get("project")
+            cmd.handler(params, config.for_project(project) if project else config)
     except PromptExit:
         # The Exit row / ctrl+q, from any prompt at any depth (see
         # remanga.tui.result.PromptExit). Not an error, and not a pause -
