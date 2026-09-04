@@ -20,7 +20,7 @@ from remanga.config import RemangaConfig
 from remanga.console import console, display_path, escape as _esc
 from remanga.settings.fields import get_field, set_field
 from remanga.settings.files import (
-    AUDIO_EXTENSIONS, discover_files, is_valid_file, parent_dir_of, read_reference_text,
+    AUDIO_EXTENSIONS, asset_dir, discover_files, is_valid_file, parent_dir_of, read_reference_text,
     write_reference_text,
 )
 from remanga.tui import Choice, ask_path, ask_text, confirm, is_cancel, select
@@ -130,9 +130,16 @@ def edit_asset(config: RemangaConfig, spec: AssetSpec) -> None:
         return
 
     current = str(get_field(config, spec.dotted) or "")
+    # Created, not just named: "drop your files in global/voice/" is only
+    # useful advice if that folder is actually there to drop them into.
+    folder = asset_dir(spec.subdir, create=True) if spec.subdir else None
+    note = spec.required_for
+    if folder is not None:
+        note += f"\nlisting {display_path(folder, wrap=False)}/ - put files there to see them here"
+
     picked = ask_path(
         f"{spec.label}", current=current, candidates=candidates_for(config, spec),
-        note=spec.required_for, allow_none=bool(spec.enabled_field),
+        note=note, allow_none=bool(spec.enabled_field),
         none_label="None (turn this off)",
     )
     if is_cancel(picked):

@@ -10,8 +10,10 @@ get a purpose-built prompt instead of a blank text box:
     keep             - the files this chapter actually has right now
     formats          - the packaging formats, as a checklist
     steps            - the pipeline steps, as an ordered checklist
-    voice/bgm        - the audio files already sitting in global/
+    engine           - the TTS engines, each described, current pre-picked
     url              - not asked at all once project.json has a source
+    voice/bgm        - not asked at all: the configured file is stated and
+                       used (they're set once and kept for months)
 
 `keep` and `formats` additionally open pre-checked with whatever this
 project chose last time (remembered in project.json - see
@@ -26,14 +28,14 @@ from typing import Any, Dict, Optional
 
 from remanga.commands import Command, Param, resolve_wipe_keep
 from remanga.config import RemangaConfig
+from remanga.config.tts import TTS_ENGINE_SPECS
 from remanga.console import console, display_path
 from remanga.reset import wipeable_entries
-from remanga.settings import AUDIO_EXTENSIONS, discover_files
 from remanga.settings.project_prefs import (
     active_package_formats, remembered_package_formats, remembered_wipe_keep,
 )
 from remanga.settings.vision import package_choices
-from remanga.tui import CANCEL, Choice, ask_path, ask_text, confirm, is_cancel, multiselect, select
+from remanga.tui import CANCEL, Choice, ask_text, confirm, is_cancel, multiselect, select
 from remanga.wizard.chapters import select_chapter, select_chapters
 
 
@@ -185,20 +187,54 @@ def _prompt_steps(param: Param, project: str, config: RemangaConfig, values: Dic
     return None if picked == saved else ",".join(picked)
 
 
-def _prompt_audio_override(subdir: str, current_value: str):
-    """Builds a prompter for an optional 'use this audio file instead of the
-    configured one, just this once' parameter (tts --voice, mix --bgm)."""
+def _configured_asset(spec_key: str, current_value):
+    """Builds a prompter for an optional "use this file instead, just this
+    once" parameter (tts --voice, mix --bgm) that doesn't actually ask.
+
+    The reference voice and the background music are set once and then used
+    for months - asking which file to use before every single chapter's TTS
+    run is a screen that answers itself every time. So the wizard states
+    what it's about to use and moves on, and changing it is either a
+    permanent edit (Settings → Assets, where the pickers list what's in
+    global/voice/ and global/bgm/) or an explicit CLI flag for a genuine
+    one-off. Returns None, which every handler reads as "use the configured
+    file"."""
 
     def prompt(param: Param, project: str, config: RemangaConfig, values: Dict[str, Any]) -> Any:
         configured = current_value(config)
-        picked = ask_path(
-            param.label, current="", candidates=discover_files(AUDIO_EXTENSIONS, preferred_subdir=subdir),
-            note=f"leave as-is to use the configured file: {configured or '(none)'}",
-            allow_none=True, none_label="Use the configured file",
-        )
-        return picked
+        flag = param.flags[0]
+        if configured:
+            console.print(
+                f"[dim]{param.prompt or param.name}: {configured} "
+                f"(change it in Settings → Assets, or pass {flag} for a one-off)[/]"
+            )
+        else:
+            console.print(
+                f"[dim]{param.prompt or param.name}: none configured "
+                f"(set one in Settings → Assets, or pass {flag})[/]"
+            )
+        return None
 
     return prompt
+
+
+def _prompt_engine(param: Param, project: str, config: RemangaConfig, values: Dict[str, Any]) -> Any:
+    """Which TTS engine speaks this run. Pre-highlighted on the configured
+    one - Enter keeps it - and every row says how that engine differs, from
+    the engine specs themselves (remanga/config/tts.py). Picking a different
+    one here is a one-run override; config.json is left alone (Settings →
+    TTS engine is the permanent switch)."""
+    current = config.tts.spec.name
+    rows = [
+        Choice(label=spec.display_name, hint=spec.name, detail=spec.summary, value=spec.name,
+               badge="current" if spec.name == current else "")
+        for spec in TTS_ENGINE_SPECS
+    ]
+    picked = select(param.label, rows, default=current,
+                    note="just for this run - weights download automatically the first time an engine is used")
+    if is_cancel(picked):
+        return CANCEL
+    return None if picked == current else picked
 
 
 def _prompt_url(param: Param, project: str, config: RemangaConfig, values: Dict[str, Any]) -> Any:
@@ -224,8 +260,9 @@ _SPECIAL = {
     "formats": _prompt_formats,
     "steps": _prompt_steps,
     "url": _prompt_url,
-    "voice": _prompt_audio_override("voice", lambda c: c.tts.spk_audio_prompt),
-    "bgm": _prompt_audio_override("bgm", lambda c: c.audio.bgm_path if c.audio.bgm_enabled else ""),
+    "engine": _prompt_engine,
+    "voice": _configured_asset("voice", lambda c: c.tts.spk_audio_prompt),
+    "bgm": _configured_asset("bgm", lambda c: c.audio.bgm_path if c.audio.bgm_enabled else ""),
 }
 
 

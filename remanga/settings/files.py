@@ -37,43 +37,29 @@ def is_valid_file(raw_path: str, min_size: int = 0) -> Optional[Path]:
     return None
 
 
-def discover_files(
-    extensions: Sequence[str],
-    *,
-    preferred_subdir: str = "",
-    extra_dirs: Iterable[Path] = (),
-    limit: int = 40,
-) -> List[Path]:
-    """Every candidate file for one kind of asset, best guess first.
+def asset_dir(subdir: str, create: bool = False) -> Path:
+    """The folder one kind of shared asset lives in - global/voice/,
+    global/bgm/. Optionally created, so telling a user "drop your files
+    here" always names a folder that exists."""
+    path = GLOBAL_DIR / subdir if subdir else GLOBAL_DIR
+    if create:
+        path.mkdir(parents=True, exist_ok=True)
+    return path
 
-    Ordering is the whole point: files under global/<preferred_subdir>/ come
-    first (that's where this asset kind belongs and where bootstrap puts
-    it), then anything else under global/, then the directories a caller
-    adds - normally the folder the currently-configured file lives in, so
-    its siblings are one keypress away when swapping to a different take of
-    the same recording.
 
-    Capped at `limit` so a global/ folder someone has dropped a sample
-    library into produces a usable menu rather than a thousand-row wall."""
-    roots: List[Path] = []
-    if preferred_subdir:
-        roots.append(GLOBAL_DIR / preferred_subdir)
-    roots.append(GLOBAL_DIR)
-    roots.extend(extra_dirs)
-
-    seen = set()
-    found: List[Path] = []
+def _scan(roots: Iterable[Path], extensions: Sequence[str], limit: int,
+          seen: set, found: List[Path], recursive: bool) -> None:
     for root in roots:
-        if not root or not root.exists() or not root.is_dir():
+        if not root or not root.is_dir():
             continue
         try:
-            entries = sorted(root.rglob("*") if root == GLOBAL_DIR else root.iterdir(),
+            entries = sorted(root.rglob("*") if recursive else root.iterdir(),
                              key=lambda p: p.name.casefold())
         except OSError:
             continue
         for entry in entries:
             if len(found) >= limit:
-                return found
+                return
             if not entry.is_file() or entry.suffix.lower() not in extensions:
                 continue
             try:
@@ -84,6 +70,43 @@ def discover_files(
                 continue
             seen.add(resolved)
             found.append(entry)
+
+
+def discover_files(
+    extensions: Sequence[str],
+    *,
+    preferred_subdir: str = "",
+    extra_dirs: Iterable[Path] = (),
+    limit: int = 40,
+) -> List[Path]:
+    """Candidate files for ONE kind of asset - searched where that kind
+    lives, not everywhere.
+
+    Each asset kind has its own folder (global/voice/, global/bgm/), and a
+    voice picker listing the background-music track is noise: they're both
+    audio files, and neither is a plausible answer for the other's
+    question. So the search is scoped to global/<preferred_subdir>/ plus the
+    directories a caller adds - normally the folder the currently-configured
+    file lives in, so its siblings are one keypress away when swapping to a
+    different take of the same recording.
+
+    Only when that turns up nothing does it widen to all of global/: a user
+    who dropped a WAV straight into global/ still gets it offered rather
+    than an empty menu telling them there are no files when there plainly
+    are. Anywhere else on disk is still reachable through the picker's own
+    "Enter a path…" row.
+
+    Capped at `limit` so a folder someone has pointed at a sample library
+    produces a usable menu rather than a thousand-row wall."""
+    seen: set = set()
+    found: List[Path] = []
+
+    _scan([asset_dir(preferred_subdir)] if preferred_subdir else [], extensions, limit, seen, found,
+          recursive=True)
+    _scan(extra_dirs, extensions, limit, seen, found, recursive=False)
+
+    if not found:
+        _scan([GLOBAL_DIR], extensions, limit, seen, found, recursive=True)
     return found
 
 

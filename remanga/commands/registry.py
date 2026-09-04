@@ -19,6 +19,7 @@ from remanga.commands.handlers import project as project_handlers
 from remanga.commands.handlers import setup as setup_handlers
 from remanga.commands.selection import DEFAULT_WIPE_KEEP
 from remanga.commands.spec import Command, Param, chapter_param, force_param, project_param
+from remanga.config.tts import TTS_ENGINE_SPECS, TTS_ENGINES
 from remanga.narration import NARRATION_FILE_MODES, TEMPLATE
 from remanga.pipeline import STEP_REGISTRY
 from remanga.reset import RESTART_MODES
@@ -168,11 +169,25 @@ COMMAND_REGISTRY: List[Command] = [
         chapter_handlers.tts,
         [
             project_param(), chapter_param(),
+            Param(
+                "engine", ["--engine", "-e"], type="choice", default=None,
+                choices=list(TTS_ENGINES),
+                prompt="TTS engine",
+                help="Synthesize with this engine instead of config.json's tts.engine, just for "
+                     "this run - " + ". ".join(
+                         f"{spec.name}: {spec.summary}" for spec in TTS_ENGINE_SPECS) + ". Its "
+                     "weights download automatically the first time it's used.",
+                choice_help={spec.name: spec.display_name for spec in TTS_ENGINE_SPECS},
+                choice_detail={spec.name: spec.summary for spec in TTS_ENGINE_SPECS},
+            ),
             Param("voice", ["--voice", "-v"], required=False, default=None,
-                  help="Override reference speaker WAV path", prompt="Reference voice override"),
+                  help="Override the reference speaker WAV for this run (the configured one is "
+                       "used otherwise - change it permanently with `remanga paths`)",
+                  prompt="Reference voice"),
             force_param("Force re-synthesis of all panels"),
         ],
         category="Chapter Production",
+        detail="uses the configured voice and engine unless you pick otherwise",
     ),
     Command(
         "mix",
@@ -181,9 +196,12 @@ COMMAND_REGISTRY: List[Command] = [
         [
             project_param(), chapter_param(),
             Param("bgm", ["--bgm", "-b"], required=False, default=None,
-                  help="Override background music audio path", prompt="Background music override"),
+                  help="Override the background music file for this run (the configured one is "
+                       "used otherwise - change it permanently with `remanga paths`)",
+                  prompt="Background music"),
         ],
         category="Chapter Production",
+        detail="uses the configured background music unless you pick otherwise",
     ),
     Command(
         "render",

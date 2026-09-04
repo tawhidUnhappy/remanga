@@ -86,7 +86,21 @@ def package(params: Dict[str, Any], config: RemangaConfig) -> None:
 
 
 def tts(params: Dict[str, Any], config: RemangaConfig) -> None:
-    TTSEngine(config.tts, config.audio).generate_narration_audio(
+    """Synthesizes this chapter's narration. `--engine` swaps the engine for
+    this run only - config.json keeps whatever it says, since a one-off
+    "try the other voice model on this chapter" shouldn't silently redefine
+    what every later run does."""
+    tts_config = config.tts
+    engine = params.get("engine")
+    if engine and engine != config.tts.engine:
+        tts_config = config.tts.model_copy(deep=True)
+        tts_config.engine = engine
+        console.print(
+            f"[cyan]Synthesizing with {tts_config.spec.display_name} for this run[/] "
+            f"[dim](config.json still says {config.tts.spec.display_name})[/]"
+        )
+
+    TTSEngine(tts_config, config.audio).generate_narration_audio(
         params["project"], params["chapter"],
         voice_override=params.get("voice"), interactive=True, force=bool(params.get("force")),
     )

@@ -315,10 +315,21 @@ Command parameters are prompted from their own `Param` specs
 The `_SPECIAL` table there overrides the generic prompt for the parameters
 whose answer is discoverable: `chapter`/`chapters` (this project's chapters +
 status), `keep` (what the chapter actually has on disk, as a checklist),
-`steps` (ordered checklist of `STEP_REGISTRY`), `voice`/`bgm` (audio files
-found under `global/`), `mode` (restart presets with what each keeps), and
-`url` (not asked at all once project.json has a manga source). Rule when
-adding a parameter: if remanga can find the answer, don't ask for it.
+`formats` (packaging checklist), `steps` (ordered checklist of
+`STEP_REGISTRY`), `engine` (TTS engines, configured one pre-picked), and the
+ones it deliberately does NOT ask at all - `url` (once project.json has a
+manga source) and `voice`/`bgm` (the configured file is stated and used;
+they're set once and kept for months, so `--voice`/`--bgm` cover the rare
+one-off and Settings → Assets covers a permanent change). Rule when adding a
+parameter: if remanga can find the answer, don't ask for it.
+
+`tts --engine` is a per-run override only - it deep-copies TTSConfig and
+sets `engine` there, never writing config.json: "try the other model on this
+chapter" must not silently redefine every later run.
+`settings/files.py:discover_files` scopes its search to the asset's own
+folder (`global/voice/`, `global/bgm/`) and widens to all of `global/` only
+when that folder turns up nothing - a voice picker listing the BGM track is
+noise, since neither is a plausible answer to the other's question.
 
 ## Interactive terminal: `remanga/tui/`
 

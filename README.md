@@ -144,7 +144,9 @@ Picking a category opens its commands, and running one lands you back in the sam
 | Which chapter? | The chapters this project has, each row showing its production status; "New chapter…" suggests the next number |
 | Which manga/URL? | `project.json`'s saved source — asked once, on the first download |
 | Which way does it read? | MangaDex's `originalLanguage` (`ja` → right-to-left, `ko`/`zh` → left-to-right) |
-| Reference voice / BGM path? | The audio files already sitting in `global/voice/`, `global/bgm/` — pick a row, or type a path for one elsewhere |
+| Which voice / music this run? | Not asked at all — the configured file is stated and used. They're set once and kept, so `--voice`/`--bgm` cover the rare one-off and Settings → Assets covers a permanent change |
+| Which reference voice / music file? | When you *do* change one: the audio files already in `global/voice/` or `global/bgm/` — each picker searches only its own folder — or type a path for one elsewhere |
+| Which TTS engine? | The engines, each described, with the configured one pre-picked |
 | What to keep when wiping? | A checklist of exactly what that chapter has on disk right now — and what you picked last time, remembered per project |
 | What to package for the LLM? | A checklist of every format, opened on what this project builds — your pick is remembered for the next chapter |
 | Which pipeline steps? | An ordered checklist of the real step registry — the number shown is the run order |
@@ -338,11 +340,15 @@ writes there (phrased so it applies to any manga, not just this one — see
 too, under `projects/my_manga/chapters/chapter_1/narration_reviews/round_<n>.json`, in case you
 want to look back at what was flagged and fixed.
 
-### 5. Synthesize Vocal Audio (IndexTTS-2.5)
+### 5. Synthesize Vocal Audio
 ```bash
 ./run.sh tts --project "my_manga" --chapter "1"
+./run.sh tts --project "my_manga" --chapter "1" --engine audio8-tts-0.1b
 ```
-*(Optional: override reference speaker voice with `--voice path/to/voice.wav` or force re-synthesis with `--force`)*
+Uses the configured engine and reference voice unless you say otherwise:
+- **`--engine`** — synthesize this run with the other engine (`indextts-2.5` / `audio8-tts-0.1b`) without touching `config.json`; its weights download automatically the first time it's used. The wizard offers this as a menu with the configured engine pre-picked, so Enter keeps it. Switch permanently in `setup-config` → **TTS engine**.
+- **`--voice`** — a different reference WAV for this run only.
+- **`--force`** — re-synthesize every panel instead of resuming.
 
 ### 6. Mix Master Audio Track
 Applies micro edge-fading, mixes optional background music (BGM), and normalizes via EBU R128:
@@ -552,7 +558,7 @@ In short: if a chapter's TTS run gets interrupted or a worker locks up, just re-
 ./run.sh mark      -p <PROJECT> -c <CHAPTER>
 ./run.sh crop     -p <PROJECT> -c <CHAPTER> [-f]
 ./run.sh review   -p <PROJECT> -c <CHAPTER>
-./run.sh tts      -p <PROJECT> -c <CHAPTER> [-v <VOICE_WAV>] [-f]
+./run.sh tts      -p <PROJECT> -c <CHAPTER> [-e <ENGINE>] [-v <VOICE_WAV>] [-f]
 ./run.sh mix      -p <PROJECT> -c <CHAPTER> [-b <BGM_FILE>]
 ./run.sh render   -p <PROJECT> -c <CHAPTER> [-f]
 ./run.sh full-recap -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-f]
