@@ -138,7 +138,7 @@ Every screen is an arrow-key menu — **↑/↓** to move, **Enter** to pick, **
 
 Short, fixed lists are **numbered** instead, so picking one is a single keystroke rather than an arrow and an Enter. Type the number to pick it, `0` to back out (the same convention the non-tty fallback prompts have always used); the arrow keys still work.
 
-`tts` is the one command with a menu of its own, because the engine and the voice clip are things you notice at the moment you go to synthesize — not while walking through `setup-config`. Every row states what that setting is right now, and opens the same screen the settings menu does:
+Five commands have a menu of their own — `tts`, `mix`, `render`, `full-recap` and `remix` — because the engine, the voice clip, the music and the resolution are things you notice at the moment you go to run them, not while walking through `setup-config`. Row 1 runs the command; the rest are the settings it reads, each stating its current value and opening the same screen the settings menu opens:
 
 ```
 ? tts
@@ -154,7 +154,19 @@ Short, fixed lists are **numbered** instead, so picking one is a single keystrok
   type 1-5 · ↑↓ move · enter select · 0 or esc back · ctrl+q exit
 ```
 
-Rows that don't apply aren't shown: **Reference transcript** appears only under an engine that needs one. On the CLI, `tts` is unchanged — it synthesizes a chapter, and the settings keep their own screens under `setup-config`.
+```
+? render
+  Render final recap MP4 video · or change what it runs with
+❯ 1. Run render  Render final recap MP4 video
+  2. Video resolution  1080p Full HD (1920x1080)
+  3. Canvas background  Bokeh canvas blur
+  4. Hardware acceleration  h264_nvenc preferred
+     Back
+  renders at the resolution, background and encoder set below
+  type 1-4 · ↑↓ move · enter select · 0 or esc back · ctrl+q exit
+```
+
+Rows that don't apply aren't shown: **Reference transcript** appears only under an engine that needs one. The rows are pointers, not copies — each runs the very same function `setup-config` runs, so the two can never describe a setting differently. Commands with no settings behind them (`download`, `crop`, `mark`, …) still run straight away. On the CLI nothing changed: `remanga tts` synthesizes a chapter, and every setting keeps its own screen under `setup-config`.
 
 Picking a category opens its commands, and running one lands you back in the same list — chaining `mark` → `crop` → `write` is picking three rows in a row. The menu is generated from the command registry, so every command `remanga --help` lists is here too, described the same way.
 

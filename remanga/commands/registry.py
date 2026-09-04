@@ -25,9 +25,8 @@ from remanga.config.tts import TTS_ENGINE_SPECS, TTS_ENGINES
 from remanga.narration import NARRATION_FILE_MODES, TEMPLATE
 from remanga.pipeline import STEP_REGISTRY
 from remanga.reset import RESTART_MODES
-from remanga.settings import configure_engine, configure_language
 from remanga.settings.assets import ASSET_BY_KEY, asset_relevant, asset_status, edit_asset
-from remanga.settings.presets import language_label
+from remanga.settings.sections import SECTION_BY_KEY
 from remanga.settings.vision import package_switch_names
 
 
@@ -47,10 +46,38 @@ CATEGORIES: Tuple[Category, ...] = (
     Category("Project-wide", "whole-project compile, status, verify, and cleanup"),
 )
 
+# --- what each command runs on --------------------------------------------
+#
+# A command's setup rows are the settings it reads, offered from the command
+# itself: you notice the wrong voice or the wrong resolution at the moment you
+# go to synthesize or render, not while walking through `setup-config`.
+#
+# Both builders below take the row's title, its current-value line and its
+# editor from the definition that already exists - remanga.settings.sections
+# for a whole settings area, remanga.settings.assets for one shared file - so
+# a row here can't describe a screen differently from the settings menu, or go
+# stale when that screen changes. Nothing is reimplemented; these are pointers.
+
+
+def _section_setup(key: str, detail: str = "") -> SetupAction:
+    """A setup row for one settings area (remanga.settings.sections). `detail`
+    overrides the section's own only where a command wants to say why *it*
+    cares about that setting."""
+    section = SECTION_BY_KEY[key]
+    return SetupAction(
+        section.title, describe=section.describe, run=section.run,
+        detail=detail or section.detail,
+    )
+
+
 def _asset_setup(key: str, label: str, detail: str) -> SetupAction:
-    """A setup row for one shared asset (see remanga.settings.assets), taking
-    its current-value line, its editor and its "does this engine even use it"
-    test from that asset's own spec rather than restating any of them."""
+    """A setup row for one shared asset (remanga.settings.assets), taking its
+    current-value line, its editor and its "does this engine even use it" test
+    from that asset's own spec.
+
+    Per-asset rather than the whole Assets screen on purpose: `mix` cares
+    about the BGM and nothing else, and offering it the reference voice as
+    well would be three rows of noise around the one that matters."""
     spec = ASSET_BY_KEY[key]
     return SetupAction(
         label,
@@ -61,24 +88,23 @@ def _asset_setup(key: str, label: str, detail: str) -> SetupAction:
     )
 
 
-# What `tts` runs on. Reachable from the tts row itself, because "which
-# engine/voice is this about to use, and can I change it here" is a question
-# you have at the moment you run it - not one worth walking out to
-# `setup-config` and back for. Every row opens the same screen the settings
-# menu's own row does; nothing is reimplemented here.
 TTS_SETUP: Tuple[SetupAction, ...] = (
-    SetupAction(
-        "TTS engine", describe=lambda config: config.tts.spec.display_name, run=configure_engine,
-        detail="which model synthesizes the narration voice - "
-               + ", ".join(spec.display_name for spec in TTS_ENGINE_SPECS),
-    ),
+    _section_setup("engine", "which model synthesizes the narration voice - "
+                   + ", ".join(spec.display_name for spec in TTS_ENGINE_SPECS)),
     _asset_setup("voice", "Reference voice", "the clip every chapter's narration is cloned from"),
     _asset_setup("transcript", "Reference transcript",
                  "what that clip says, word for word - only the engines that need it show this"),
-    SetupAction(
-        "Narration language", describe=language_label, run=configure_language,
-        detail="passed straight through to the engine",
-    ),
+    _section_setup("language", "passed straight through to the engine"),
+)
+
+BGM_SETUP: Tuple[SetupAction, ...] = (
+    _asset_setup("bgm", "Background music", "the music bed mixed under the narration"),
+)
+
+VIDEO_SETUP: Tuple[SetupAction, ...] = (
+    _section_setup("resolution", "the frame size every chapter is rendered at"),
+    _section_setup("background", "what fills the frame around each panel"),
+    _section_setup("hardware", "GPU encoding when it's available, CPU when it isn't"),
 )
 
 _STEP_NAMES = ", ".join(step.name for step in STEP_REGISTRY)
@@ -259,6 +285,7 @@ COMMAND_REGISTRY: List[Command] = [
         ],
         category="Chapter Production",
         detail="uses the configured background music unless you pick otherwise",
+        setup=BGM_SETUP,
     ),
     Command(
         "render",
@@ -269,6 +296,8 @@ COMMAND_REGISTRY: List[Command] = [
             force_param("Force re-rendering video"),
         ],
         category="Chapter Production",
+        detail="renders at the resolution, background and encoder set below",
+        setup=VIDEO_SETUP,
     ),
     Command(
         "run",
@@ -323,6 +352,8 @@ COMMAND_REGISTRY: List[Command] = [
             force_param("Force a full recompile even if already compiled"),
         ],
         category="Project-wide",
+        detail="one BGM pass and one render for the whole manga - both configured below",
+        setup=BGM_SETUP + VIDEO_SETUP,
     ),
     Command(
         "remix",
@@ -341,6 +372,8 @@ COMMAND_REGISTRY: List[Command] = [
                   prompt="Skip recompiling the full-recap video?"),
         ],
         category="Project-wide",
+        detail="change the music or the video settings here, then re-mix and re-render with them",
+        setup=BGM_SETUP + VIDEO_SETUP,
     ),
     Command(
         "status",

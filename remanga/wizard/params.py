@@ -211,8 +211,13 @@ def _not_asked(current_value, where: str):
     chosen once and then used for months. Asking which of them to use before
     every single chapter's run is a screen that answers itself every time -
     so the wizard says what it's about to use and moves on. Changing one is
-    either a permanent edit (`where` names the settings screen for it) or an
-    explicit CLI flag for a genuine one-off."""
+    either a permanent edit (`where` names where to make it) or an explicit
+    CLI flag for a genuine one-off.
+
+    `where` names the command's own menu rather than a path through Settings:
+    every parameter that lands here belongs to a command that lists that
+    setting one row above (Command.setup - see commands/registry.py), so the
+    screen is already open in front of you."""
 
     def prompt(param: Param, project: str, config: RemangaConfig, values: Dict[str, Any]) -> Any:
         configured = current_value(config)
@@ -250,9 +255,10 @@ _SPECIAL = {
     "formats": _prompt_formats,
     "steps": _prompt_steps,
     "url": _prompt_url,
-    "engine": _not_asked(lambda c: c.tts.spec.display_name, "Settings → TTS engine"),
-    "voice": _not_asked(lambda c: c.tts.spk_audio_prompt, "Settings → Assets"),
-    "bgm": _not_asked(lambda c: c.audio.bgm_path if c.audio.bgm_enabled else "", "Settings → Assets"),
+    "engine": _not_asked(lambda c: c.tts.spec.display_name, "this command's TTS engine row"),
+    "voice": _not_asked(lambda c: c.tts.spk_audio_prompt, "this command's Reference voice row"),
+    "bgm": _not_asked(lambda c: c.audio.bgm_path if c.audio.bgm_enabled else "",
+                      "this command's Background music row"),
 }
 
 
