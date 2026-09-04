@@ -320,6 +320,12 @@ LLM output and hand-written text carry things a TTS engine turns into noise. Thi
 
 Runs of `!!!` collapse to one (same meaning to a model, less risk of over-reading), and a mixed `?!` survives intact — that pairing is its own tone.
 
+It also fixes what reads *flat* rather than what glitches:
+
+- **`'speech'` → `"speech"`** — a single quote is also the apostrophe, so a tokenizer can't tell `sneers, 'a worthless skill'` from `Dragon King's Flame`. Double quotes for speech leave `'` meaning exactly one thing.
+- **Quoted speech gets a capital** — `pleads, 'please stop!'` reads to the model as the middle of a clause and gets that flat continuation prosody; `pleads, "Please stop!"` starts a fresh utterance, which is what it is.
+- **`Mr.` → `Mister`**, and **`A rank` → `A-rank`** — both are otherwise read as letters or as the article "a".
+
 It always shows every line it would change, with which rules fired, and asks before writing — narration text isn't regenerable from anything on disk. `--dry-run` previews and exits; `--force` skips the confirmation. Running it twice changes nothing the second time.
 
 ### 4. Generate and Place `narration.json` + `memory.json`

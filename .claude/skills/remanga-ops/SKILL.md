@@ -406,6 +406,12 @@ keeps), reachable from the menu like everything else.
   matters: `charset` runs before `punctuation` so the gap a removed emoji
   leaves gets cleaned up rather than frozen in ("mage , meets"). Must stay
   idempotent - the command's second run has to report "already TTS-safe".
+  `normalize.py` holds the safety rules; `delivery.py` holds the ones that
+  change how a line is *performed* (single->double speech quotes, capitalized
+  speech, Mr.->Mister, A rank->A-rank) and runs last, on already-clean text.
+  The quote conversion is safe because an apostrophe is the only single quote
+  with letters on BOTH sides - that one distinction is what makes it
+  automatable; don't replace it with a positional guess.
 - `package` (Chapter Production): (re)builds sheets/zips/pdf from an
   already-cropped chapter's panels/, standalone from `crop` - previously
   only happened as a side effect of crop's resume-check top-up.

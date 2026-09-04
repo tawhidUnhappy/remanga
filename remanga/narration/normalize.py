@@ -29,6 +29,7 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Callable, List, Tuple
 
+from remanga.narration.delivery import ranks, speech_case, speech_quotes, titles
 from remanga.narration.numbers import decimal_to_words, int_to_words, ordinal_to_words
 
 # The complete set of characters allowed to reach the synthesizer. Anything
@@ -233,6 +234,9 @@ def _sentence_end(text: str) -> str:
     return text + "."
 
 
+# Safety first (what would glitch), then delivery (what would read flat).
+# Delivery rules run last, on text that's already clean, so they never have
+# to reason about emoji or markdown - see remanga/narration/delivery.py.
 RULES: Tuple[Rule, ...] = (
     Rule("unicode", "normalized unicode / removed invisible characters", _unicode_form),
     Rule("typographic", "converted smart quotes, dashes and ellipses", _typographic),
@@ -246,6 +250,10 @@ RULES: Tuple[Rule, ...] = (
     Rule("punctuation", "tidied punctuation (kept ? ! ...)", _punctuation),
     Rule("whitespace", "collapsed whitespace", _whitespace),
     Rule("sentence_end", "added a missing sentence ending", _sentence_end),
+    Rule("speech_quotes", "used double quotes for speech (freeing ' for apostrophes)", speech_quotes),
+    Rule("speech_case", "capitalized the start of quoted speech", speech_case),
+    Rule("titles", "spelled out titles (Mr. -> Mister)", titles),
+    Rule("ranks", "hyphenated A rank / S class", ranks),
 )
 
 RULE_BY_NAME = {rule.name: rule for rule in RULES}
