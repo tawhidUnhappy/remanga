@@ -353,6 +353,29 @@ def _run_category_menu(category: str, cmds: "List", project: str, config: Remang
             _run_command(cmds[choice_idx - 1], project, config)
 
 
+def _warn_panel_narration_mismatches(project: str) -> None:
+    """Runs automatically the moment a project is selected (see
+    run_interactive_pipeline below) - cheap enough (no ffprobe, just
+    directory listings + JSON reads) to do on every selection, not just an
+    explicit `verify` run. Surfaces exactly the footgun the remanga-ops
+    skill calls out: narration.json's panel_id must equal the stem of a
+    file in panels/ - a mismatch usually means a re-crop happened after
+    narration was written, or vice versa. Purely informational; never
+    blocks entering the menu."""
+    from remanga.verify import project_panel_narration_mismatches
+
+    mismatches = project_panel_narration_mismatches(project)
+    if not mismatches:
+        return
+    console.print(f"\n[bold yellow]⚠ Panel/narration mismatch found in {len(mismatches)} chapter(s):[/]")
+    for chapter_num, issue in mismatches:
+        console.print(f"  [yellow]Chapter {chapter_num}:[/] {issue}")
+    console.print(
+        "[dim]  -> likely a re-crop after narration was written, or vice versa - "
+        "re-run crop/write/review for the affected chapter(s) to line them back up.[/]"
+    )
+
+
 def run_interactive_pipeline():
     """Master interactive production wizard: project discovery once, then a
     simple two-level nested menu - pick a category, pick a command within
@@ -366,6 +389,7 @@ def run_interactive_pipeline():
 
     # 1. Project Selection / Creation / Settings
     project = select_or_create_project(config)
+    _warn_panel_narration_mismatches(project)
 
     # 2. Category menu, grouping COMMAND_REGISTRY (the same list cli.py's
     # argparse is built from) by its own `category` field, so this can never

@@ -54,6 +54,7 @@ class ChapterVerification:
     master_audio: Optional[MediaCheck] = None
     video: Optional[MediaCheck] = None
     duration_mismatch: str = ""
+    panel_narration_mismatch: str = ""
 
     @property
     def ok(self) -> bool:
@@ -62,7 +63,66 @@ class ChapterVerification:
             and (self.master_audio is None or self.master_audio.ok)
             and (self.video is None or self.video.ok)
             and not self.duration_mismatch
+            and not self.panel_narration_mismatch
         )
+
+
+def check_panel_narration_mismatch(project_name: str, chapter_num: str) -> Optional[str]:
+    """Fast, cheap cross-check between panels/ and narration.json's entries -
+    no ffprobe/media decode, just directory listing + one JSON read, so it's
+    safe to run automatically and often (the wizard runs this the moment a
+    project is selected, not just via the `verify` command). Catches the
+    exact footgun the remanga-ops skill calls out: narration.json's
+    panel_id MUST equal the stem of a file in panels/ (render.py globs
+    panels/*.png|*.jpg and keys off .stem) - a mismatch here usually means a
+    re-crop happened after narration was written (or vice versa), silently
+    leaving some panels unnarrated or some narration entries pointing at
+    panels that no longer exist. Returns a one-line description if
+    something's off, None if narration.json doesn't exist yet or everything
+    lines up."""
+    chapter_dir = get_chapter_dir(project_name, chapter_num)
+    narration_path = chapter_dir / "narration.json"
+    if not has_real_json_content(narration_path):
+        return None
+
+    panels_dir = chapter_dir / "panels"
+    panel_stems = {p.stem for p in panels_dir.iterdir() if p.is_file()} if panels_dir.exists() else set()
+
+    narration = read_json(narration_path).get("narration", [])
+    narration_ids = [e.get("panel_id") for e in narration]
+
+    if len(narration_ids) == len(panel_stems) and set(narration_ids) == panel_stems:
+        return None
+
+    missing_panels = [pid for pid in narration_ids if pid not in panel_stems]
+    extra_panels = sorted(panel_stems - set(narration_ids))
+    parts = [f"{len(narration_ids)} narration entries vs {len(panel_stems)} panel file(s)"]
+    if missing_panels:
+        parts.append(
+            f"{len(missing_panels)} narrated panel_id(s) with no matching panel file: "
+            f"{', '.join(missing_panels[:5])}{' ...' if len(missing_panels) > 5 else ''}"
+        )
+    if extra_panels:
+        parts.append(
+            f"{len(extra_panels)} panel file(s) with no narration entry: "
+            f"{', '.join(extra_panels[:5])}{' ...' if len(extra_panels) > 5 else ''}"
+        )
+    return "; ".join(parts)
+
+
+def project_panel_narration_mismatches(project_name: str) -> List[tuple]:
+    """Every chapter of this project with a panel/narration mismatch right
+    now, as (chapter_num, issue) pairs - see check_panel_narration_mismatch.
+    Cheap enough to call on every project selection, not just an explicit
+    `verify` run."""
+    from remanga.full_recap import discover_chapters, chapter_sort_key
+
+    results = []
+    for chapter_num in sorted(discover_chapters(project_name), key=chapter_sort_key):
+        issue = check_panel_narration_mismatch(project_name, chapter_num)
+        if issue:
+            results.append((chapter_num, issue))
+    return results
 
 
 def probe_media(path: Path) -> MediaCheck:
@@ -124,6 +184,8 @@ def verify_chapter(project_name: str, chapter_num: str, check_video: bool = True
     narration = read_json(narration_path).get("narration", [])
     result.narration_entries = len(narration)
     panel_ids = [e.get("panel_id") or f"panel_{i:03d}" for i, e in enumerate(narration, start=1)]
+
+    result.panel_narration_mismatch = check_panel_narration_mismatch(project_name, chapter_num) or ""
 
     audio_dir = get_audio_dir(project_name, chapter_num, create=False)
     for pid in panel_ids:
@@ -206,6 +268,9 @@ def _print_chapter_result(r: ChapterVerification) -> None:
         return
 
     console.print(line + "[bold red]ISSUES FOUND[/]")
+    if r.panel_narration_mismatch:
+        console.print(f"  [red]panels/narration.json mismatch:[/] {_esc(r.panel_narration_mismatch)}")
+        console.print(f"  [dim]-> fix: re-run crop/write/review for chapter {r.chapter_num} so panels and narration line up again[/]")
     if r.audio_clips_missing:
         console.print(f"  [red]{len(r.audio_clips_missing)}/{r.narration_entries} voice clip(s) missing:[/] {', '.join(r.audio_clips_missing[:10])}{' ...' if len(r.audio_clips_missing) > 10 else ''}")
         console.print(f"  [dim]-> fix: remanga tts --project <p> --chapter {r.chapter_num}[/]")
