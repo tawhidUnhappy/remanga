@@ -65,12 +65,12 @@ def save_project_metadata(project_name: str, data: Dict[str, Any]) -> None:
 
 
 def get_pipeline_path(project_name: str) -> Path:
-    """{manga}/pipeline.json - that project's ordered list of pipeline step
-    names (see remanga.pipeline). Just a path lookup here, same as every
-    other per-project metadata file in this module - the default-steps
-    fallback and the "write it if missing" helper live in remanga.pipeline
-    itself, since they need STEP_REGISTRY's default order, which this
-    low-level paths package deliberately knows nothing about."""
+    """{manga}/pipeline.json - LEGACY. The ordered step list lives in
+    project.json now ("pipeline", see remanga.settings.project_prefs), with
+    everything else a project remembers. This path is still resolved for two
+    reasons: remanga.pipeline.load_pipeline reads it when a project written by
+    an older version has one, and project_prefs deletes it once the steps have
+    been saved to project.json."""
     return get_project_dir(project_name) / "pipeline.json"
 
 

@@ -301,16 +301,17 @@ COMMAND_REGISTRY: List[Command] = [
     ),
     Command(
         "run",
-        "Run this project's pipeline.json (or the full default step order, if it has none) for "
-        "one chapter, or an explicit --steps subset/order instead - 'just one tool', 'a lot of "
-        f"them', or a full custom pipeline. Steps: {_STEP_NAMES}",
+        "Run this project's saved pipeline (or the full default step order, if it has never "
+        "chosen one) for one chapter, or an explicit --steps subset/order instead - 'just one "
+        f"tool', 'a lot of them', or a full custom pipeline. Steps: {_STEP_NAMES}",
         chapter_handlers.run,
         [
             project_param(), chapter_param(),
             Param("steps", ["--steps", "-s"], required=False, default=None,
-                  help="Comma-separated step names to run, in order (one-off override - doesn't "
-                       "touch pipeline.json). Default: this project's saved pipeline.json, or the "
-                       f"full default order if it has none ({_STEP_NAMES}).",
+                  help="Comma-separated step names to run, in order (a one-off override - unlike "
+                       "the wizard's checklist, it never saves). Default: this project's saved "
+                       f"pipeline (project.json's \"pipeline\"), or the full default order if it "
+                       f"has never chosen one ({_STEP_NAMES}).",
                   prompt="Steps to run, in order"),
         ],
         category="Chapter Production",

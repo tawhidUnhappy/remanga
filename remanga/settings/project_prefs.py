@@ -3,10 +3,14 @@
 config.json holds the defaults for every project on this machine. A few
 choices, though, belong to *one manga*: which upload formats that project's
 LLM workflow wants built, what a wipe should keep for it, and which pipeline
-steps its last `run` actually ran. Re-answering those identically for chapter
-after chapter is exactly the kind of question this pipeline shouldn't be
-asking twice, so the answer is written to that project's project.json the
-first time it's given and pre-selected from then on.
+steps `run` executes for it. Re-answering those identically for chapter after
+chapter is exactly the kind of question this pipeline shouldn't be asking
+twice, so the answer is written to that project's project.json the first time
+it's given and pre-selected from then on.
+
+One file, not one per setting: everything a project remembers lives in its
+project.json, so "what has this project chosen?" is one file to open and one
+file to copy when a project moves.
 
 Precedence, everywhere both exist: an explicit answer for this run (a CLI
 flag, or the wizard's checklist) beats the project's remembered choice,
@@ -19,12 +23,12 @@ from __future__ import annotations
 from typing import Iterable, List, Optional, Sequence, Set
 
 from remanga.config import CropperConfig, RemangaConfig
-from remanga.paths import load_project_metadata, save_project_metadata
+from remanga.paths import get_pipeline_path, load_project_metadata, save_project_metadata
 from remanga.settings.vision import package_switch_names
 
 PACKAGE_FORMATS_KEY = "package_formats"
 WIPE_KEEP_KEY = "wipe_keep"
-RUN_STEPS_KEY = "run_steps"
+PIPELINE_KEY = "pipeline"
 
 # What a user types (or the wizard sends) to mean "none of them" - an empty
 # selection is a real answer for both settings: build nothing extra, or keep
@@ -119,18 +123,25 @@ def remember_wipe_keep(project_name: str, keep_names: Iterable[str]) -> None:
     save_project_metadata(project_name, {WIPE_KEEP_KEY: sorted(keep_names)})
 
 
-# --- last run's pipeline steps ---------------------------------------------
+# --- the project's pipeline ------------------------------------------------
 
 
-def remembered_run_steps(project_name: str) -> Optional[List[str]]:
-    """The step list this project's last `run` was given from the wizard, in
-    the order it ran them - or None if it has never been asked.
+def remembered_pipeline(project_name: str) -> Optional[List[str]]:
+    """This project's ordered pipeline step names, or None if it has never
+    chosen - in which case remanga.pipeline falls back to DEFAULT_STEPS.
 
-    Deliberately NOT pipeline.json: that file is the project's pipeline, and
-    a one-off run ("just tts, mix, render, the render died") must not
-    redefine it. This is only what the next run's checklist opens on."""
-    return _stored_list(project_name, RUN_STEPS_KEY)
+    Lives here, in project.json, next to the project's other remembered
+    answers. It used to be a pipeline.json of its own alongside it; a project
+    that still has one is read from it (see remanga.pipeline.load_pipeline)
+    until the next save moves it in here."""
+    return _stored_list(project_name, PIPELINE_KEY)
 
 
-def remember_run_steps(project_name: str, steps: Sequence[str]) -> None:
-    save_project_metadata(project_name, {RUN_STEPS_KEY: list(steps)})
+def remember_pipeline(project_name: str, steps: Sequence[str]) -> None:
+    """Saves the pipeline, and retires a legacy pipeline.json if this project
+    still had one - leaving it in place would leave a file that looks like
+    the pipeline, reads like the pipeline, and is no longer the pipeline."""
+    save_project_metadata(project_name, {PIPELINE_KEY: list(steps)})
+    legacy = get_pipeline_path(project_name)
+    if legacy.exists():
+        legacy.unlink()

@@ -9,15 +9,17 @@ get a purpose-built prompt instead of a blank text box:
     chapter/chapters - the chapters this project actually has, with status
     keep             - the files this chapter actually has right now
     formats          - the packaging formats, as a checklist
-    steps            - the pipeline steps, as an ordered checklist
+    steps            - the project's pipeline, as an ordered checklist
     engine           - the TTS engines, each described, current pre-picked
     url              - not asked at all once project.json has a source
     engine/voice/bgm - not asked at all: what's configured is stated and
                        used (all three are set once and kept for months)
 
-`keep`, `formats` and `steps` additionally open pre-checked with whatever
-this project chose last time (remembered in project.json - see
-settings/project_prefs.py), so answering them once per project is enough.
+`keep` and `formats` additionally open pre-checked with whatever this
+project chose last time (remembered in project.json - see
+settings/project_prefs.py), and `steps` opens on the project's pipeline and
+saves back to it (pipeline.json), so answering any of them once per project
+is enough.
 
 That last one is the rule the rest follow: if remanga can find the answer,
 it shouldn't be a question."""
@@ -31,8 +33,7 @@ from remanga.config import RemangaConfig
 from remanga.console import console, display_path
 from remanga.reset import wipeable_entries
 from remanga.settings.project_prefs import (
-    active_package_formats, remember_run_steps, remembered_package_formats,
-    remembered_run_steps, remembered_wipe_keep,
+    active_package_formats, remembered_package_formats, remembered_wipe_keep,
 )
 from remanga.settings.vision import package_choices
 from remanga.tui import CANCEL, Choice, ask_text, confirm, is_cancel, multiselect, select
@@ -165,41 +166,24 @@ def _prompt_formats(param: Param, project: str, config: RemangaConfig, values: D
 
 
 def _prompt_steps(param: Param, project: str, config: RemangaConfig, values: Dict[str, Any]) -> Any:
-    """The pipeline steps for a one-off run, pre-checked - in order - with
-    whatever this project ran last time, falling back to its saved pipeline
-    the first time it's asked. Confirming a selection that matches the saved
-    pipeline returns None, which means "use the saved pipeline.json" - the
-    same thing leaving --steps off does.
+    """Which steps this run executes - which is the same question as what
+    this project's pipeline is, so it's the same checklist the Pipeline row
+    opens, and confirming it saves projects/<name>/pipeline.json.
 
-    The pick is remembered (in project.json, not pipeline.json) as soon as
-    it's made rather than after the run finishes, unlike wipe's keep-list:
-    the run that dies at tts, or that you interrupt after render starts, is
-    precisely the one you're about to repeat with the same subset ticked."""
-    from remanga.pipeline import STEP_REGISTRY, load_pipeline
+    That's what makes the answer stick: pick "tts, mix, render" once and every
+    later run opens on it, already ticked, in that order, because it is now
+    the pipeline. Returns None - "no override" - since the handler reads the
+    pipeline back and that's exactly what was just chosen. A subset that
+    should NOT stick is `--steps` on the CLI, which still never writes
+    anything."""
+    from remanga.wizard.pipeline_edit import choose_pipeline_steps
 
-    saved = load_pipeline(project)
-    known = {step.name for step in STEP_REGISTRY}
-    # A remembered step that no longer exists (a renamed/removed step in a
-    # newer STEP_REGISTRY) is dropped rather than carried as a dead row.
-    remembered = [name for name in (remembered_run_steps(project) or []) if name in known]
-    start = remembered or saved
-
-    rows = [
-        Choice(label=step.name, hint=step.description, value=step.name, checked=step.name in start)
-        for step in STEP_REGISTRY
-    ]
-    rows.sort(key=lambda row: start.index(row.value) if row.value in start else len(start))
-
-    # Opening on the last run already says the pick is remembered, so only
-    # the first-time note (where it isn't obvious yet) spells it out.
-    note = f"this project's pipeline: {', '.join(saved)}"
-    note += (" · checked as you last ran it" if remembered and remembered != saved
-             else " · your choice here is remembered for the next run")
-    picked = multiselect(param.label, rows, ordered=True, allow_empty=False, note=note)
-    if is_cancel(picked):
-        return CANCEL
-    remember_run_steps(project, picked)
-    return None if picked == saved else ",".join(picked)
+    picked = choose_pipeline_steps(
+        project, title=param.label,
+        note="the number is the run order · this becomes the project's pipeline, "
+             "so the next run opens on it",
+    )
+    return CANCEL if picked is None else None
 
 
 def _not_asked(current_value, where: str):

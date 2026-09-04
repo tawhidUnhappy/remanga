@@ -2,8 +2,8 @@
 crop -> package -> narration -> review -> tts -> mix -> render sequence, now expressed as an ordered list of named, independently
 runnable steps instead of one hardcoded function. This lets a caller run
 "just one tool" (a single step name), "a lot of them" (an arbitrary subset,
-in any order), or the full default pipeline - driven by
-projects/<name>/pipeline.json instead of code.
+in any order), or the full default pipeline - driven by the project's own
+saved step list (project.json's "pipeline") instead of code.
 
 Each step's actual work is NOT reimplemented here - every _run_* function
 below is a thin wrapper around the exact same downloader/cropper/audio/video/
@@ -27,7 +27,7 @@ from remanga.downloader import MangaDexDownloader
 from remanga.json_io import has_real_json_content, read_json_or, write_json
 from remanga.packaging import package_chapter
 from remanga.paths import get_chapter_dir, get_pipeline_path
-from remanga.settings.project_prefs import cropper_config_for
+from remanga.settings.project_prefs import cropper_config_for, remembered_pipeline
 from remanga.video import VideoRenderer
 from remanga.webui import launch_and_wait as launch_panel_marker
 
@@ -127,7 +127,7 @@ def _run_render(project: str, chapter: str, config: RemangaConfig) -> None:
 
 # Ordered, once - both STEP_REGISTRY (source of truth for what a step is/
 # does) and DEFAULT_STEPS (today's exact hardcoded wizard order, used as the
-# fallback whenever a project has no pipeline.json) come from this one list.
+# fallback whenever a project has never chosen) come from this one list.
 STEP_REGISTRY: List[Step] = [
     Step("download", "Download chapter pages from MangaDex", _run_download),
     Step("mark", "Mark panels via the Panel Marker web UI (writes crops.json)", _run_mark, needs=["download"]),
@@ -149,8 +149,8 @@ DEFAULT_STEPS: List[str] = [step.name for step in STEP_REGISTRY]
 def run_pipeline(project: str, chapter: str, config: RemangaConfig, steps: Optional[List[str]] = None) -> None:
     """Runs the named steps, in the given order. `steps` defaults to
     DEFAULT_STEPS (today's exact wizard sequence). An unknown step name is
-    warned about and skipped, not fatal - a typo in pipeline.json shouldn't
-    abort every other step in it."""
+    warned about and skipped, not fatal - a typo in a saved step list
+    shouldn't abort every other step in it."""
     step_names = list(steps) if steps is not None else list(DEFAULT_STEPS)
     for name in step_names:
         step = _STEP_BY_NAME.get(name)
@@ -161,22 +161,19 @@ def run_pipeline(project: str, chapter: str, config: RemangaConfig, steps: Optio
 
 
 def load_pipeline(project: str) -> List[str]:
-    """Reads projects/<name>/pipeline.json's ordered "steps" list. Falls back
-    to DEFAULT_STEPS - unchanged - whenever the file is missing, empty, or
-    malformed, so an existing project with no pipeline.json keeps running
-    today's exact step order with zero behavior change."""
-    data = read_json_or(get_pipeline_path(project), {})
-    steps = data.get("steps") if isinstance(data, dict) else None
+    """This project's ordered step list: project.json's "pipeline", else a
+    legacy pipeline.json if the project still has one, else DEFAULT_STEPS -
+    so a project that has never chosen runs today's exact order, unchanged.
+
+    The steps moved into project.json to sit with everything else a project
+    remembers (see remanga.settings.project_prefs); the fallback below is what
+    keeps a project written by an older version running until its next save
+    moves it across."""
+    steps = remembered_pipeline(project)
+    if steps:
+        return steps
+    legacy = read_json_or(get_pipeline_path(project), {})
+    steps = legacy.get("steps") if isinstance(legacy, dict) else None
     if isinstance(steps, list) and steps:
         return [str(s) for s in steps]
     return list(DEFAULT_STEPS)
-
-
-def ensure_pipeline_file(project: str) -> Path:
-    """Writes the default pipeline.json for a project the first time it's
-    touched, without ever clobbering one a user already customized - mirrors
-    remanga.paths.ensure_memory_file/ensure_global_lessons_file."""
-    path = get_pipeline_path(project)
-    if not path.exists():
-        write_json(path, {"steps": list(DEFAULT_STEPS)})
-    return path

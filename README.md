@@ -184,7 +184,7 @@ Picking a category opens its commands, and running one lands you back in the sam
 | Which pipeline steps? | An ordered checklist of the real step registry — the number shown is the run order, and it opens on the steps you ran last time |
 | Which restart mode? | The four presets, each row saying what survives it |
 
-Chapter production runs in order — download → mark panels → crop → package → narration → review → TTS → mix → render — either step by step from the menu, or in one go with `run` (which follows this project's `pipeline.json`). `run`'s checklist opens on whatever you ran last — remembered per project in its `project.json`, so re-running the tail of a pipeline that died at TTS is Enter, not nine boxes again — and picking a subset still never rewrites `pipeline.json`.
+Chapter production runs in order — download → mark panels → crop → package → narration → review → TTS → mix → render — either step by step from the menu, or in one go with `run`, which follows the steps this project has chosen. Choosing them is the same ordered checklist the main menu's **Pipeline** row opens, and confirming it saves: pick "tts, mix, render" once because the render died, and every later run opens on exactly that, already ticked, in that order. There's one stored list per project (`project.json`'s `pipeline`), so `run`, the Pipeline row and the CLI can't disagree about what the pipeline is. `--steps` on the CLI stays a true one-off — it never saves.
 
 If stdin isn't a terminal (a piped script, CI, an editor's output pane), every menu falls back to the plain numbered prompts remanga has always had, with `0` as back/quit at each level.
 
@@ -665,7 +665,7 @@ remanga/
 │   └── youtube.md           # Title/description/thumbnail for the upload, in plain text
 ├── projects/
 │   └── <project_name>/
-│       ├── project.json        # Saved MangaDex URL, chapter index, and remembered per-project choices
+│       ├── project.json        # Saved MangaDex URL, chapter index, and every per-project choice (pipeline steps, upload formats, wipe keep-list)
 │       ├── memory.json         # Story continuity state across chapters
 │       ├── manifest.json       # Per-chapter pages/panels bookkeeping, one shared file (informational only)
 │       ├── chapters/
@@ -729,7 +729,7 @@ remanga/
 │   ├── console.py               # The one shared Rich Console every module prints through
 │   ├── json_io.py               # Shared JSON read/write helpers
 │   ├── ffmpeg_io.py             # Shared ffmpeg subprocess helper
-│   ├── pipeline.py              # The step registry and per-project pipeline.json
+│   ├── pipeline.py              # The step registry and each project's saved step list
 │   └── cli.py                   # CLI command dispatcher
 ├── config.json                 # Active user production settings
 ├── bootstrap.sh                # Zero-dependency sandbox environment installer
