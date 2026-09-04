@@ -237,7 +237,7 @@ def _group_by_category() -> "Dict[str, List]":
     return groups
 
 
-def _prompt_keep_items(project: str, chapter: str) -> str:
+def _prompt_keep_items(project: str, chapter: str) -> "str | None":
     """Dynamic counterpart to `select_chapter` for the `wipe` command's
     `keep` param: lists exactly what currently exists for this chapter
     (source entries + generated sheets/zip/audio/video dirs - see
@@ -245,21 +245,26 @@ def _prompt_keep_items(project: str, chapter: str) -> str:
     them to KEEP by number instead of having to type exact names blind.
     Comma-separated names still work too (an empty pick wipes everything)."""
     from remanga import reset
+    from remanga.commands import DEFAULT_WIPE_KEEP
 
     entries = reset.wipeable_entries(project, chapter)
     if not entries:
         console.print("[dim]Nothing exists yet for this chapter - nothing to wipe.[/]")
-        return ""
+        return "none"
     console.print(f"[bold]Currently on disk for Chapter {chapter}:[/]")
     for i, entry in enumerate(entries, start=1):
         kind = "dir" if entry.is_dir() else "file"
-        console.print(f"  [bold]{i}.[/] {entry.name} [dim]({kind})[/]")
+        default_mark = " [dim](kept by default)[/]" if entry.name in DEFAULT_WIPE_KEEP else ""
+        console.print(f"  [bold]{i}.[/] {entry.name} [dim]({kind})[/]{default_mark}")
     raw = Prompt.ask(
-        "[bold]Enter number(s) (or exact name(s)) to KEEP, comma-separated - blank wipes everything[/]",
+        f"[bold]Enter number(s)/name(s) to KEEP, comma-separated - blank keeps the default "
+        f"({', '.join(sorted(DEFAULT_WIPE_KEEP))}), 'none' wipes absolutely everything[/]",
         default="",
     ).strip()
     if not raw:
-        return ""
+        return None  # signals "use DEFAULT_WIPE_KEEP" - see _h_wipe
+    if raw.lower() in ("none", "nothing"):
+        return "none"
     names: List[str] = []
     for token in raw.split(","):
         token = token.strip()

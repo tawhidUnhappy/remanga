@@ -251,9 +251,23 @@ def _h_restart(params: Dict[str, Any], config: RemangaConfig) -> None:
         console.print("[dim]Restart cancelled.[/]")
 
 
+# Applied whenever --keep is left unset entirely (None) - the three things
+# most expensive/annoying to redo (a re-download, re-marking panels, and an
+# LLM narration pass) survive a wipe by default; everything generated from
+# them (panels/, sheets/zips, audio, video) does not. Pass --keep explicitly
+# (a comma list, or "none" for an absolute full wipe) to override this.
+DEFAULT_WIPE_KEEP = {"pages", "crops.json", "narration.json"}
+
+
 def _h_wipe(params: Dict[str, Any], config: RemangaConfig) -> None:
     project, chapter = params["project"], params["chapter"]
-    keep_names = {n.strip() for n in (params.get("keep") or "").split(",") if n.strip()}
+    keep_raw = params.get("keep")
+    if keep_raw is None:
+        keep_names = set(DEFAULT_WIPE_KEEP)
+    elif keep_raw.strip().lower() in ("none", "nothing"):
+        keep_names = set()
+    else:
+        keep_names = {n.strip() for n in keep_raw.split(",") if n.strip()}
     candidates = [e for e in reset.wipeable_entries(project, chapter) if e.name not in keep_names]
     if not candidates:
         console.print("[dim]Nothing to wipe - everything here is already in the keep list.[/]")
@@ -480,7 +494,10 @@ COMMAND_REGISTRY: List[Command] = [
                 "keep", ["--keep", "-k"], required=False, default=None,
                 help="Comma-separated names of items to keep (e.g. pages,narration.json) - see the "
                      "wizard's numbered listing for what actually exists on a given chapter, or run "
-                     "`status`/look in the chapter's folder. Leave blank to wipe everything.",
+                     "`status`/look in the chapter's folder. Left unset (the default): keeps "
+                     f"{', '.join(sorted(DEFAULT_WIPE_KEEP))} - the downloaded pages, marks, and "
+                     "narration script, wiping only what's cheaply regenerated from them. Pass 'none' "
+                     "to wipe absolutely everything instead.",
             ),
             Param("force", ["--force", "-f"], type="bool", default=False, help="Skip the confirmation prompt"),
         ],
