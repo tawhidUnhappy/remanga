@@ -3,7 +3,9 @@
 Two levels, both generated from the command registry - a category, then a
 command inside it - so every command remanga has is reachable here the
 moment it's registered, described the same way `--help` describes it, and
-prompted for according to its own parameter specs. There are no fixed
+prompted for according to its own parameter specs. A command that declares
+settings of its own (`Command.setup`, currently `tts`) opens one more level:
+run it, or change the engine/voice/language it would run with. There are no fixed
 "modes": chaining work (mark, then crop, then write) is picking commands one
 after another, and the pipeline runner is itself just a command.
 
@@ -15,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any, List
 
-from remanga.commands import Command, commands_by_category
+from remanga.commands import Command, SetupAction, commands_by_category
 from remanga.config import RemangaConfig
 from remanga.console import console
 from remanga.tui import Choice, is_cancel, select
@@ -26,6 +28,7 @@ from remanga.wizard.projects import select_or_create_project
 
 _PIPELINE = "__pipeline__"
 _SWITCH_PROJECT = "__switch__"
+_RUN = "__run__"
 _HINT_LIMIT = 72
 
 
@@ -65,6 +68,39 @@ def run_command(cmd: Command, project: str, config: RemangaConfig) -> None:
         console.print(f"[bold red]{cmd.name} failed:[/] {e}")
 
 
+def run_command_menu(cmd: Command, project: str, config: RemangaConfig) -> None:
+    """A command that has settings of its own (`Command.setup`): run it, or
+    change one of those settings first.
+
+    The point is that "synthesize this chapter" and "which voice and engine
+    synthesize it" are the same moment - you notice the wrong voice while
+    looking at the command that uses it, not while walking through
+    `setup-config`. Every row shows what that setting is right now, and opens
+    the same screen the settings menu opens; nothing is answered twice.
+
+    Numbered, because it's short and fixed: 1 runs the command, the rest are
+    its settings."""
+    while True:
+        actions = [action for action in cmd.setup if action.relevant(config)]
+        rows = [Choice(label=f"Run {cmd.name}", hint=_short(cmd.help),
+                       detail=cmd.detail or cmd.help, value=_RUN)]
+        rows += [
+            Choice(label=action.label, hint=str(action.describe(config)),
+                   detail=action.detail, value=action)
+            for action in actions
+        ]
+        picked = select(
+            cmd.name, rows, numbered=True, back_label="Back",
+            note=f"{_short(cmd.help)} · or change what it runs with",
+        )
+        if is_cancel(picked):
+            return
+        if picked is _RUN:
+            run_command(cmd, project, config)
+        else:
+            picked.run(config)
+
+
 def run_category_menu(category, commands: List[Command], project: str, config: RemangaConfig) -> None:
     """One category's commands. Stays open after running one, so several
     commands from the same category (mark, then crop, then write) don't mean
@@ -76,7 +112,10 @@ def run_category_menu(category, commands: List[Command], project: str, config: R
         )
         if is_cancel(picked):
             return
-        run_command(picked, project, config)
+        if picked.setup:
+            run_command_menu(picked, project, config)
+        else:
+            run_command(picked, project, config)
 
 
 def main_menu(project: str, config: RemangaConfig) -> Any:

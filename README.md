@@ -136,18 +136,25 @@ Every screen is an arrow-key menu — **↑/↓** to move, **Enter** to pick, **
   ↑↓ move · enter select · type to filter · esc back · ctrl+q exit
 ```
 
-A short, fixed list — the TTS engines — is **numbered** instead, so it's one keystroke rather than an arrow and an Enter. Type the number to pick it, `0` to back out (the same convention the non-tty fallback prompts have always used); the arrow keys still work:
+Short, fixed lists are **numbered** instead, so picking one is a single keystroke rather than an arrow and an Enter. Type the number to pick it, `0` to back out (the same convention the non-tty fallback prompts have always used); the arrow keys still work.
+
+`tts` is the one command with a menu of its own, because the engine and the voice clip are things you notice at the moment you go to synthesize — not while walking through `setup-config`. Every row states what that setting is right now, and opens the same screen the settings menu does:
 
 ```
-? TTS engine
-  each engine runs in its own isolated environment; switching downloads its weights on first use
-❯ 1. [current] IndexTTS-2.5  indextts-2.5
-  2. Audio8 TTS  audio8-tts-0.1b
+? tts
+  Generate vocal audio from narration.json · or change what it runs with
+❯ 1. Run tts  Generate vocal audio from narration.json
+  2. TTS engine  Audio8 TTS
+  3. Reference voice  global/voice/narrator.wav
+  4. Reference transcript  In a world where you don't just die once, a frightened bo...  (651 chars)
+  5. Narration language  English (EN)
      Back
      Exit remanga  quit from here
-  Zero-shot cloning from a reference voice WAV alone
-  type 1-2 · ↑↓ move · enter select · 0 or esc back · ctrl+q exit
+  uses the configured voice and engine unless you pick otherwise
+  type 1-5 · ↑↓ move · enter select · 0 or esc back · ctrl+q exit
 ```
+
+Rows that don't apply aren't shown: **Reference transcript** appears only under an engine that needs one. On the CLI, `tts` is unchanged — it synthesizes a chapter, and the settings keep their own screens under `setup-config`.
 
 Picking a category opens its commands, and running one lands you back in the same list — chaining `mark` → `crop` → `write` is picking three rows in a row. The menu is generated from the command registry, so every command `remanga --help` lists is here too, described the same way.
 
@@ -566,7 +573,7 @@ remanga can drive more than one text-to-speech engine, each in its own isolated 
 | `indextts-2.5` (default) | Reference voice WAV only | Zero-shot - infers its own emotion/prosody from `narration.json`'s text and punctuation (see below) |
 | `audio8-tts-0.1b` | Reference voice WAV **+ a text transcript of it** | [Audio8/Audio8-TTS-Preview-0.1b](https://huggingface.co/Audio8/Audio8-TTS-Preview-0.1b) - a ~170M-parameter Falcon-H1-based cloning model with its own 44.1kHz codec decoder |
 
-Switch by running `./run.sh tts-engine` — its own command, so it's one row in the wizard's Setup menu rather than a step inside `setup-config`, and the engines come up as a numbered list you answer with one keystroke. It's separate from `tts`, which synthesizes a chapter with whatever engine is set here (`tts --engine` overrides it for one run without changing the setting). `./run.sh setup-config` (the "TTS engine" row) and editing `tts.engine` in `config.json` both still work. `bootstrap.sh` already provisions both engines' isolated venvs (`.tools/venv-indextts`, `.tools/venv-audio8`) regardless of which one is active, so switching never requires re-running it — only that engine's own model weights get downloaded, and only the first time it's actually used (`checkpoints/audio8_tts_0.1b/`, ~1.7GB).
+Switch from the wizard's `tts` row — **2. TTS engine**, a numbered list you answer with one keystroke, right next to **1. Run tts** (see [How the menus work](#how-the-menus-work)). `./run.sh setup-config` (the "TTS engine" row) and editing `tts.engine` in `config.json` directly both still work, and `tts --engine` overrides the engine for a single run without changing the setting. `bootstrap.sh` already provisions both engines' isolated venvs (`.tools/venv-indextts`, `.tools/venv-audio8`) regardless of which one is active, so switching never requires re-running it — only that engine's own model weights get downloaded, and only the first time it's actually used (`checkpoints/audio8_tts_0.1b/`, ~1.7GB).
 
 `audio8-tts-0.1b` needs one extra piece of configuration `indextts-2.5` doesn't: an accurate transcript of whatever WAV `tts.spk_audio_prompt` points at — the setup wizard asks for this right after the reference voice file whenever this engine is selected, since this model's cloning quality depends on transcript accuracy, not just the audio itself. The transcript itself lives in its own text file (`tts.audio8.reference_text_path`, default `global/tts_reference.txt`) rather than inline in config.json, so an unrelated config edit can't accidentally mangle a long paragraph of free text sitting next to it - read fresh at synth time, editable directly or via the setup wizard. `tts.audio8` also holds this engine's own `temperature`/`top_p`/`max_new_tokens` sampling settings, separate from `indextts-2.5`'s own top-level `temperature`/`top_p` fields.
 
@@ -610,7 +617,6 @@ In short: if a chapter's TTS run gets interrupted or a worker locks up, just re-
 
 # Configuration & Hardware Setup
 ./run.sh setup-config
-./run.sh tts-engine
 ./run.sh setup-models
 
 # Step-by-Step Production Commands

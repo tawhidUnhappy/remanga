@@ -18,11 +18,16 @@ from remanga.commands.handlers import cleanup as cleanup_handlers
 from remanga.commands.handlers import project as project_handlers
 from remanga.commands.handlers import setup as setup_handlers
 from remanga.commands.selection import DEFAULT_WIPE_KEEP
-from remanga.commands.spec import Command, Param, chapter_param, force_param, project_param
+from remanga.commands.spec import (
+    Command, Param, SetupAction, chapter_param, force_param, project_param,
+)
 from remanga.config.tts import TTS_ENGINE_SPECS, TTS_ENGINES
 from remanga.narration import NARRATION_FILE_MODES, TEMPLATE
 from remanga.pipeline import STEP_REGISTRY
 from remanga.reset import RESTART_MODES
+from remanga.settings import configure_engine, configure_language
+from remanga.settings.assets import ASSET_BY_KEY, asset_relevant, asset_status, edit_asset
+from remanga.settings.presets import language_label
 from remanga.settings.vision import package_switch_names
 
 
@@ -40,6 +45,40 @@ CATEGORIES: Tuple[Category, ...] = (
     Category("Setup", "settings, shared assets, and model weights"),
     Category("Chapter Production", "one chapter, from download to rendered video"),
     Category("Project-wide", "whole-project compile, status, verify, and cleanup"),
+)
+
+def _asset_setup(key: str, label: str, detail: str) -> SetupAction:
+    """A setup row for one shared asset (see remanga.settings.assets), taking
+    its current-value line, its editor and its "does this engine even use it"
+    test from that asset's own spec rather than restating any of them."""
+    spec = ASSET_BY_KEY[key]
+    return SetupAction(
+        label,
+        describe=lambda config: asset_status(config, spec)[2],
+        run=lambda config: edit_asset(config, spec),
+        detail=detail,
+        relevant=lambda config: asset_relevant(config, spec),
+    )
+
+
+# What `tts` runs on. Reachable from the tts row itself, because "which
+# engine/voice is this about to use, and can I change it here" is a question
+# you have at the moment you run it - not one worth walking out to
+# `setup-config` and back for. Every row opens the same screen the settings
+# menu's own row does; nothing is reimplemented here.
+TTS_SETUP: Tuple[SetupAction, ...] = (
+    SetupAction(
+        "TTS engine", describe=lambda config: config.tts.spec.display_name, run=configure_engine,
+        detail="which model synthesizes the narration voice - "
+               + ", ".join(spec.display_name for spec in TTS_ENGINE_SPECS),
+    ),
+    _asset_setup("voice", "Reference voice", "the clip every chapter's narration is cloned from"),
+    _asset_setup("transcript", "Reference transcript",
+                 "what that clip says, word for word - only the engines that need it show this"),
+    SetupAction(
+        "Narration language", describe=language_label, run=configure_language,
+        detail="passed straight through to the engine",
+    ),
 )
 
 _STEP_NAMES = ", ".join(step.name for step in STEP_REGISTRY)
@@ -62,18 +101,6 @@ COMMAND_REGISTRY: List[Command] = [
         setup_handlers.paths,
         category="Setup",
         detail="picks from the audio files already in global/ instead of asking you to type a path",
-    ),
-    Command(
-        "tts-engine",
-        "Choose which engine speaks the narration, as a numbered list - "
-        + ", ".join(spec.display_name for spec in TTS_ENGINE_SPECS) + ". Saves it to config.json's "
-        "tts.engine for every chapter from here on; the engine you pick downloads its own weights "
-        "the first time it's used. Separate from `tts`, which synthesizes one chapter with "
-        "whichever engine is set here (`tts --engine` overrides it for a single run without "
-        "changing this).",
-        setup_handlers.tts_engine,
-        category="Setup",
-        detail="type the number to switch engines - what `tts` uses from then on",
     ),
     Command(
         "setup-models",
@@ -217,6 +244,7 @@ COMMAND_REGISTRY: List[Command] = [
         ],
         category="Chapter Production",
         detail="uses the configured voice and engine unless you pick otherwise",
+        setup=TTS_SETUP,
     ),
     Command(
         "mix",

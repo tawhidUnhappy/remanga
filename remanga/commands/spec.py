@@ -11,7 +11,7 @@ used to do."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from remanga.config import RemangaConfig
 
@@ -50,6 +50,25 @@ class Param:
         return self.prompt or self.help or self.name
 
 
+@dataclass(frozen=True)
+class SetupAction:
+    """One row in a command's setup submenu: a setting that command runs on,
+    editable right where you are about to use it.
+
+    `describe` renders the setting's current value as the row's hint - the
+    same "a menu that doubles as the status screen" idea remanga.settings.
+    sections is built on, so `tts` says which engine and which voice clip it
+    would use before you run it. `run` opens whatever screen changes it, and
+    `relevant` hides a row that means nothing under the current settings (the
+    reference transcript, for an engine that clones from audio alone)."""
+
+    label: str
+    describe: Callable[[RemangaConfig], str]
+    run: Callable[[RemangaConfig], None]
+    detail: str = ""
+    relevant: Callable[[RemangaConfig], bool] = lambda config: True
+
+
 @dataclass
 class Command:
     name: str
@@ -63,6 +82,15 @@ class Command:
     # One line on what running this actually does to the project, shown
     # under the highlighted row in the wizard. `help` goes to --help.
     detail: str = ""
+    # Settings this command runs on. When there are any, the wizard opens a
+    # submenu - run the command, or change one of the settings first - rather
+    # than going straight into the command's parameters, so "synthesize this
+    # chapter" and "which voice/engine synthesizes it" are one stop instead of
+    # a command in one menu and a settings screen three menus away. argparse
+    # ignores this completely (each setting already has its own screen under
+    # `setup-config`), so it can't make the CLI and the wizard disagree about
+    # what the *command* does.
+    setup: Tuple[SetupAction, ...] = ()
 
 
 def add_param_to_parser(parser, param: Param) -> None:

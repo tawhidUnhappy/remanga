@@ -23,8 +23,8 @@ from remanga.commands.selection import (
     DEFAULT_WIPE_KEEP, parse_chapter_selection, resolve_wipe_keep, split_chapters,
 )
 from remanga.commands.spec import (
-    Command, Param, add_param_to_parser, chapter_param, force_param, params_from_namespace,
-    project_param,
+    Command, Param, SetupAction, add_param_to_parser, chapter_param, force_param,
+    params_from_namespace, project_param,
 )
 
 __all__ = [
@@ -35,6 +35,7 @@ __all__ = [
     "Command",
     "DEFAULT_WIPE_KEEP",
     "Param",
+    "SetupAction",
     "add_param_to_parser",
     "chapter_param",
     "commands_by_category",
