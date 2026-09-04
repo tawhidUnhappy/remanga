@@ -186,13 +186,17 @@ class VideoRenderer:
             str(final_video)
         ])
 
-        console.print("[yellow]Starting video rendering... This may take a moment.[/]")
-        result = run_ffmpeg(cmd, capture=True, show_progress=True)
+        # The encode's length is already known exactly - it's the timeline the
+        # frames were laid out from - so the bar shows a real percentage
+        # rather than just counting up.
+        total_seconds = sum(float(p.get("total_slot_sec") or 0) for p in panels)
+        result = run_ffmpeg(cmd, capture=True, show_progress=True, total_seconds=total_seconds,
+                            description=f"Encoding {self.video_config.height}p video")
 
         if result.returncode != 0:
             console.print(f"[red]FFmpeg Error Details:\n{_escape_path(result.stderr)}[/]")
             raise RuntimeError("FFmpeg rendering failed.")
 
-        console.print(f"[bold green]✓ Recap video generated successfully![/]")
+        console.print("[bold green]✓ Recap video generated successfully![/]")
         console.print(f"[bold green]Location:[/] {_escape_path(str(final_video))}")
         return final_video

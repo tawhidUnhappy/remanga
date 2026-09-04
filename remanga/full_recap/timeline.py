@@ -121,7 +121,9 @@ def assemble_combined_audio(
             str(final_path),
         ]
         try:
-            run_ffmpeg(cmd, check=True, capture=True, show_progress=True)
+            run_ffmpeg(cmd, check=True, capture=True, show_progress=True,
+                       total_seconds=len(master_audio) / 1000.0,
+                       description="Normalizing full-manga audio")
             raw_path.unlink(missing_ok=True)
         except Exception as e:
             console.print(f"[yellow]Loudnorm filter warning: {_esc(str(e))}. Falling back to the un-normalized full-manga track.[/]")

@@ -146,13 +146,13 @@ class FullRecapCompiler:
             cmd.extend(["-preset", "p6", "-cq", "20"])
         cmd.extend(["-c:a", "aac", "-b:a", "192k", "-shortest", str(final_video)])
 
-        console.print("[yellow]Encoding the full-manga recap... This may take a while for a long manga.[/]")
-        result = run_ffmpeg(cmd, capture=True, show_progress=True)
+        total_video_sec = sum(d for _, d in frame_timeline)
+        result = run_ffmpeg(cmd, capture=True, show_progress=True, total_seconds=total_video_sec,
+                            description="Encoding full-manga recap")
         if result.returncode != 0:
             console.print(f"[red]FFmpeg Error Details:\n{_esc(result.stderr)}[/]")
             raise RuntimeError("FFmpeg full-manga rendering failed.")
 
-        total_video_sec = sum(d for _, d in frame_timeline)
         elapsed_sec = time.perf_counter() - start_time
         console.print(f"[bold green]✓ Full-manga recap compiled successfully![/] "
                        f"[dim]({len(chapter_list)} chapters, {fmt_duration(total_video_sec)} runtime, "

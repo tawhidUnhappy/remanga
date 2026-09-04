@@ -677,6 +677,20 @@ Emotion/prosody is inferred straight from each panel's `text` and its punctuatio
 - If your GPU genuinely doesn't support NVENC, or no working ffmpeg/driver combination is found anywhere, it falls back to CPU encoding (`libx264`) automatically.
 - You can manually force CPU encoding by setting `"prefer_gpu": false` in `config.json`.
 
+### 3b. Why is my CPU busier than my GPU while rendering?
+Because `nvidia-smi`'s headline **GPU-Util is not measuring the encoder.** That number reports SM (CUDA core) occupancy; NVENC is separate fixed-function silicon it doesn't count. Measured mid-render on an RTX 3060:
+
+```
+utilization.gpu 8 %   utilization.encoder 100 %   ffmpeg ~295% CPU (3 of 12 cores)
+```
+
+The encoder is pegged — the GPU is doing exactly the job it was given. Ask for the right counter:
+```bash
+nvidia-smi --query-gpu=utilization.gpu,utilization.encoder --format=csv
+```
+
+The CPU work is real, but it's everything that *isn't* H.264 encoding: decoding the panel PNGs, converting RGB→YUV, duplicating each panel's frame out to the configured fps (a 12-minute recap at 30fps is ~21,000 frames), encoding the AAC audio, and muxing the MP4. None of that has a GPU path worth taking here, and at ~7x realtime it isn't the bottleneck either. The frame-compositing phase *before* the encode is 100% CPU by design (Pillow), as is the audio assembly (pydub).
+
 ### 4. How do I get contact sheets instead of individual panels?
 Contact sheets (`sheets`) are on by default; `panels_zip` is off. To get individual panels instead of, or in addition to, sheets:
 - Run `./run.sh setup-config` and answer the checklist in **Option 2 (Vision Outputs)** — check `panels_zip`, uncheck `sheets`/`sheets_zip` if you don't want both.

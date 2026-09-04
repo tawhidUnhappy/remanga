@@ -427,6 +427,20 @@ keeps), reachable from the menu like everything else.
   (post-recrop/post-rewrite skew) - same check feeds the `verify` command
   too, one implementation for both.
 
+## ffmpeg output: `-progress`, never raw stats
+
+`ffmpeg_io.run_ffmpeg(show_progress=True)` injects `-hide_banner -nostats
+-loglevel error -progress pipe:1` and renders a Rich bar from the key=value
+stream, with `total_seconds` passed by the caller (the encode's length is
+always already known - the frame timeline for a render, the master audio's
+own length for a loudnorm pass). Never let ffmpeg write to the terminal
+itself: at default loglevel it prints a 40-line ./configure dump on every
+start, and its own status line assumes a terminal that honors `\r` - in
+anything that doesn't, a long encode lands thousands of near-identical
+`frame=... fps=...` lines in the scrollback. `proc_io.stream_subprocess` is
+still the right tool for the model downloaders (tqdm bars, no `-progress`
+equivalent), just not for ffmpeg.
+
 ## GPU/ffmpeg
 
 Bundled `bin/ffmpeg` (pinned BtbN build) has working `h264_nvenc` on this
@@ -436,6 +450,15 @@ already falls back bundled→system-ffmpeg→CPU correctly. Before "fixing" GPU
 selection, probe directly first - a silent CPU-only phase (pydub audio
 concat, PIL frame compositing) running *before* the GPU encode is normal,
 not a bug; don't confuse the two.
+
+"The CPU is working harder than the GPU during render" is also normal and
+NOT a misconfiguration. Measured mid-encode on this box: `utilization.gpu`
+8%, `utilization.encoder` **100%**, ffmpeg ~295% CPU (3 of 12 cores).
+nvidia-smi's headline GPU-Util reports SM (CUDA core) occupancy, and NVENC
+is separate fixed-function silicon that it doesn't count - so a saturated
+encoder reads as an idle GPU. Query `utilization.encoder` before concluding
+anything. The CPU side is the unavoidable prep: PNG decode, rgb24→yuv420p,
+duplicating each panel's frame out to fps, AAC, muxing.
 
 ## Maintenance rule (do this, don't just read this)
 
