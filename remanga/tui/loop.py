@@ -177,6 +177,7 @@ def run_menu(
     footer: str,
     note: str = "",
     checkable: bool = False,
+    numbered: bool = False,
     order_of: Optional[Callable[[], dict]] = None,
     on_key: Callable[[MenuState, str], Optional[tuple]],
     echo: Optional[Callable[[Any], str]] = None,
@@ -204,7 +205,7 @@ def run_menu(
                 live.update(menu_frame(
                     title=title, choices=state.visible, cursor=state.cursor,
                     page_size=state.page_size, query=state.query, footer=footer,
-                    note=note, checkable=checkable,
+                    note=note, checkable=checkable, numbered=numbered,
                     order=order_of() if order_of else None,
                 ), refresh=True)
 

@@ -136,6 +136,19 @@ Every screen is an arrow-key menu — **↑/↓** to move, **Enter** to pick, **
   ↑↓ move · enter select · type to filter · esc back · ctrl+q exit
 ```
 
+A short, fixed list — the TTS engines — is **numbered** instead, so it's one keystroke rather than an arrow and an Enter. Type the number to pick it, `0` to back out (the same convention the non-tty fallback prompts have always used); the arrow keys still work:
+
+```
+? TTS engine
+  each engine runs in its own isolated environment; switching downloads its weights on first use
+❯ 1. [current] IndexTTS-2.5  indextts-2.5
+  2. Audio8 TTS  audio8-tts-0.1b
+     Back
+     Exit remanga  quit from here
+  Zero-shot cloning from a reference voice WAV alone
+  type 1-2 · ↑↓ move · enter select · 0 or esc back · ctrl+q exit
+```
+
 Picking a category opens its commands, and running one lands you back in the same list — chaining `mark` → `crop` → `write` is picking three rows in a row. The menu is generated from the command registry, so every command `remanga --help` lists is here too, described the same way.
 
 **The wizard doesn't ask for anything it can find out:**

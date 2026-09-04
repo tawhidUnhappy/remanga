@@ -26,6 +26,7 @@ def configure_engine(config: RemangaConfig) -> None:
             for spec in TTS_ENGINE_SPECS
         ],
         default=config.tts.engine,
+        numbered=True,
         note="each engine runs in its own isolated environment; switching downloads its weights on first use",
     )
     if is_cancel(picked):

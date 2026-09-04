@@ -36,6 +36,22 @@ _STYLE_ON = "green"
 _STYLE_DISABLED = "dim strike"
 
 
+def numbered_rows(choices: Sequence[Choice]) -> Dict[int, int]:
+    """Which rows get a number, and which number - {row index: 1-based
+    position}, counted over the rows a number could actually pick.
+
+    Skips the disabled ones and the plain action rows (Back/Exit), so the
+    numbers never point at something that can't be chosen with them. Shared
+    by the renderer and by the key handler that resolves a typed digit, which
+    is what keeps the digit you press and the digit you see the same."""
+    numbers: Dict[int, int] = {}
+    for index, choice in enumerate(choices):
+        if choice.plain or choice.disabled:
+            continue
+        numbers[index] = len(numbers) + 1
+    return numbers
+
+
 def window_bounds(cursor: int, total: int, page_size: int) -> "tuple[int, int]":
     """The slice of a long list to actually draw, kept centered-ish on the
     cursor. Returns (start, end) as a half-open range; both are clamped so
@@ -48,9 +64,18 @@ def window_bounds(cursor: int, total: int, page_size: int) -> "tuple[int, int]":
     return start, start + page_size
 
 
-def _row(choice: Choice, *, active: bool, checkable: bool, order: Optional[int]) -> Text:
+def _row(choice: Choice, *, active: bool, checkable: bool, order: Optional[int],
+         number: Optional[int] = None, number_width: int = 0) -> Text:
     line = Text()
     line.append(f"{POINTER} " if active else "  ", style=_STYLE_MARK if active else "")
+
+    if number_width:
+        # Numbered menus (see menu_frame's `numbered`): the digit is a
+        # shortcut key, so it's padded to a fixed width and the rows that
+        # aren't pickable by number (Back/Exit) keep the same indent rather
+        # than sliding left out of the column.
+        label = f"{number}. " if number is not None else ""
+        line.append(label.ljust(number_width), style=_STYLE_ACTIVE if active else _STYLE_HINT)
 
     if checkable and choice.plain:
         line.append("  ")  # an action row, not one of the selectable items
@@ -87,6 +112,7 @@ def menu_frame(
     footer: str = "",
     note: str = "",
     checkable: bool = False,
+    numbered: bool = False,
     order: Optional[Dict[int, int]] = None,
     empty_text: str = "no matches",
 ) -> Group:
@@ -94,8 +120,10 @@ def menu_frame(
 
     `order` (index -> 1-based position) turns the checkbox column into
     ordered run positions, for the pipeline editor where *sequence* is half
-    the answer. `note` is a single line under the title for context the user
-    needs while choosing (a path, a warning, a count)."""
+    the answer. `numbered` puts 1., 2., 3. in front of the pickable rows, for
+    a short menu whose answer is typed rather than arrowed to (see
+    remanga.tui.select). `note` is a single line under the title for context
+    the user needs while choosing (a path, a warning, a count)."""
     lines: List[Text] = []
 
     header = Text()
@@ -109,6 +137,11 @@ def menu_frame(
     if note:
         lines.append(Text(f"  {note}", style=_STYLE_HINT))
 
+    numbers = numbered_rows(choices) if numbered else {}
+    # "10. " is a wider column than "1. ", and the labels have to stay aligned
+    # under either.
+    number_width = len(f"{max(numbers.values())}. ") if numbers else 0
+
     if not choices:
         lines.append(Text(f"  {empty_text}", style=_STYLE_HINT))
     else:
@@ -119,6 +152,7 @@ def menu_frame(
             lines.append(_row(
                 choices[i], active=(i == cursor), checkable=checkable,
                 order=(order or {}).get(i) if order is not None else None,
+                number=numbers.get(i), number_width=number_width,
             ))
         remaining = len(choices) - end
         if remaining > 0:
