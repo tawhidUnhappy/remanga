@@ -18,6 +18,10 @@ import logging
 import os
 import sys
 import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _hash_verify import delete_files_for_retry, verify_repo_files  # noqa: E402
 
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "0")
@@ -53,7 +57,21 @@ def main() -> int:
                 token=hf_token,
             )
             print(f">> Downloaded via Hugging Face Hub to {model_dir}")
-            return 0
+
+            # See _hash_verify.py's docstring: snapshot_download's own check
+            # is size-only, so verify against the Hub's recorded sha256 too.
+            # A corrupt file here is deleted and re-fetched by simply looping
+            # back into this same retry loop - snapshot_download() only
+            # re-downloads what's actually missing on disk.
+            ok, bad = verify_repo_files(model_dir, repo_id, hf_token, cache_layout=False)
+            if ok:
+                return 0
+            if attempt == MAX_ATTEMPTS:
+                print(f"Error: {len(bad)} file(s) still fail hash verification after {MAX_ATTEMPTS} attempts: "
+                      f"{', '.join(bad)}", file=sys.stderr)
+                return 1
+            delete_files_for_retry(model_dir, bad, cache_layout=False)
+            continue
         except Exception as e:
             last_error = e
             print(f"Attempt {attempt}/{MAX_ATTEMPTS} failed: {e}", file=sys.stderr)

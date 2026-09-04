@@ -59,6 +59,9 @@ import time
 from pathlib import Path
 from typing import Optional
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _hash_verify import delete_files_for_retry, verify_repo_files  # noqa: E402
+
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 os.environ.setdefault("MODELSCOPE_LOG_LEVEL", "40")
 os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
@@ -197,11 +200,35 @@ def main() -> int:
     model_dir, repo_id = sys.argv[1], sys.argv[2]
     hf_token = sys.argv[3] if len(sys.argv) == 4 else None
 
+    def _verify(label: str) -> bool:
+        # See _hash_verify.py's docstring: snapshot_download's own check is
+        # size-only regardless of which of the three sources below actually
+        # served the bytes, so every success path funnels through this same
+        # sha256 check against the Hub's own recorded LFS hashes. One retry:
+        # delete just the corrupt files and re-fetch via plain HTTP (the
+        # proven-steady path, regardless of which attempt produced them).
+        ok, bad = verify_repo_files(model_dir, repo_id, hf_token, cache_layout=False)
+        if ok:
+            print(f">> Downloaded via {label} to {model_dir}")
+            return True
+        print(f">> Re-fetching {len(bad)} corrupt file(s) via HF Hub, classic HTTP...")
+        delete_files_for_retry(model_dir, bad, cache_layout=False)
+        if not _run_hf_attempt(model_dir, repo_id, hf_token, disable_xet=True,
+                                stall_timeout=None, label="HF Hub, classic HTTP, hash-retry"):
+            print("Error re-downloading corrupt files", file=sys.stderr)
+            return False
+        ok, bad = verify_repo_files(model_dir, repo_id, hf_token, cache_layout=False)
+        if not ok:
+            print(f"Error: {len(bad)} file(s) still fail hash verification after retry: {', '.join(bad)}",
+                  file=sys.stderr)
+            return False
+        print(f">> Downloaded via {label} to {model_dir}")
+        return True
+
     # Attempt 1: HF Hub, Xet enabled, supervised for stalls.
     if _run_hf_attempt(model_dir, repo_id, hf_token, disable_xet=False,
                         stall_timeout=XET_STALL_TIMEOUT_SECONDS, label="HF Hub, Xet"):
-        print(f">> Downloaded via Hugging Face Hub to {model_dir}")
-        return 0
+        return 0 if _verify("Hugging Face Hub") else 1
 
     # Attempt 2: HF Hub, Xet disabled (classic HTTP) - proven to make steady
     # progress even when slow. Retried MAX_ATTEMPTS times on outright
@@ -215,8 +242,7 @@ def main() -> int:
         if attempt < MAX_ATTEMPTS:
             time.sleep(min(5 * attempt, 30))
     if last_ok:
-        print(f">> Downloaded via Hugging Face Hub to {model_dir}")
-        return 0
+        return 0 if _verify("Hugging Face Hub") else 1
 
     print(">> Hugging Face Hub failed (both Xet and classic HTTP), "
           "falling back to ModelScope mirror...", file=sys.stderr)
@@ -224,8 +250,7 @@ def main() -> int:
     try:
         from modelscope import snapshot_download as ms_download
         ms_download(model_id=repo_id, local_dir=model_dir)
-        print(f">> Downloaded via ModelScope mirror to {model_dir}")
-        return 0
+        return 0 if _verify("ModelScope mirror") else 1
     except Exception as e:
         print(f"Error downloading model weights: {e}", file=sys.stderr)
         return 1

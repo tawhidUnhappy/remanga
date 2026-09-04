@@ -18,6 +18,10 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _hash_verify import delete_files_for_retry, verify_repo_files  # noqa: E402
 
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "0")
@@ -36,15 +40,15 @@ def main() -> int:
     model_dir, repo_id = sys.argv[1], sys.argv[2]
     hf_token = sys.argv[3] if len(sys.argv) == 4 else None
 
+    downloaded_via = None
     try:
         from modelscope import snapshot_download as ms_download
         ms_download(model_id=repo_id, local_dir=model_dir)
-        print(f">> Downloaded via ModelScope mirror to {model_dir}")
-        return 0
+        downloaded_via = "ModelScope mirror"
     except Exception as e:
         print(f">> ModelScope mirror failed ({e}), falling back to Hugging Face Hub...", file=sys.stderr)
 
-    try:
+    def _hf_download() -> None:
         from huggingface_hub import snapshot_download as hf_download
         hf_download(
             repo_id=repo_id,
@@ -54,11 +58,38 @@ def main() -> int:
             max_retries=10,
             token=hf_token,
         )
-        print(f">> Downloaded via Hugging Face Hub to {model_dir}")
-        return 0
-    except Exception as e:
-        print(f"Error downloading model weights: {e}", file=sys.stderr)
-        return 1
+
+    if downloaded_via is None:
+        try:
+            _hf_download()
+            downloaded_via = "Hugging Face Hub"
+        except Exception as e:
+            print(f"Error downloading model weights: {e}", file=sys.stderr)
+            return 1
+
+    print(f">> Downloaded via {downloaded_via} to {model_dir}")
+
+    # Verified against the Hub's own recorded sha256 regardless of which
+    # mirror actually served the bytes - see _hash_verify.py's docstring for
+    # why snapshot_download's own size check alone isn't enough. One retry:
+    # delete just the corrupt files and re-fetch through the Hub directly
+    # (ModelScope may be the one that produced them, so don't retry there).
+    ok, bad = verify_repo_files(model_dir, repo_id, hf_token, cache_layout=False)
+    if not ok:
+        print(f">> Re-fetching {len(bad)} corrupt file(s) via Hugging Face Hub...")
+        delete_files_for_retry(model_dir, bad, cache_layout=False)
+        try:
+            _hf_download()
+        except Exception as e:
+            print(f"Error re-downloading corrupt files: {e}", file=sys.stderr)
+            return 1
+        ok, bad = verify_repo_files(model_dir, repo_id, hf_token, cache_layout=False)
+        if not ok:
+            print(f"Error: {len(bad)} file(s) still fail hash verification after retry: {', '.join(bad)}",
+                  file=sys.stderr)
+            return 1
+
+    return 0
 
 
 if __name__ == "__main__":
