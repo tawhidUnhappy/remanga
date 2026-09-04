@@ -20,6 +20,7 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
   - [Vision Outputs: What to Generate, What to Zip](#vision-outputs-what-to-generate-what-to-zip)
   - [Panel Marker Web UI](#panel-marker-web-ui)
   - [Temporal Horizon Prompting (Zero Spoilers)](#temporal-horizon-prompting-zero-spoilers)
+  - [YouTube Title, Description & Thumbnail](#youtube-title-description--thumbnail-promptsyoutube_metadatamd)
 - [Natural, Expressive Narration](#natural-expressive-narration)
 - [Reliability: Crashes, Interrupts & Resuming](#reliability-crashes-interrupts--resuming)
 - [CLI Command Reference](#cli-command-reference)
@@ -533,6 +534,17 @@ The included prompt system in `prompts/` enforces strict narrative rules:
 3. **Show-and-Synthesize:** Narrative commentary blends speech bubbles and actions into active present-tense storytelling.
 4. **Pacing Ceiling:** 10 to 20 words per panel (hard ceiling: 26 words) to ensure optimal retention and natural IndexTTS-2.5 speech pacing.
 
+### YouTube Title, Description & Thumbnail (`prompts/youtube_metadata.md`)
+
+Once a chapter's video is rendered, the same copy/paste hand-off that produced `narration.json` produces its publishing metadata. Upload the chapter's `narration.json` and `memory.json` — plus the project's `youtube_format.json`, from the second chapter onward — along with `prompts/youtube_metadata.md`, and save the two JSON blocks it replies with:
+
+| File | Where | What it is |
+| --- | --- | --- |
+| `youtube.json` | `projects/<project>/chapters/chapter_<num>/` | This chapter's title, description, tags, hashtags, and thumbnail brief (overlay text + an image-generation prompt + the `panel_id` it's based on) |
+| `youtube_format.json` | `projects/<project>/` | The series' **format lock** — title template, description skeleton, fixed blocks, core tags, hashtags, thumbnail style. Written on the first chapter, obeyed verbatim on every one after |
+
+The format lock is the point of the prompt: chapter 12's video has to be recognizable as the same series as chapter 3 at a glance in a sidebar, so only the per-chapter slots (hook, chapter number, summary, beats, thumbnail subject) ever change — every fixed block is copied character for character. The prompt also enforces YouTube's real limits (title ≤ 100 characters, aim ≤ 70; description ≤ 5,000 with the hook inside the first ~150; tags ≤ 500 characters total; exactly 3 hashtags) and the same zero-spoiler horizon as the narration: the title and thumbnail are seen *before* the video, so the chapter's final beat never appears in either.
+
 ---
 
 ## Switching TTS Engines
@@ -619,7 +631,9 @@ remanga/
 │   ├── indextts_2.5/           # IndexTTS-2.5 neural model weights
 │   └── magiv3/                 # MAGI v3 panel-detection weights (Panel Marker assist)
 ├── prompts/
-│   └── narration.md  # Master objective scriptwriter prompt
+│   ├── narration.md         # Master objective scriptwriter prompt
+│   ├── narration_review.md  # Fix-pass prompt for a human review round
+│   └── youtube_metadata.md  # Per-chapter YouTube title/description/thumbnail prompt
 ├── projects/
 │   └── <project_name>/
 │       ├── project.json        # Saved MangaDex URL, chapter index, and remembered per-project choices
