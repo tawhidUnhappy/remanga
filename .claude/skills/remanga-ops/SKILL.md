@@ -316,14 +316,15 @@ The `_SPECIAL` table there overrides the generic prompt for the parameters
 whose answer is discoverable: `chapter`/`chapters` (this project's chapters +
 status), `keep` (what the chapter actually has on disk, as a checklist),
 `formats` (packaging checklist), `steps` (ordered checklist of
-`STEP_REGISTRY`), `engine` (TTS engines, configured one pre-picked), and the
-ones it deliberately does NOT ask at all - `url` (once project.json has a
-manga source) and `voice`/`bgm` (the configured file is stated and used;
-they're set once and kept for months, so `--voice`/`--bgm` cover the rare
-one-off and Settings → Assets covers a permanent change). Rule when adding a
-parameter: if remanga can find the answer, don't ask for it.
+`STEP_REGISTRY`), and the ones it deliberately does NOT ask at all (the
+`_not_asked` factory: state what's configured, return None) - `url` (once
+project.json has a manga source) and `engine`/`voice`/`bgm`, all three set
+once and kept for months, so the CLI flags cover the rare one-off and the
+settings screens cover a permanent change. Rule when adding a parameter: if
+remanga can find the answer, don't ask for it - and if the answer changes
+about once a year, state it instead of asking.
 
-`tts --engine` is a per-run override only - it deep-copies TTSConfig and
+`tts --engine` is a CLI-only per-run override - it deep-copies TTSConfig and
 sets `engine` there, never writing config.json: "try the other model on this
 chapter" must not silently redefine every later run.
 `settings/files.py:discover_files` scopes its search to the asset's own

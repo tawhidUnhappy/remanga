@@ -144,9 +144,8 @@ Picking a category opens its commands, and running one lands you back in the sam
 | Which chapter? | The chapters this project has, each row showing its production status; "New chapter…" suggests the next number |
 | Which manga/URL? | `project.json`'s saved source — asked once, on the first download |
 | Which way does it read? | MangaDex's `originalLanguage` (`ja` → right-to-left, `ko`/`zh` → left-to-right) |
-| Which voice / music this run? | Not asked at all — the configured file is stated and used. They're set once and kept, so `--voice`/`--bgm` cover the rare one-off and Settings → Assets covers a permanent change |
+| Which engine / voice / music this run? | Not asked at all — what's configured is stated and used. All three are set once and kept, so `--engine`/`--voice`/`--bgm` cover the rare one-off and the settings screens cover a permanent change |
 | Which reference voice / music file? | When you *do* change one: the audio files already in `global/voice/` or `global/bgm/` — each picker searches only its own folder — or type a path for one elsewhere |
-| Which TTS engine? | The engines, each described, with the configured one pre-picked |
 | What to keep when wiping? | A checklist of exactly what that chapter has on disk right now — and what you picked last time, remembered per project |
 | What to package for the LLM? | A checklist of every format, opened on what this project builds — your pick is remembered for the next chapter |
 | Which pipeline steps? | An ordered checklist of the real step registry — the number shown is the run order |
@@ -346,7 +345,7 @@ want to look back at what was flagged and fixed.
 ./run.sh tts --project "my_manga" --chapter "1" --engine audio8-tts-0.1b
 ```
 Uses the configured engine and reference voice unless you say otherwise:
-- **`--engine`** — synthesize this run with the other engine (`indextts-2.5` / `audio8-tts-0.1b`) without touching `config.json`; its weights download automatically the first time it's used. The wizard offers this as a menu with the configured engine pre-picked, so Enter keeps it. Switch permanently in `setup-config` → **TTS engine**.
+- **`--engine`** — synthesize this run with the other engine (`indextts-2.5` / `audio8-tts-0.1b`) without touching `config.json`; its weights download automatically the first time it's used. The wizard doesn't ask — it states which engine is configured and uses it, since that's not a per-chapter decision. Switch permanently in `setup-config` → **TTS engine**.
 - **`--voice`** — a different reference WAV for this run only.
 - **`--force`** — re-synthesize every panel instead of resuming.
 
