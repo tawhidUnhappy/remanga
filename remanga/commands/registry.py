@@ -19,6 +19,7 @@ from remanga.commands.handlers import project as project_handlers
 from remanga.commands.handlers import setup as setup_handlers
 from remanga.commands.selection import DEFAULT_WIPE_KEEP
 from remanga.commands.spec import Command, Param, chapter_param, force_param, project_param
+from remanga.narration import NARRATION_FILE_MODES, TEMPLATE
 from remanga.pipeline import STEP_REGISTRY
 from remanga.reset import RESTART_MODES
 from remanga.settings.vision import package_switch_names
@@ -98,6 +99,28 @@ COMMAND_REGISTRY: List[Command] = [
         chapter_handlers.review,
         [project_param(), chapter_param()],
         category="Chapter Production",
+    ),
+    Command(
+        "narration-init",
+        "Create this chapter's narration.json from scratch - either a full template with one "
+        "empty entry per cropped panel (the same skeleton the Narration Writer creates), or a "
+        "completely empty file (zero bytes, not even '{}')",
+        chapter_handlers.narration_init,
+        [
+            project_param(), chapter_param(),
+            Param(
+                "mode", ["--mode", "-m"], type="choice", default=TEMPLATE,
+                choices=[mode.name for mode in NARRATION_FILE_MODES],
+                prompt="What kind of narration.json",
+                help="How to create the file. " + ". ".join(
+                    f"{mode.name}: {mode.summary}" for mode in NARRATION_FILE_MODES) + ".",
+                choice_help={mode.name: mode.summary for mode in NARRATION_FILE_MODES},
+                choice_detail={mode.name: mode.detail for mode in NARRATION_FILE_MODES},
+            ),
+            force_param("Replace an existing narration.json that already has content"),
+        ],
+        category="Chapter Production",
+        detail="a starting point to fill in by hand, or to hand an LLM as the exact structure",
     ),
     Command(
         "write",
@@ -280,6 +303,8 @@ COMMAND_REGISTRY: List[Command] = [
                 choices=[mode.name for mode in RESTART_MODES],
                 prompt="How much to keep",
                 help=f"How much of the chapter's source folder survives. {_RESTART_MODE_HELP}.",
+                choice_help={mode.name: mode.summary for mode in RESTART_MODES},
+                choice_detail={mode.name: f"keeps: {mode.keeps}" for mode in RESTART_MODES},
             ),
             Param("no_reverify", ["--no-reverify"], type="bool", default=False,
                   help="Skip re-checking/re-fetching downloaded pages afterward",

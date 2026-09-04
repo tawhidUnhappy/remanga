@@ -11,7 +11,6 @@ get a purpose-built prompt instead of a blank text box:
     formats          - the packaging formats, as a checklist
     steps            - the pipeline steps, as an ordered checklist
     voice/bgm        - the audio files already sitting in global/
-    mode             - the restart presets, each with what it keeps
     url              - not asked at all once project.json has a source
 
 `keep` and `formats` additionally open pre-checked with whatever this
@@ -28,7 +27,7 @@ from typing import Any, Dict, Optional
 from remanga.commands import Command, Param, resolve_wipe_keep
 from remanga.config import RemangaConfig
 from remanga.console import console, display_path
-from remanga.reset import RESTART_MODE_BY_NAME, wipeable_entries
+from remanga.reset import wipeable_entries
 from remanga.settings import AUDIO_EXTENSIONS, discover_files
 from remanga.settings.project_prefs import (
     active_package_formats, remembered_package_formats, remembered_wipe_keep,
@@ -218,22 +217,6 @@ def _prompt_url(param: Param, project: str, config: RemangaConfig, values: Dict[
     return ask_text(param.label, note="a MangaDex URL, a UUID, or just the title to search for") or None
 
 
-def _prompt_mode(param: Param, project: str, config: RemangaConfig, values: Dict[str, Any]) -> Any:
-    """A restart preset, each row saying what survives it - the difference
-    between the four modes IS what they keep, which a bare list of names
-    can't convey."""
-    rows = []
-    for name in param.choices or []:
-        mode = RESTART_MODE_BY_NAME.get(name)
-        rows.append(Choice(
-            label=mode.label if mode else name,
-            hint=mode.summary if mode else "",
-            detail=f"keeps: {mode.keeps}" if mode else "",
-            value=name,
-        ))
-    return select(param.label, rows, default=param.default)
-
-
 _SPECIAL = {
     "chapter": _prompt_chapter,
     "chapters": _prompt_chapters,
@@ -241,7 +224,6 @@ _SPECIAL = {
     "formats": _prompt_formats,
     "steps": _prompt_steps,
     "url": _prompt_url,
-    "mode": _prompt_mode,
     "voice": _prompt_audio_override("voice", lambda c: c.tts.spk_audio_prompt),
     "bgm": _prompt_audio_override("bgm", lambda c: c.audio.bgm_path if c.audio.bgm_enabled else ""),
 }
@@ -251,7 +233,16 @@ _SPECIAL = {
 
 
 def _prompt_choice(param: Param) -> Any:
-    rows = [Choice(label=value, value=value) for value in (param.choices or [])]
+    """A choice param as a described menu. What each option *means* comes
+    from the Param's own choice_help/choice_detail (see commands/spec.py),
+    filled in by whichever module owns those choices - so the restart modes
+    explain what each keeps, and the narration file modes explain what each
+    writes, without this function knowing either of them exists."""
+    rows = [
+        Choice(label=value, hint=param.choice_help.get(value, ""),
+               detail=param.choice_detail.get(value, ""), value=value)
+        for value in (param.choices or [])
+    ]
     return select(param.label, rows, default=param.default)
 
 

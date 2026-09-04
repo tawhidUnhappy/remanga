@@ -35,6 +35,15 @@ class Param:
     # Short label for the interactive prompt. `help` is written for
     # `--help` output and is often a paragraph; a menu needs a line.
     prompt: str = ""
+    # For a "choice" param: what each individual choice means, so the wizard
+    # can show a described menu instead of a list of bare words. Keyed by
+    # choice value; `choice_help` is the one-line hint on every row,
+    # `choice_detail` the longer text shown under the highlighted one. Both
+    # are filled from whatever module owns those choices (restart modes from
+    # remanga.reset, narration file modes from remanga.narration), so the
+    # descriptions live with the behavior rather than being retyped here.
+    choice_help: Dict[str, str] = field(default_factory=dict)
+    choice_detail: Dict[str, str] = field(default_factory=dict)
 
     @property
     def label(self) -> str:

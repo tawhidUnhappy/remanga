@@ -16,6 +16,7 @@ from remanga.console import console
 from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
 from remanga.pipeline import load_pipeline, run_pipeline
+from remanga.narration import TEMPLATE, create_narration_file
 from remanga.packaging import package_chapter
 from remanga.settings.project_prefs import cropper_config_for, parse_package_formats
 from remanga.video import VideoRenderer
@@ -31,6 +32,16 @@ def download(params: Dict[str, Any], config: RemangaConfig) -> None:
 
 def mark(params: Dict[str, Any], config: RemangaConfig) -> None:
     launch_panel_marker(params["project"], params["chapter"], config.marker)
+
+
+def narration_init(params: Dict[str, Any], config: RemangaConfig) -> None:
+    """Creates the chapter's narration.json - a full per-panel template, or a
+    genuinely empty file. See remanga/narration.py for what each mode
+    writes and why both exist."""
+    create_narration_file(
+        params["project"], params["chapter"],
+        mode=params.get("mode") or TEMPLATE, force=bool(params.get("force")),
+    )
 
 
 def write(params: Dict[str, Any], config: RemangaConfig) -> None:

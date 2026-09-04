@@ -304,6 +304,12 @@ them one after another). Adding a command is one `Command` entry with a
 means giving a command a new category string - an unknown one still gets its
 own group rather than vanishing.
 
+A `choice` param can carry `choice_help`/`choice_detail` dicts (see
+`commands/spec.py`), filled from whichever module owns those choices
+(`reset.RESTART_MODES`, `narration.NARRATION_FILE_MODES`) - that's what
+makes the wizard's menu explain each option without any screen re-describing
+behavior that lives elsewhere.
+
 Command parameters are prompted from their own `Param` specs
 (`remanga/wizard/params.py`), so new flags become wizard questions for free.
 The `_SPECIAL` table there overrides the generic prompt for the parameters
@@ -369,6 +375,14 @@ keeps), reachable from the menu like everything else.
 
 ## New commands/checks added post-writeup (keep COMMAND_REGISTRY the source of truth, this is just a pointer)
 
+- `narration-init` (Chapter Production): creates narration.json either as a
+  full per-panel template or as a genuinely empty (0-byte) file. The
+  document shape lives in `remanga/narration.py:narration_document` and
+  WriterState builds through it too, so a hand-started template and a
+  Writer-produced file are identical by construction - don't hand-write that
+  dict anywhere else. Refuses to clobber real content without `--force`; a
+  blank file is not content (`has_real_json_content`), so blank → template
+  needs no flag.
 - `package` (Chapter Production): (re)builds sheets/zips/pdf from an
   already-cropped chapter's panels/, standalone from `crop` - previously
   only happened as a side effect of crop's resume-check top-up.

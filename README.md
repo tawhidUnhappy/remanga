@@ -289,6 +289,17 @@ Launches the **Panel Marker** web UI: MAGI v3 pre-fills every page's panel boxes
 
 Whatever you pass is **remembered for that project** (in its `project.json`), so the next chapter builds the same set without being asked. Leave `--formats` off to use that remembered choice, falling back to `config.json`'s `cropper.package` switches for a project that has never chosen. `--formats none` builds nothing. In the wizard this is a checklist rather than a flag, opened on what the project currently builds. Re-run it any time — after changing the size cap, or when you want a different format from an already-cropped chapter — it works straight from `panels/`, no re-crop.
 
+### 3c. Start `narration.json` Yourself (optional)
+Not using the LLM copy/paste flow for this chapter? `narration-init` creates the file for you, two ways:
+```bash
+./run.sh narration-init --project "my_manga" --chapter "1" --mode template
+./run.sh narration-init --project "my_manga" --chapter "1" --mode blank
+```
+- **`template`** (default) — the complete skeleton for this chapter: one entry per cropped panel, in panel order, each with empty `text`. Byte-for-byte the same structure the Narration Writer creates when it opens, so you can fill it in by hand in an editor, or hand it to an LLM as the exact structure to fill in without it having to invent the panel list. Needs the chapter cropped (that's where the panel ids come from).
+- **`blank`** — a genuinely empty file. Zero bytes: not `{}`, not `[]`, nothing. That's the placeholder state the rest of remanga reads as "not written yet", so it reserves the path without any stage mistaking it for real content.
+
+It won't overwrite a narration.json that already has content unless you pass `--force` (the wizard asks). A blank file isn't content, so going blank → template needs no flag.
+
 ### 4. Generate and Place `narration.json` + `memory.json`
 Upload **any one** of your generated vision archives — whichever package formats are active (`panels_zip`, `pdf`, `sheets_zip`) — and `prompts/narration.md` to your LLM, attaching the project's current `memory.json` too, once it has real content, so continuity carries across chapters. **From chapter 2 onward, `memory.json` isn't optional** — the interactive wizard blocks and re-prompts until it has real content, since it's the only thing carrying character/plot continuity forward from the previous chapter. The prompt asks for **exactly two fenced JSON code blocks and nothing else** (no commentary before/after), so the LLM's reply can be copy-pasted straight into each file. The interactive wizard prints every archive actually available to upload this run as a ctrl+click-openable path (VS Code and similar editors), and both destination paths, when it gets to this step:
 ```text

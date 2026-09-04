@@ -16,8 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from remanga.json_io import has_real_json_content, read_json_or
-
-PANEL_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp")
+from remanga.narration import PANEL_IMAGE_EXTS, narration_document
 
 
 class WriterState:
@@ -87,9 +86,9 @@ class WriterState:
             self.texts[panel_id] = text or ""
 
     def build_narration_json(self) -> Dict[str, Any]:
-        narration = [{"panel_id": pid, "text": self.texts.get(pid, "")} for pid in self.panel_order]
-        return {
-            "chapter": self.chapter_num,
-            "total_panels": len(narration),
-            "narration": narration,
-        }
+        """Built through remanga.narration.narration_document - the same
+        function `narration-init --mode template` uses, so a hand-started
+        template and a Writer-produced file are structurally identical."""
+        return narration_document(
+            self.chapter_num, [(pid, self.texts.get(pid, "")) for pid in self.panel_order]
+        )
