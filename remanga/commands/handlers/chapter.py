@@ -8,7 +8,9 @@ audio/video/webui call the CLI has always made, uniform in shape
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, List
+
+from rich.markup import escape
 
 from remanga.audio import AudioProcessor, TTSEngine
 from remanga.config import RemangaConfig
@@ -22,6 +24,12 @@ from remanga.settings.project_prefs import cropper_config_for, parse_package_for
 from remanga.video import VideoRenderer
 from remanga.webui import launch_and_wait as launch_panel_marker
 from remanga.webui import launch_and_wait_writer
+from remanga.tui import confirm
+
+# How many changed lines to show in full before summarizing the rest - enough
+# to judge whether the normalizer is doing what you want, short of scrolling
+# a whole chapter off the screen.
+PREVIEW_LIMIT = 8
 
 
 def download(params: Dict[str, Any], config: RemangaConfig) -> None:
@@ -42,6 +50,67 @@ def narration_init(params: Dict[str, Any], config: RemangaConfig) -> None:
         params["project"], params["chapter"],
         mode=params.get("mode") or TEMPLATE, force=bool(params.get("force")),
     )
+
+
+def normalize_narration_cmd(params: Dict[str, Any], config: RemangaConfig) -> None:
+    """Rewrites this chapter's narration.json into text that's safe to
+    synthesize - see remanga/narration/normalize.py for exactly what gets
+    removed and what is deliberately kept (`?`, `!` and `...` always are).
+
+    Always previews before writing: narration text is hand-written or
+    LLM-generated and can't be regenerated from anything on disk, so the
+    change is shown line by line and confirmed."""
+    from collections import Counter
+
+    from remanga.narration import RULE_BY_NAME, normalize_narration, save_narration
+
+    project, chapter = params["project"], params["chapter"]
+    document, changes = normalize_narration(project, chapter)
+    total = len(document.get("narration", []))
+
+    if not changes:
+        console.print(
+            f"[bold green]✓ Chapter {chapter}'s narration is already TTS-safe[/] "
+            f"[dim]({total} line(s) checked, nothing to change)[/]"
+        )
+        return
+
+    console.print(
+        f"[bold]{len(changes)} of {total} line(s) would change[/] "
+        f"[dim]in chapter {chapter}'s narration.json[/]"
+    )
+    for change in changes[:PREVIEW_LIMIT]:
+        console.print(f"\n  [bold]{escape(change.panel_id)}[/] [dim]{escape(_rule_summary(change.rules))}[/]")
+        console.print(f"    [red]- {escape(change.before)}[/]")
+        console.print(f"    [green]+ {escape(change.after)}[/]")
+    if len(changes) > PREVIEW_LIMIT:
+        console.print(f"\n  [dim]... and {len(changes) - PREVIEW_LIMIT} more line(s)[/]")
+
+    counts = Counter(rule for change in changes for rule in change.rules)
+    console.print("\n[bold]What changed, across the chapter:[/]")
+    for name, count in counts.most_common():
+        console.print(f"  [dim]{count:>3} line(s):[/] {RULE_BY_NAME[name].summary}")
+    console.print("[dim]  ? ! and ... are never removed - only de-duplicated.[/]")
+
+    if params.get("dry_run"):
+        console.print("\n[yellow]Dry run - narration.json was not modified.[/]")
+        return
+
+    if not params.get("force") and not confirm(
+        "Write these changes to narration.json?", default=True,
+        note="the original text is replaced; re-running afterward changes nothing further",
+    ):
+        console.print("[dim]Cancelled - narration.json is unchanged.[/]")
+        return
+
+    save_narration(project, chapter, document)
+    console.print(f"[bold green]✓ narration.json normalized[/] [dim]({len(changes)} line(s) rewritten)[/]")
+
+
+def _rule_summary(rules: List[str]) -> str:
+    from remanga.narration import RULE_BY_NAME
+
+    return ", ".join(RULE_BY_NAME[name].summary for name in rules)
 
 
 def write(params: Dict[str, Any], config: RemangaConfig) -> None:

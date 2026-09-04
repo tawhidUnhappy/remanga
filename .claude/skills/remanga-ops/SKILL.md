@@ -395,6 +395,17 @@ keeps), reachable from the menu like everything else.
   dict anywhere else. Refuses to clobber real content without `--force`; a
   blank file is not content (`has_real_json_content`), so blank → template
   needs no flag.
+- `normalize-narration` (Chapter Production): rewrites narration.json into
+  TTS-safe text. Rules live in `remanga/narration/normalize.py` as named
+  `Rule` objects applied in order, and `normalize_text` reports which fired -
+  that report is what the command previews. Two invariants when touching it:
+  `?`, `!` and `...` are never removed (only de-duplicated) because the
+  engines infer emotion from them with no emo_vector sent, and the final
+  `charset` pass is a WHITELIST (`ALLOWED_PUNCTUATION`) - a missed exotic
+  character is a glitch mid-chapter, which is worse than dropping it. Order
+  matters: `charset` runs before `punctuation` so the gap a removed emoji
+  leaves gets cleaned up rather than frozen in ("mage , meets"). Must stay
+  idempotent - the command's second run has to report "already TTS-safe".
 - `package` (Chapter Production): (re)builds sheets/zips/pdf from an
   already-cropped chapter's panels/, standalone from `crop` - previously
   only happened as a side effect of crop's resume-check top-up.

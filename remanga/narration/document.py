@@ -28,7 +28,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple
 
 from remanga.console import console, display_path
-from remanga.json_io import has_real_json_content, write_json
+from remanga.json_io import has_real_json_content, read_json, write_json
+from remanga.narration.normalize import normalize_text
 from remanga.paths import get_chapter_dir
 
 # What counts as a panel image when reading a chapter's panels/ folder.
@@ -137,4 +138,48 @@ def create_narration_file(
         f"[dim]({len(ids)} panel(s), every text empty)[/]"
     )
     console.print(f"  {display_path(path)}")
+    return path
+
+
+@dataclass(frozen=True)
+class PanelChange:
+    """One panel's text before and after normalization, plus which rules
+    fired - so a preview can show what a change actually was, not just that
+    something changed."""
+
+    panel_id: str
+    before: str
+    after: str
+    rules: List[str]
+
+
+def normalize_narration(project_name: str, chapter_num: str) -> Tuple[Dict[str, Any], List[PanelChange]]:
+    """Reads this chapter's narration.json and returns (normalized document,
+    the panels that changed). Writes nothing - the caller previews, confirms,
+    and only then saves, because narration text is hand-written or
+    LLM-generated and not regenerable from anything on disk.
+
+    Raises if there's no narration to normalize yet."""
+    path = narration_path(project_name, chapter_num)
+    if not has_real_json_content(path):
+        raise FileNotFoundError(
+            f"No narration to normalize at {path} - write it first (`write`, the LLM flow, or "
+            f"`narration-init`)."
+        )
+
+    document = read_json(path)
+    changes: List[PanelChange] = []
+    for entry in document.get("narration", []):
+        before = entry.get("text", "") or ""
+        after, rules = normalize_text(before)
+        if after != before:
+            changes.append(PanelChange(entry.get("panel_id", "?"), before, after, rules))
+            entry["text"] = after
+    return document, changes
+
+
+def save_narration(project_name: str, chapter_num: str, document: Dict[str, Any]) -> Path:
+    """Writes narration.json back. Atomic, like every JSON write here."""
+    path = narration_path(project_name, chapter_num)
+    write_json(path, document)
     return path

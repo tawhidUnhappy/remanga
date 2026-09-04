@@ -301,6 +301,27 @@ Not using the LLM copy/paste flow for this chapter? `narration-init` creates the
 
 It won't overwrite a narration.json that already has content unless you pass `--force` (the wizard asks). A blank file isn't content, so going blank → template needs no flag.
 
+### 3d. Make the Narration Safe to Speak
+```bash
+./run.sh normalize-narration --project "my_manga" --chapter "1" --dry-run
+./run.sh normalize-narration --project "my_manga" --chapter "1"
+```
+LLM output and hand-written text carry things a TTS engine turns into noise. This rewrites the narration text so every engine says what you meant:
+
+| Removed (makes artifacts) | Kept (carries delivery) |
+| --- | --- |
+| Emoji, arrows, box drawing — anything outside a speakable whitelist | **`?` and `!`** — how the engine infers emotion when no emotion vector is sent |
+| Leftover markdown (`**bold**` gets voiced as "asterisk asterisk") | **`...`** — a pause the engine actually performs |
+| URLs, email addresses, and citations like `(see https://…)` | Commas, periods, apostrophes, quotes — the phrasing |
+| SHOUTED words — many front-ends spell all-caps out letter by letter | Single capitals (`A rank`, `S-class`) — those really are letters |
+| Streeeetched letters (capped at three) | Intra-word hyphens |
+| Raw digits — `3,000` becomes `three thousand`, `2nd` becomes `second`, `50%` becomes `fifty percent` | |
+| Zero-width and control characters, smart quotes, em dashes | |
+
+Runs of `!!!` collapse to one (same meaning to a model, less risk of over-reading), and a mixed `?!` survives intact — that pairing is its own tone.
+
+It always shows every line it would change, with which rules fired, and asks before writing — narration text isn't regenerable from anything on disk. `--dry-run` previews and exits; `--force` skips the confirmation. Running it twice changes nothing the second time.
+
 ### 4. Generate and Place `narration.json` + `memory.json`
 Upload **any one** of your generated vision archives — whichever package formats are active (`panels_zip`, `pdf`, `sheets_zip`) — and `prompts/narration.md` to your LLM, attaching the project's current `memory.json` too, once it has real content, so continuity carries across chapters. **From chapter 2 onward, `memory.json` isn't optional** — the interactive wizard blocks and re-prompts until it has real content, since it's the only thing carrying character/plot continuity forward from the previous chapter. The prompt asks for **exactly two fenced JSON code blocks and nothing else** (no commentary before/after), so the LLM's reply can be copy-pasted straight into each file. The interactive wizard prints every archive actually available to upload this run as a ctrl+click-openable path (VS Code and similar editors), and both destination paths, when it gets to this step:
 ```text

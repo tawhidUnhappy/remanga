@@ -124,6 +124,23 @@ COMMAND_REGISTRY: List[Command] = [
         detail="a starting point to fill in by hand, or to hand an LLM as the exact structure",
     ),
     Command(
+        "normalize-narration",
+        "Rewrite this chapter's narration.json into text that's safe to synthesize - removes "
+        "emoji, markdown, URLs, SHOUTED words, streeetched letters and every other character "
+        "that makes a TTS engine produce artifacts, and writes digits out as words. Never "
+        "removes ? ! or ... - those are what the engine reads emotion and pacing from",
+        chapter_handlers.normalize_narration_cmd,
+        [
+            project_param(), chapter_param(),
+            Param("dry_run", ["--dry-run"], type="bool", default=False,
+                  prompt="Preview only, without writing?",
+                  help="Show what would change and exit without touching narration.json"),
+            force_param("Write without confirming the preview"),
+        ],
+        category="Chapter Production",
+        detail="shows every line it would change before writing anything",
+    ),
+    Command(
         "write",
         "Launch the Narration Writer web UI to hand-write narration.json yourself, instead of "
         "an LLM - same panel-by-panel layout as the Narration Reviewer, but each field is the "
