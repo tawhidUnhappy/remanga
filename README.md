@@ -20,6 +20,7 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
   - [Vision Outputs: What to Generate, What to Zip](#vision-outputs-what-to-generate-what-to-zip)
   - [Panel Marker Web UI](#panel-marker-web-ui)
   - [Temporal Horizon Prompting (Zero Spoilers)](#temporal-horizon-prompting-zero-spoilers)
+  - [YouTube Upload Text](#youtube-upload-text-promptsyoutubemd)
 - [Natural, Expressive Narration](#natural-expressive-narration)
 - [Reliability: Crashes, Interrupts & Resuming](#reliability-crashes-interrupts--resuming)
 - [CLI Command Reference](#cli-command-reference)
@@ -533,6 +534,14 @@ The included prompt system in `prompts/` enforces strict narrative rules:
 3. **Show-and-Synthesize:** Narrative commentary blends speech bubbles and actions into active present-tense storytelling.
 4. **Pacing Ceiling:** 10 to 20 words per panel (hard ceiling: 26 words) to ensure optimal retention and natural IndexTTS-2.5 speech pacing.
 
+### YouTube Upload Text (`prompts/youtube.md`)
+
+Nothing in the pipeline reads or writes this — it's a prompt you use by hand when a chapter is rendered. Upload the chapter's `narration.json` and `memory.json` with `prompts/youtube.md`, and it replies with four plain-text blocks to copy straight into YouTube: `=== TITLE ===`, `=== DESCRIPTION ===`, `=== THUMBNAIL TEXT ===` and `=== THUMBNAIL PROMPT ===`.
+
+It's written for reuse rather than for a fresh write-up every chapter: the description is meant to be pasted unchanged from one upload to the next, with the chapter number alone on the opening line so the next chapter is a one-character edit, and the title and thumbnail text carry the number so two uploads never look like the same video. It also holds the line on YouTube's limits (title ≤ 100 characters, aim ≤ 70; the first ~150 characters of the description are all that show above "…more"; exactly 3 hashtags) and on the same zero-spoiler horizon as the narration — a title and thumbnail are read *before* the video, so the chapter's ending appears in neither.
+
+*A fuller version of this — per-chapter `youtube.json` files, a series-wide format lock, and a `youtube` pipeline step that runs the hand-off for you — lives on the [`youtube-publishing-automation`](https://github.com/tawhidUnhappy/remanga/tree/youtube-publishing-automation) branch, for when this stops being a copy/paste job.*
+
 ---
 
 ## Switching TTS Engines
@@ -619,7 +628,9 @@ remanga/
 │   ├── indextts_2.5/           # IndexTTS-2.5 neural model weights
 │   └── magiv3/                 # MAGI v3 panel-detection weights (Panel Marker assist)
 ├── prompts/
-│   └── narration.md  # Master objective scriptwriter prompt
+│   ├── narration.md         # Master objective scriptwriter prompt
+│   ├── narration_review.md  # Fix-pass prompt for a human review round
+│   └── youtube.md           # Title/description/thumbnail for the upload, in plain text
 ├── projects/
 │   └── <project_name>/
 │       ├── project.json        # Saved MangaDex URL, chapter index, and remembered per-project choices
