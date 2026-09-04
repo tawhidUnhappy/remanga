@@ -31,7 +31,7 @@ def render_status_panel(project: str, chapter: str) -> str:
     # chapter get packaged into" reads identically wherever it's asked.
     package_str = package_summary(package)
 
-    # Items 2-9 below name only the filename, not the full path - the
+    # Items 2-12 below name only the filename, not the full path - the
     # workspace directory they all live under is already stated once, in
     # "Workspace Directory" above. Repeating the full absolute path on every
     # line (the old behavior) made this panel wrap mid-directory-name on
@@ -58,5 +58,6 @@ def render_status_panel(project: str, chapter: str) -> str:
    9b. Narration Review   : {'[yellow]⚑ ' + str(st['review_flagged_count']) + ' flagged, awaiting LLM fix pass[/]' if st['review_pending'] else '[dim]— no pending review[/]'}
   10. Master Audio Track  : {'[green]✓ Generated (IndexTTS-2.5)[/]' if st['master_audio_exist'] else '[red]✗ Not built (' + str(st['audio_clips_count']) + '/' + str(st['total_narration_entries']) + ' clips)[/]'}
   11. Final Recap Video   : {'[green]✓ Ready (' + _esc(st['video_path'].name) + ')[/]' if st['video_exist'] else '[red]✗ Not rendered[/]'}
+  12. YouTube Metadata    : {'[green]✓ Written (youtube.json)[/]' if st['youtube_exist'] else '[dim yellow]✗ Not written[/]'}
 """
     return status_str.strip()

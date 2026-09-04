@@ -12,13 +12,15 @@ piece is for:
     pipeline_edit.py - which steps run, and in what order
     narration.py     - the narration-generation hand-off
     review.py        - the review-round loop
+    youtube.py       - the YouTube title/description/thumbnail hand-off
     uploads.py       - what this chapter has that can be uploaded
     handoff.py       - printing an LLM hand-off (shared by both steps)
     checks.py        - the automatic panel/narration sanity check
 
-`run_narration_step` and `run_narration_review_loop` are re-exported because
-remanga.pipeline's narration/review steps and the `review` command call them
-by that name."""
+`run_narration_step`, `run_narration_review_loop` and
+`run_youtube_metadata_step` are re-exported because remanga.pipeline's
+narration/review/youtube steps and the `review`/`youtube` commands call them
+by those names."""
 
 from __future__ import annotations
 
@@ -26,10 +28,12 @@ from remanga.wizard.app import run_interactive_pipeline
 from remanga.wizard.narration import run_narration_step
 from remanga.wizard.pipeline_edit import edit_pipeline_steps
 from remanga.wizard.review import run_narration_review_loop
+from remanga.wizard.youtube import run_youtube_metadata_step
 
 __all__ = [
     "edit_pipeline_steps",
     "run_interactive_pipeline",
     "run_narration_review_loop",
     "run_narration_step",
+    "run_youtube_metadata_step",
 ]

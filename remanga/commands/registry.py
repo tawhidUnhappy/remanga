@@ -231,6 +231,16 @@ COMMAND_REGISTRY: List[Command] = [
         category="Chapter Production",
     ),
     Command(
+        "youtube",
+        "Write this chapter's YouTube title, description, tags and thumbnail brief via LLM "
+        "copy/paste (writes youtube.json), following - or, on the first chapter, creating - the "
+        "project's youtube_format.json so every chapter of the manga is published the same way",
+        chapter_handlers.youtube,
+        [project_param(), chapter_param()],
+        category="Chapter Production",
+        detail="one format for the whole series: chapter 1 sets it, every chapter after follows it",
+    ),
+    Command(
         "run",
         "Run this project's pipeline.json (or the full default step order, if it has none) for "
         "one chapter, or an explicit --steps subset/order instead - 'just one tool', 'a lot of "
@@ -261,8 +271,9 @@ COMMAND_REGISTRY: List[Command] = [
                 prompt="Keep which of the chapter's existing files?",
                 help="Comma-separated names of items to keep (e.g. pages,narration.json) - the "
                      "wizard lists what actually exists for the chapter as a checklist. Left unset "
-                     f"(the default): keeps {_DEFAULT_KEEP_TEXT} - the downloaded pages, marks, and "
-                     "narration script, wiping only what's cheaply regenerated from them. Pass "
+                     f"(the default): keeps {_DEFAULT_KEEP_TEXT} - the downloaded pages, marks, "
+                     "narration script and YouTube metadata, wiping only what's cheaply "
+                     "regenerated from them. Pass "
                      "'none' to wipe absolutely everything instead.",
             ),
             force_param(),

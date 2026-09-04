@@ -12,12 +12,13 @@ from typing import List, Optional
 
 from remanga.full_recap import chapter_sort_key, discover_chapters
 
-# Applied whenever --keep is left unset entirely (None) - the three things
-# most expensive/annoying to redo (a re-download, re-marking panels, and an
-# LLM narration pass) survive a wipe by default; everything generated from
-# them (panels/, sheets/zips, audio, video) does not. Pass --keep explicitly
-# (a comma list, or "none" for an absolute full wipe) to override this.
-DEFAULT_WIPE_KEEP = {"pages", "crops.json", "narration.json"}
+# Applied whenever --keep is left unset entirely (None) - the four things
+# most expensive/annoying to redo (a re-download, re-marking panels, and the
+# two LLM round-trips: the narration pass and the YouTube metadata written
+# from it) survive a wipe by default; everything generated from them
+# (panels/, sheets/zips, audio, video) does not. Pass --keep explicitly (a
+# comma list, or "none" for an absolute full wipe) to override this.
+DEFAULT_WIPE_KEEP = {"pages", "crops.json", "narration.json", "youtube.json"}
 
 
 def split_chapters(raw: Optional[str]) -> Optional[List[str]]:

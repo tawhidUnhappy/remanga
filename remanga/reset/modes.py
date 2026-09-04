@@ -20,6 +20,10 @@ KEEP_ON_RESTART = {"pages"}
 KEEP_ON_MARKS_ONLY_RESTART = KEEP_ON_RESTART | {"crops.json"}
 KEEP_ON_SOFT_RESTART = KEEP_ON_RESTART | {
     "crops.json", "panels", "narration.json", "narration_review.json", "narration_reviews",
+    # Written from narration.json by an LLM round-trip of its own, so a soft
+    # restart - which keeps narration.json - has nothing to gain by throwing
+    # the title/description/thumbnail brief away with the audio and video.
+    "youtube.json",
 }
 
 _KEEP_SETS: Dict[str, set] = {
@@ -68,7 +72,8 @@ RESTART_MODES: Tuple[RestartMode, ...] = (
         deletion_mode="marks_only", reopen_marker=True,
     ),
     RestartMode(
-        "soft", "Soft restart", "downloaded pages, crops.json, panels/, and narration.json",
+        "soft", "Soft restart",
+        "downloaded pages, crops.json, panels/, narration.json, and youtube.json",
         "keep everything hand-made; wipe only generated audio/video/packaging",
     ),
 )
