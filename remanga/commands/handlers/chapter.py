@@ -144,13 +144,6 @@ def review(params: Dict[str, Any], config: RemangaConfig) -> None:
     run_narration_review_loop(params["project"], params["chapter"], config)
 
 
-def youtube(params: Dict[str, Any], config: RemangaConfig) -> None:
-    # Deferred import, same reason as review() above.
-    from remanga.wizard import run_youtube_metadata_step
-
-    run_youtube_metadata_step(params["project"], params["chapter"], config)
-
-
 def crop(params: Dict[str, Any], config: RemangaConfig) -> None:
     """Cuts the panels, and only that - packaging is `package`'s job."""
     from remanga.settings import package_summary

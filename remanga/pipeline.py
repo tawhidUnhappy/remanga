@@ -1,5 +1,5 @@
 """Modular step-registry + JSON pipeline config: the download -> mark ->
-crop -> package -> narration -> review -> tts -> mix -> render -> youtube sequence, now expressed as an ordered list of named, independently
+crop -> package -> narration -> review -> tts -> mix -> render sequence, now expressed as an ordered list of named, independently
 runnable steps instead of one hardcoded function. This lets a caller run
 "just one tool" (a single step name), "a lot of them" (an arbitrary subset,
 in any order), or the full default pipeline - driven by
@@ -7,7 +7,7 @@ projects/<name>/pipeline.json instead of code.
 
 Each step's actual work is NOT reimplemented here - every _run_* function
 below is a thin wrapper around the exact same downloader/cropper/audio/video/
-webui calls (and, for narration/review/youtube, the exact same remanga/wizard/ functions)
+webui calls (and, for narration/review, the exact same remanga/wizard/ functions)
 the interactive wizard has always used, including their console messages -
 so the default step list run through run_pipeline() behaves identically to
 today's wizard. The wizard's own "run the pipeline" path is just the `run`
@@ -125,15 +125,6 @@ def _run_render(project: str, chapter: str, config: RemangaConfig) -> None:
     print_path(f"  {display_path(final_video, wrap=False)}")
 
 
-def _run_youtube(project: str, chapter: str, config: RemangaConfig) -> None:
-    """The publishing hand-off: title, description, tags and thumbnail brief
-    for the video the render step just produced. Deferred import for the same
-    reason narration/review use one - remanga/wizard/ imports run_pipeline
-    from this module."""
-    from remanga.wizard import run_youtube_metadata_step
-    run_youtube_metadata_step(project, chapter, config)
-
-
 # Ordered, once - both STEP_REGISTRY (source of truth for what a step is/
 # does) and DEFAULT_STEPS (today's exact hardcoded wizard order, used as the
 # fallback whenever a project has no pipeline.json) come from this one list.
@@ -149,8 +140,6 @@ STEP_REGISTRY: List[Step] = [
     Step("tts", "Synthesize vocal audio via TTS", _run_tts, needs=["review"]),
     Step("mix", "Mix master audio track (narration + BGM + loudnorm)", _run_mix, needs=["tts"]),
     Step("render", "Render the final recap video", _run_render, needs=["mix"]),
-    Step("youtube", "Write the YouTube title/description/thumbnail brief via LLM copy/paste "
-                    "(writes youtube.json)", _run_youtube, needs=["render"]),
 ]
 
 _STEP_BY_NAME = {step.name: step for step in STEP_REGISTRY}

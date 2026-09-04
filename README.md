@@ -20,7 +20,6 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
   - [Vision Outputs: What to Generate, What to Zip](#vision-outputs-what-to-generate-what-to-zip)
   - [Panel Marker Web UI](#panel-marker-web-ui)
   - [Temporal Horizon Prompting (Zero Spoilers)](#temporal-horizon-prompting-zero-spoilers)
-  - [YouTube Title, Description & Thumbnail](#youtube-title-description--thumbnail-promptsyoutube_metadatamd)
 - [Natural, Expressive Narration](#natural-expressive-narration)
 - [Reliability: Crashes, Interrupts & Resuming](#reliability-crashes-interrupts--resuming)
 - [CLI Command Reference](#cli-command-reference)
@@ -152,7 +151,7 @@ Picking a category opens its commands, and running one lands you back in the sam
 | Which pipeline steps? | An ordered checklist of the real step registry — the number shown is the run order, and it opens on the steps you ran last time |
 | Which restart mode? | The four presets, each row saying what survives it |
 
-Chapter production runs in order — download → mark panels → crop → package → narration → review → TTS → mix → render → YouTube metadata — either step by step from the menu, or in one go with `run` (which follows this project's `pipeline.json`). `run`'s checklist opens on whatever you ran last — remembered per project in its `project.json`, so re-running the tail of a pipeline that died at TTS is Enter, not nine boxes again — and picking a subset still never rewrites `pipeline.json`.
+Chapter production runs in order — download → mark panels → crop → package → narration → review → TTS → mix → render — either step by step from the menu, or in one go with `run` (which follows this project's `pipeline.json`). `run`'s checklist opens on whatever you ran last — remembered per project in its `project.json`, so re-running the tail of a pipeline that died at TTS is Enter, not nine boxes again — and picking a subset still never rewrites `pipeline.json`.
 
 If stdin isn't a terminal (a piped script, CI, an editor's output pane), every menu falls back to the plain numbered prompts remanga has always had, with `0` as back/quit at each level.
 
@@ -418,7 +417,7 @@ Composites frames onto the chosen background canvas and renders hardware-acceler
 | **Hard** (default) | `--mode hard` | downloaded pages only | starting the chapter completely over |
 | **Marks-only** | `--mode marks_only` | + `crops.json` | your panel marks are good, but you changed a cropper setting (margin, gutter-snap, vision format) or just want a fresh narration script — `narration.json` is emptied, not kept |
 | **Re-mark** | `--mode remark` | + `crops.json` | same deletion as marks-only, but also reopens the Panel Marker web UI afterward with the kept marks pre-loaded, so you can review/adjust them before continuing instead of trusting them blindly |
-| **Soft** | `--mode soft` | + `crops.json`, `panels/`, `narration.json`, `youtube.json` | you changed voice/BGM/resolution and only need TTS/mix/render redone |
+| **Soft** | `--mode soft` | + `crops.json`, `panels/`, `narration.json` | you changed voice/BGM/resolution and only need TTS/mix/render redone |
 
 ```bash
 ./run.sh restart --project "my_manga" --chapter "1" --mode marks_only
@@ -534,21 +533,6 @@ The included prompt system in `prompts/` enforces strict narrative rules:
 3. **Show-and-Synthesize:** Narrative commentary blends speech bubbles and actions into active present-tense storytelling.
 4. **Pacing Ceiling:** 10 to 20 words per panel (hard ceiling: 26 words) to ensure optimal retention and natural IndexTTS-2.5 speech pacing.
 
-### YouTube Title, Description & Thumbnail (`prompts/youtube_metadata.md`)
-
-`./run.sh youtube -p <PROJECT> -c <CHAPTER>` — also the `youtube` pipeline step, which runs last by default, and a row in the wizard's Chapter Production menu. It's the same copy/paste hand-off that produces `narration.json`: it writes a blank `youtube.json` placeholder to paste into, tells you what to upload, and waits. Upload the chapter's `narration.json` and `memory.json` — plus the project's `youtube_format.json`, from the second chapter onward — along with `prompts/youtube_metadata.md`, and save the two JSON blocks it replies with:
-
-| File | Where | What it is |
-| --- | --- | --- |
-| `youtube.json` | `projects/<project>/chapters/chapter_<num>/` | This chapter's title, description, tags, hashtags, and thumbnail brief (overlay text + an image-generation prompt + the `panel_id` it's based on) |
-| `youtube_format.json` | `projects/<project>/` | The series' **format lock** — title template, description skeleton, fixed blocks, core tags, hashtags, thumbnail style. Written on the first chapter, obeyed verbatim on every one after |
-
-Every block opens with the same two keys — `file`, naming which of the two files it is, and `chapter`, the chapter this run is for — so two similar-looking JSON blocks can be told apart without reading them. The step checks those keys, not just that the files are non-empty: blocks pasted into each other's path, or a chapter's metadata saved under a different chapter, are reported by name rather than discovered later. (The format lock is exempt from the chapter check — it's series-wide, so its `chapter` legitimately trails behind or runs ahead of the one being worked on.) Everything the LLM writes is in English, whatever language the narration is in.
-
-Both blocks are checked before the step finishes: a chapter whose `youtube.json` is saved while the project still has no format lock isn't done, because the next chapter would then be handed no format to follow. Re-running the step on a chapter that already has both is a no-op, and it never overwrites a `youtube.json` that holds a real reply. `wipe` keeps `youtube.json` by default and a soft `restart` keeps it too — it costs an LLM round-trip of its own, exactly like the narration script.
-
-The format lock is the point of the prompt: chapter 12's video has to be recognizable as the same series as chapter 3 at a glance in a sidebar, so only the per-chapter slots (hook, chapter number, summary, beats, thumbnail subject) ever change — every fixed block is copied character for character. The prompt also enforces YouTube's real limits (title ≤ 100 characters, aim ≤ 70; description ≤ 5,000 with the hook inside the first ~150; tags ≤ 500 characters total; exactly 3 hashtags) and the same zero-spoiler horizon as the narration: the title and thumbnail are seen *before* the video, so the chapter's final beat never appears in either.
-
 ---
 
 ## Switching TTS Engines
@@ -614,7 +598,6 @@ In short: if a chapter's TTS run gets interrupted or a worker locks up, just re-
 ./run.sh tts      -p <PROJECT> -c <CHAPTER> [-e <ENGINE>] [-v <VOICE_WAV>] [-f]
 ./run.sh mix      -p <PROJECT> -c <CHAPTER> [-b <BGM_FILE>]
 ./run.sh render   -p <PROJECT> -c <CHAPTER> [-f]
-./run.sh youtube  -p <PROJECT> -c <CHAPTER>
 ./run.sh full-recap -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-f]
 ./run.sh remix    -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-b <BGM_FILE>] [--no-rejoin]
 ./run.sh status   -p <PROJECT> -c <CHAPTER>
@@ -636,22 +619,18 @@ remanga/
 │   ├── indextts_2.5/           # IndexTTS-2.5 neural model weights
 │   └── magiv3/                 # MAGI v3 panel-detection weights (Panel Marker assist)
 ├── prompts/
-│   ├── narration.md         # Master objective scriptwriter prompt
-│   ├── narration_review.md  # Fix-pass prompt for a human review round
-│   └── youtube_metadata.md  # Per-chapter YouTube title/description/thumbnail prompt
+│   └── narration.md  # Master objective scriptwriter prompt
 ├── projects/
 │   └── <project_name>/
 │       ├── project.json        # Saved MangaDex URL, chapter index, and remembered per-project choices
 │       ├── memory.json         # Story continuity state across chapters
-│       ├── youtube_format.json # The series' YouTube format lock (title/description/thumbnail templates)
 │       ├── manifest.json       # Per-chapter pages/panels bookkeeping, one shared file (informational only)
 │       ├── chapters/
 │       │   └── chapter_<num>/          # SOURCE ONLY - the handful of things nothing else can regenerate
 │       │       ├── pages/              # Raw downloaded chapter pages
 │       │       ├── crops.json          # Panel crop coordinates from the Panel Marker web UI
 │       │       ├── panels/             # Cropped individual panel images (full quality - video reads these)
-│       │       ├── narration.json      # Synchronized narration script
-│       │       └── youtube.json        # This chapter's YouTube title/description/tags/thumbnail brief
+│       │       └── narration.json      # Synchronized narration script
 │       │
 │       # Everything below is GENERATED - one shared, per-kind, per-chapter tree,
 │       # never mixed into the source chapter folder above. A restart (any mode)

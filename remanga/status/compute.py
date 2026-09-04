@@ -13,7 +13,7 @@ from remanga.json_io import has_real_json_content, read_json_or
 from remanga.paths import (
     get_audio_dir, get_audio_timing_path, get_chapter_dir, get_final_video_path,
     get_master_audio_path, get_narration_review_path, get_pages_zip_path, get_panels_pdf_dir,
-    get_panels_zip_dir, get_sheets_dir, get_sheets_zip_dir, get_youtube_path,
+    get_panels_zip_dir, get_sheets_dir, get_sheets_zip_dir,
 )
 
 
@@ -53,8 +53,6 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
     audio_clips_count = len([p for p in audio_dir.glob("*.wav") if not p.stem.endswith("_raw")]) if audio_dir.exists() else 0
     timing_exist = get_audio_timing_path(project_name, chapter_num, create=False).exists()
     master_audio_exist = get_master_audio_path(project_name, chapter_num, create=False).exists()
-
-    youtube_exist = has_real_json_content(get_youtube_path(project_name, chapter_num))
 
     final_video_path = get_final_video_path(project_name, chapter_num, create=False)
     video_exist = final_video_path.exists() and final_video_path.stat().st_size > 1000
@@ -99,7 +97,6 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
         "audio_clips_count": audio_clips_count,
         "timing_exist": timing_exist,
         "master_audio_exist": master_audio_exist,
-        "youtube_exist": youtube_exist,
         "video_exist": video_exist,
         "video_path": final_video_path,
         "summary": summary,

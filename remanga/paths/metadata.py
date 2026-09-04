@@ -1,8 +1,6 @@
 """Project-level metadata files: project.json (manga identity/source),
-memory.json (story continuity), youtube_format.json (the series' publishing
-format lock) with its per-chapter youtube.json, manifest.json (small
-per-chapter production bookkeeping), and the project listing the wizard's
-picker reads."""
+memory.json (story continuity), manifest.json (small per-chapter production
+bookkeeping), and the project listing the wizard's picker reads."""
 
 from __future__ import annotations
 
@@ -11,7 +9,7 @@ from typing import Any, Dict, List
 
 from remanga.json_io import read_json_or, write_json
 
-from .projects import get_chapter_dir, get_project_dir, get_projects_dir
+from .projects import get_project_dir, get_projects_dir
 
 
 def get_project_metadata_path(project_name: str) -> Path:
@@ -64,39 +62,6 @@ def save_project_metadata(project_name: str, data: Dict[str, Any]) -> None:
     existing.update(data)
     write_json(meta_path, existing)
     ensure_memory_file(project_name)
-
-
-def get_youtube_path(project_name: str, chapter_num: str) -> Path:
-    """{manga}/chapters/chapter_N/youtube.json - that chapter's YouTube title,
-    description, tags and thumbnail brief, written by an LLM from the finished
-    narration (see prompts/youtube_metadata.md). Lives in the chapter's SOURCE
-    folder alongside narration.json rather than under a generated/ kind: like
-    narration.json, nothing remanga has can regenerate it - it costs another
-    LLM round-trip."""
-    return get_chapter_dir(project_name, chapter_num) / "youtube.json"
-
-
-def get_youtube_format_path(project_name: str) -> Path:
-    """{manga}/youtube_format.json - the series' publishing format lock: title
-    template, description skeleton, fixed blocks, core tags, hashtags and
-    thumbnail style. One file for the whole manga, written on the first chapter
-    and obeyed by every chapter after it, which is what makes chapter 12's video
-    recognizable as the same series as chapter 3."""
-    return get_project_dir(project_name) / "youtube_format.json"
-
-
-def ensure_youtube_format_file(project_name: str) -> Path:
-    """Creates a blank placeholder youtube_format.json at the project root the
-    first time the YouTube step runs, without ever clobbering a format an LLM
-    has already written there - same pattern as ensure_memory_file(). Blank,
-    not `{}`: an empty file is what has_real_json_content() reads as "not
-    written yet", and it's what the prompt's "you weren't given a format lock,
-    so design one" branch keys off."""
-    path = get_youtube_format_path(project_name)
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("", encoding="utf-8")
-    return path
 
 
 def get_pipeline_path(project_name: str) -> Path:
