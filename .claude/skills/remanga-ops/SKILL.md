@@ -271,7 +271,7 @@ Run `verify` after a crash/kill, not routinely.
 
 ## Pipeline step registry (`remanga/pipeline.py`)
 
-The wizard's step order (download→mark→crop→narration→review→tts→mix→render)
+The wizard's step order (download→mark→crop→package→narration→review→tts→mix→render)
 lives in `STEP_REGISTRY`, not hardcoded per-project. Each project can have
 `projects/<name>/pipeline.json` = `{"steps": ["download", "mark", ...]}`;
 missing/empty falls back to `DEFAULT_STEPS` (that exact order) unchanged.
@@ -279,8 +279,16 @@ Edit it via the wizard's "Pipeline" menu row (an ordered checklist -
 check order is run order), or `remanga run -p <p> -c <c>`
 (uses pipeline.json) / `remanga run -p <p> -c <c> -s crop,narration` (one-off
 explicit subset, doesn't touch pipeline.json). Every existing single-step
-subcommand (`download`/`mark`/`crop`/`write`/`review`/`tts`/`mix`/`render`)
-still works unchanged - `run` just wraps the same underlying calls.
+subcommand (`download`/`mark`/`crop`/`package`/`write`/`review`/`tts`/`mix`/
+`render`) still works unchanged - `run` just wraps the same underlying calls.
+
+`crop` does NOT package. It cuts panels and stops; building sheets/zips/PDFs
+is `package` (the command, and the pipeline step of the same name), one
+implementation in `remanga/packaging.py:package_chapter` shared by both. It
+used to happen automatically on every crop - including a top-up on the
+resume path - which meant a ~30MB zip rebuilt by a command asked only to cut
+panels. The `reading_direction` guard moved with it: cropping never used
+that field, only the bundles' chapter_info.json does.
 
 ## Wizard menu is registry-driven, no hardcoded "modes"
 

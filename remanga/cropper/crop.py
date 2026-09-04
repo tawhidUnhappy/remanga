@@ -1,9 +1,14 @@
-"""Chapter-level crop orchestration: reads crops.json, resolves and crops every
-panel, then packages whichever LLM upload formats are active. The actual box
-math lives in remanga.cropper.panel_boxes/gutter/seams/dedupe, one page's
-worth of cropping lives in remanga.cropper.crop_page, and
+"""Chapter-level crop orchestration: reads crops.json and crops every panel.
+
+Cropping stops there. Building the LLM upload formats (sheets, zips, PDFs)
+is the `package` command / pipeline step - see remanga/packaging.py - not a
+side effect of cropping: a 30MB zip produced by a command that was asked to
+cut panels is work nobody requested, and it happened on every single crop.
+
+The actual box math lives in remanga.cropper.panel_boxes/gutter/seams/
+dedupe, one page's worth of cropping lives in remanga.cropper.crop_page, and
 manifest/summary/packaging lives in remanga.cropper.crop_report - this module
-just wires the pipeline stages together in order."""
+just wires the stages together in order."""
 
 from __future__ import annotations
 
@@ -13,10 +18,9 @@ from typing import List, Optional
 from remanga.config import CropperConfig
 from remanga.console import console
 from remanga.cropper.crop_page import crop_page
-from remanga.cropper.crop_report import ensure_panel_folders_generated, ensure_sheets_generated, package_outputs, print_crop_summary, write_manifest
-from remanga.cropper.llm_bundles import build_llm_bundles, is_up_to_date
+from remanga.cropper.crop_report import print_crop_summary, write_manifest
 from remanga.json_io import has_real_json_content, read_json
-from remanga.paths import get_chapter_dir, load_project_metadata, read_manifest
+from remanga.paths import get_chapter_dir, read_manifest
 
 
 class CoordinateCropper:
@@ -25,9 +29,11 @@ class CoordinateCropper:
 
     def crop_chapter_from_json(self, project_name: str, chapter_num: str, force: bool = False) -> List[Path]:
         """
-        Reads crops.json in the chapter directory, crops panels, generates
-        contact sheets or panel archives, and packages according to config.
+        Reads crops.json in the chapter directory and crops every panel.
         Skips if already cropped and force is False.
+
+        Produces panels/ and nothing else - run `package` (or the pipeline's
+        package step) to build the upload formats from them.
         """
         chapter_dir = get_chapter_dir(project_name, chapter_num)
         crops_json_path = chapter_dir / "crops.json"
@@ -46,44 +52,16 @@ class CoordinateCropper:
                 f"Please download the chapter pages first."
             )
 
-        # reading_direction feeds every panels_pdf/panels_zip/sheets_zip
-        # chapter_info.json via chapter_identity_fields (see
-        # remanga.paths.metadata) - required before packaging runs below, not
-        # just cosmetic. `remanga interactive` asks for it once per project
-        # and saves it to project.json; this direct/scripted `crop` entry
-        # point has no prompt UI of its own, so it fails clearly instead of
-        # silently defaulting or shipping a bundle with a guessed direction.
-        # This is the pattern to follow for any future required-but-missing
-        # project.json/config.json field: interactive callers prompt and
-        # save it up front, non-interactive callers fail fast here with
-        # exactly what's missing and how to fix it.
-        if "reading_direction" not in load_project_metadata(project_name):
-            raise ValueError(
-                f"Missing 'reading_direction' for project '{project_name}' - required before "
-                f"panels_pdf/panels_zip/sheets_zip can be packaged. Set it by running "
-                f"`remanga interactive` once for this project (it will ask and save it), or add "
-                f"\"reading_direction\": \"right_to_left\" (or \"left_to_right\") directly to "
-                f"projects/{project_name}/project.json."
-            )
-
-        # RESUME CHECK: If panels already exist and force=False, verify and skip
-        # the (expensive) re-crop. Still tops up any enabled package format
-        # that's missing (a lightweight re-encode of already-cropped panels,
-        # not a full re-crop) - so a chapter cropped before that format
-        # existed, or with it previously disabled, gets it built once on its
-        # next run instead of never. "Already cropped" is decided by this
-        # chapter having a "panels" entry in the shared manifest.json (see
+        # RESUME CHECK: if panels already exist and force=False, skip the
+        # (expensive) re-crop. "Already cropped" is decided by this chapter
+        # having a "panels" entry in the shared manifest.json (see
         # crop_report.write_manifest) - the crop step's own record that it
-        # ran to completion for this chapter, same role the old standalone
+        # ran to completion, the same role the old standalone
         # panels_manifest.json's mere existence used to play.
         existing_panels = sorted(p for p in panels_dir.iterdir() if p.is_file()) if panels_dir.exists() else []
         already_cropped = bool(read_manifest(project_name).get("chapters", {}).get(str(chapter_num), {}).get("panels"))
         if not force and existing_panels and already_cropped:
             console.print(f"[bold green]✓ Found {len(existing_panels)} panels already cropped! Skipping re-crop.[/]")
-            if not is_up_to_date(self.config, project_name, chapter_num):
-                sheet_paths = ensure_sheets_generated(self.config, project_name, chapter_num, existing_panels)
-                build_llm_bundles(self.config, project_name, chapter_num, existing_panels, sheet_paths)
-            ensure_panel_folders_generated(self.config, project_name, chapter_num, existing_panels)
             return existing_panels
 
         # Clear existing panels directory before fresh cropping - a full wipe,
@@ -127,6 +105,4 @@ class CoordinateCropper:
             panels_dir, len(output_panel_paths), self.config,
             gutter_panels_adjusted, gutter_edges_adjusted, panels_trimmed, duplicate_panels_dropped,
         )
-        package_outputs(self.config, output_panel_paths, project_name, chapter_num)
-
         return output_panel_paths

@@ -150,7 +150,7 @@ Picking a category opens its commands, and running one lands you back in the sam
 | Which pipeline steps? | An ordered checklist of the real step registry — the number shown is the run order |
 | Which restart mode? | The four presets, each row saying what survives it |
 
-Chapter production runs in the same order it always has — download → mark panels → crop/package → narration → review → TTS → mix → render — either step by step from the menu, or in one go with `run` (which follows this project's `pipeline.json`).
+Chapter production runs in order — download → mark panels → crop → package → narration → review → TTS → mix → render — either step by step from the menu, or in one go with `run` (which follows this project's `pipeline.json`).
 
 If stdin isn't a terminal (a piped script, CI, an editor's output pane), every menu falls back to the plain numbered prompts remanga has always had, with `0` as back/quit at each level.
 
@@ -275,18 +275,19 @@ Launches the **Panel Marker** web UI: MAGI v3 pre-fills every page's panel boxes
 ```
 *Creates:* `projects/my_manga/chapters/chapter_1/crops.json` — see [Panel Marker Web UI](#panel-marker-web-ui) below.
 
-### 3. Crop Panels & Package Vision Uploads
+### 3. Crop Panels
 ```bash
 ./run.sh crop --project "my_manga" --chapter "1"
 ```
-*Creates:* `chapters/chapter_<num>/panels/` (source), this chapter's `panels` entry in the project's shared `manifest.json`, and - all under the project-level generated tree, not the chapter's source folder - `sheets/chapter_<num>/` (whenever it's actually needed - `package.sheets` on by default, or `package.sheets_zip` active), and whichever of `panels_zip/chapter_<num>/panels_1.zip`, `panels_pdf/chapter_<num>/panels_1.pdf` (or its zipped/split variants), `sheets_zip/chapter_<num>/sheets_1.zip`, and `sheets_folders/chapter_<num>/` (all off by default) are active per `cropper.package` (see [Vision Outputs](#vision-outputs-what-to-generate-what-to-zip) below).
+*Creates:* `chapters/chapter_<num>/panels/` (source) and this chapter's `panels` entry in the project's shared `manifest.json`. **That's all it creates** — cropping cuts panels and stops. Building the LLM upload formats is step 3b, its own command, so a 30MB zip never appears as a side effect of a command you ran to cut panels.
 
-### 3b. (Re)build Just the Upload Formats
-Already cropped, and now you want a different upload format — or the same ones again after changing the size cap? `package` rebuilds them straight from `panels/`, no re-crop:
+### 3b. Package the Upload Formats
 ```bash
 ./run.sh package --project "my_manga" --chapter "1" --formats sheets,panels_zip
 ```
-Whatever you pass is **remembered for that project** (in its `project.json`), so the next chapter builds the same set without being asked — and so does `crop`'s own packaging step. Leave `--formats` off to use that remembered choice, falling back to `config.json`'s `cropper.package` switches for a project that has never chosen. `--formats none` builds nothing. In the wizard this is a checklist rather than a flag, opened on what the project currently builds.
+*Creates* — all under the project-level generated tree, not the chapter's source folder — whichever formats you chose: `sheets/chapter_<num>/`, `panels_zip/chapter_<num>/panels_1.zip`, `panels_pdf/chapter_<num>/panels_1.pdf` (or its zipped/split variants), `sheets_zip/chapter_<num>/sheets_1.zip`, `sheets_folders/chapter_<num>/` (see [Vision Outputs](#vision-outputs-what-to-generate-what-to-zip) below).
+
+Whatever you pass is **remembered for that project** (in its `project.json`), so the next chapter builds the same set without being asked. Leave `--formats` off to use that remembered choice, falling back to `config.json`'s `cropper.package` switches for a project that has never chosen. `--formats none` builds nothing. In the wizard this is a checklist rather than a flag, opened on what the project currently builds. Re-run it any time — after changing the size cap, or when you want a different format from an already-cropped chapter — it works straight from `panels/`, no re-crop.
 
 ### 4. Generate and Place `narration.json` + `memory.json`
 Upload **any one** of your generated vision archives — whichever package formats are active (`panels_zip`, `pdf`, `sheets_zip`) — and `prompts/narration.md` to your LLM, attaching the project's current `memory.json` too, once it has real content, so continuity carries across chapters. **From chapter 2 onward, `memory.json` isn't optional** — the interactive wizard blocks and re-prompts until it has real content, since it's the only thing carrying character/plot continuity forward from the previous chapter. The prompt asks for **exactly two fenced JSON code blocks and nothing else** (no commentary before/after), so the LLM's reply can be copy-pasted straight into each file. The interactive wizard prints every archive actually available to upload this run as a ctrl+click-openable path (VS Code and similar editors), and both destination paths, when it gets to this step:

@@ -1,6 +1,5 @@
-"""Modular step-registry + JSON pipeline config: the same download -> mark ->
-crop -> narration -> review -> tts -> mix -> render sequence the wizard has
-always run, now expressed as an ordered list of named, independently
+"""Modular step-registry + JSON pipeline config: the download -> mark ->
+crop -> package -> narration -> review -> tts -> mix -> render sequence, now expressed as an ordered list of named, independently
 runnable steps instead of one hardcoded function. This lets a caller run
 "just one tool" (a single step name), "a lot of them" (an arbitrary subset,
 in any order), or the full default pipeline - driven by
@@ -26,7 +25,9 @@ from remanga.console import console, display_path, print_path
 from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
 from remanga.json_io import has_real_json_content, read_json_or, write_json
+from remanga.packaging import package_chapter
 from remanga.paths import get_chapter_dir, get_pipeline_path
+from remanga.settings.project_prefs import cropper_config_for
 from remanga.video import VideoRenderer
 from remanga.webui import launch_and_wait as launch_panel_marker
 
@@ -74,9 +75,17 @@ def _run_mark(project: str, chapter: str, config: RemangaConfig) -> None:
 
 
 def _run_crop(project: str, chapter: str, config: RemangaConfig) -> None:
-    console.print("\n[bold]Step — Cropping Panels & Packaging Vision Uploads[/]")
-    cropper = CoordinateCropper(config.cropper)
-    cropper.crop_chapter_from_json(project, chapter)
+    console.print("\n[bold]Step — Cropping Panels[/]")
+    CoordinateCropper(cropper_config_for(config, project)).crop_chapter_from_json(project, chapter)
+
+
+def _run_package(project: str, chapter: str, config: RemangaConfig) -> None:
+    """Builds this project's chosen upload formats. Its own step, because
+    cropping no longer packages as a side effect (see remanga/cropper/
+    crop.py) - so a pipeline that doesn't want a 30MB zip built every run
+    simply leaves this step out."""
+    console.print("\n[bold]Step — Packaging Vision Uploads[/]")
+    package_chapter(config, project, chapter, required=False)
 
 
 def _run_narration(project: str, chapter: str, config: RemangaConfig) -> None:
@@ -122,8 +131,11 @@ def _run_render(project: str, chapter: str, config: RemangaConfig) -> None:
 STEP_REGISTRY: List[Step] = [
     Step("download", "Download chapter pages from MangaDex", _run_download),
     Step("mark", "Mark panels via the Panel Marker web UI (writes crops.json)", _run_mark, needs=["download"]),
-    Step("crop", "Crop panels and package vision uploads (sheets/zips/PDF)", _run_crop, needs=["mark"]),
-    Step("narration", "Write narration.json + memory.json via LLM copy/paste", _run_narration, needs=["crop"]),
+    Step("crop", "Crop panels out of the marked pages", _run_crop, needs=["mark"]),
+    Step("package", "Package the panels into the chosen upload formats (sheets/zips/PDF)",
+         _run_package, needs=["crop"]),
+    Step("narration", "Write narration.json + memory.json via LLM copy/paste", _run_narration,
+         needs=["package"]),
     Step("review", "Review narration via the Narration Reviewer web UI", _run_review, needs=["narration"]),
     Step("tts", "Synthesize vocal audio via TTS", _run_tts, needs=["review"]),
     Step("mix", "Mix master audio track (narration + BGM + loudnorm)", _run_mix, needs=["tts"]),
