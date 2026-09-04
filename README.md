@@ -326,6 +326,17 @@ It also fixes what reads *flat* rather than what glitches:
 - **Quoted speech gets a capital** — `pleads, 'please stop!'` reads to the model as the middle of a clause and gets that flat continuation prosody; `pleads, "Please stop!"` starts a fresh utterance, which is what it is.
 - **`Mr.` → `Mister`**, and **`A rank` → `A-rank`** — both are otherwise read as letters or as the article "a".
 
+It also reports what it deliberately **doesn't** touch — problems whose only honest fix is a rewrite: empty lines, lines over the 26-word ceiling, narration repeated on two panels, and the one that never announces itself in any single line — most sentences opening the same way:
+
+```
+Worth a look - not changed, because only a rewrite fixes these:
+  • 59 of 129 lines (46%) open with an '-ing' phrase
+      001_001_01: Collapsing to the ground outside the shop, a terrified black...
+      001_003_03: Flashing a ruthless smirk, Lloyd coldly states, "I will not ...
+    Each line reads fine on its own, but one sentence shape repeated for a whole
+    chapter sounds like a drone however well it's synthesized.
+```
+
 It always shows every line it would change, with which rules fired, and asks before writing — narration text isn't regenerable from anything on disk. `--dry-run` previews and exits; `--force` skips the confirmation. Running it twice changes nothing the second time.
 
 ### 4. Generate and Place `narration.json` + `memory.json`

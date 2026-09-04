@@ -62,17 +62,19 @@ def normalize_narration_cmd(params: Dict[str, Any], config: RemangaConfig) -> No
     change is shown line by line and confirmed."""
     from collections import Counter
 
-    from remanga.narration import RULE_BY_NAME, normalize_narration, save_narration
+    from remanga.narration import RULE_BY_NAME, advise, normalize_narration, save_narration
 
     project, chapter = params["project"], params["chapter"]
     document, changes = normalize_narration(project, chapter)
-    total = len(document.get("narration", []))
+    entries = document.get("narration", [])
+    total = len(entries)
 
     if not changes:
         console.print(
             f"[bold green]✓ Chapter {chapter}'s narration is already TTS-safe[/] "
             f"[dim]({total} line(s) checked, nothing to change)[/]"
         )
+        _print_advisories(advise(entries))
         return
 
     console.print(
@@ -105,6 +107,23 @@ def normalize_narration_cmd(params: Dict[str, Any], config: RemangaConfig) -> No
 
     save_narration(project, chapter, document)
     console.print(f"[bold green]✓ narration.json normalized[/] [dim]({len(changes)} line(s) rewritten)[/]")
+    _print_advisories(advise(entries))
+
+
+def _print_advisories(advisories: List[Any]) -> None:
+    """Prints what the normalizer noticed but deliberately did not touch -
+    problems whose only honest fix is a rewrite (see
+    remanga/narration/advisories.py). Reported on every run, including the
+    one where nothing needed changing: a chapter can be perfectly
+    synthesizable and still read as a drone."""
+    if not advisories:
+        return
+    console.print("\n[bold yellow]Worth a look - not changed, because only a rewrite fixes these:[/]")
+    for advisory in advisories:
+        console.print(f"  [yellow]•[/] {escape(advisory.message)}")
+        for example in advisory.examples:
+            console.print(f"      [dim]{escape(example)}[/]")
+        console.print(f"    [dim]{escape(advisory.fix)}[/]")
 
 
 def _rule_summary(rules: List[str]) -> str:

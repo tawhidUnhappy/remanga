@@ -268,10 +268,23 @@ the way the panel actually sounds, not around it:
 - **Delivery Tone:** Calm, measured, objective, third-person narrative commentary as the
   baseline - punctuation shades that baseline toward how the panel actually reads, it doesn't
   replace it with caricature.
+- **Vary how sentences open.** Every line individually can be well-written and the chapter
+  still sound like a drone, because one sentence shape is repeated for twelve straight
+  minutes. The shape this collapses into is the participial opener - *"Clutching his chest,
+  Cain stammers..."*, *"Flashing a smirk, Lloyd states..."*, *"Grasping his brow, the warrior
+  sneers..."* - which is fine occasionally and deadening at scale. A real chapter measured at
+  **45% of lines opening with an "-ing" phrase**, and it was audible. Keep it under a third:
+  start from the subject (*"Lloyd raises his tankard..."*), from the dialogue, from the
+  action's result, or from a plain declarative - whatever the panel leads with. `remanga
+  normalize-narration` reports this ratio per chapter, so it's checkable after the fact, but
+  it can only report it: no tool can rewrite a sentence's shape for you.
 
 ### Rule 4: Word Budget & Retention Pacing
 - **Standard Panel Target:** **10 to 20 words** (~3.5 to 5.0 seconds of audio).
-- **Hard Upper Ceiling:** **Never exceed 26 words** on any single panel.
+- **Hard Upper Ceiling:** **Never exceed 26 words** on any single panel. (`remanga
+  normalize-narration` reports every line that breaks this ceiling, along with empty lines and
+  narration repeated across panels - a check after the fact, not a licence to ignore the rule
+  while writing.)
 - **Never leave `text` empty.** Every panel you're given already passed through story-page
   *and* panel-relevance filtering upstream (see Rule 6) - a human marked exactly which panels
   matter during cropping, before you ever see this chapter, so if a panel made it into your
@@ -323,7 +336,7 @@ the way the panel actually sounds, not around it:
   character's actual words, tone, and phrasing intact - don't paraphrase or clean up how they
   talk. The one exception is manga lettering's own stutter/trailing-off typography (hyphens,
   ellipses), which is a visual/SFX convention, not something meant to be read character-for-
-  character - the narration.json text goes straight into IndexTTS-2.5/audio8 speech synthesis
+  character - the narration.json text goes into IndexTTS-2.5/audio8 speech synthesis
   (`remanga/audio/tts.py`), and neither engine does any text normalization of its own, so a
   stray hyphen or ellipsis gets synthesized as a broken half-word or a dead-air pause instead
   of a stammer.
