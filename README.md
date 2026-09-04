@@ -689,6 +689,8 @@ The encoder is pegged — the GPU is doing exactly the job it was given. Ask for
 nvidia-smi --query-gpu=utilization.gpu,utilization.encoder --format=csv
 ```
 
+Ubuntu's own **Resources** app (`resources`, the default system monitor since it replaced GNOME System Monitor) reads the same NVML counters and shows them separately: its GPU tab has a **Video Encoder** / **Video Decoder** figure alongside the main GPU utilization graph — that's the one that moves during a render, while the headline graph stays near idle. To see it per-process, turn on the **Video Encoder** column in Settings → Processes (or Apps), and ffmpeg's row will show it. Either way, don't read the general "GPU" percentage as "is my GPU being used" for an encode.
+
 The CPU work is real, but it's everything that *isn't* H.264 encoding: decoding the panel PNGs, converting RGB→YUV, duplicating each panel's frame out to the configured fps (a 12-minute recap at 30fps is ~21,000 frames), encoding the AAC audio, and muxing the MP4. None of that has a GPU path worth taking here, and at ~7x realtime it isn't the bottleneck either. The frame-compositing phase *before* the encode is 100% CPU by design (Pillow), as is the audio assembly (pydub).
 
 ### 4. How do I get contact sheets instead of individual panels?

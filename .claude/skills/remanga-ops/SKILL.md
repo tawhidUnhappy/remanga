@@ -457,7 +457,9 @@ NOT a misconfiguration. Measured mid-encode on this box: `utilization.gpu`
 nvidia-smi's headline GPU-Util reports SM (CUDA core) occupancy, and NVENC
 is separate fixed-function silicon that it doesn't count - so a saturated
 encoder reads as an idle GPU. Query `utilization.encoder` before concluding
-anything. The CPU side is the unavoidable prep: PNG decode, rgb24→yuv420p,
+anything - Ubuntu's default Resources app (net.nokyan.Resources, NVML-backed)
+shows the same split as a "Video Encoder" figure on its GPU tab, and as an
+optional per-process column. The CPU side is the unavoidable prep: PNG decode, rgb24→yuv420p,
 duplicating each panel's frame out to fps, AAC, muxing.
 
 ## Maintenance rule (do this, don't just read this)
