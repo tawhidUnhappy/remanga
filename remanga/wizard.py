@@ -237,15 +237,55 @@ def _group_by_category() -> "Dict[str, List]":
     return groups
 
 
-def _prompt_param(param: Param, project: str):
+def _prompt_keep_items(project: str, chapter: str) -> str:
+    """Dynamic counterpart to `select_chapter` for the `wipe` command's
+    `keep` param: lists exactly what currently exists for this chapter
+    (source entries + generated sheets/zip/audio/video dirs - see
+    reset.wipeable_entries) with numbers, and lets the user pick which of
+    them to KEEP by number instead of having to type exact names blind.
+    Comma-separated names still work too (an empty pick wipes everything)."""
+    from remanga import reset
+
+    entries = reset.wipeable_entries(project, chapter)
+    if not entries:
+        console.print("[dim]Nothing exists yet for this chapter - nothing to wipe.[/]")
+        return ""
+    console.print(f"[bold]Currently on disk for Chapter {chapter}:[/]")
+    for i, entry in enumerate(entries, start=1):
+        kind = "dir" if entry.is_dir() else "file"
+        console.print(f"  [bold]{i}.[/] {entry.name} [dim]({kind})[/]")
+    raw = Prompt.ask(
+        "[bold]Enter number(s) (or exact name(s)) to KEEP, comma-separated - blank wipes everything[/]",
+        default="",
+    ).strip()
+    if not raw:
+        return ""
+    names: List[str] = []
+    for token in raw.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        if token.isdigit() and 1 <= int(token) <= len(entries):
+            names.append(entries[int(token) - 1].name)
+        else:
+            names.append(token)
+    return ",".join(names)
+
+
+def _prompt_param(param: Param, project: str, params_so_far: Dict[str, Any]):
     """Prompts for one Command param's value, matching its type/choices/
     default/help. `project` is only used for a `chapter`/`chapters` param's
     helper listings - the project itself is never prompted for here, it's
-    already resolved by project selection."""
+    already resolved by project selection. `params_so_far` gives access to
+    earlier params in the same command (e.g. `keep`'s dynamic listing needs
+    the `chapter` value already picked earlier in the same _run_command
+    loop)."""
     if param.type == "bool":
         return Confirm.ask(f"[bold]{param.help}[/]", default=bool(param.default))
     if param.name == "chapter":
         return select_chapter(project)
+    if param.name == "keep" and "chapter" in params_so_far:
+        return _prompt_keep_items(project, params_so_far["chapter"])
     if param.name == "chapters":
         chapters = discover_chapters(project)
         if chapters:
@@ -262,7 +302,7 @@ def _prompt_param(param: Param, project: str):
 def _run_command(cmd, project: str, config: RemangaConfig) -> None:
     params: Dict[str, Any] = {}
     for param in cmd.params:
-        params[param.name] = project if param.name == "project" else _prompt_param(param, project)
+        params[param.name] = project if param.name == "project" else _prompt_param(param, project, params)
     cmd.handler(params, config)
 
 

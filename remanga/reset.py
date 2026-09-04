@@ -134,6 +134,54 @@ def restart_chapter(
     return candidates
 
 
+def wipeable_entries(project_name: str, chapter_num: str) -> List[Path]:
+    """Every deletable item for this chapter right now: the chapter's own
+    source-folder entries (pages/, crops.json, panels/, narration.json,
+    ...) plus every generated {kind}/chapter_N/ directory that currently
+    exists (sheets, sheets_zip, panels_zip, audio, video, ...). This is the
+    live menu `wipe_chapter` below picks its "keep" list from - unlike
+    restart_chapter's three fixed modes above (each keeping one hardcoded
+    set), nothing here is wired in; it's simply "what's actually here right
+    now for this chapter", so a wizard can offer it as-is with no separate
+    list to keep in sync."""
+    chap_dir = get_chapter_dir(project_name, chapter_num)
+    entries = sorted(chap_dir.iterdir()) if chap_dir.exists() else []
+    return entries + _generated_dirs_for_chapter(project_name, chapter_num)
+
+
+def wipe_chapter(
+    project_name: str, chapter_num: str, keep_names: set, *, reverify_downloads: bool = True,
+) -> List[Path]:
+    """Deletes every entry from wipeable_entries() whose name isn't in
+    `keep_names` - the fully dynamic counterpart to restart_chapter's three
+    fixed modes, letting a caller keep any combination at all (e.g. keep
+    video/ and narration.json but wipe panels/ to re-crop with new
+    settings, something none of the "hard"/"marks_only"/"soft" modes above
+    can express). `reverify_downloads` behaves exactly like
+    restart_chapter's own flag - re-checks/re-fetches pages/ afterward
+    regardless of whether pages/ itself was kept or wiped, so a wipe that
+    deleted pages/ ends up with it re-downloaded rather than just missing.
+    Returns the paths that were removed."""
+    candidates = [e for e in wipeable_entries(project_name, chapter_num) if e.name not in keep_names]
+    for entry in candidates:
+        if entry.is_dir():
+            shutil.rmtree(entry)
+        else:
+            entry.unlink()
+
+    if "panels" not in keep_names:
+        manifest = read_manifest(project_name)
+        chapter_entry = manifest.get("chapters", {}).get(str(chapter_num))
+        if chapter_entry and "panels" in chapter_entry:
+            del chapter_entry["panels"]
+            write_json(get_manifest_path(project_name), manifest)
+
+    if reverify_downloads:
+        _reverify_downloads(project_name, chapter_num)
+
+    return candidates
+
+
 def _reverify_downloads(project_name: str, chapter_num: str) -> None:
     """Re-checks (and re-fetches if needed) this chapter's downloaded pages, the same
     way every normal pipeline run's own download step already does — deferred imports

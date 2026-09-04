@@ -142,6 +142,28 @@ def _h_crop(params: Dict[str, Any], config: RemangaConfig) -> None:
     cropper.crop_chapter_from_json(params["project"], params["chapter"], force=bool(params.get("force")))
 
 
+def _h_package(params: Dict[str, Any], config: RemangaConfig) -> None:
+    # Deliberately separate from `crop` (which only tops up a package format
+    # for a chapter that's *already* cropped, if it's missing entirely - see
+    # CoordinateCropper.crop_chapter_from_json's resume-check) - this always
+    # rebuilds every currently-enabled format (sheets/sheets_zip/sheets_
+    # folders/panels_zip/panels_pdf/...) from this chapter's existing
+    # panels/, e.g. right after flipping one on in setup-config, without
+    # forcing a full re-crop just to pick it up.
+    from remanga.cropper.crop_report import package_outputs
+    from remanga.paths import get_chapter_dir
+
+    project_name, chapter_num = params["project"], params["chapter"]
+    panels_dir = get_chapter_dir(project_name, chapter_num) / "panels"
+    panel_paths = sorted(p for p in panels_dir.iterdir() if p.is_file()) if panels_dir.exists() else []
+    if not panel_paths:
+        raise FileNotFoundError(
+            f"No cropped panels found for chapter {chapter_num}: {panels_dir}\n"
+            f"Run `crop` for this chapter first."
+        )
+    package_outputs(config.cropper, panel_paths, project_name, chapter_num)
+
+
 def _h_tts(params: Dict[str, Any], config: RemangaConfig) -> None:
     tts = TTSEngine(config.tts, config.audio)
     tts.generate_narration_audio(
@@ -229,6 +251,30 @@ def _h_restart(params: Dict[str, Any], config: RemangaConfig) -> None:
         console.print("[dim]Restart cancelled.[/]")
 
 
+def _h_wipe(params: Dict[str, Any], config: RemangaConfig) -> None:
+    project, chapter = params["project"], params["chapter"]
+    keep_names = {n.strip() for n in (params.get("keep") or "").split(",") if n.strip()}
+    candidates = [e for e in reset.wipeable_entries(project, chapter) if e.name not in keep_names]
+    if not candidates:
+        console.print("[dim]Nothing to wipe - everything here is already in the keep list.[/]")
+        return
+    console.print("[bold red]Wipe: the following will be permanently deleted:[/]")
+    for c in candidates:
+        console.print(f"  [dim]- {c}[/]")
+    console.print(f"[dim]Kept: {', '.join(sorted(keep_names)) or '(nothing - full wipe)'}.[/]")
+    if params.get("force") or Confirm.ask(
+        f"[bold red]Confirm: permanently delete these {len(candidates)} item(s) for Chapter {chapter}? This cannot be undone.[/]",
+        default=False,
+    ):
+        # Downloads are always re-verified afterward, regardless of whether
+        # pages/ itself was kept - a wipe that deleted it should still end
+        # up re-downloaded rather than just missing (see reset.wipe_chapter).
+        reset.wipe_chapter(project, chapter, keep_names, reverify_downloads=True)
+        console.print(f"[bold green]✓ Chapter {chapter} wipe complete. Downloaded pages re-verified.[/]")
+    else:
+        console.print("[dim]Wipe cancelled.[/]")
+
+
 _PROJECT = lambda help_: Param("project", ["--project", "-p"], required=True, help=help_)
 _CHAPTER = lambda help_="Chapter number": Param("chapter", ["--chapter", "-c"], required=True, help=help_)
 
@@ -297,6 +343,14 @@ COMMAND_REGISTRY: List[Command] = [
             _PROJECT("Project name"), _CHAPTER(),
             Param("force", ["--force", "-f"], type="bool", default=False, help="Force re-cropping even if panels exist"),
         ],
+        category="Chapter Production",
+    ),
+    Command(
+        "package",
+        "Build/rebuild sheets, sheets.zip, panels.zip, and/or panels.pdf from an already-cropped "
+        "chapter's panels, per config.json's cropper.package switches - no re-crop needed",
+        _h_package,
+        [_PROJECT("Project name"), _CHAPTER()],
         category="Chapter Production",
     ),
     Command(
@@ -411,6 +465,24 @@ COMMAND_REGISTRY: List[Command] = [
             ),
             Param("no_reverify", ["--no-reverify"], type="bool", default=False,
                   help="Skip re-checking/re-fetching downloaded pages afterward"),
+        ],
+        category="Project-wide",
+    ),
+    Command(
+        "wipe",
+        "Wipe everything for a chapter (source files and generated sheets/zips/audio/video) except "
+        "whatever you choose to keep - unlike restart's fixed modes, any combination can be kept. "
+        "Downloaded pages are always re-verified/re-fetched afterward.",
+        _h_wipe,
+        [
+            _PROJECT("Project name"), _CHAPTER(),
+            Param(
+                "keep", ["--keep", "-k"], required=False, default=None,
+                help="Comma-separated names of items to keep (e.g. pages,narration.json) - see the "
+                     "wizard's numbered listing for what actually exists on a given chapter, or run "
+                     "`status`/look in the chapter's folder. Leave blank to wipe everything.",
+            ),
+            Param("force", ["--force", "-f"], type="bool", default=False, help="Skip the confirmation prompt"),
         ],
         category="Project-wide",
     ),
