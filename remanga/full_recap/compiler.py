@@ -21,11 +21,13 @@ from remanga.audio.mix import AudioProcessor
 from remanga.audio.tts import TTSEngine
 from remanga.config import RemangaConfig
 from remanga.console import console, escape as _esc
+from remanga.cropper import CoordinateCropper
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.full_recap.discovery import discover_chapters
 from remanga.full_recap.timeline import assemble_combined_audio
 from remanga.humanize import fmt_duration
 from remanga.paths import get_chapter_dir, get_final_video_path, get_full_recap_concat_path, get_full_recap_video_path
+from remanga.settings.project_prefs import cropper_config_for
 from remanga.video.compose import FrameCompositor
 from remanga.video.render import VideoRenderer
 
@@ -38,15 +40,24 @@ class FullRecapCompiler:
     the join."""
 
     def __init__(self, config: Optional[RemangaConfig] = None):
+        # Deferred: remanga.downloader imports remanga.full_recap.discovery
+        # (for chapter_sort_key), and importing the *package*
+        # remanga.full_recap always runs this module's own top-level import
+        # first - a module-level `from remanga.downloader import ...` here
+        # would be circular. Constructing one compiler per process makes
+        # this a one-time cost, not a per-chapter one.
+        from remanga.downloader import MangaDexDownloader
+
         self.config = config or RemangaConfig.load()
         self._tts = TTSEngine(self.config.tts, self.config.audio)
         self._mixer = AudioProcessor(self.config.audio)
         self._compositor = FrameCompositor(self.config.video)
         self._renderer = VideoRenderer(self.config.system, self.config.video)
+        self._downloader = MangaDexDownloader(self.config.downloader)
 
     def _ensure_chapter_video(
         self, project_name: str, chapter_num: str, force: bool, *,
-        force_tts: bool = False, force_mix: bool = False,
+        force_tts: bool = False, force_mix: bool = False, regenerate_all: bool = False,
     ) -> Path:
         """Makes sure chapter_num has cropped panels, a narration script,
         its per-panel voice clips, its mixed master audio, and its own
@@ -60,10 +71,23 @@ class FullRecapCompiler:
         force_tts/force_mix are separate from `force` (which only ever
         meant "re-render", not "re-synthesize"/"re-mix") - see
         compile_full_manga's regenerate_all for the one caller that sets
-        them, wiping out TTS/mix's own staleness caching on purpose."""
+        them, wiping out TTS/mix's own staleness caching on purpose.
+
+        regenerate_all additionally re-verifies/fills in this chapter's
+        pages (MangaDexDownloader's own idempotent check - never a forced
+        wipe, just "is everything that should be here actually here") and
+        re-crops panels/ from crops.json before any of that - the two
+        regenerable prerequisites narration.json and crops.json themselves
+        are never touched, only what's built FROM them."""
         chapter_dir = get_chapter_dir(project_name, chapter_num)
         panels_dir = chapter_dir / "panels"
         narration_path = chapter_dir / "narration.json"
+
+        if regenerate_all:
+            self._downloader.download_chapter(None, chapter_num, project_name, force=False)
+            CoordinateCropper(cropper_config_for(self.config, project_name)).crop_chapter_from_json(
+                project_name, chapter_num, force=True
+            )
 
         if not panels_dir.exists() or not any(p.is_file() for p in panels_dir.iterdir()):
             raise FileNotFoundError(
@@ -94,17 +118,18 @@ class FullRecapCompiler:
         video/render.py) still catches any chapter that's actually stale.
 
         regenerate_all is the stronger, separate "start over from scratch"
-        option: everything downstream of each chapter's pages/crops.json/
-        narration.json - voice synthesis, the mix, the per-chapter render,
-        and the whole-manga join - is redone unconditionally, ignoring
-        every staleness/cache check TTS and the mixer normally trust (plain
-        `force`/`force_chapters` never touched TTS or the mix at all - only
-        the render and the join). It does NOT touch pages, marks, or
-        narration text themselves; those are either fetched from MangaDex
-        or hand-authored and can't be regenerated from anything else
-        remanga has, so this never re-downloads or re-crops. Implies
-        force=True and force_chapters=True regardless of what was passed
-        for them."""
+        option: pages are re-verified/filled-in (MangaDexDownloader's own
+        idempotent check, not a forced wipe), panels/ is re-cropped fresh
+        from crops.json, and voice synthesis, the mix, the per-chapter
+        render, and the whole-manga join are all redone unconditionally,
+        ignoring every staleness/cache check TTS and the mixer normally
+        trust (plain `force`/`force_chapters` never touched any of pages,
+        panels, TTS or the mix - only the render and the join). The only
+        two things left completely untouched are crops.json and
+        narration.json themselves - hand-authored/LLM-written and not
+        regenerable from anything else remanga has - everything built FROM
+        them is fair game. Implies force=True and force_chapters=True
+        regardless of what was passed for them."""
         if regenerate_all:
             force = True
             force_chapters = True
@@ -121,7 +146,8 @@ class FullRecapCompiler:
             return final_video
 
         start_time = time.perf_counter()
-        mode_note = " [dim](regenerating everything from scratch: voice, mix, render, and the join)[/]" if regenerate_all else ""
+        mode_note = (" [dim](regenerating everything from scratch: pages, panels, voice, mix, "
+                     "render, and the join)[/]") if regenerate_all else ""
         console.print(f"[bold cyan]Compiling {len(chapter_list)} chapter(s) into one continuous recap:[/] {', '.join(chapter_list)}{mode_note}")
 
         # Phase 1: every chapter's OWN final video first (kept, not a
@@ -133,7 +159,7 @@ class FullRecapCompiler:
             console.print(f"[cyan]({i}/{len(chapter_list)}) Preparing chapter {chapter_num}...[/]")
             chapter_videos.append(self._ensure_chapter_video(
                 project_name, chapter_num, force=force_chapters,
-                force_tts=regenerate_all, force_mix=regenerate_all,
+                force_tts=regenerate_all, force_mix=regenerate_all, regenerate_all=regenerate_all,
             ))
 
         # Phase 2: the whole-manga join - a fresh continuous audio timeline
