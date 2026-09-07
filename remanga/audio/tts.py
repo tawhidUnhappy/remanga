@@ -14,6 +14,37 @@ from remanga.settings.fields import set_field
 from remanga.paths import get_audio_dir, get_audio_timing_path, get_chapter_dir
 
 
+# Anything smaller than this is inaudible and not worth a re-export pass
+# over a chapter's cached clips - the same "don't churn for nothing" test
+# audio/synth/base.py applies to its speed adjustment.
+_MIN_AUDIBLE_GAIN_DB = 0.01
+
+# Peak level a boosted clip must stay under to be considered un-clipped.
+# Not exactly 0.0: a clip whose loudest sample lands on full scale by
+# coincidence is normal, one pushed there by gain is what this catches.
+_CLIPPING_DBFS = -0.1
+
+# Past roughly this much gain the result is distortion, not volume, whatever
+# the config says. Clamped rather than rejected: config.json is hand-edited,
+# and a fat-fingered 600 should give a loud chapter, not a crash.
+_MAX_BOOST_DB = 30.0
+
+
+def _is_audible_gain(gain_db: float) -> bool:
+    return abs(gain_db) >= _MIN_AUDIBLE_GAIN_DB
+
+
+def _clamp_boost(raw: Any) -> float:
+    """A configured/recorded boost as a usable number of decibels. Anything
+    unreadable (a string typo'd into config.json, a null) reads as 0.0 - no
+    boost is the safe interpretation of "no idea what this says"."""
+    try:
+        value = float(raw or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(-_MAX_BOOST_DB, min(_MAX_BOOST_DB, value))
+
+
 class TTSEngine:
     def __init__(self, tts_config: Optional[TTSConfig] = None, audio_config: Optional[AudioConfig] = None):
         self.tts_config = tts_config or TTSConfig()
@@ -79,6 +110,54 @@ class TTSEngine:
             f"Temp: {self.tts_config.engine_block.temperature}, "
             f"Reference Voice: {spk_prompt_path})[/]"
         )
+
+        # This engine's own gain (see config/tts.py), and how much of it the
+        # clips on disk are still missing. audio_timing.json records what was
+        # baked in last time, so raising the boost from +3 to +6 costs one
+        # +3 dB pass over the cached clips rather than a whole re-synthesis -
+        # a volume knob nobody can afford to turn is not a volume knob.
+        timing_manifest_path = get_audio_timing_path(project_name, chapter_num)
+        boost_db = _clamp_boost(getattr(self.tts_config.engine_block, "volume_boost_db", 0.0))
+        previous_boost_db = _clamp_boost(
+            read_json_or(timing_manifest_path, {}).get("volume_boost_db", 0.0)
+        )
+        boost_delta_db = boost_db - previous_boost_db
+        if boost_db:
+            console.print(
+                f"[dim]Volume boost for {self._synth.display_name}: {boost_db:+.1f} dB"
+                + (f" (cached clips get the {boost_delta_db:+.1f} dB difference)"
+                   if _is_audible_gain(boost_delta_db) and not force else "")
+                + "[/]"
+            )
+            # The one combination where this knob is a no-op, said out loud
+            # rather than left to be discovered by listening to an unchanged
+            # video: loudnorm normalizes the finished master to a fixed
+            # loudness, so with nothing else in the mix to be balanced
+            # against, boosting the narration and then normalizing it lands
+            # back exactly where it started. With BGM on it still does the
+            # useful thing - the music ends up further under the voice.
+            if self.audio_config.enable_loudnorm and not self.audio_config.bgm_enabled:
+                console.print(
+                    "[yellow]Heads up: audio.enable_loudnorm is on and there's no BGM, so this "
+                    "boost won't change the finished audio at all[/] [dim]- the mix normalizes "
+                    "the master back to its target loudness. The boost is real in the clips "
+                    "themselves; it only shows up in the video once there's music to sit over, "
+                    "or with audio.enable_loudnorm off.[/]"
+                )
+        clipped_panels: List[str] = []
+
+        def apply_boost(segment: AudioSegment, gain_db: float, panel_id: str) -> AudioSegment:
+            """`segment` with `gain_db` applied, recording anything that ends
+            up clipping. pydub saturates rather than wrapping, so a boost
+            that overshoots distorts instead of exploding - which is exactly
+            why it has to be reported rather than left to be noticed by ear
+            three steps later in a rendered video."""
+            if not _is_audible_gain(gain_db):
+                return segment
+            boosted = segment + gain_db
+            if boosted.max_dBFS > _CLIPPING_DBFS:
+                clipped_panels.append(panel_id)
+            return boosted
 
         def is_cached_complete(panel_id: str) -> bool:
             clip = audio_dir / f"{panel_id}.wav"
@@ -170,6 +249,13 @@ class TTSEngine:
                 # RESUME GUARD: Reuse existing clean WAV if present and non-empty
                 if is_resumable(panel_id):
                     segment = AudioSegment.from_file(processed_clip_path)
+                    # Re-exported ONLY when the configured gain actually
+                    # moved: rewriting every cached clip on every run would
+                    # churn a chapter's worth of files (and their mtimes)
+                    # for nothing.
+                    if _is_audible_gain(boost_delta_db):
+                        segment = apply_boost(segment, boost_delta_db, panel_id)
+                        atomic_export(segment, processed_clip_path)
                     duration_ms = len(segment)
                     resumed_count += 1
                 else:
@@ -185,6 +271,11 @@ class TTSEngine:
 
                         if self.audio_config.edge_fade_ms > 0 and len(segment) > (self.audio_config.edge_fade_ms * 2):
                             segment = segment.fade_in(self.audio_config.edge_fade_ms).fade_out(self.audio_config.edge_fade_ms)
+
+                        # After the fades, so the boost can't be partly faded
+                        # back out at each edge, and before the export, so the
+                        # clip on disk is the boosted one.
+                        segment = apply_boost(segment, boost_db, panel_id)
 
                         atomic_export(segment, processed_clip_path)
 
@@ -230,9 +321,15 @@ class TTSEngine:
         # every downstream step would think something changed every time,
         # forever re-mixing and re-encoding chapters that are actually
         # already done.
-        timing_manifest_path = get_audio_timing_path(project_name, chapter_num)
         new_timing = {
             "chapter": str(chapter_num),
+            # What is actually baked into the clips this file describes - read
+            # back at the top of the next run to work out the difference. It
+            # also earns its keep in the staleness chain described below: a
+            # changed boost changes this file, so mix and render both notice
+            # and redo themselves, which is what makes turning the knob
+            # reach the finished video without any extra flag.
+            "volume_boost_db": boost_db,
             "total_timeline_ms": current_timeline_ms,
             "total_timeline_sec": round(current_timeline_ms / 1000.0, 3),
             "panels": timing_data
@@ -240,6 +337,14 @@ class TTSEngine:
         if read_json_or(timing_manifest_path, None) != new_timing:
             write_json(timing_manifest_path, new_timing)
 
+        if clipped_panels:
+            shown = ", ".join(clipped_panels[:5]) + (" ..." if len(clipped_panels) > 5 else "")
+            console.print(
+                f"[yellow]{len(clipped_panels)} panel(s) clipped at {boost_db:+.1f} dB[/] "
+                f"[dim]({shown}) - the loudest parts are squared off rather than louder. "
+                f"Lower volume_boost_db for this engine and re-run; the difference is "
+                f"re-applied to the existing clips, nothing is re-synthesized.[/]"
+            )
         if resumed_count > 0:
             console.print(f"[dim cyan](Resumed {resumed_count} existing audio clips without re-generating)[/]")
         console.print(f"[bold green]✓ Voice audio synthesized and synchronized for {len(narration_entries)} panels![/]")

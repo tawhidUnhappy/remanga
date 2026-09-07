@@ -129,6 +129,28 @@ class IndexTTSConfig(BaseModel):
     temperature: float = 0.8
     top_p: float = 0.8
     sample_rate: int = 22050
+    # Gain applied to THIS engine's synthesized narration clips, in decibels
+    # (0.0 = untouched, positive = louder). Per engine because that is where
+    # the problem is: the two models return audio at noticeably different
+    # levels, so one narrator sits under the music while the other sits over
+    # it, and a single shared number would just move the problem to whichever
+    # engine wasn't being used that day.
+    #
+    # Applied to each panel's clip as it is written (audio/tts.py), so the
+    # WAVs on disk really are louder - not a flag read at mix time. The
+    # audible result in the finished video is mostly VOICE-VS-MUSIC balance
+    # rather than a louder file: audio/mix.py's EBU R128 loudnorm pass
+    # normalizes the whole master to a fixed target afterwards, so boosting
+    # the narration pushes the BGM down under it rather than raising the
+    # final output level. Turn off audio.enable_loudnorm if you want the
+    # boost to survive into the master's absolute level too.
+    #
+    # Changing this does NOT require re-synthesizing: audio_timing.json
+    # records the gain baked into the clips it describes, and the next tts
+    # run applies only the difference to clips it would otherwise reuse -
+    # see audio/tts.py. Boosting far enough to clip is possible (pydub
+    # saturates rather than wraps); a run that clips says so.
+    volume_boost_db: float = 0.0
 
 
 class Audio8Config(BaseModel):
@@ -164,6 +186,28 @@ class Audio8Config(BaseModel):
     top_p: float = 0.9
     max_new_tokens: int = 512
     sample_rate: int = 44100
+    # Gain applied to THIS engine's synthesized narration clips, in decibels
+    # (0.0 = untouched, positive = louder). Per engine because that is where
+    # the problem is: the two models return audio at noticeably different
+    # levels, so one narrator sits under the music while the other sits over
+    # it, and a single shared number would just move the problem to whichever
+    # engine wasn't being used that day.
+    #
+    # Applied to each panel's clip as it is written (audio/tts.py), so the
+    # WAVs on disk really are louder - not a flag read at mix time. The
+    # audible result in the finished video is mostly VOICE-VS-MUSIC balance
+    # rather than a louder file: audio/mix.py's EBU R128 loudnorm pass
+    # normalizes the whole master to a fixed target afterwards, so boosting
+    # the narration pushes the BGM down under it rather than raising the
+    # final output level. Turn off audio.enable_loudnorm if you want the
+    # boost to survive into the master's absolute level too.
+    #
+    # Changing this does NOT require re-synthesizing: audio_timing.json
+    # records the gain baked into the clips it describes, and the next tts
+    # run applies only the difference to clips it would otherwise reuse -
+    # see audio/tts.py. Boosting far enough to clip is possible (pydub
+    # saturates rather than wraps); a run that clips says so.
+    volume_boost_db: float = 0.0
     # This model generates a fixed budget of audio codec tokens per call
     # (max_new_tokens above) - text needing more than that budget's worth
     # of speech just gets cut off mid-generation, silently, with no error.

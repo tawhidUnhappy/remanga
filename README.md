@@ -630,15 +630,30 @@ The two engines are configured as **two parallel blocks**, `tts.indextts` and `t
   "engine": "indextts-2.5",
   "lang": "EN", "speed": 1.0, "synth_timeout_seconds": 180,
 
-  "indextts": { "spk_audio_prompt": "global/voice/narrator_a.wav", "temperature": 0.8, "top_p": 0.8 },
-  "audio8":   { "spk_audio_prompt": "global/voice/narrator_b.wav", "temperature": 0.7, "top_p": 0.9,
-                "reference_text_path": "global/tts_reference.txt" }
+  "indextts": { "spk_audio_prompt": "global/voice/narrator_a.wav", "volume_boost_db": 0.0,
+                "temperature": 0.8, "top_p": 0.8 },
+  "audio8":   { "spk_audio_prompt": "global/voice/narrator_b.wav", "volume_boost_db": 4.0,
+                "temperature": 0.7, "top_p": 0.9, "reference_text_path": "global/tts_reference.txt" }
 }
 ```
 
 Only the settings that mean the same thing under either engine — `engine`, `lang`, `speed`, `synth_timeout_seconds` — stay at the `tts` top level. Everything else belongs to one engine, because the two models clone differently and the clip that sounds best under one is routinely not the one that sounds best under the other. Sharing a single field meant re-pointing it at a different WAV every time you switched, which is how a whole chapter gets synthesized in the wrong voice.
 
 The wizard's **Reference voice** row follows `tts.engine`: it names the engine it is editing (*"Reference voice WAV (Audio8 TTS)"*) and writes to that engine's block, so switching engines switches which file the row shows. Switching also states the voice now in effect, and offers to pick one if that engine hasn't got one yet. `tts --voice` still overrides for a single run, and applies to the engine actually running.
+
+### Per-engine volume boost
+
+`volume_boost_db` in each block is a gain applied to that engine's narration clips, in decibels (`0.0` = untouched, positive = louder). It's per engine for the same reason the voice is: the two models return audio at noticeably different levels, so one narrator sits under the music while the other sits over it.
+
+The gain is baked into each panel's WAV as it's written, so the clips on disk really are louder. **What you hear in the finished video depends on `audio.enable_loudnorm`:**
+
+| Your settings | What a boost does |
+|---|---|
+| loudnorm **on** + BGM on (the default) | Raises the **voice against the music** — the master is normalized to a fixed loudness either way, so boosting narration pushes the BGM further underneath it. This is the useful case. |
+| loudnorm **on** + BGM off | **Nothing.** With nothing else in the mix, boosting and then normalizing lands exactly where it started. The pipeline warns you when it sees this combination. |
+| loudnorm **off** | Raises the master's absolute level by the full amount. |
+
+**Changing it does not re-synthesize.** `audio_timing.json` records the gain baked into the clips it describes, so going from `+3` to `+6` applies only the `+3` difference to the cached clips — no TTS re-run — and going back down applies a negative one. Because that file's mtime is what `mix` and `render` watch, turning the knob propagates all the way to the finished video on the next run with no extra flag. Values are clamped to ±30 dB, and any panel pushed into clipping is named in the output (pydub saturates rather than wrapping, so it distorts rather than exploding).
 
 **Upgrading is automatic.** A `config.json` from before the split — with IndexTTS's fields unnested at the `tts` top level and one shared `spk_audio_prompt` — is migrated on load: the flat settings fold into `tts.indextts`, and the shared voice seeds **both** engines, so the first run after upgrading sounds exactly like the last run before it and the two only diverge once you change one. Per-project `settings` overrides written against the old paths are migrated the same way.
 
