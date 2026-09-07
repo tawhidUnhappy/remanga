@@ -27,8 +27,14 @@ class IndexTTSSynthesizer(BaseWorkerSynthesizer):
 
     def __init__(self, tts_config: TTSConfig, audio_config: AudioConfig):
         self.tts_config = tts_config
+        # This engine's own block - its model, its sampling knobs and its own
+        # reference voice, separate from audio8's (see config/tts.py). Read
+        # through `engine_config` rather than off tts_config directly so the
+        # two synthesizers are shaped the same way, and so nothing here can
+        # accidentally pick up the other engine's answer.
+        self.engine_config = tts_config.indextts
         super().__init__(audio_config, ModelManager(
-            tts_config.model_dir, tts_config.hf_repo_id,
+            self.engine_config.model_dir, self.engine_config.hf_repo_id,
             tool_name="indextts", download_script="download_indextts.py",
             expected_files=("gpt.pth", "s2mel.pth"), display_name=SPEC.display_name,
         ))
@@ -39,10 +45,10 @@ class IndexTTSSynthesizer(BaseWorkerSynthesizer):
 
         cmd: List[str] = [
             str(python), "-u", str(script),
-            "--cfg_path", str(Path(self.tts_config.cfg_path).resolve()),
+            "--cfg_path", str(Path(self.engine_config.cfg_path).resolve()),
             "--model_dir", str(model_dir.resolve()),
         ]
-        if self.tts_config.use_bf16:
+        if self.engine_config.use_bf16:
             cmd.append("--use_bf16")
 
         return subprocess.Popen(
@@ -59,7 +65,7 @@ class IndexTTSSynthesizer(BaseWorkerSynthesizer):
         ("!"/"?"/"..." etc - see prompts/narration.md Rule 3) when none is
         supplied, which is what makes narration sound naturally expressive
         instead of a forced-flat reading of whatever the text actually
-        says. Temperature/top_p (TTSConfig) are left at IndexTTS-2.5's own
+        says. Temperature/top_p (IndexTTSConfig) are left at IndexTTS-2.5's own
         recommended defaults for natural prosody within that inferred
         emotion."""
         request: Dict[str, Any] = {
@@ -68,8 +74,8 @@ class IndexTTSSynthesizer(BaseWorkerSynthesizer):
             "text": text,
             "lang": (self.tts_config.lang or "EN").strip().upper(),
             "output_path": str(output_wav.resolve()),
-            "temperature": self.tts_config.temperature,
-            "top_p": self.tts_config.top_p,
+            "temperature": self.engine_config.temperature,
+            "top_p": self.engine_config.top_p,
         }
         if abs(self.tts_config.speed - 1.0) >= 0.02:
             request["duration_factor"] = round(1.0 / self.tts_config.speed, 3)

@@ -178,7 +178,7 @@ Picking a category opens its commands, and running one lands you back in the sam
 | Which manga/URL? | `project.json`'s saved source — asked once, on the first download |
 | Which way does it read? | MangaDex's `originalLanguage` (`ja` → right-to-left, `ko`/`zh` → left-to-right) |
 | Which engine / voice / music this run? | Not asked at all — what's configured is stated and used. All three are set once and kept, so `--engine`/`--voice`/`--bgm` cover the rare one-off and the settings screens cover a permanent change |
-| Which reference voice / music file? | When you *do* change one: the audio files already in `global/voice/` or `global/bgm/` — each picker searches only its own folder — or type a path for one elsewhere |
+| Which reference voice / music file? | When you *do* change one: the audio files already in `global/voice/` or `global/bgm/` — each picker searches only its own folder — or type a path for one elsewhere. The voice row edits the **active engine's own** voice and says which engine that is |
 | What to keep when wiping? | A checklist of exactly what that chapter has on disk right now — and what you picked last time, remembered per project |
 | What to package for the LLM? | A checklist of every format, opened on what this project builds — your pick is remembered for the next chapter |
 | Which pipeline steps? | An ordered checklist of the real step registry — the number shown is the run order, and it opens on the steps you ran last time |
@@ -196,7 +196,7 @@ If stdin isn't a terminal (a piped script, CI, an editor's output pane), every m
 
 ```json
 "settings": {
-  "tts.spk_audio_prompt": "global/voice/gravelly.wav",
+  "tts.indextts.spk_audio_prompt": "global/voice/gravelly.wav",
   "audio.bgm_path": "global/bgm/Dread.wav",
   "video.height": 1440
 }
@@ -265,14 +265,20 @@ Just need to swap the reference voice WAV, BGM file, or the audio8 engine's tran
   },
   "tts": {
     "engine": "indextts-2.5",
-    "spk_audio_prompt": "path/to/reference_voice.wav",
     "lang": "EN",
-    "use_bf16": true,
     "speed": 1.0,
-    "temperature": 0.8,
-    "top_p": 0.8,
-    "sample_rate": 22050,
-    "synth_timeout_seconds": 180
+    "synth_timeout_seconds": 180,
+    "indextts": {
+      "spk_audio_prompt": "path/to/reference_voice.wav",
+      "use_bf16": true,
+      "temperature": 0.8,
+      "top_p": 0.8,
+      "sample_rate": 22050
+    },
+    "audio8": {
+      "spk_audio_prompt": "path/to/another_reference_voice.wav",
+      "reference_text_path": "global/tts_reference.txt"
+    }
   },
   "audio": {
     "sample_rate": 44100,
@@ -615,7 +621,28 @@ remanga can drive more than one text-to-speech engine, each in its own isolated 
 
 Switch from the wizard's `tts` row — **2. TTS engine**, a numbered list you answer with one keystroke, right next to **1. Run tts** (see [How the menus work](#how-the-menus-work)). `./run.sh setup-config` (the "TTS engine" row) and editing `tts.engine` in `config.json` directly both still work, and `tts --engine` overrides the engine for a single run without changing the setting. `bootstrap.sh` already provisions both engines' isolated venvs (`.tools/venv-indextts`, `.tools/venv-audio8`) regardless of which one is active, so switching never requires re-running it — only that engine's own model weights get downloaded, and only the first time it's actually used (`checkpoints/audio8_tts_0.1b/`, ~1.7GB).
 
-`audio8-tts-0.1b` needs one extra piece of configuration `indextts-2.5` doesn't: an accurate transcript of whatever WAV `tts.spk_audio_prompt` points at — the setup wizard asks for this right after the reference voice file whenever this engine is selected, since this model's cloning quality depends on transcript accuracy, not just the audio itself. The transcript itself lives in its own text file (`tts.audio8.reference_text_path`, default `global/tts_reference.txt`) rather than inline in config.json, so an unrelated config edit can't accidentally mangle a long paragraph of free text sitting next to it - read fresh at synth time, editable directly or via the setup wizard. `tts.audio8` also holds this engine's own `temperature`/`top_p`/`max_new_tokens` sampling settings, separate from `indextts-2.5`'s own top-level `temperature`/`top_p` fields.
+### Each engine has its own voice
+
+The two engines are configured as **two parallel blocks**, `tts.indextts` and `tts.audio8`, and each holds its own `spk_audio_prompt` — so every engine gets its own reference voice, its own checkpoint and its own sampling settings:
+
+```json
+"tts": {
+  "engine": "indextts-2.5",
+  "lang": "EN", "speed": 1.0, "synth_timeout_seconds": 180,
+
+  "indextts": { "spk_audio_prompt": "global/voice/narrator_a.wav", "temperature": 0.8, "top_p": 0.8 },
+  "audio8":   { "spk_audio_prompt": "global/voice/narrator_b.wav", "temperature": 0.7, "top_p": 0.9,
+                "reference_text_path": "global/tts_reference.txt" }
+}
+```
+
+Only the settings that mean the same thing under either engine — `engine`, `lang`, `speed`, `synth_timeout_seconds` — stay at the `tts` top level. Everything else belongs to one engine, because the two models clone differently and the clip that sounds best under one is routinely not the one that sounds best under the other. Sharing a single field meant re-pointing it at a different WAV every time you switched, which is how a whole chapter gets synthesized in the wrong voice.
+
+The wizard's **Reference voice** row follows `tts.engine`: it names the engine it is editing (*"Reference voice WAV (Audio8 TTS)"*) and writes to that engine's block, so switching engines switches which file the row shows. Switching also states the voice now in effect, and offers to pick one if that engine hasn't got one yet. `tts --voice` still overrides for a single run, and applies to the engine actually running.
+
+**Upgrading is automatic.** A `config.json` from before the split — with IndexTTS's fields unnested at the `tts` top level and one shared `spk_audio_prompt` — is migrated on load: the flat settings fold into `tts.indextts`, and the shared voice seeds **both** engines, so the first run after upgrading sounds exactly like the last run before it and the two only diverge once you change one. Per-project `settings` overrides written against the old paths are migrated the same way.
+
+`audio8-tts-0.1b` needs one extra piece of configuration `indextts-2.5` doesn't: an accurate transcript of whatever WAV `tts.audio8.spk_audio_prompt` points at — the setup wizard asks for this right after the reference voice file whenever this engine is selected, since this model's cloning quality depends on transcript accuracy, not just the audio itself. Note that the transcript must match **that engine's own** clip, not the other's. The transcript lives in its own text file (`tts.audio8.reference_text_path`, default `global/tts_reference.txt`) rather than inline in config.json, so an unrelated config edit can't accidentally mangle a long paragraph of free text sitting next to it - read fresh at synth time, editable directly or via the setup wizard.
 
 Everything downstream — `remanga tts`, resuming, `full-recap`, `remix` — works identically regardless of which engine is active; `remanga/audio/synth/`'s `create_synthesizer()` is the only place that picks between them.
 
@@ -776,8 +803,8 @@ remanga/
 ### 2. A specific narration line sounds unstable, or too dramatic
 Emotion/prosody is inferred straight from each panel's `text` and its punctuation now (see [Natural, Expressive Narration](#natural-expressive-narration)), so an over-the-top or unstable-sounding line usually traces back to what's actually written for that panel, not a synthesis bug:
 - Check whether that panel's `narration.json` text over-punctuates — a line stacking multiple `!`/`?`/`...` reads as more dramatic than intended. `prompts/narration.md` Rule 3 asks the LLM to reserve emphatic punctuation for panels that genuinely call for it; if it slipped through anyway, trim the line's punctuation back to plain prose and re-run.
-- Inspect your reference speaker WAV (`spk_audio_prompt`). A cleaner, steadier reference sample (see the criteria above) makes every inferred emotion sound more natural, not just calm ones.
-- If a specific line still sounds unstable even with clean text and a clean reference, `tts.temperature`/`top_p` default to IndexTTS-2.5's own recommended `0.8`/`0.8` for natural-sounding delivery — nudging them down (e.g. `0.6`) trades some of that naturalness for more stability, as a last resort rather than a first fix.
+- Inspect the active engine's reference speaker WAV (`tts.<engine>.spk_audio_prompt` — each engine has its own). A cleaner, steadier reference sample (see the criteria above) makes every inferred emotion sound more natural, not just calm ones.
+- If a specific line still sounds unstable even with clean text and a clean reference, `tts.indextts.temperature`/`top_p` default to IndexTTS-2.5's own recommended `0.8`/`0.8` for natural-sounding delivery — nudging them down (e.g. `0.6`) trades some of that naturalness for more stability, as a last resort rather than a first fix.
 
 ### 3. NVENC GPU encoder error during video rendering
 `bootstrap.sh` pins the bundled `bin/ffmpeg` to a specific, tested BtbN build (not the "latest" rolling one) precisely so NVENC works out of the box for a wide range of NVIDIA driver versions — a too-new build otherwise requires a driver version yours may not have yet, and it reports as a generic-looking failure. If GPU encoding still doesn't work:

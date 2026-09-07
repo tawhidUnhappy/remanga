@@ -14,6 +14,8 @@ doubles as the status screen for settings."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from dataclasses import dataclass
 from typing import Callable, List, Tuple
 
@@ -46,8 +48,14 @@ def _assets_summary(config: RemangaConfig) -> str:
 SECTIONS: Tuple[Section, ...] = (
     Section(
         "engine", "TTS engine",
-        lambda c: c.tts.spec.display_name, engine.configure_engine,
-        detail="which model synthesizes the narration voice",
+        # The voice belongs to the engine now (see config/tts.py), so the
+        # engine row states both: picking an engine IS picking a narrator,
+        # and a row that named only the model would hide half of what
+        # changing it does.
+        lambda c: f"{c.tts.spec.display_name} · {Path(c.tts.active_spk_audio_prompt).name}"
+        if c.tts.active_spk_audio_prompt else f"{c.tts.spec.display_name} · no voice set",
+        engine.configure_engine,
+        detail="which model synthesizes the narration, and the reference voice it clones",
     ),
     Section(
         "assets", "Assets (voice, BGM, transcript)",

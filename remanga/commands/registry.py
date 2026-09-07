@@ -91,9 +91,12 @@ def _asset_setup(key: str, label: str, detail: str) -> SetupAction:
 TTS_SETUP: Tuple[SetupAction, ...] = (
     _section_setup("engine", "which model synthesizes the narration voice - "
                    + ", ".join(spec.display_name for spec in TTS_ENGINE_SPECS)),
-    _asset_setup("voice", "Reference voice", "the clip every chapter's narration is cloned from"),
+    _asset_setup("voice", "Reference voice",
+                 "the active engine's own clip, that this chapter's narration is cloned from - "
+                 "each engine keeps a separate one"),
     _asset_setup("transcript", "Reference transcript",
-                 "what that clip says, word for word - only the engines that need it show this"),
+                 "what that engine's own clip says, word for word - only the engines that "
+                 "need it show this"),
     _section_setup("language", "passed straight through to the engine"),
 )
 

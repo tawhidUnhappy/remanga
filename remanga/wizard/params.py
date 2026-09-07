@@ -245,7 +245,12 @@ _SPECIAL = {
     "steps": _prompt_steps,
     "url": _prompt_url,
     "engine": _not_asked(lambda c: c.tts.spec.display_name, "this command's TTS engine row"),
-    "voice": _not_asked(lambda c: c.tts.spk_audio_prompt, "this command's Reference voice row"),
+    # The active engine's own voice, named as such: with a voice per engine,
+    # stating a bare path would leave "which engine is that the voice for?"
+    # unanswered on the one screen that exists to answer it.
+    "voice": _not_asked(lambda c: f"{c.tts.active_spk_audio_prompt} ({c.tts.spec.display_name})"
+                        if c.tts.active_spk_audio_prompt else "",
+                        "this command's Reference voice row"),
     "bgm": _not_asked(lambda c: c.audio.bgm_path if c.audio.bgm_enabled else "",
                       "this command's Background music row"),
 }

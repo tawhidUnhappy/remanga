@@ -18,13 +18,14 @@ from .ocr import OCRConfig
 from .reviewer import ReviewerConfig
 from .root import RemangaConfig
 from .system import SystemConfig
-from .tts import TTS_ENGINES, Audio8Config, TTSConfig
+from .tts import TTS_ENGINES, Audio8Config, IndexTTSConfig, TTSConfig
 from .video import VideoConfig
 from .writer import WriterConfig
 
 __all__ = [
     "AudioConfig",
     "Audio8Config",
+    "IndexTTSConfig",
     "CropperConfig",
     "DownloaderConfig",
     "MarkerConfig",

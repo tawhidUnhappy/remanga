@@ -21,7 +21,8 @@ def render_status_panel(project: str, chapter: str) -> str:
     # This project's settings, not the machine's - the panel says what a
     # render of THIS chapter would use.
     config = RemangaConfig.load().for_project(project)
-    voice_path = Path(config.tts.spk_audio_prompt).expanduser() if config.tts.spk_audio_prompt else None
+    active_voice = config.tts.active_spk_audio_prompt
+    voice_path = Path(active_voice).expanduser() if active_voice else None
     voice_status = f"[green]Configured ({display_path(voice_path)})[/]" if (voice_path and voice_path.exists()) else f"[yellow]Not set / Missing ({display_path(voice_path) if voice_path else 'n/a'})[/]"
 
     bgm_path = Path(config.audio.bgm_path).expanduser() if config.audio.bgm_path else None

@@ -19,7 +19,7 @@ lands depends only on which config object it was handed."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from pydantic import BaseModel, Field, PrivateAttr
 
@@ -35,7 +35,7 @@ from .marker import MarkerConfig
 from .ocr import OCRConfig
 from .reviewer import ReviewerConfig
 from .system import SystemConfig
-from .tts import TTSConfig
+from .tts import LEGACY_INDEXTTS_FIELDS, TTSConfig
 from .video import VideoConfig
 from .writer import WriterConfig
 
@@ -74,6 +74,24 @@ def _flatten(model: BaseModel, prefix: str = "") -> Dict[str, Any]:
         else:
             flat[dotted] = value
     return flat
+
+
+# Per-project overrides are stored as flat dotted keys, so a project.json
+# written before tts grew its per-engine blocks still names the old flat
+# paths. Same migration as TTSConfig's own (see its _migrate_flat_engine_block):
+# an engine-specific setting moves into the indextts block, and the one
+# formerly-shared voice seeds BOTH engines - a project that chose its own
+# narrator must keep it under whichever engine it is run with. Without this
+# the keys would simply not resolve and _apply would drop them in silence,
+# which is exactly how a project quietly reverts to the machine's voice.
+def _migrate_override_key(dotted: str) -> Tuple[str, ...]:
+    """The dotted path(s) an override key applies to today. Anything that
+    isn't a legacy tts key is returned unchanged, as a single path."""
+    if dotted == "tts.spk_audio_prompt":
+        return ("tts.indextts.spk_audio_prompt", "tts.audio8.spk_audio_prompt")
+    if dotted.startswith("tts.") and dotted[len("tts."):] in LEGACY_INDEXTTS_FIELDS:
+        return (f"tts.indextts.{dotted[len('tts.'):]}",)
+    return (dotted,)
 
 
 def _apply(model: BaseModel, dotted: str, value: Any) -> None:
@@ -122,7 +140,8 @@ class RemangaConfig(BaseModel):
         if isinstance(overrides, dict):
             for dotted, value in overrides.items():
                 if is_project_scoped(str(dotted)):
-                    _apply(scoped, str(dotted), value)
+                    for target in _migrate_override_key(str(dotted)):
+                        _apply(scoped, target, value)
         scoped._project = project_name
         return scoped
 

@@ -35,12 +35,31 @@ def configure_engine(config: RemangaConfig) -> None:
     set_field(config, "tts.engine", picked)
     console.print(f"[green]✓ Engine:[/] {config.tts.spec.display_name}")
 
+    # Each engine clones from its OWN reference clip (see config/tts.py), so
+    # switching engines switches which WAV narration is spoken in. Say which
+    # one is now in effect - silently swapping the narrator's voice is the
+    # kind of change that is only noticed after a chapter has been
+    # synthesized - and offer to set it right here when that engine has
+    # none, since the alternative is discovering it at synth time.
+    voice = config.tts.active_spk_audio_prompt
+    if voice:
+        console.print(
+            f"[dim]{config.tts.spec.display_name} speaks with its own reference voice: "
+            f"{voice} ({config.tts.active_voice_field})[/]"
+        )
+    else:
+        console.print(
+            f"[yellow]{config.tts.spec.display_name} has no reference voice set yet[/] "
+            f"[dim]- each engine keeps its own ({config.tts.active_voice_field}).[/]"
+        )
+        if confirm(f"Pick {config.tts.spec.display_name}'s reference voice now?", default=True):
+            edit_asset(config, ASSET_BY_KEY["voice"])
+
     # An engine that clones from audio alone needs nothing more. One that
-    # also wants the reference clip's transcript is asked for it here, but
-    # only when there isn't one already - the file is shared across engines
-    # and usually already filled in.
+    # also wants a transcript of its reference clip is asked for it here,
+    # but only when there isn't one already.
     if config.tts.spec.needs_reference_text and not read_reference_text(config.tts.audio8.reference_text_path):
-        console.print(f"[dim]{config.tts.spec.display_name} also wants a transcript of the reference clip.[/]")
+        console.print(f"[dim]{config.tts.spec.display_name} also wants a transcript of its reference clip.[/]")
         if confirm("Add the reference transcript now?", default=True):
             edit_asset(config, ASSET_BY_KEY["transcript"])
 

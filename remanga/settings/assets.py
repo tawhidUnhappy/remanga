@@ -12,11 +12,12 @@ same list."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple
+from typing import Callable, List, Optional, Sequence, Tuple, Union
 
 from remanga.config import RemangaConfig
+from remanga.config.tts import engine_spec, voice_field_for
 from remanga.console import console, display_path, escape as _esc
 from remanga.settings.fields import get_field, set_field
 from remanga.settings.files import (
@@ -31,7 +32,14 @@ class AssetSpec:
     """One configurable asset.
 
     dotted        - the config field holding its path (or, for a text asset,
-                    the path of the file holding its content).
+                    the path of the file holding its content). Either a
+                    fixed dotted string, or a function of the config for an
+                    asset whose home MOVES with another setting - the
+                    reference voice lives in whichever engine block is
+                    active now (tts.indextts.spk_audio_prompt or
+                    tts.audio8.spk_audio_prompt), so this row edits the
+                    voice of the engine you are about to run. Resolve it
+                    with .field(config), never by reading .dotted.
     kind          - "file" (pick an existing file) or "text" (edit the
                     contents of a small text file in place).
     subdir        - where files of this kind normally live under global/,
@@ -41,8 +49,11 @@ class AssetSpec:
     required_for  - why the pipeline needs it, shown when it's missing."""
 
     key: str
-    label: str
-    dotted: str
+    # Like `dotted`: a plain string, or a function of the config for a label
+    # that has to name what it is currently pointing at. Resolve with
+    # .title(config).
+    label: Union[str, Callable[[RemangaConfig], str]]
+    dotted: Union[str, Callable[[RemangaConfig], str]]
     kind: str = "file"
     subdir: str = ""
     extensions: Sequence[str] = AUDIO_EXTENSIONS
@@ -50,10 +61,26 @@ class AssetSpec:
     required_for: str = ""
     used_when: str = ""
 
+    def field(self, config: RemangaConfig) -> str:
+        """The dotted config path this asset lives at right now."""
+        return self.dotted(config) if callable(self.dotted) else self.dotted
+
+    def title(self, config: RemangaConfig) -> str:
+        """This asset's label as it should read right now."""
+        return self.label(config) if callable(self.label) else self.label
+
 
 ASSETS: Tuple[AssetSpec, ...] = (
+    # Per ENGINE, not per install: each TTS engine clones from its own
+    # reference clip (see config/tts.py), so this row follows tts.engine and
+    # names the engine it is editing. Changing engines changes which file
+    # this row shows and sets - which is the point, since the clip that
+    # sounds best under one model routinely isn't the one that sounds best
+    # under the other.
     AssetSpec(
-        "voice", "Reference voice WAV", "tts.spk_audio_prompt", subdir="voice",
+        "voice",
+        lambda config: f"Reference voice WAV ({config.tts.spec.display_name})",
+        lambda config: config.tts.active_voice_field, subdir="voice",
         required_for="zero-shot speaker cloning - a clean 3-10 second clip of a steady voice",
     ),
     AssetSpec(
@@ -63,7 +90,8 @@ ASSETS: Tuple[AssetSpec, ...] = (
     ),
     AssetSpec(
         "transcript", "TTS reference transcript", "tts.audio8.reference_text_path", kind="text",
-        required_for="what the reference clip says, word for word - cloning quality depends on it",
+        required_for="what Audio8 TTS's own reference clip says, word for word - cloning "
+                     "quality depends on it",
         used_when="engine needs a transcript",
     ),
 )
@@ -83,7 +111,7 @@ def asset_relevant(config: RemangaConfig, spec: AssetSpec) -> bool:
 
 def asset_status(config: RemangaConfig, spec: AssetSpec) -> Tuple[bool, str, str]:
     """(ok, badge, description) for one asset, as every screen shows it."""
-    raw = str(get_field(config, spec.dotted) or "")
+    raw = str(get_field(config, spec.field(config)) or "")
 
     if spec.enabled_field and not get_field(config, spec.enabled_field):
         return True, "off", "disabled"
@@ -105,7 +133,7 @@ def asset_choice(config: RemangaConfig, spec: AssetSpec) -> Choice:
     ok, badge, description = asset_status(config, spec)
     relevant = asset_relevant(config, spec)
     return Choice(
-        label=spec.label,
+        label=spec.title(config),
         hint=description,
         badge=badge if relevant else "unused",
         detail=spec.required_for if not ok else "",
@@ -116,7 +144,7 @@ def asset_choice(config: RemangaConfig, spec: AssetSpec) -> Choice:
 def candidates_for(config: RemangaConfig, spec: AssetSpec) -> List[Path]:
     return discover_files(
         spec.extensions, preferred_subdir=spec.subdir,
-        extra_dirs=parent_dir_of(str(get_field(config, spec.dotted) or "")),
+        extra_dirs=parent_dir_of(str(get_field(config, spec.field(config)) or "")),
     )
 
 
@@ -129,7 +157,7 @@ def edit_asset(config: RemangaConfig, spec: AssetSpec) -> None:
         _edit_text_asset(config, spec)
         return
 
-    current = str(get_field(config, spec.dotted) or "")
+    current = str(get_field(config, spec.field(config)) or "")
     # Created, not just named: "drop your files in global/voice/" is only
     # useful advice if that folder is actually there to drop them into.
     folder = asset_dir(spec.subdir, create=True) if spec.subdir else None
@@ -138,7 +166,7 @@ def edit_asset(config: RemangaConfig, spec: AssetSpec) -> None:
         note += f"\nlisting {display_path(folder, wrap=False)}/ - put files there to see them here"
 
     picked = ask_path(
-        f"{spec.label}", current=current, candidates=candidates_for(config, spec),
+        spec.title(config), current=current, candidates=candidates_for(config, spec),
         note=note, allow_none=bool(spec.enabled_field),
         none_label="None (turn this off)",
     )
@@ -147,7 +175,7 @@ def edit_asset(config: RemangaConfig, spec: AssetSpec) -> None:
 
     if picked is None:
         set_field(config, spec.enabled_field, False)
-        console.print(f"[yellow]{spec.label} disabled.[/]")
+        console.print(f"[yellow]{spec.title(config)} disabled.[/]")
         return
 
     valid = is_valid_file(picked, min_size=1)
@@ -155,18 +183,18 @@ def edit_asset(config: RemangaConfig, spec: AssetSpec) -> None:
         console.print(f"[bold red]✗ File not found or empty:[/] {_esc(str(picked))}")
         return
 
-    set_field(config, spec.dotted, str(valid), save=False)
+    set_field(config, spec.field(config), str(valid), save=False)
     if spec.enabled_field:
         set_field(config, spec.enabled_field, True, save=False)
     config.save()
-    console.print(f"[bold green]✓ {spec.label} saved:[/] {display_path(valid)}")
+    console.print(f"[bold green]✓ {spec.title(config)} saved:[/] {display_path(valid)}")
 
 
 def _edit_text_asset(config: RemangaConfig, spec: AssetSpec) -> None:
-    path_str = str(get_field(config, spec.dotted) or "")
+    path_str = str(get_field(config, spec.field(config)) or "")
     current = read_reference_text(path_str)
     new_text = ask_text(
-        spec.label, default=current,
+        spec.title(config), default=current,
         note=f"{spec.required_for}\nSaved to: {display_path(Path(path_str), wrap=False)}",
     )
     saved = write_reference_text(path_str, new_text)
@@ -193,27 +221,55 @@ def run_asset_menu(config: RemangaConfig, *, title: str = "Assets") -> None:
 # ---------------------------------------------------------------------------
 
 
-def ensure_valid_voice_prompt(config: RemangaConfig, interactive: bool = True) -> str:
-    spec = ASSET_BY_KEY["voice"]
-    raw_path = str(config.tts.spk_audio_prompt or "").strip()
+def ensure_valid_voice_prompt(
+    config: RemangaConfig, interactive: bool = True, *, engine: Optional[str] = None,
+) -> str:
+    """The reference clip the running engine will clone from, validated.
+
+    `engine` names the engine actually synthesizing, when that isn't the one
+    config.json selects - `remanga tts --engine X` swaps engines for a single
+    run without redefining later ones, and each engine has its own voice, so
+    validating (and, interactively, asking for) the CONFIGURED engine's clip
+    there would check one file and hand the worker another. Only the voice
+    field is ever written back; `tts.engine` is left exactly as it is, so a
+    one-off can't quietly become the project's engine by way of a save
+    inside the picker.
+
+    Every message names the engine and its own config field: with a voice
+    per engine, "the reference voice is missing" is not actionable on its
+    own - the file the other engine uses may well be sitting there perfectly
+    valid, and the one being asked for is the one that isn't."""
+    active_engine = engine or config.tts.engine
+    engine_name = engine_spec(active_engine).display_name
+    field = voice_field_for(active_engine)
+    # A one-off copy of the voice spec pinned to THIS engine's field and
+    # label, so the picker edits and reports the right engine even when the
+    # config object it was handed names a different one.
+    spec = replace(
+        ASSET_BY_KEY["voice"], dotted=field, label=f"Reference voice WAV ({engine_name})",
+    )
+    raw_path = str(get_field(config, field) or "").strip()
     valid = is_valid_file(raw_path)
     if valid:
         return str(valid.resolve())
 
     if not interactive:
         raise FileNotFoundError(
-            f"Invalid or missing reference voice file: '{raw_path}'. "
-            f"Set a valid WAV file in config.json under 'tts.spk_audio_prompt' "
-            f"(or run `remanga paths`)."
+            f"Invalid or missing reference voice file for {engine_name}: '{raw_path}'. "
+            f"Set a valid WAV file in config.json under '{field}' "
+            f"(or run `remanga paths`). Each engine has its own reference voice - "
+            f"setting the other engine's does not cover this one."
         )
 
     console.print(
-        f"\n[bold]{config.tts.spec.display_name} speaker voice setup[/]\n"
-        f"[dim]{spec.required_for}[/]"
+        f"\n[bold]{engine_name} speaker voice setup[/]\n"
+        f"[dim]{spec.required_for}[/]\n"
+        f"[dim]This is {engine_name}'s own reference clip "
+        f"({field}) - the other engine keeps its own.[/]"
     )
     while True:
         edit_asset(config, spec)
-        valid = is_valid_file(config.tts.spk_audio_prompt)
+        valid = is_valid_file(get_field(config, field))
         if valid:
             return str(valid.resolve())
         console.print("[bold red]A valid reference voice file is required to synthesize narration.[/]")

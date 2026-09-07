@@ -30,7 +30,7 @@ def _unconfigured(config: RemangaConfig) -> list:
             continue
         ok, _, _ = asset_status(config, spec)
         if not ok:
-            missing.append(spec.label)
+            missing.append(spec.title(config))
     return missing
 
 

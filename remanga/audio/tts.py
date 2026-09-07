@@ -10,6 +10,7 @@ from remanga.audio.synth import create_synthesizer
 from remanga.config import AudioConfig, RemangaConfig, TTSConfig
 from remanga.console import console
 from remanga.json_io import read_json, read_json_or, write_json
+from remanga.settings.fields import set_field
 from remanga.paths import get_audio_dir, get_audio_timing_path, get_chapter_dir
 
 
@@ -34,12 +35,20 @@ class TTSEngine:
         # Scoped to the project: the validator below reads the voice out of this
         # config, and it has to be the one this manga uses.
         full_config = RemangaConfig.load().for_project(project_name)
+        # Both of these are per-ENGINE now (see config/tts.py): a --voice
+        # one-off means "use this clip for the engine actually running", and
+        # the validator is told which engine that is, since self.tts_config
+        # may be a one-off `--engine` copy naming a different one than
+        # config.json does. Writing through engine_block rather than a fixed
+        # field is what keeps the override on the right engine's block.
         if voice_override:
-            full_config.tts.spk_audio_prompt = voice_override
-            self.tts_config.spk_audio_prompt = voice_override
+            self.tts_config.engine_block.spk_audio_prompt = voice_override
+            set_field(full_config, self.tts_config.active_voice_field, voice_override, save=False)
 
-        spk_prompt_path = settings.ensure_valid_voice_prompt(full_config, interactive=interactive)
-        self.tts_config.spk_audio_prompt = spk_prompt_path
+        spk_prompt_path = settings.ensure_valid_voice_prompt(
+            full_config, interactive=interactive, engine=self.tts_config.engine,
+        )
+        self.tts_config.engine_block.spk_audio_prompt = spk_prompt_path
 
         chapter_dir = get_chapter_dir(project_name, chapter_num)
         narration_path = chapter_dir / "narration.json"
@@ -66,7 +75,9 @@ class TTSEngine:
 
         console.print(
             f"[cyan]Synthesizing consistent speech via {self._synth.display_name}[/] "
-            f"[dim](Lang: {self.tts_config.lang}, Temp: {self.tts_config.temperature}, Reference Voice: {spk_prompt_path})[/]"
+            f"[dim](Lang: {self.tts_config.lang}, "
+            f"Temp: {self.tts_config.engine_block.temperature}, "
+            f"Reference Voice: {spk_prompt_path})[/]"
         )
 
         def is_cached_complete(panel_id: str) -> bool:
