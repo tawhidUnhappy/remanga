@@ -27,9 +27,18 @@ from remanga.full_recap.discovery import discover_chapters
 from remanga.full_recap.timeline import assemble_combined_audio
 from remanga.humanize import fmt_duration
 from remanga.paths import get_chapter_dir, get_final_video_path, get_full_recap_concat_path, get_full_recap_video_path
+from remanga.reset import wipe_chapter
 from remanga.settings.project_prefs import cropper_config_for
 from remanga.video.compose import FrameCompositor
 from remanga.video.render import VideoRenderer
+
+# What survives a --regenerate-all pass, and the only things that do:
+# crops.json (panel marks) and narration.json (the narration script) can't
+# be rebuilt from anything else remanga has, and pages/ is kept rather than
+# re-fetched from zero - wipe_chapter's reverify_downloads still re-checks
+# it and pulls anything missing, so "redownload or verify" ends up correct
+# either way without throwing away hundreds of MB of already-correct scans.
+REGENERATE_KEEP = ("pages", "crops.json", "narration.json")
 
 
 class FullRecapCompiler:
@@ -40,20 +49,11 @@ class FullRecapCompiler:
     the join."""
 
     def __init__(self, config: Optional[RemangaConfig] = None):
-        # Deferred: remanga.downloader imports remanga.full_recap.discovery
-        # (for chapter_sort_key), and importing the *package*
-        # remanga.full_recap always runs this module's own top-level import
-        # first - a module-level `from remanga.downloader import ...` here
-        # would be circular. Constructing one compiler per process makes
-        # this a one-time cost, not a per-chapter one.
-        from remanga.downloader import MangaDexDownloader
-
         self.config = config or RemangaConfig.load()
         self._tts = TTSEngine(self.config.tts, self.config.audio)
         self._mixer = AudioProcessor(self.config.audio)
         self._compositor = FrameCompositor(self.config.video)
         self._renderer = VideoRenderer(self.config.system, self.config.video)
-        self._downloader = MangaDexDownloader(self.config.downloader)
 
     def _ensure_chapter_video(
         self, project_name: str, chapter_num: str, force: bool, *,
@@ -84,7 +84,28 @@ class FullRecapCompiler:
         narration_path = chapter_dir / "narration.json"
 
         if regenerate_all:
-            self._downloader.download_chapter(None, chapter_num, project_name, force=False)
+            # A real delete, not a regenerate-over-the-top: panels/, the
+            # per-panel voice clips, audio_timing.json, master_audio.wav,
+            # the composited frames and the chapter's own MP4 all go, so
+            # nothing stale from a previous run can survive into this one
+            # (an orphaned clip for a panel that no longer exists after a
+            # re-crop, a frame from an older resolution). Only crops.json
+            # and narration.json - hand-authored/LLM-written, not
+            # regenerable from anything else - plus pages/ are kept, and
+            # reverify_downloads re-checks/re-fetches pages right after.
+            removed = wipe_chapter(
+                project_name, chapter_num, keep_names=set(REGENERATE_KEEP), reverify_downloads=True,
+            )
+            if removed:
+                # Named by kind, not by p.name: every generated directory for
+                # a chapter is literally called "chapter_<n>", so listing bare
+                # names printed "panels, chapter_3.2, chapter_3.2, chapter_3.2"
+                # and said nothing about which three.
+                names = [p.name if p.parent.name.startswith("chapter_") else f"{p.parent.name}/" for p in removed]
+                console.print(
+                    f"[yellow]Chapter {chapter_num}: deleted {len(removed)} generated item(s)[/] "
+                    f"[dim]({', '.join(names)}) - keeping {', '.join(sorted(REGENERATE_KEEP))}[/]"
+                )
             CoordinateCropper(cropper_config_for(self.config, project_name)).crop_chapter_from_json(
                 project_name, chapter_num, force=True
             )
@@ -118,18 +139,18 @@ class FullRecapCompiler:
         video/render.py) still catches any chapter that's actually stale.
 
         regenerate_all is the stronger, separate "start over from scratch"
-        option: pages are re-verified/filled-in (MangaDexDownloader's own
-        idempotent check, not a forced wipe), panels/ is re-cropped fresh
-        from crops.json, and voice synthesis, the mix, the per-chapter
-        render, and the whole-manga join are all redone unconditionally,
-        ignoring every staleness/cache check TTS and the mixer normally
-        trust (plain `force`/`force_chapters` never touched any of pages,
-        panels, TTS or the mix - only the render and the join). The only
-        two things left completely untouched are crops.json and
-        narration.json themselves - hand-authored/LLM-written and not
-        regenerable from anything else remanga has - everything built FROM
-        them is fair game. Implies force=True and force_chapters=True
-        regardless of what was passed for them."""
+        option, and the only genuinely DESTRUCTIVE one here: every included
+        chapter is wiped down to REGENERATE_KEEP first (see
+        _ensure_chapter_video), deleting panels/, the per-panel voice clips,
+        audio_timing.json, master_audio.wav, the composited frames and the
+        chapter's own MP4 - then pages are re-verified/re-fetched, panels
+        re-cropped, and voice/mix/render/join all rebuilt from nothing.
+        Deleting rather than regenerating over the top is the point: it's
+        what guarantees no stale artifact from a previous run survives (an
+        orphaned clip for a panel a re-crop removed, a frame at an older
+        resolution). Only crops.json, narration.json and pages/ survive.
+        Implies force=True and force_chapters=True regardless of what was
+        passed for them."""
         if regenerate_all:
             force = True
             force_chapters = True

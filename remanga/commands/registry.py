@@ -392,13 +392,14 @@ COMMAND_REGISTRY: List[Command] = [
                   prompt="Chapters to include"),
             force_param("Force a full recompile even if already compiled"),
             Param("regenerate_all", ["--regenerate-all"], type="bool", default=False,
-                  help="Regenerate everything from scratch for every included chapter - "
-                       "re-verify/redownload pages, re-crop panels, re-synthesize voice, re-mix, "
-                       "re-render, and re-join - ignoring all of pages/TTS/mix/render's own "
-                       "staleness caching. Only crops.json (panel marks) and narration.json "
-                       "themselves survive untouched - nothing else can rebuild those. Implies "
-                       "--force.",
-                  prompt="Regenerate everything from scratch (pages, panels, voice, mix, render, join)?"),
+                  help="DELETES every generated artifact for each included chapter (panels, voice "
+                       "clips, mixed audio, frames, the chapter MP4), then rebuilds all of it from "
+                       "scratch: pages re-verified/re-fetched, panels re-cropped, voice "
+                       "re-synthesized, re-mixed, re-rendered and re-joined. Only crops.json "
+                       "(panel marks), narration.json and pages/ survive - nothing else can "
+                       "rebuild those. Implies --force.",
+                  prompt="Delete all generated files and rebuild from scratch? "
+                         "(keeps only crops.json, narration.json and pages)"),
         ],
         category="Project-wide",
         detail="one BGM pass and one render for the whole manga - both configured below",
