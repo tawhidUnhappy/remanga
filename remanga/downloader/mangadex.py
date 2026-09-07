@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 import zipfile
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 import requests
 from rich.progress import BarColumn, DownloadColumn, Progress, TextColumn, TimeRemainingColumn
 
@@ -11,7 +11,22 @@ from remanga.config import DownloaderConfig
 from remanga.console import console, escape as _esc
 from remanga.cropper.naming import page_stem
 from remanga.downloader.resolve import BASE_URL, MangaDexResolver
-from remanga.paths import get_chapter_dir, get_pages_zip_path, load_project_metadata, read_manifest, save_project_metadata, update_manifest_chapter
+from remanga.full_recap.discovery import chapter_sort_key  # direct submodule import -
+# full_recap's own __init__ also pulls in compiler.py (audio/video stack),
+# which this module has no other reason to import
+from remanga.paths import (
+    get_chapter_dir, get_pages_zip_path, load_project_metadata, read_manifest,
+    read_remote_chapter_cache, save_project_metadata, update_manifest_chapter,
+    write_remote_chapter_cache,
+)
+
+# How long a fetched MangaDex chapter feed is trusted before a plain
+# "download"/"open the list" re-checks it automatically - a manga getting a
+# new chapter mid-session is the normal case this guards against, while
+# still sparing the feed API call (list_chapters paginates the whole feed)
+# on every single menu open. Explicit refetch (force_refresh=True) always
+# bypasses this regardless of age.
+CHAPTER_LIST_CACHE_TTL_SECONDS = 24 * 60 * 60
 
 
 class MangaDexDownloader:
@@ -37,8 +52,30 @@ class MangaDexDownloader:
         console.print(f"[bold green]✓ Created Pages ZIP archive:[/] {_esc(str(zip_path))}")
         return zip_path
 
-    def download_chapter(self, manga_id_or_url: Optional[str], chapter_num: str, project_name: str) -> Path:
-        """Download high-resolution chapter images with idempotency check, metadata tracking, and auto-zip."""
+    def download_chapter(
+        self, manga_id_or_url: Optional[str], chapter_num: str, project_name: str, force: bool = False,
+    ) -> Path:
+        """Download high-resolution chapter images with idempotency check, metadata tracking, and auto-zip.
+
+        Picking an already-downloaded chapter again (the normal, `force=False`
+        path) is always safe and cheap: every page already on disk and
+        verified against the current MangaDex listing is kept as-is, only
+        whatever's actually missing gets fetched, and pages/ is swept of
+        anything that doesn't belong (a stray leftover, an old naming
+        scheme, a page from a different image_quality) - see the stray-file
+        cleanup and cached_meta check below. `force=True` ("reverify and
+        download clean") skips trusting any of that: pages/ is wiped first,
+        so every page is refetched from scratch even if it looked complete
+        and verified before - the deliberate "start over" escape hatch for
+        a chapter suspected of having gotten corrupted or replaced upstream
+        in a way the cheap checks below wouldn't catch."""
+        if force:
+            dest_dir = get_chapter_dir(project_name, chapter_num) / "pages"
+            if dest_dir.exists():
+                for stray in dest_dir.iterdir():
+                    if stray.is_file():
+                        stray.unlink()
+                console.print(f"[yellow]Force reverify: cleared existing pages for chapter {chapter_num} before re-downloading.[/]")
         if not manga_id_or_url:
             meta = load_project_metadata(project_name)
             manga_id_or_url = meta.get("manga_url") or meta.get("manga_id")
@@ -248,3 +285,103 @@ class MangaDexDownloader:
             self._create_pages_zip(project_name, chapter_num, dest_dir)
 
         return dest_dir
+
+    def _resolve_manga_id(self, project_name: str, manga_id_or_url: Optional[str]) -> str:
+        if not manga_id_or_url:
+            meta = load_project_metadata(project_name)
+            manga_id_or_url = meta.get("manga_url") or meta.get("manga_id")
+            if not manga_id_or_url:
+                raise ValueError(
+                    f"No MangaDex URL or ID provided and none found saved for project '{project_name}'."
+                )
+        return self.resolver.parse_manga_id(manga_id_or_url)
+
+    def _local_chapter_status(self, project_name: str, chapter_num: str, expected_pages: Optional[int]) -> str:
+        """One of "downloaded" (every expected page present and this
+        chapter's cached pages-record says verified), "partial" (some
+        pages on disk but not verified-complete for the current listing),
+        or "missing" (nothing downloaded here yet). Purely a local disk +
+        manifest check - no network call - so this is cheap enough to run
+        for every chapter in a whole-manga listing."""
+        pages_dir = get_chapter_dir(project_name, chapter_num) / "pages"
+        on_disk = sum(1 for p in pages_dir.iterdir() if p.is_file()) if pages_dir.exists() else 0
+        if on_disk == 0:
+            return "missing"
+        cached_meta = read_manifest(project_name).get("chapters", {}).get(str(chapter_num), {}).get("pages")
+        if cached_meta and cached_meta.get("verified") and (
+            expected_pages is None or cached_meta.get("total_pages") == expected_pages
+        ):
+            return "downloaded"
+        return "partial"
+
+    def list_chapters_with_status(
+        self, project_name: str, manga_id_or_url: Optional[str] = None, force_refresh: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Every chapter MangaDex has for this project's manga, in reading
+        order, each annotated with this project's own local download status
+        ("downloaded" / "partial" / "missing") - the one call a chapter-
+        picking menu needs to show "here's everything upstream, here's what
+        you already have" in one screen.
+
+        The MangaDex feed fetch itself (list_chapters, paginated) is cached
+        in this project's manifest.json for CHAPTER_LIST_CACHE_TTL_SECONDS
+        (24h) - a manga getting a new chapter is the only thing that ever
+        changes it, so re-fetching on every menu open would just be a slow,
+        rate-limited API call for almost always the same answer.
+        force_refresh=True (the interactive "refetch from MangaDex" action)
+        always bypasses the cache regardless of age. The local status
+        annotation is never cached - it's a cheap disk check, and it must
+        always reflect whatever was downloaded since the last fetch, cached
+        chapter list or not."""
+        manga_id = self._resolve_manga_id(project_name, manga_id_or_url)
+
+        cached = read_remote_chapter_cache(project_name)
+        cache_is_fresh = (
+            not force_refresh
+            and cached.get("manga_id") == manga_id
+            and (time.time() - cached.get("fetched_at", 0)) < CHAPTER_LIST_CACHE_TTL_SECONDS
+        )
+        if cache_is_fresh:
+            remote_chapters = cached["chapters"]
+        else:
+            raw_chapters = self.resolver.list_chapters(manga_id)
+            remote_chapters = [
+                {
+                    "chapter": str(ch.get("attributes", {}).get("chapter") or ""),
+                    "chapter_id": ch["id"],
+                    "pages": ch.get("attributes", {}).get("pages"),
+                    "title": ch.get("attributes", {}).get("title") or "",
+                }
+                for ch in raw_chapters
+                if ch.get("attributes", {}).get("chapter")  # skip the odd chapterless "oneshot" entry
+            ]
+            remote_chapters.sort(key=lambda c: chapter_sort_key(c["chapter"]))
+            write_remote_chapter_cache(project_name, manga_id, remote_chapters, time.time())
+
+        for entry in remote_chapters:
+            entry["status"] = self._local_chapter_status(project_name, entry["chapter"], entry.get("pages"))
+        return remote_chapters
+
+    def download_chapters(
+        self, project_name: str, chapter_nums: List[str], manga_id_or_url: Optional[str] = None,
+        force: bool = False,
+    ) -> List[Path]:
+        """Downloads several chapters in one call - "download all", a
+        range, or an explicit multi-select all reduce to this. Duplicate
+        chapter numbers are collapsed (picking one chapter twice in a
+        multiselect is harmless, not a double-download) but order is kept
+        stable via a first-seen pass rather than an unordered set. Each
+        chapter still goes through download_chapter's own idempotent
+        verify-and-fill-in-what's-missing logic (or, with force=True, its
+        wipe-and-redo-clean path) - a failure on one chapter is reported and
+        re-raised immediately rather than silently skipped, since a partial
+        bulk download that looks like it finished is worse than one that
+        stops where it broke."""
+        seen: set = set()
+        ordered_nums = [n for n in chapter_nums if not (n in seen or seen.add(n))]
+
+        results: List[Path] = []
+        for i, chapter_num in enumerate(ordered_nums, start=1):
+            console.print(f"[bold cyan]({i}/{len(ordered_nums)}) Chapter {chapter_num}[/]")
+            results.append(self.download_chapter(manga_id_or_url, chapter_num, project_name, force=force))
+        return results

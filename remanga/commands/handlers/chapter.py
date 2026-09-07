@@ -38,6 +38,47 @@ def download(params: Dict[str, Any], config: RemangaConfig) -> None:
     )
 
 
+def download_chapters(params: Dict[str, Any], config: RemangaConfig) -> None:
+    """Download several chapters at once - a comma list and/or numeric
+    ranges ('1,3,7-9'), 'all' for every chapter MangaDex has, or (the
+    common case, and the only option when --chapters is left unset from an
+    interactive terminal) the picker screen showing which chapters this
+    project already has - see remanga/wizard/downloads.py."""
+    project = params["project"]
+    manga_id_or_url = params.get("url")
+    raw_chapters = (params.get("select") or "").strip()
+    force = bool(params.get("force"))
+    refetch = bool(params.get("refetch"))
+
+    if not raw_chapters:
+        from remanga.tui import is_interactive
+        from remanga.wizard.downloads import run_download_chapters
+
+        if not is_interactive():
+            raise ValueError(
+                "--chapters is required when not running in an interactive terminal "
+                "(a comma list and/or ranges like '1,3,7-9', or 'all')."
+            )
+        run_download_chapters(project, config, manga_id_or_url)
+        return
+
+    downloader = MangaDexDownloader(config.downloader)
+    if raw_chapters.strip().lower() == "all":
+        entries = downloader.list_chapters_with_status(project, manga_id_or_url, force_refresh=refetch)
+        chapter_nums = [e["chapter"] for e in entries]
+    else:
+        from remanga.downloader.selection import parse_remote_chapter_selection
+
+        entries = downloader.list_chapters_with_status(project, manga_id_or_url, force_refresh=refetch)
+        chapter_nums = parse_remote_chapter_selection(raw_chapters, [e["chapter"] for e in entries])
+
+    if not chapter_nums:
+        console.print("[yellow]No chapters matched that selection - nothing to download.[/]")
+        return
+
+    downloader.download_chapters(project, chapter_nums, manga_id_or_url, force=force)
+
+
 def mark(params: Dict[str, Any], config: RemangaConfig) -> None:
     launch_panel_marker(params["project"], params["chapter"], config.marker)
 

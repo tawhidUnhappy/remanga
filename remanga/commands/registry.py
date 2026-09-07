@@ -150,6 +150,38 @@ COMMAND_REGISTRY: List[Command] = [
         detail="reuses the manga source saved in project.json - only asks when there isn't one",
     ),
     Command(
+        "download-chapters",
+        "Download several chapters at once from MangaDex, or open the picker showing which "
+        "chapters this project already has vs. what's available upstream",
+        chapter_handlers.download_chapters,
+        [
+            project_param(),
+            Param("url", ["--url", "-u"], required=False, default=None,
+                  help="Manga title or MangaDex URL/UUID (optional if saved)",
+                  prompt="Manga title or MangaDex URL"),
+            # Deliberately NOT named "chapters" - that name is special-cased
+            # in wizard/params.py to mean "pick from chapters this project
+            # already has on disk" (select_chapters/discover_chapters),
+            # which is exactly wrong here: this picks from what MangaDex
+            # has *upstream*, very possibly chapters not downloaded yet.
+            Param("select", ["--select"], required=False, default=None,
+                  help="Comma list and/or ranges ('1,3,7-9'), or 'all' for every chapter MangaDex "
+                       "has. Left unset in an interactive terminal opens the picker screen instead.",
+                  prompt="Chapters (comma list / ranges / 'all', or leave empty for the picker)"),
+            Param("force", ["--force", "-f"], type="bool", default=False,
+                  help="Reverify and download clean - wipe each selected chapter's pages first and "
+                       "redownload everything, even ones already marked downloaded",
+                  prompt="Reverify and download clean (ignore existing pages)?"),
+            Param("refetch", ["--refetch"], type="bool", default=False,
+                  help="Refetch the chapter list from MangaDex instead of using the cached listing "
+                       "(cached for 24h)",
+                  prompt="Refetch the chapter list from MangaDex instead of using the 24h cache?"),
+        ],
+        category="Chapter Production",
+        detail="the normal (non-force) path always just verifies and fills in whatever's missing - "
+               "picking an already-downloaded chapter again is never wasted work",
+    ),
+    Command(
         "mark",
         "Launch the Panel Marker web UI to mark panels (writes crops.json)",
         chapter_handlers.mark,

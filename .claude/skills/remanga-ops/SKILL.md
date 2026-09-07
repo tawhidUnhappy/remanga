@@ -51,6 +51,59 @@ never `.tools/venv-X/bin/pip`. GPU work never touches the main env - see
 venvs unconditionally; switching `config.json`'s `tts.engine` later never
 needs a re-bootstrap, only that engine's weights lazy-fetch on first use.
 
+## Full-manga recap: does it delete/regenerate previous audio/video?
+
+No - `FullRecapCompiler.compile_full_manga` (`full_recap/compiler.py`) is
+resumable by construction, same as every per-chapter step: each chapter's
+own TTS/mix/render calls its own already-cached-and-resumable machinery
+(`TTSEngine.generate_narration_audio` skips clips already on disk,
+`AudioProcessor`/`VideoRenderer` have their own mtime-staleness checks), and
+the whole-manga MP4 itself is only rebuilt from scratch with an explicit
+`--force` (checked via `final_video.exists()` up front - already-compiled
+means "done", not "reconfirm every chapter first"). `force_chapters`
+(defaults to `force`) can also be set False on its own to force only the
+join, not every chapter's per-chapter render - see remix.py's rejoin.
+Nothing here needed adding - it already behaves the way "don't blow away
+what's already built" implies.
+
+## Chapter downloads: chapter picker + MangaDex chapter-list caching
+
+`download` (`remanga download -p <project> -c <chapter>`) is unchanged -
+one chapter, by number, same idempotent verify-and-fill-in-what's-missing
+behavior it always had (picking the same chapter twice is always safe:
+stray files get swept, only actually-missing pages get fetched).
+
+`download-chapters` (`remanga/wizard/downloads.py`,
+`downloader/mangadex.py:list_chapters_with_status`/`download_chapters`) is
+new - the "which chapters do I actually have" screen:
+- `MangaDexResolver.list_chapters`'s feed fetch is cached per-project in
+  `manifest.json["remote_chapters"]` (`paths/metadata.py:read_remote_chapter_cache`/
+  `write_remote_chapter_cache`) for `CHAPTER_LIST_CACHE_TTL_SECONDS` (24h);
+  the wizard's "Refetch chapter list from MangaDex" row (or `--refetch`)
+  bypasses it regardless of age. `find_chapter_id`'s own feed fetch inside
+  `download_chapter` is NOT covered by this cache (pre-existing, its own
+  separate call) - only the picker's listing is.
+- Each entry is annotated with a local-disk-only status (`_local_chapter_status`:
+  "downloaded"/"partial"/"missing", no network call) so the picker always
+  reflects what's actually on disk even against a cached remote listing.
+- The wizard screen: pick chapters (multiselect, ctrl+a = all, pre-checked
+  with everything not already "downloaded") or Refetch, then a confirm for
+  "reverify and download clean" (`force=True`: wipes each selected
+  chapter's `pages/` first, so even an already-verified chapter is fully
+  redownloaded from scratch - the deliberate escape hatch for a chapter
+  suspected corrupted or re-uploaded upstream). Non-interactive/CLI use
+  passes `--select` instead (comma list and/or ranges - `1,3,7-9` - or
+  `all`; ranges expand against MangaDex's own listing via
+  `downloader/selection.py:parse_remote_chapter_selection`, the download-
+  side counterpart to `commands/selection.py`'s local-chapters version)
+  and requires it when stdin isn't a tty.
+- `Param.name` for this had to avoid `"chapters"` - that name is
+  special-cased in `wizard/params.py` to mean "pick from chapters this
+  project already has on disk" (`select_chapters`/`discover_chapters`),
+  which is backwards here (this picks from MangaDex's upstream listing,
+  chapters very possibly not downloaded yet) - the flag is `--select`
+  instead.
+
 ## TTS engines (`config.json` → `tts.engine`)
 
 | | `indextts-2.5` | `audio8-tts-0.1b` |

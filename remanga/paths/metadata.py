@@ -97,6 +97,24 @@ def read_manifest(project_name: str) -> Dict[str, Any]:
     return read_json_or(get_manifest_path(project_name), {"chapters": {}})
 
 
+def read_remote_chapter_cache(project_name: str) -> Dict[str, Any]:
+    """manifest.json['remote_chapters'] - the last MangaDex chapter-feed
+    fetch for this project, cached whole (not merged into the per-chapter
+    "chapters" sections above, which only ever describe chapters this
+    project has actually started downloading): {"manga_id", "fetched_at"
+    (epoch seconds), "chapters": [{"chapter", "chapter_id", "pages"}, ...]}.
+    Empty dict when nothing's been fetched yet. See
+    downloader/mangadex.py:list_chapters_with_status for the 24h TTL this
+    backs and the interactive "refetch" escape hatch."""
+    return read_manifest(project_name).get("remote_chapters", {})
+
+
+def write_remote_chapter_cache(project_name: str, manga_id: str, chapters: List[Dict[str, Any]], fetched_at: float) -> None:
+    manifest = read_manifest(project_name)
+    manifest["remote_chapters"] = {"manga_id": manga_id, "fetched_at": fetched_at, "chapters": chapters}
+    write_json(get_manifest_path(project_name), manifest)
+
+
 def update_manifest_chapter(project_name: str, chapter_num: str, section: str, data: Any) -> None:
     """Read-modify-write manifest.json['chapters'][chapter_num][section] = data.
     Chapters/sections are independent - downloader writes "pages" (called
