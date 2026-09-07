@@ -44,6 +44,15 @@ class Param:
     # descriptions live with the behavior rather than being retyped here.
     choice_help: Dict[str, str] = field(default_factory=dict)
     choice_detail: Dict[str, str] = field(default_factory=dict)
+    # A flag that exists for the CLI only, because the handler asks the same
+    # thing itself in a purpose-built interactive screen (download-chapters'
+    # chapter picker - see remanga/wizard/downloads.py). The wizard skips
+    # prompting it entirely and leaves it at `default`, so the screen opens
+    # straight away instead of behind two or three generic text/yes-no boxes
+    # asking what it is about to ask better. Never set this on a flag the
+    # handler does NOT re-ask interactively: the wizard would then silently
+    # run with the default and there'd be no way to change it from the menu.
+    cli_only: bool = False
 
     @property
     def label(self) -> str:

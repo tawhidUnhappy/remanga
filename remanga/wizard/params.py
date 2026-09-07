@@ -49,6 +49,11 @@ def collect_params(cmd: Command, project: str, config: RemangaConfig) -> Optiona
         if param.name == "project":
             values["project"] = project
             continue
+        # Left at its default, unasked: the handler opens its own screen that
+        # asks this better than a generic prompt could - see Param.cli_only.
+        if param.cli_only:
+            values[param.name] = param.default
+            continue
         answer = prompt_param(param, project=project, config=config, values=values)
         if is_cancel(answer):
             return None

@@ -118,6 +118,14 @@ new - the "which chapters do I actually have" screen:
   `downloader/selection.py:parse_remote_chapter_selection`, the download-
   side counterpart to `commands/selection.py`'s local-chapters version)
   and requires it when stdin isn't a tty.
+- The three flags `--select`/`--force`/`--refetch` are marked
+  `Param(cli_only=True)` (new field, honored in `wizard/params.py:
+  collect_params`, which leaves them at `default` unasked). Without it the
+  wizard put three generic text/yes-no boxes *in front of* the picker - and
+  asked about force twice, since the picker asks it again itself. Only ever
+  set `cli_only` on a flag the handler genuinely re-asks in its own screen;
+  otherwise the wizard silently runs with the default and the menu has no
+  way to change it.
 - `Param.name` for this had to avoid `"chapters"` - that name is
   special-cased in `wizard/params.py` to mean "pick from chapters this
   project already has on disk" (`select_chapters`/`discover_chapters`),

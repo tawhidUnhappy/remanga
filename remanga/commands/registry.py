@@ -164,15 +164,23 @@ COMMAND_REGISTRY: List[Command] = [
             # already has on disk" (select_chapters/discover_chapters),
             # which is exactly wrong here: this picks from what MangaDex
             # has *upstream*, very possibly chapters not downloaded yet.
-            Param("select", ["--select"], required=False, default=None,
+            # All three are cli_only: the picker screen this command opens
+            # (remanga/wizard/downloads.py) asks every one of them itself,
+            # against the actual chapter list - which chapters, on rows that
+            # show what's already downloaded; clean-reverify, as a confirm
+            # after picking; refetch, as its own menu row. Prompting them
+            # generically first would put three text/yes-no boxes in front of
+            # the screen that asks the same things far better, and ask about
+            # force twice.
+            Param("select", ["--select"], required=False, default=None, cli_only=True,
                   help="Comma list and/or ranges ('1,3,7-9'), or 'all' for every chapter MangaDex "
                        "has. Left unset in an interactive terminal opens the picker screen instead.",
                   prompt="Chapters (comma list / ranges / 'all', or leave empty for the picker)"),
-            Param("force", ["--force", "-f"], type="bool", default=False,
+            Param("force", ["--force", "-f"], type="bool", default=False, cli_only=True,
                   help="Reverify and download clean - wipe each selected chapter's pages first and "
                        "redownload everything, even ones already marked downloaded",
                   prompt="Reverify and download clean (ignore existing pages)?"),
-            Param("refetch", ["--refetch"], type="bool", default=False,
+            Param("refetch", ["--refetch"], type="bool", default=False, cli_only=True,
                   help="Refetch the chapter list from MangaDex instead of using the cached listing "
                        "(cached for 24h)",
                   prompt="Refetch the chapter list from MangaDex instead of using the 24h cache?"),
