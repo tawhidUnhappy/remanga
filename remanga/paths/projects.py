@@ -170,6 +170,30 @@ def get_final_video_path(project_name: str, chapter_num: str, create: bool = Tru
     return get_generated_dir(project_name, "video", chapter_num, create=create) / f"{project_name}_ch{clean_chap}_recap.mp4"
 
 
-def get_full_recap_video_path(project_name: str) -> Path:
-    """The whole-manga joined video - see remanga/full_recap/."""
-    return get_project_video_dir(project_name) / f"{project_name}_full_recap.mp4"
+def find_full_recap_video(project_name: str) -> "Path | None":
+    """The most recently written whole-manga joined video for this project,
+    if one exists - for callers that only need to know "is there one to
+    rejoin/verify" without already knowing its exact chapter range (remix's
+    rejoin check, verify's report). Globs rather than a fixed name since
+    get_full_recap_video_path names the file after its own start/end
+    chapter now - a project can (rarely) have more than one on disk after
+    its chapter range changed between compiles; the newest by mtime is the
+    one every other whole-manga command means by "the" full recap."""
+    candidates = sorted(
+        get_project_video_dir(project_name, create=False).glob(f"{project_name}_ch*_full_recap.mp4"),
+        key=lambda p: p.stat().st_mtime, reverse=True,
+    ) if get_project_video_dir(project_name, create=False).exists() else []
+    return candidates[0] if candidates else None
+
+
+def get_full_recap_video_path(project_name: str, start_chapter: str, end_chapter: str) -> Path:
+    """The whole-manga joined video - see remanga/full_recap/. Named with
+    its own start/end chapter (e.g. "..._ch1-ch12_recap.mp4", or just
+    "..._ch1_recap.mp4" for a single-chapter compile) so two different
+    partial recaps of the same project - or the same one after a chapter
+    range changed - never collide under one fixed filename, and which
+    chapters a given file actually covers is readable from its name alone
+    without opening it."""
+    start_clean, end_clean = _clean_chapter(start_chapter), _clean_chapter(end_chapter)
+    span = f"ch{start_clean}" if start_clean == end_clean else f"ch{start_clean}-ch{end_clean}"
+    return get_project_video_dir(project_name) / f"{project_name}_{span}_full_recap.mp4"

@@ -66,6 +66,27 @@ join, not every chapter's per-chapter render - see remix.py's rejoin.
 Nothing here needed adding - it already behaves the way "don't blow away
 what's already built" implies.
 
+`--regenerate-all` was added on top for the actual "start over from
+scratch" case: unlike plain `--force` (which only ever re-renders/re-joins,
+never re-synthesizes or re-mixes), this forces TTS + mix + render + join
+for every included chapter, ignoring all of their own staleness caching.
+It still never touches pages/, crops.json, or narration.json - those are
+fetched/hand-authored, not regenerable from anything else remanga has.
+`FullRecapCompiler._ensure_chapter_video` grew `force_tts`/`force_mix`
+kwargs (separate from `force`, which kept its old render-only meaning) for
+this.
+
+The joined video's filename now carries its own start/end chapter
+(`get_full_recap_video_path(project, start, end)` -> e.g.
+`..._ch1-ch12_full_recap.mp4`, or `..._ch3_full_recap.mp4` for one
+chapter) instead of one fixed name - so two different partial recaps, or
+the same project after its chapter range changed, never collide, and
+which chapters a file covers reads off the filename alone. Callers that
+need to find "the" existing full-recap without already knowing its exact
+range (remix.py's rejoin check, verify's report) use the new
+`find_full_recap_video(project)` glob-based lookup (newest by mtime)
+instead.
+
 ## Chapter downloads: chapter picker + MangaDex chapter-list caching
 
 `download` (`remanga download -p <project> -c <chapter>`) is unchanged -

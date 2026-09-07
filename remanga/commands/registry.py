@@ -383,6 +383,13 @@ COMMAND_REGISTRY: List[Command] = [
                        "chapter found, in order)",
                   prompt="Chapters to include"),
             force_param("Force a full recompile even if already compiled"),
+            Param("regenerate_all", ["--regenerate-all"], type="bool", default=False,
+                  help="Regenerate everything from scratch for every included chapter - voice "
+                       "synthesis, the mix, the per-chapter render, and the whole-manga join - "
+                       "ignoring all of TTS/mix/render's own staleness caching. Only pages, "
+                       "panel marks, and narration.json text survive (nothing else can rebuild "
+                       "those). Implies --force.",
+                  prompt="Regenerate everything from scratch (voice, mix, render, join)?"),
         ],
         category="Project-wide",
         detail="one BGM pass and one render for the whole manga - both configured below",

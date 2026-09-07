@@ -7,8 +7,8 @@ from typing import List, Optional
 from remanga.console import console
 from remanga.json_io import has_real_json_content, read_json, read_json_or
 from remanga.paths import (
-    get_audio_dir, get_audio_timing_path, get_chapter_dir, get_final_video_path,
-    get_full_recap_video_path, get_master_audio_path,
+    find_full_recap_video, get_audio_dir, get_audio_timing_path, get_chapter_dir, get_final_video_path,
+    get_master_audio_path,
 )
 from remanga.verify.models import ChapterVerification
 from remanga.verify.panels import check_panel_narration_mismatch
@@ -79,8 +79,8 @@ def verify_project(project_name: str, chapters: Optional[List[str]] = None, chec
         results.append(r)
         print_chapter_result(r)
 
-    full_video_path = get_full_recap_video_path(project_name)
-    if full_video_path.exists():
+    full_video_path = find_full_recap_video(project_name)
+    if full_video_path is not None:
         console.print("\n[bold]Full-recap joined video:[/]")
         full_check = probe_media(full_video_path)
         print_media_line("  full-recap video", full_check)

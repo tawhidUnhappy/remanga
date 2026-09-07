@@ -21,7 +21,7 @@ from remanga.audio.mix import AudioProcessor
 from remanga.config import RemangaConfig
 from remanga.console import console, escape as _esc
 from remanga.full_recap import FullRecapCompiler, chapter_sort_key, discover_chapters
-from remanga.paths import get_final_video_path, get_full_recap_video_path
+from remanga.paths import find_full_recap_video, get_final_video_path
 from remanga.video.render import VideoRenderer
 
 
@@ -58,8 +58,8 @@ def remix_project(
         mixer.mix_master_audio(project_name, chapter_num, bgm_override=bgm_override, interactive=False, force=True)
         renderer.render_video(project_name, chapter_num, force=False)
 
-    full_video = get_full_recap_video_path(project_name)
-    if rejoin and full_video.exists():
+    full_video = find_full_recap_video(project_name)
+    if rejoin and full_video is not None:
         # Always re-join the FULL current chapter set (not just whatever
         # subset was remixed) - a joined video missing chapters this remix
         # didn't touch would be a worse surprise than re-joining a couple of
@@ -68,7 +68,7 @@ def remix_project(
         # force_chapters=False: every chapter was just mixed/rendered above -
         # forcing them again here would just repeat identical ffmpeg work.
         FullRecapCompiler(config).compile_full_manga(project_name, force=True, force_chapters=False)
-    elif not full_video.exists():
+    elif full_video is None:
         console.print(f"[dim](No existing full-recap video for '{project_name}' to re-join - run `remanga full-recap` first if you want one.)[/]")
 
     console.print(f"[bold green]✓ Remix complete for {len(chapter_list)} chapter(s).[/]")

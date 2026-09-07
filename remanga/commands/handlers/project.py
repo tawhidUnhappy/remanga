@@ -18,6 +18,7 @@ def full_recap(params: Dict[str, Any], config: RemangaConfig) -> None:
     FullRecapCompiler(config).compile_full_manga(
         params["project"], force=bool(params.get("force")),
         chapters=split_chapters(params.get("chapters")),
+        regenerate_all=bool(params.get("regenerate_all")),
     )
 
 

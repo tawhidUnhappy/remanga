@@ -34,7 +34,7 @@ from .metadata import (
     write_remote_chapter_cache,
 )
 from .projects import (
-    GENERATED_KINDS, get_audio_dir, get_audio_timing_path, get_chapter_dir,
+    GENERATED_KINDS, find_full_recap_video, get_audio_dir, get_audio_timing_path, get_chapter_dir,
     get_final_video_path, get_full_recap_concat_path, get_full_recap_master_audio_path,
     get_full_recap_video_path, get_full_recap_work_dir, get_generated_dir, get_master_audio_path,
     get_pages_zip_path, get_panels_pdf_dir, get_panels_zip_dir, get_project_dir,
@@ -61,7 +61,7 @@ __all__ = [
     "get_master_audio_path", "get_video_dir", "get_video_work_dir", "get_video_frames_dir",
     "get_video_concat_path", "get_project_video_dir", "get_full_recap_work_dir",
     "get_full_recap_master_audio_path", "get_full_recap_concat_path", "get_final_video_path",
-    "get_full_recap_video_path",
+    "get_full_recap_video_path", "find_full_recap_video",
     # metadata
     "get_project_metadata_path", "get_memory_path", "ensure_memory_file", "load_project_metadata",
     "chapter_identity_fields", "save_project_metadata", "get_manifest_path", "read_manifest",
