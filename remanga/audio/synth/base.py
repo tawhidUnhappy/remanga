@@ -14,11 +14,12 @@ from __future__ import annotations
 import atexit
 import collections
 import json
+import re
 import select
 import subprocess
 import threading
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from remanga.config import AudioConfig
 from remanga.console import console
@@ -32,6 +33,35 @@ _MAX_AUTO_HEAL_ATTEMPTS = 8
 # How many of the worker's most recent stderr lines to keep around for error
 # messages (see _drain_stderr). Everything older just gets dropped.
 _STDERR_TAIL_LINES = 200
+
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+
+def _split_text_into_chunks(text: str, max_chars: int) -> List[str]:
+    """Greedily packs sentences into chunks of at most `max_chars`, so a
+    long narration line can be sent through an engine's fixed-generation-
+    budget worker as several bounded calls instead of one that silently
+    truncates. Splits on sentence boundaries (not mid-sentence) so each
+    chunk is still natural to speak on its own; a single sentence longer
+    than max_chars on its own becomes its own (oversized) chunk rather than
+    being cut apart mid-word - rare in narration text, and still better
+    than an engine truncating it further."""
+    sentences = _SENTENCE_SPLIT_RE.split(text.replace("\n", " "))
+    chunks: List[str] = []
+    current = ""
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+        candidate = f"{current} {sentence}".strip() if current else sentence
+        if len(candidate) > max_chars and current:
+            chunks.append(current)
+            current = sentence
+        else:
+            current = candidate
+    if current:
+        chunks.append(current)
+    return chunks or [text]
 
 
 def _pip_install_into_tool_env(tool_name: str, packages: set) -> bool:
@@ -63,6 +93,14 @@ class BaseWorkerSynthesizer:
 
     tool_name: str = ""
     display_name: str = ""
+
+    # Subclasses opt in when their engine has a fixed per-call generation
+    # budget that silently truncates the audio - no error, it just stops
+    # partway through - once the input text needs more than that budget's
+    # worth of output (e.g. audio8's max_new_tokens: see Audio8Synthesizer).
+    # None (the default) means synthesize() always makes exactly one call,
+    # unchanged from before this existed.
+    chunk_max_chars: Optional[int] = None
 
     def __init__(self, audio_config: AudioConfig, model_manager: ModelManager):
         self.audio_config = audio_config
@@ -201,7 +239,23 @@ class BaseWorkerSynthesizer:
             pass
 
     def synthesize(self, text: str, spk_prompt_path: str, output_wav: Path) -> None:
-        """Synthesizes speech via this engine's worker process."""
+        """Synthesizes speech via this engine's worker process. Text longer
+        than `chunk_max_chars` (when the engine sets one) is split on
+        sentence boundaries into several bounded calls first and the
+        resulting clips re-joined into `output_wav` - see chunk_max_chars'
+        docstring above for why. The rest of the pipeline never sees the
+        difference: still exactly one WAV at `output_wav` either way."""
+        if self.chunk_max_chars and len(text) > self.chunk_max_chars:
+            chunks = _split_text_into_chunks(text, self.chunk_max_chars)
+            if len(chunks) > 1:
+                self._synthesize_chunks(chunks, spk_prompt_path, output_wav)
+                return
+        self._synthesize_once(text, spk_prompt_path, output_wav)
+
+    def _synthesize_once(self, text: str, spk_prompt_path: str, output_wav: Path) -> None:
+        """One bounded worker call, start to finish - what synthesize() used
+        to do inline before chunking existed. Also what each individual
+        chunk goes through in the chunked path below."""
         proc = self._ensure_worker()
         request = self._build_request(text, spk_prompt_path, output_wav)
 
@@ -230,6 +284,35 @@ class BaseWorkerSynthesizer:
             raise RuntimeError(f"{self.display_name} synthesis failed: {response.get('error')}")
 
         self._post_synthesize(output_wav, request)
+
+    def _synthesize_chunks(self, chunks: List[str], spk_prompt_path: str, output_wav: Path) -> None:
+        """Synthesizes each chunk to its own temp WAV via the normal
+        single-call path (so per-chunk post-processing like the speed
+        ffmpeg-atempo fallback still applies), concatenates them in order,
+        and atomically replaces `output_wav` with the joined result. Temp
+        parts are always cleaned up, success or failure."""
+        from pydub import AudioSegment  # already a hard dependency (see audio/tts.py)
+
+        part_paths: List[Path] = []
+        try:
+            for i, chunk in enumerate(chunks):
+                # ".wav" suffix kept last (not ".wav.tmp") - some workers
+                # (audio8_worker.py included) pick their output format from
+                # the file extension and error on anything else.
+                part_path = output_wav.with_name(f"{output_wav.stem}.chunk{i:03d}.tmp.wav")
+                self._synthesize_once(chunk, spk_prompt_path, part_path)
+                part_paths.append(part_path)
+
+            combined = AudioSegment.empty()
+            for part_path in part_paths:
+                combined += AudioSegment.from_file(part_path)
+
+            tmp_output = output_wav.with_name(output_wav.name + ".tmp")
+            combined.export(tmp_output, format="wav")
+            tmp_output.replace(output_wav)
+        finally:
+            for part_path in part_paths:
+                part_path.unlink(missing_ok=True)
 
     def shutdown(self) -> None:
         """Cleanly stops the worker process, if one is running. Safe to call

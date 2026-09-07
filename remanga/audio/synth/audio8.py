@@ -33,6 +33,13 @@ class Audio8Synthesizer(BaseWorkerSynthesizer):
     def __init__(self, tts_config: TTSConfig, audio_config: AudioConfig):
         self.tts_config = tts_config
         self.engine_config = tts_config.audio8
+        # This model generates a fixed max_new_tokens budget of audio codec
+        # tokens per call - text needing more speech than that budget silently
+        # truncates, no error. See BaseWorkerSynthesizer.chunk_max_chars /
+        # Audio8Config.chunk_max_chars for the fix (sentence-boundary chunking
+        # + re-join), configurable per-install since it depends on this
+        # model's tokenizer, not hardcoded here.
+        self.chunk_max_chars = self.engine_config.chunk_max_chars
         super().__init__(audio_config, ModelManager(
             self.engine_config.model_dir, self.engine_config.hf_repo_id,
             tool_name="audio8", download_script="download_audio8.py",

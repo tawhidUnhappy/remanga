@@ -91,6 +91,18 @@ class Audio8Config(BaseModel):
     top_p: float = 0.9
     max_new_tokens: int = 512
     sample_rate: int = 44100
+    # This model generates a fixed budget of audio codec tokens per call
+    # (max_new_tokens above) - text needing more than that budget's worth
+    # of speech just gets cut off mid-generation, silently, with no error.
+    # Any narration line longer than this many characters gets split on
+    # sentence boundaries into several bounded calls instead (see
+    # Audio8Synthesizer.chunk_max_chars / base.py's chunking path) and the
+    # resulting clips re-joined - the rest of the pipeline never sees the
+    # difference, it's still one WAV per panel. 220 chars is a conservative
+    # empirical fit under 512 tokens for this model/tokenizer; lower it if
+    # a chunk still gets truncated, raise it if chunks feel choppier than
+    # they need to be.
+    chunk_max_chars: int = 220
 
 
 class TTSConfig(BaseModel):

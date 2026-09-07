@@ -95,7 +95,8 @@
       "temperature": 0.7,
       "top_p": 0.9,
       "max_new_tokens": 512,
-      "sample_rate": 44100
+      "sample_rate": 44100,
+      "chunk_max_chars": 220
     }
   },
   "ocr": {
