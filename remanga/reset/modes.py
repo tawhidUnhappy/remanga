@@ -6,7 +6,10 @@ live here as specs rather than as an if/elif chain plus two parallel
 dictionaries of display strings in the command handler: the label and the
 "kept:" line shown before a destructive confirmation are part of what a
 mode *is*, and having them anywhere else is how a mode's description ends
-up describing what it used to delete."""
+up describing what it used to delete.
+
+PROJECT_KEEP, at the bottom, is the same idea one level up: what a
+whole-project wipe keeps, as data."""
 
 from __future__ import annotations
 
@@ -27,6 +30,34 @@ _KEEP_SETS: Dict[str, set] = {
     "marks_only": KEEP_ON_MARKS_ONLY_RESTART,
     "soft": KEEP_ON_SOFT_RESTART,
 }
+
+# What a whole-PROJECT wipe keeps, and the only things that do - see
+# remanga.reset.actions.wipe_project. Two groups, and nothing else at the
+# project root belongs to either:
+#   - chapters/  the source tree. paths.get_chapter_dir holds only material
+#                that was fetched from outside the pipeline or hand-authored
+#                (pages/, crops.json, narration.json), so nothing in there is
+#                ever something a regenerate could rebuild.
+#   - the project's own metadata/settings files. project.json (manga source
+#     + this project's remembered choices), memory.json (the LLM's story
+#     continuity), manifest.json (production bookkeeping AND the cached
+#     MangaDex chapter feed - throwing it away would turn a re-verify into a
+#     re-download of every page), and pipeline.json, the legacy home of the
+#     saved step order still read for projects written by an older version
+#     (paths.get_pipeline_path): a settings file exactly like project.json,
+#     and deleting a setting is not what "delete the generated files" means.
+#
+# Everything else directly under projects/{manga}/ is a generated-artifact
+# directory (paths.GENERATED_KINDS - audio/, video/, panels_zip/, sheets/,
+# ...) and goes. Expressed as "keep these, delete the rest" rather than as a
+# loop over GENERATED_KINDS on purpose: a stray folder from an older layout,
+# a kind that is no longer produced, or a half-written temp directory is
+# exactly the stale state a full regenerate exists to clear, and a
+# delete-list built from the current GENERATED_KINDS would walk straight
+# past every one of them.
+PROJECT_KEEP: Tuple[str, ...] = (
+    "chapters", "manifest.json", "memory.json", "pipeline.json", "project.json",
+)
 
 
 @dataclass(frozen=True)

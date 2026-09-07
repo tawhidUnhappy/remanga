@@ -1,5 +1,6 @@
-"""The deletions themselves: restart (fixed presets) and wipe (keep any
-combination), plus the shared post-delete bookkeeping both need."""
+"""The deletions themselves: restart (fixed presets), wipe (keep any
+combination) and wipe_project (the whole project at once), plus the shared
+post-delete bookkeeping they need."""
 
 from __future__ import annotations
 
@@ -10,7 +11,7 @@ from typing import List
 from remanga.console import console
 from remanga.json_io import write_json
 from remanga.paths import get_chapter_dir, get_manifest_path, read_manifest
-from remanga.reset.entries import restart_candidates, wipeable_entries
+from remanga.reset.entries import project_wipe_candidates, restart_candidates, wipeable_entries
 
 
 def _delete_all(entries: List[Path]) -> None:
@@ -94,9 +95,38 @@ def wipe_chapter(
     return candidates
 
 
+def wipe_project(project_name: str) -> List[Path]:
+    """Deletes every generated artifact in the whole project in one sweep -
+    audio/, video/, panels_zip/ and every other directory under
+    projects/{manga}/ - keeping only PROJECT_KEEP (chapters/ and the
+    project's own metadata files). Returns the paths that were removed.
+
+    Not expressible as a loop of wipe_chapter over every chapter, which is
+    why it exists: wipe_chapter only ever looks at directories named after
+    one chapter, so a "start completely clean" built out of it leaves behind
+    everything that isn't filed under a chapter in the run - the full-recap
+    join's own _work/ (a half-gigabyte master WAV and a concat list, both
+    pointing at frames that are about to be deleted) and its finished MP4,
+    the artifact directories of chapters not included this time, and any
+    directory from a kind or a layout that isn't produced any more. Those
+    are precisely the stale files a regenerate is run to get rid of.
+
+    Downloads are deliberately NOT re-verified here, unlike wipe_chapter:
+    pages/ lives inside chapters/ and is never touched by this, and a
+    caller rebuilding several chapters re-verifies each one as it reaches
+    it (see full_recap.FullRecapCompiler._ensure_chapter_video) rather than
+    paying for a whole project's worth of MangaDex checks up front."""
+    candidates = project_wipe_candidates(project_name)
+    _delete_all(candidates)
+    return candidates
+
+
 def reverify_chapter_downloads(project_name: str, chapter_num: str) -> None:
     """Re-checks (and re-fetches if needed) this chapter's downloaded pages,
     exactly the way every normal pipeline run's download step already does.
+    Called by both chapter resets above and by a regenerate-all compile, so
+    its failure message says what is true for all of them - the pages
+    already on disk are left alone - rather than naming any one of them.
     Deferred imports dodge a config/downloader/reset import cycle, the same
     pattern webui/detection.py uses for its magi_assist import."""
     from remanga.config import RemangaConfig
@@ -107,6 +137,6 @@ def reverify_chapter_downloads(project_name: str, chapter_num: str) -> None:
         MangaDexDownloader(config.downloader).download_chapter(None, chapter_num, project_name)
     except Exception as e:
         console.print(
-            f"[yellow]Reset finished, but re-verifying downloaded pages failed: {e}[/]\n"
-            f"[dim]The chapter reset is still in effect - run the download step again when you can.[/]"
+            f"[yellow]Couldn't re-verify chapter {chapter_num}'s downloaded pages: {e}[/]\n"
+            f"[dim]The pages already on disk are untouched - run the download step again when you can.[/]"
         )

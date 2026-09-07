@@ -174,7 +174,7 @@ Picking a category opens its commands, and running one lands you back in the sam
 
 | Question | Where the answer comes from instead |
 | --- | --- |
-| Which chapter? | The chapters this project has, each row showing its production status; "New chapter…" suggests the next number |
+| Which chapter? | The chapters this project has, each row showing its production status; "New chapter…" is pre-filled with the first chapter **MangaDex lists that you don't have yet** — not "one more than your newest", which is the same number only for gapless whole-number manga (a project on 4.1 needs 4.2, not 5.1) |
 | Which manga/URL? | `project.json`'s saved source — asked once, on the first download |
 | Which way does it read? | MangaDex's `originalLanguage` (`ja` → right-to-left, `ko`/`zh` → left-to-right) |
 | Which engine / voice / music this run? | Not asked at all — what's configured is stated and used. All three are set once and kept, so `--engine`/`--voice`/`--bgm` cover the rare one-off and the settings screens cover a permanent change |
@@ -486,6 +486,20 @@ Two commands - both reachable from `remanga interactive`'s project-picker menu (
 ./run.sh full-recap --project "my_manga" [--chapters 1,2,3] [--force]
 ```
 It runs each chapter's remaining TTS/mix/render steps (skipping whatever's already cached) and **keeps every chapter's own MP4** — under `video/chapter_<num>/` — then builds the joined video separately: one continuous narration track, ONE background-music loop under the whole thing (a single fade-in at the very start, a single fade-out at the very end — never restarted per chapter), and ONE loudness-normalization pass, so there's no audible BGM restart or loudness jump at a chapter boundary the way naively concatenating N independently-mixed chapter videos would produce. The result lands at `video/<project>_full_recap.mp4`.
+
+Add `--regenerate-all` (the wizard asks it as *"Delete every generated file in this project and rebuild from scratch?"*) to start genuinely clean. It is the one destructive option here: **before any chapter is touched, every generated folder in the whole project is deleted** — `audio/`, `video/`, `panels_zip/`, `sheets/`, anything else that's accumulated there — and only these survive:
+
+```
+projects/<manga>/
+├── chapters/       # pages/, crops.json, narration.json — downloaded or hand-authored
+├── project.json    # manga source + this project's remembered choices
+├── memory.json     # the LLM's story continuity
+└── manifest.json   # production bookkeeping + the cached MangaDex chapter list
+```
+
+Then every chapter is rebuilt from that: pages re-verified (anything missing re-fetched), panels re-cropped, voice re-synthesized, re-mixed, re-rendered, re-joined. `--regenerate-all` implies `--force`, and everything it is about to delete is listed before it happens.
+
+Wiping the **whole project** up front, rather than each chapter as the compile reaches it, is the point. A per-chapter wipe can only delete folders named after a chapter in the run, so it always leaves the join's own `video/_work/` (a master WAV that can run to hundreds of MB, plus a concat list pointing at frames that are about to be deleted), the previous joined MP4, the artifacts of any chapter you excluded with `--chapters`, and any folder from an output format you've since turned off. Those are exactly the stale files you ran a regenerate to be rid of — so note that this **does** clear chapters outside `--chapters` too; it means the whole project, not the selection.
 
 **`remix`** is the fast path once you've already rendered something and just want different music or a different volume:
 ```bash

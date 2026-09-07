@@ -24,7 +24,7 @@ from remanga.commands.spec import (
 from remanga.config.tts import TTS_ENGINE_SPECS, TTS_ENGINES
 from remanga.narration import NARRATION_FILE_MODES, TEMPLATE
 from remanga.pipeline import STEP_REGISTRY
-from remanga.reset import RESTART_MODES
+from remanga.reset import PROJECT_KEEP, RESTART_MODES
 from remanga.settings.assets import ASSET_BY_KEY, asset_relevant, asset_status, edit_asset
 from remanga.settings.sections import SECTION_BY_KEY
 from remanga.settings.vision import package_switch_names
@@ -108,6 +108,10 @@ VIDEO_SETUP: Tuple[SetupAction, ...] = (
 )
 
 _STEP_NAMES = ", ".join(step.name for step in STEP_REGISTRY)
+# The project-root metadata files a whole-project wipe keeps, named from the
+# keep-list itself rather than retyped, so --regenerate-all's help can't end
+# up describing a different set than reset.wipe_project actually preserves.
+_PROJECT_KEEP_FILES = ", ".join(name for name in PROJECT_KEEP if name.endswith(".json"))
 _RESTART_MODE_HELP = ". ".join(f"{mode.name}: {mode.summary}" for mode in RESTART_MODES)
 _DEFAULT_KEEP_TEXT = ", ".join(sorted(DEFAULT_WIPE_KEEP))
 
@@ -392,14 +396,18 @@ COMMAND_REGISTRY: List[Command] = [
                   prompt="Chapters to include"),
             force_param("Force a full recompile even if already compiled"),
             Param("regenerate_all", ["--regenerate-all"], type="bool", default=False,
-                  help="DELETES every generated artifact for each included chapter (panels, voice "
-                       "clips, mixed audio, frames, the chapter MP4), then rebuilds all of it from "
+                  help="DELETES every generated file in the WHOLE PROJECT first - audio/, video/, "
+                       "panels_zip/ and every other generated folder under it, including the "
+                       "full-recap join's own working files, the previous joined MP4, and the "
+                       "artifacts of chapters not included in this run - then rebuilds from "
                        "scratch: pages re-verified/re-fetched, panels re-cropped, voice "
-                       "re-synthesized, re-mixed, re-rendered and re-joined. Only crops.json "
-                       "(panel marks), narration.json and pages/ survive - nothing else can "
-                       "rebuild those. Implies --force.",
-                  prompt="Delete all generated files and rebuild from scratch? "
-                         "(keeps only crops.json, narration.json and pages)"),
+                       "re-synthesized, re-mixed, re-rendered and re-joined. Only the chapters/ "
+                       "source tree (pages, crops.json, narration.json) and the project's own "
+                       f"{_PROJECT_KEEP_FILES} survive - nothing else can rebuild those. "
+                       "Everything about to be deleted is listed before it happens. Implies "
+                       "--force.",
+                  prompt="Delete every generated file in this project and rebuild from scratch? "
+                         "(keeps only chapters/ and the project's own json files)"),
         ],
         category="Project-wide",
         detail="one BGM pass and one render for the whole manga - both configured below",

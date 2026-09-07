@@ -20,25 +20,19 @@ from typing import List, Optional
 from remanga.audio.mix import AudioProcessor
 from remanga.audio.tts import TTSEngine
 from remanga.config import RemangaConfig
-from remanga.console import console, escape as _esc
+from remanga.console import console, display_path, escape as _esc
 from remanga.cropper import CoordinateCropper
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.full_recap.discovery import discover_chapters
 from remanga.full_recap.timeline import assemble_combined_audio
 from remanga.humanize import fmt_duration
 from remanga.paths import get_chapter_dir, get_final_video_path, get_full_recap_concat_path, get_full_recap_video_path
-from remanga.reset import wipe_chapter
+from remanga.reset import (
+    PROJECT_KEEP, project_wipe_candidates, reverify_chapter_downloads, wipe_project,
+)
 from remanga.settings.project_prefs import cropper_config_for
 from remanga.video.compose import FrameCompositor
 from remanga.video.render import VideoRenderer
-
-# What survives a --regenerate-all pass, and the only things that do:
-# crops.json (panel marks) and narration.json (the narration script) can't
-# be rebuilt from anything else remanga has, and pages/ is kept rather than
-# re-fetched from zero - wipe_chapter's reverify_downloads still re-checks
-# it and pulls anything missing, so "redownload or verify" ends up correct
-# either way without throwing away hundreds of MB of already-correct scans.
-REGENERATE_KEEP = ("pages", "crops.json", "narration.json")
 
 
 class FullRecapCompiler:
@@ -54,6 +48,37 @@ class FullRecapCompiler:
         self._mixer = AudioProcessor(self.config.audio)
         self._compositor = FrameCompositor(self.config.video)
         self._renderer = VideoRenderer(self.config.system, self.config.video)
+
+    def _wipe_generated(self, project_name: str) -> None:
+        """The regenerate-all delete: every generated artifact in the
+        project, in one sweep, listed BEFORE it happens and counted after.
+
+        Listed first for the same reason remanga.reset.entries exists: this
+        deletes a whole project's worth of output, and "here is what went"
+        printed afterwards is not something anyone can object to in time.
+        The list is printed from project_wipe_candidates and the deletion
+        re-derives it, exactly as the interactive wipe commands do (see
+        commands/handlers/cleanup.py), so the two can't describe different
+        sets - and the count reported at the end is what was actually
+        removed, not what was predicted."""
+        candidates = project_wipe_candidates(project_name)
+        if not candidates:
+            console.print(
+                f"[dim]Nothing generated to delete for '{project_name}' - "
+                f"starting from an already-clean project.[/]"
+            )
+            return
+
+        console.print(
+            f"[bold red]Regenerating from scratch - permanently deleting every generated "
+            f"file in '{project_name}':[/]"
+        )
+        for item in candidates:
+            console.print(f"  [dim]- {display_path(item)}[/]")
+        console.print(f"[dim]Kept: {', '.join(PROJECT_KEEP)}.[/]")
+
+        removed = wipe_project(project_name)
+        console.print(f"[bold green]✓ Deleted {len(removed)} item(s) - rebuilding from source.[/]")
 
     def _ensure_chapter_video(
         self, project_name: str, chapter_num: str, force: bool, *,
@@ -73,10 +98,13 @@ class FullRecapCompiler:
         compile_full_manga's regenerate_all for the one caller that sets
         them, wiping out TTS/mix's own staleness caching on purpose.
 
-        regenerate_all additionally re-verifies/fills in this chapter's
-        pages (MangaDexDownloader's own idempotent check - never a forced
-        wipe, just "is everything that should be here actually here") and
-        re-crops panels/ from crops.json before any of that - the two
+        regenerate_all does no deleting of its own - compile_full_manga
+        already wiped the entire project clean in one sweep before the
+        first chapter (see its docstring and reset.wipe_project). What it
+        does here is refill this chapter from the source that survived:
+        re-verify/fill in its pages (MangaDexDownloader's own idempotent
+        check - never a forced wipe, just "is everything that should be
+        here actually here") and re-crop panels/ from crops.json. The two
         regenerable prerequisites narration.json and crops.json themselves
         are never touched, only what's built FROM them."""
         chapter_dir = get_chapter_dir(project_name, chapter_num)
@@ -84,28 +112,13 @@ class FullRecapCompiler:
         narration_path = chapter_dir / "narration.json"
 
         if regenerate_all:
-            # A real delete, not a regenerate-over-the-top: panels/, the
-            # per-panel voice clips, audio_timing.json, master_audio.wav,
-            # the composited frames and the chapter's own MP4 all go, so
-            # nothing stale from a previous run can survive into this one
-            # (an orphaned clip for a panel that no longer exists after a
-            # re-crop, a frame from an older resolution). Only crops.json
-            # and narration.json - hand-authored/LLM-written, not
-            # regenerable from anything else - plus pages/ are kept, and
-            # reverify_downloads re-checks/re-fetches pages right after.
-            removed = wipe_chapter(
-                project_name, chapter_num, keep_names=set(REGENERATE_KEEP), reverify_downloads=True,
-            )
-            if removed:
-                # Named by kind, not by p.name: every generated directory for
-                # a chapter is literally called "chapter_<n>", so listing bare
-                # names printed "panels, chapter_3.2, chapter_3.2, chapter_3.2"
-                # and said nothing about which three.
-                names = [p.name if p.parent.name.startswith("chapter_") else f"{p.parent.name}/" for p in removed]
-                console.print(
-                    f"[yellow]Chapter {chapter_num}: deleted {len(removed)} generated item(s)[/] "
-                    f"[dim]({', '.join(names)}) - keeping {', '.join(sorted(REGENERATE_KEEP))}[/]"
-                )
+            # Nothing to delete here - _wipe_generated already took the whole
+            # project down to its source before the first chapter. Pages are
+            # re-verified (and anything missing re-fetched) first, then
+            # panels/ is re-cropped with force=True, which clears panels/
+            # itself before writing, so a panel dropped by a re-mark can't
+            # survive the re-crop that follows it.
+            reverify_chapter_downloads(project_name, chapter_num)
             CoordinateCropper(cropper_config_for(self.config, project_name)).crop_chapter_from_json(
                 project_name, chapter_num, force=True
             )
@@ -139,18 +152,31 @@ class FullRecapCompiler:
         video/render.py) still catches any chapter that's actually stale.
 
         regenerate_all is the stronger, separate "start over from scratch"
-        option, and the only genuinely DESTRUCTIVE one here: every included
-        chapter is wiped down to REGENERATE_KEEP first (see
-        _ensure_chapter_video), deleting panels/, the per-panel voice clips,
-        audio_timing.json, master_audio.wav, the composited frames and the
-        chapter's own MP4 - then pages are re-verified/re-fetched, panels
-        re-cropped, and voice/mix/render/join all rebuilt from nothing.
-        Deleting rather than regenerating over the top is the point: it's
-        what guarantees no stale artifact from a previous run survives (an
-        orphaned clip for a panel a re-crop removed, a frame at an older
-        resolution). Only crops.json, narration.json and pages/ survive.
-        Implies force=True and force_chapters=True regardless of what was
-        passed for them."""
+        option, and the only genuinely DESTRUCTIVE one here. Before any
+        chapter is touched, the WHOLE PROJECT is wiped down to
+        reset.PROJECT_KEEP in one sweep (see _wipe_generated): audio/,
+        video/, panels_zip/ and every other generated directory under
+        projects/{manga}/ go, including the join's own _work/ master WAV
+        and concat list, the previous full-recap MP4, and the artifacts of
+        chapters not even included in this run. Only chapters/ (pages,
+        crops.json, narration.json) and the project's metadata files
+        survive. Then each chapter is rebuilt from that source: pages
+        re-verified/re-fetched, panels re-cropped, voice re-synthesized,
+        re-mixed, re-rendered, re-joined.
+
+        Wiping the whole project up front, rather than each chapter as the
+        loop reaches it, is the point of the mode. A per-chapter wipe can
+        only ever delete directories named after a chapter in the run, so
+        everything else - the join's working files (a half-gigabyte WAV
+        and a concat list pointing at frames that are about to be deleted),
+        the old joined MP4, artifacts of excluded chapters, a directory
+        from a kind no longer produced - survives a "regenerate everything"
+        and goes on to be mistaken for current. Deleting rather than
+        overwriting is the other half: it is what guarantees no stale
+        artifact from a previous run can be picked up (an orphaned voice
+        clip for a panel a re-crop removed, a frame at an older
+        resolution). Implies force=True and force_chapters=True regardless
+        of what was passed for them."""
         if regenerate_all:
             force = True
             force_chapters = True
@@ -160,6 +186,14 @@ class FullRecapCompiler:
         chapter_list = chapters or discover_chapters(project_name)
         if not chapter_list:
             raise FileNotFoundError(f"No chapters found for project '{project_name}'.")
+
+        # Before anything else asks for a generated path - get_generated_dir
+        # creates the directories it hands out, so a wipe run after this
+        # point would delete folders the run had already made and is about
+        # to write into.
+        if regenerate_all:
+            self._wipe_generated(project_name)
+
         final_video = get_full_recap_video_path(project_name, chapter_list[0], chapter_list[-1])
 
         if not force and final_video.exists() and final_video.stat().st_size > 1000:
