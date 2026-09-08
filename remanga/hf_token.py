@@ -1,5 +1,5 @@
 """Optional Hugging Face token, shared by every model download in remanga
-(Kokoro-82M, MAGI v3, LightOnOCR-2) - config.json's
+(Kokoro-82M, MAGI v3, DeepSeek-OCR-2) - config.json's
 `system.hf_token_path` points at a small JSON file:
 
     {"token": "hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}

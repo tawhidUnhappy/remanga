@@ -105,10 +105,12 @@
     }
   },
   "ocr": {
-    "hf_repo_id": "lightonai/LightOnOCR-2-1B",
-    "model_dir": "checkpoints/lighton_ocr_2_1b",
-    "prompt": "",
-    "max_new_tokens": 512
+    "hf_repo_id": "deepseek-ai/DeepSeek-OCR-2",
+    "model_dir": "checkpoints/deepseek_ocr_2",
+    "prompt": "<image>\nFree OCR.",
+    "base_size": 1024,
+    "image_size": 768,
+    "crop_mode": true
   },
   "audio": {
     "sample_rate": 44100,

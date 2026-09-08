@@ -45,7 +45,7 @@ def create_writer_app(state: WriterState, config: WriterConfig, project_name: st
 
     @app.post("/api/ocr/<path:panel_id>")
     def ocr_panel(panel_id: str):
-        """Runs LightOnOCR-2 on one panel's cropped image and hands back the
+        """Runs DeepSeek-OCR-2 on one panel's cropped image and hands back the
         recognized text - the frontend offers it as a starting draft to edit,
         never auto-overwrites whatever's already typed (see app.js). First
         call in a session pays the model-load (and, if the weights aren't

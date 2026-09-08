@@ -29,7 +29,7 @@ TOOLS_DIR="$SCRIPT_DIR/.tools"
 VENV_DIR="$SCRIPT_DIR/.venv"
 KOKORO_VENV_DIR="$TOOLS_DIR/venv-kokoro"
 MAGI_VENV_DIR="$TOOLS_DIR/venv-magi"
-LIGHTON_OCR_VENV_DIR="$TOOLS_DIR/venv-lighton-ocr"
+DEEPSEEK_OCR_VENV_DIR="$TOOLS_DIR/venv-deepseek-ocr"
 
 WARNINGS=()
 
@@ -200,7 +200,7 @@ fi
 # ---------------------------------------------------------------------------
 # One lightweight main env plus one per heavy ML dependency, tucked under
 # .tools/. Their requirements genuinely conflict - MAGI v3 needs
-# transformers<4.52 and LightOnOCR-2 needs >=5.0, and nothing guarantees
+# transformers<4.52 and DeepSeek-OCR-2 pins ==4.46.3, and nothing guarantees
 # any two of them would ever agree on one resolution - so separate
 # environments buy permanent isolation instead of a pin that has to be
 # re-verified by hand every time one tool's install could clobber another's.
@@ -251,18 +251,27 @@ else
     warn "could not create the MAGI v3 environment"
 fi
 
-say "Creating LightOnOCR-2 environment [$REMANGA_TORCH_BACKEND wheels]..."
-if make_venv "$LIGHTON_OCR_VENV_DIR"; then
-    # transformers>=5.0 is a hard requirement, not a preference: LightOnOCR-2
-    # is supported natively there (LightOnOcrForConditionalGeneration /
-    # LightOnOcrProcessor) and simply does not exist in 4.x. This is also
-    # exactly why it gets its own environment - MAGI v3 pins
-    # transformers<4.52, so the two could never share one resolution.
-    try_step "LightOnOCR-2 install" \
-        "$UV" pip install --python "$LIGHTON_OCR_VENV_DIR" "${TORCH_ARGS[@]}" \
-        torch "transformers>=5.0.0" accelerate pillow huggingface-hub safetensors
+say "Creating DeepSeek-OCR-2 environment [$REMANGA_TORCH_BACKEND wheels]..."
+if make_venv "$DEEPSEEK_OCR_VENV_DIR"; then
+    # transformers is pinned exactly, torch is not. The model card pins both
+    # (transformers==4.46.3, torch==2.6.0), but the pins are not equally
+    # load-bearing: the pinned transformers is what the model's own
+    # trust_remote_code modeling code is written against, while torch 2.6
+    # simply is not in the wheel index this machine resolves to (cu129 jumps
+    # from <2.6 to >2.7), so honouring it would mean installing CUDA wheels
+    # built for a different machine. einops/addict/easydict are undeclared
+    # imports that modeling code needs.
+    #
+    # flash-attn is deliberately absent. The card uses it, but it is a long,
+    # fragile CUDA extension build and transformers falls back to its own
+    # attention without it - the same reasoning that keeps every other
+    # optional kernel build out of a first run.
+    try_step "DeepSeek-OCR-2 install" \
+        "$UV" pip install --python "$DEEPSEEK_OCR_VENV_DIR" "${TORCH_ARGS[@]}" \
+        torch "transformers==4.46.3" "tokenizers==0.20.3" einops addict easydict \
+        accelerate pillow huggingface-hub safetensors
 else
-    warn "could not create the LightOnOCR-2 environment"
+    warn "could not create the DeepSeek-OCR-2 environment"
 fi
 
 # ---------------------------------------------------------------------------

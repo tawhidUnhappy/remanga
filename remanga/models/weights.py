@@ -14,7 +14,7 @@ class ModelManager:
     isolated `.tools/venv-<tool_name>` environment's modelscope/huggingface_hub
     install (those packages aren't part of the main env - see remanga/venvs.py).
 
-    Generic across every model remanga fetches (Kokoro-82M, LightOnOCR-2,
+    Generic across every model remanga fetches (Kokoro-82M, DeepSeek-OCR-2,
     ...) - what differs is just which isolated venv talks to the Hub, which
     download script it runs, and which files on disk prove the download
     actually finished; everything else (skip-if-present check, the status
@@ -65,7 +65,7 @@ class ModelManager:
         # stalled ("Downloading..." and then nothing) even though the
         # download is progressing fine underneath. Same reasoning every
         # worker subprocess spawn elsewhere already applies (kokoro_worker/
-        # kokoro_worker/lighton_ocr_worker's own -u flag).
+        # kokoro_worker/deepseek_ocr_worker's own -u flag).
         cmd = [str(python), "-u", str(script), str(self.model_dir.resolve()), self.repo_id]
         if token:
             cmd.append(token)

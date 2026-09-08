@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Shared post-download SHA256 verification, used by every standalone weight
 downloader in this repo (download_kokoro.py,
-download_lighton_ocr.py, and webui/scripts/download_magi.py).
+download_deepseek_ocr.py, and webui/scripts/download_magi.py).
 
 Why this exists: huggingface_hub's own snapshot_download() only checks that
 each downloaded file's *size* matches what the server reported ("Consistency
@@ -46,7 +46,7 @@ def _sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
 
 def _resolve_local_path(model_dir: str, rfilename: str, cache_layout: bool) -> Path | None:
     """Finds where `rfilename` actually landed on disk. `local_dir=` downloads
-    (kokoro/lighton_ocr) put it directly at model_dir/rfilename.
+    (kokoro/deepseek_ocr) put it directly at model_dir/rfilename.
     `cache_dir=` downloads (magi) put the real blob under
     <model_dir>/models--<org>--<repo>/blobs/<hash>, symlinked from
     snapshots/<revision>/rfilename - os.path.realpath() follows that straight

@@ -145,7 +145,7 @@ bash bootstrap.sh
    - `.tools/venv-kokoro/` — PyTorch + Kokoro and its misaki/spaCy G2P stack.
    - `.tools/venv-magi/` — PyTorch + MAGI v3's own pinned dependencies (including a `transformers` capped below its DaViT-breaking `4.52`).
 
-MAGI v3 pins `transformers<4.52` and LightOnOCR-2 needs `>=5.0` — separate environments mean neither can ever silently break the other. The main env only ever talks to them as subprocesses (see `remanga/venvs.py`); the storage trade-off buys permanent isolation instead of a pin that has to be babysat.
+MAGI v3 pins `transformers<4.52` and DeepSeek-OCR-2 pins `==4.46.3` — separate environments mean neither can ever silently break the other. The main env only ever talks to them as subprocesses (see `remanga/venvs.py`); the storage trade-off buys permanent isolation instead of a pin that has to be babysat.
 3. Turbo-downloads official `hexgrad/Kokoro-82M` weights into `checkpoints/kokoro_82m` and `ragavsachdeva/magiv3` weights into `checkpoints/magiv3`.
 5. Initializes default `config.json`.
 
@@ -830,7 +830,7 @@ remanga/
 │   ├── cropper/                # crop.py (coordinate cropper), sheets.py, gutter/ (edge snapping), ...
 │   ├── downloader/             # mangadex.py (MangaDex client) & resolve.py (id/title/language lookup)
 │   ├── models/                 # weights.py (talks to the isolated venvs to fetch/verify weights)
-│   │   └── scripts/             # download_kokoro.py, download_lighton_ocr.py
+│   │   └── scripts/             # download_kokoro.py, download_deepseek_ocr.py
 │   ├── webui/                  # Panel Marker: server.py (entry point/lifecycle), routes.py (Flask app/API),
 │   │   │                       # marker_state.py (session state), detection.py + magi_assist.py (MAGI v3),
 │   │   │                       # shortcuts_store.py (Shortcuts menu persistence)

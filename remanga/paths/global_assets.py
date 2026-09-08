@@ -61,7 +61,7 @@ def ensure_hf_token_file() -> Path:
             "token": "",
             "_hint": "Optional - paste a Hugging Face access token here (https://huggingface.co/settings/tokens, "
                      "'Read' scope is enough) to raise the Hub's per-IP rate limit/speed on model downloads "
-                     "(Kokoro-82M, MAGI v3, LightOnOCR-2). Leave \"token\" blank to keep "
+                     "(Kokoro-82M, MAGI v3, DeepSeek-OCR-2). Leave \"token\" blank to keep "
                      "downloading unauthenticated - nothing breaks either way.",
         }
         p.write_text(json.dumps(placeholder, indent=2) + "\n", encoding="utf-8")

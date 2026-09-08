@@ -1,5 +1,5 @@
 """Locates the isolated per-tool virtualenvs bootstrap.sh provisions
-(`.tools/venv-kokoro`, `.tools/venv-magi`, `.tools/venv-lighton-ocr`, ...) and
+(`.tools/venv-kokoro`, `.tools/venv-magi`, `.tools/venv-deepseek-ocr`, ...) and
 their standalone worker scripts - one dependency-isolated environment per
 heavy ML engine so their conflicting library pins never have to share one
 Python process. See remanga/audio/synth/ and remanga/webui/magi_assist.py

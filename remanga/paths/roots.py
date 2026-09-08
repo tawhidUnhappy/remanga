@@ -23,7 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 BIN_DIR = REPO_ROOT / "bin"
 UV_BIN = BIN_DIR / "uv"
 
-# Isolated per-tool virtualenvs (kokoro, magi, lighton-ocr, ...) bootstrap.sh
+# Isolated per-tool virtualenvs (kokoro, magi, deepseek-ocr, ...) bootstrap.sh
 # provisions alongside the main .venv - see remanga/paths/tools.py.
 TOOLS_DIR = REPO_ROOT / ".tools"
 

@@ -18,7 +18,7 @@ pure local experiments the user didn't ask to keep.
 ## Layout in one pass
 
 ```
-.venv, .tools/venv-{kokoro,magi,lighton-ocr}  # 4 hermetic uv venvs, own torch/transformers pin each
+.venv, .tools/venv-{kokoro,magi,deepseek-ocr}  # 4 hermetic uv venvs, own torch/transformers pin each
 remanga/                                     # package: json_io.py, ffmpeg_io.py, proc_io.py, humanize.py, pipeline.py, hardware.py, ...
   tui/                                       # arrow-key menus (select/multiselect/confirm) + non-tty fallback
   commands/{spec,selection,registry,categories,setup_rows,help_text}.py + catalog/{setup,chapter,project}.py + handlers/{setup,chapter,project,cleanup}.py
@@ -159,47 +159,62 @@ see branch `legacy/indextts-audio8` for what they did.
   bootstrap.sh does.
 - Native rate 24 kHz (not 22.05k) - see the resampling note further down.
 
-## LightOnOCR-2 (`config.json` → `ocr`) - powers the Narration Writer's OCR button
+## DeepSeek-OCR-2 (`config.json` → `ocr`) - powers the Narration Writer's OCR button
 
-`lightonai/LightOnOCR-2-1B` weights download via `remanga setup-models`
-(`config/ocr.py`, `models/scripts/download_lighton_ocr.py`, via
+`deepseek-ai/DeepSeek-OCR-2` (Apache-2.0, ~3B, ~6.8GB) downloads via
+`remanga setup-models` (`config/ocr.py`,
+`models/scripts/download_deepseek_ocr.py`, via
 `OCREngine(config.ocr).model_manager` - `commands.py:_h_setup_models` reuses
 `OCREngine`'s own `ModelManager` rather than building a second one), into
-`checkpoints/lighton_ocr_2_1b`, with its own isolated
-`.tools/venv-lighton-ocr` (provisioned in `bootstrap.sh` with a real
-torch/transformers inference stack, not download-only).
+`checkpoints/deepseek_ocr_2`, with its own isolated `.tools/venv-deepseek-ocr`.
 
-Replaced DeepSeek-OCR-2, whose API this repo never verified - the old worker
-guessed `.infer()` from the v1 model card and carried a fallback for reading
-whatever file it might have written. **LightOnOCR-2 is supported natively in
-transformers** (`LightOnOcrForConditionalGeneration` / `LightOnOcrProcessor`,
-no `trust_remote_code`), so the worker calls a documented API.
+This repo drove LightOnOCR-2 for exactly one day in between; it was replaced
+on preference. Its worker/downloader are in git history if wanted.
 
-- **transformers>=5.0 is a hard requirement** - the classes do not exist in
-  4.x. This is also why it must stay in its own venv: MAGI v3 pins <4.52.
-- ~1B params, Apache-2.0, Pixtral vision encoder + Qwen3 decoder.
-- The chat template takes an image with **no text turn at all** for plain
-  page parsing; `ocr.prompt` defaults to `""` and is only appended when
-  non-empty. An empty text turn is NOT the same as no text turn.
-- `generate()` returns the prompt prepended - slice
-  `output_ids[0, inputs["input_ids"].shape[1]:]` before decoding, or the UI
-  gets the chat scaffolding back as if it were panel text.
-- bf16 on CUDA, float32 elsewhere (bf16 isn't reliable on MPS/CPU).
-- **Download with `ignore_patterns`, never `allow_patterns`.** An extension
-  allowlist silently skipped `chat_template.jinja` (not .json/.safetensors/
-  .txt/.model); the model then loaded fine and died on the first page with
-  "this processor does not have a chat template". Exclude the few things you
-  don't want, don't try to enumerate what you do.
-- **The model cannot be prompted out of its document habits.** Measured: an
-  explicit "plain text only, no LaTeX, no description" prompt changed the
-  LaTeX not at all and made the image descriptions *worse* (added a
-  `![image](...)` tag). It is a distilled document parser, not an
-  instruction-following VLM. `ocr.prompt` defaults to `""` for that reason;
-  the fix is post-processing (`ocr/cleanup.py`), which strips LaTeX-wrapped
-  sound effects (`$\frac{2}{7}\text{Gulp...}$`), markdown image tags and
-  "Note: The image contains..." asides.
-- Cleanup keeps punctuation-only lines on purpose - `...` is a real manga
-  bubble, and unwrapping already empties lines that held only LaTeX.
+- **`transformers==4.46.3` is pinned exactly, torch is NOT.** The card pins
+  both, but the pins are not equally load-bearing: pinned transformers is
+  what the `trust_remote_code` modeling code is written against, whereas
+  torch 2.6 is simply absent from the index this machine resolves to (cu129
+  jumps <2.6 -> >2.7). Honouring the torch pin would mean installing wheels
+  built for a different machine. Verified: 4.46.3 + torch 2.13.0+cu129
+  resolves and loads.
+- **The API is `model.infer(tokenizer, prompt=, image_file=, output_path=,
+  base_size=1024, image_size=768, crop_mode=True, save_results=True)`** -
+  confirmed against the v2 card. An older version of the worker guessed this
+  from the v1 card and flagged itself as unverified; the guess was right
+  except `image_size`, which is 768 not 640.
+- **flash-attn deliberately not installed** even though the card uses it -
+  long fragile CUDA extension build, and transformers falls back on its own
+  attention. Same policy as every other optional kernel build.
+- **`einops`/`addict`/`easydict` are undeclared imports** the remote modeling
+  code needs; installing them up front saves an auto-heal round trip.
+- **Pass `torch_dtype` AND `low_cpu_mem_usage=True` at load.** The model
+  card's `.from_pretrained(...).cuda().to(torch.bfloat16)` casts too late:
+  without a dtype, transformers stages all ~3B params in float32 in SYSTEM
+  RAM (~12GB) before moving them. On this 14GB machine that invoked the
+  kernel OOM killer and took the desktop down - measured, anon-rss
+  11,967,492kB at the kill. The GPU was never the constraint. Asking for
+  bfloat16 up front halves it; the worker also preflights MemAvailable and
+  refuses below 8GB rather than letting the OOM killer choose a victim.
+- **Don't cap the test with `ulimit -v`.** CUDA reserves tens of GB of
+  virtual address space it never touches (30GB virtual vs 12GB resident in
+  that same OOM record), so a virtual cap kills a healthy process with
+  "Cannot allocate memory (os error 12)". Watch/limit RSS instead.
+- **It answers a picture-only panel in Chinese**: "（图中无可辨识的文字）"
+  ("no recognizable text in the image") instead of returning nothing.
+  `ocr/cleanup.py` strips it. Unlike LightOnOCR it does NOT emit LaTeX, but
+  it does transliterate stylized sound effects as Japanese katakana.
+- Prompt presets: `"<image>\nFree OCR."` (used - text only) and
+  `"<image>\n<|grounding|>Convert the document to markdown."` (layout markup,
+  meaningless for a speech bubble).
+
+**OCR output needs cleaning either way** (`ocr/cleanup.py`). Document-OCR
+models treat a manga panel as a page: LightOnOCR wrapped sound effects as
+LaTeX (`$\frac{2}{7}\text{Gulp...}$`) and described the artwork when a panel
+was mostly picture. Measured then: **prompting does not fix this** - an
+explicit "plain text only, no LaTeX, no description" instruction left the
+LaTeX untouched and made descriptions worse. Cleanup keeps punctuation-only
+lines on purpose - `...` is a real manga bubble.
 
 **Hub download reliability - hard-won, keep.** `download_lighton_ocr.py` is
 deliberately simple (retry `snapshot_download()` up to 3x, HF Hub only), but

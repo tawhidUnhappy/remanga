@@ -1,9 +1,12 @@
-"""Turns LightOnOCR-2's document-parsing output into plain panel text.
+"""Turns a document-OCR model's output into plain panel text.
 
-The model is distilled for parsing document *pages*, and a manga panel is not
-one. Two habits come from that and neither is fixable by prompting - measured
-on real panels, an explicit "plain text only, no LaTeX, no description"
-instruction changed nothing about the LaTeX and made the descriptions worse:
+These models are trained to parse document *pages*, and a manga panel is not
+one. Two habits come from that, and neither is fixable by prompting - measured
+on real panels with LightOnOCR-2, an explicit "plain text only, no LaTeX, no
+description" instruction changed nothing about the LaTeX and made the
+descriptions worse. The examples below are its output; DeepSeek-OCR-2 is a
+document model too, so the same shapes are expected and the same stripping
+applies:
 
   - **LaTeX.** Sound effects come back wrapped as maths, because on a document
     page that is usually what a small isolated glyph cluster is:
@@ -43,6 +46,15 @@ _TEXT_WRAP_RE = re.compile(r"\\(?:text|mathrm|mathit|mathbf|textbf|textit)\s*\{(
 _LATEX_CMD_RE = re.compile(r"\\[a-zA-Z]+\s*")
 _BLANK_RUN_RE = re.compile(r"\n{3,}")
 
+# DeepSeek-OCR-2 answers a picture-only panel with a sentence ABOUT the panel,
+# in Chinese, rather than with nothing: "（图中无可辨识的文字）" - "(no
+# recognizable text in the image)". It is a status message, not a reading, and
+# left alone it lands in the Narration Writer's text box as if the panel said
+# it. Matched narrowly - fullwidth parentheses wrapping a CJK phrase that
+# contains 无 ("no/none") or 未 ("not yet") - so a panel that genuinely shows
+# a Japanese line survives.
+_CJK_NO_TEXT_RE = re.compile(r"^\s*[（(][^)）]*[无未][^)）]*[)）]\s*$", re.MULTILINE)
+
 
 def _strip_latex(text: str) -> str:
     """Unwraps `$...$` / `$$...$$` spans, keeping whatever words were inside."""
@@ -64,6 +76,7 @@ def clean_ocr_text(text: str) -> str:
     if not text:
         return ""
 
+    text = _CJK_NO_TEXT_RE.sub("", text)
     text = _MD_IMAGE_RE.sub("", text)
     text = _DESCRIPTION_RE.sub("", text)
     text = _strip_latex(text)
