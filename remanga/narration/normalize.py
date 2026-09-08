@@ -10,8 +10,8 @@ characters, SHOUTED WORDS (many front-ends spell all-caps out letter by
 letter - "SHUT UP" becomes "ess aitch you tee"), streeeetched letters, and
 raw digits (each engine reads "3,000" in its own way, and none of them ask).
 
-KEPT - everything that carries delivery. `?`, `!` and `...` are how these
-engines infer emotion and pacing when no emotion vector is sent (see
+KEPT - everything that carries delivery. `?`, `!` and `...` drive both the
+emotion classified from the text and the engine's own pacing (see
 prompts/narration.md Rule 3 and remanga/audio/synth/indextts.py), so they
 are never stripped. Runs of them collapse - "!!!" means the same as "!" to a
 model and only risks over-reading - and mixed "?!" survives intact, because

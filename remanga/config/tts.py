@@ -71,13 +71,61 @@ class IndexTTSConfig(BaseModel):
     # IndexTTS-2.5's own defaults (indextts/infer_v2_5.py's infer_generator),
     # for natural-sounding prosody - a much lower temperature/top_p sounds
     # more "consistent" but trades away natural pitch/pacing variation for a
-    # flatter, more robotic delivery. Emotion itself isn't configured here at
-    # all: audio/synth/ sends no emo_vector, so IndexTTS-2.5 infers its own
-    # emotion straight from each panel's text and punctuation (see
-    # prompts/narration.md Rule 3) - temperature/top_p just control sampling
-    # variety within whatever emotion that inference lands on.
+    # flatter, more robotic delivery. These control sampling variety only;
+    # WHICH emotion is being sampled within is use_text_emotion's job below.
     temperature: float = 0.8
     top_p: float = 0.8
+    # Whether each panel's emotion is derived from its own narration TEXT
+    # rather than cloned wholesale from spk_audio_prompt.
+    #
+    # IndexTTS-2.5 ships this off, and that default is not the no-op it
+    # looks like: with it off, infer() sets `emo_audio_prompt =
+    # spk_audio_prompt` and forces `emo_alpha = 1.0`
+    # (indextts/infer_v2_5.py), so EVERY line is read with the emotional
+    # contour of the reference clip's first 15 seconds regardless of what
+    # the text says - one flat note for a whole chapter that is anything
+    # but. Turning it on routes each panel's text through the QwenEmotion
+    # classifier bundled with the checkpoint (model_dir's
+    # qwen0.6bemo4-merge/, downloaded with the weights), and the 8-way
+    # emotion vector it returns is blended into the GPT emotion latent -
+    # so a furious panel is spoken furious and a quiet one stays quiet,
+    # which is what prompts/narration.md Rule 3 assumed all along.
+    #
+    # Costs ~1.2GB of VRAM for the classifier, held for the whole run, plus
+    # a few tens of milliseconds per panel. Set false to get the old
+    # emotion-from-the-reference-clip behaviour back on a card that can't
+    # spare it; audio/synth/indextts.py then sends nothing extra and the
+    # worker never loads the classifier at all.
+    use_text_emotion: bool = True
+    # How strongly that text-derived emotion is applied, 0.0-1.0. Passed as
+    # IndexTTS-2.5's `emo_alpha`, which scales the classifier's emotion
+    # vector before it is blended into the GPT emotion latent; whatever
+    # weight the vector does not claim stays with the emotion latent
+    # derived from spk_audio_prompt, i.e. with the narrator's own voice.
+    #
+    # Not 1.0, which is IndexTTS-2.5's own default and measurably too much
+    # for narration. Measured on this repo's narrator clip, one shouted
+    # line ("angry" 0.85 from the classifier):
+    #
+    #   emotion off      mean f0 145Hz, sd 21   (clip itself: 159Hz, sd 28)
+    #   strength 0.5     mean f0 167Hz, sd 36
+    #   strength 0.7     mean f0 179Hz, sd 35
+    #   strength 1.0     mean f0 216Hz, sd 49
+    #
+    # Emotion off is flatter than the reference clip is - that is the bug
+    # this setting exists to fix. But at 1.0 the pitch runs ~57Hz above the
+    # reference, far enough that an intense panel stops sounding like the
+    # same narrator having a strong reaction and starts sounding like
+    # somebody else shouting - the "cloning went weird" complaint arriving
+    # by a different road. 0.7 keeps nearly all the expressive range (sd 35
+    # vs 21) while holding pitch close to the narrator's own.
+    #
+    # It also protects ordinary panels: most narration classifies as
+    # "calm", and at 1.0 a calm vector claims the entire blend and reads
+    # FLATTER (sd 16) than leaving emotion off at all. Below 1.0 the
+    # narrator's own latent keeps a share, so neutral lines keep their
+    # natural movement. Ignored entirely when use_text_emotion is false.
+    text_emotion_strength: float = Field(default=0.7, ge=0.0, le=1.0)
     sample_rate: int = 22050
     # Gain applied to THIS engine's synthesized narration clips, in decibels
     # (0.0 = untouched, positive = louder). Per engine because that is where

@@ -104,6 +104,8 @@
       "use_bf16": true,
       "temperature": 0.8,
       "top_p": 0.8,
+      "use_text_emotion": true,
+      "text_emotion_strength": 0.7,
       "sample_rate": 22050,
       "volume_boost_db": 0.0
     },

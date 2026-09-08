@@ -15,11 +15,16 @@ Protocol (newline-delimited JSON, one message per line):
   Parent -> worker: {"cmd": "synthesize", "spk_audio_prompt": ..., "text": ...,
                      "lang": ..., "output_path": ..., "temperature": ...,
                      "top_p": ..., "duration_factor": ...}
-  `emo_vector` is still accepted (see below) if a future caller ever wants to
-  force a specific emotion again, but remanga/audio/synth/ deliberately
-  never sends one - with none supplied, IndexTTS-2.5 infers its own emotion
-  and prosody straight from `text`'s wording and punctuation, which is what
-  makes narration sound naturally expressive.
+  `use_emo_text` asks IndexTTS-2.5 to classify `text`'s own emotion and speak
+  it that way, `emo_alpha` scales how strongly that emotion is applied;
+  they are honoured only when this worker was started with
+  --use_qwen_emo (see main() - the classifier is a load-time cost, so a
+  request cannot turn it on after the fact). Without it IndexTTS-2.5 does
+  NOT read emotion off the text: infer_generator falls back to
+  `emo_audio_prompt = spk_audio_prompt` at `emo_alpha = 1.0`, cloning the
+  emotional contour of the reference clip's first 15 seconds onto every
+  line. `emo_vector` is also still accepted if a caller ever wants to force
+  one specific emotion, but remanga/audio/synth/ never sends one.
   Worker -> parent (once ready): {"event": "ready"}
   Worker -> parent (per request): {"ok": true} or {"ok": false, "error": "..."}
   Parent -> worker: {"cmd": "shutdown"}  (or just close stdin)
@@ -107,6 +112,7 @@ def main() -> None:
     parser.add_argument("--cfg_path", required=True)
     parser.add_argument("--model_dir", required=True)
     parser.add_argument("--use_bf16", action="store_true")
+    parser.add_argument("--use_qwen_emo", action="store_true")
     args = parser.parse_args()
 
     try:
@@ -120,6 +126,8 @@ def main() -> None:
             kwargs = {"cfg_path": args.cfg_path, "model_dir": args.model_dir}
             if "use_bf16" in sig_params:
                 kwargs["use_bf16"] = args.use_bf16
+            if args.use_qwen_emo and "use_qwen_emo" in sig_params:
+                kwargs["use_qwen_emo"] = True
             model = IndexTTS2(**kwargs)
     except Exception as e:
         send({"event": "error", "error": f"Failed to load IndexTTS: {e}"})
@@ -128,6 +136,13 @@ def main() -> None:
     send({"event": "ready"})
 
     infer_params = inspect.signature(model.infer).parameters
+    # Ask the loaded model whether the classifier is really there rather than
+    # trusting the flag: on a checkout whose __init__ has no `use_qwen_emo`,
+    # or one that declined to load it, forwarding use_emo_text anyway makes
+    # infer() raise "use_emo_text=True requires QwenEmotion" on EVERY panel.
+    # Better to quietly fall back to the reference clip's emotion than to
+    # fail a whole chapter over an optional refinement.
+    qwen_emo_ready = getattr(model, "qwen_emo", None) is not None
 
     for line in sys.stdin:
         line = line.strip()
@@ -155,6 +170,16 @@ def main() -> None:
                     call_kwargs["emo_vector"] = emo_vector
                 elif "emotion_vector" in infer_params:
                     call_kwargs["emotion_vector"] = emo_vector
+
+            if req.get("use_emo_text") and qwen_emo_ready and "use_emo_text" in infer_params:
+                call_kwargs["use_emo_text"] = True
+                # Only meaningful alongside use_emo_text: this is what scales
+                # the classifier's emotion vector (infer_generator applies it
+                # to emo_vector before blending). On the reference-audio path
+                # IndexTTS-2.5 overwrites emo_alpha with 1.0 regardless, so
+                # sending it there would just be noise.
+                if req.get("emo_alpha") is not None and "emo_alpha" in infer_params:
+                    call_kwargs["emo_alpha"] = req["emo_alpha"]
 
             has_var_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in infer_params.values())
             if req.get("temperature") is not None and ("temperature" in infer_params or has_var_kwargs):

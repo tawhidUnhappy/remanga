@@ -50,6 +50,12 @@ class IndexTTSSynthesizer(BaseWorkerSynthesizer):
         ]
         if self.engine_config.use_bf16:
             cmd.append("--use_bf16")
+        # Loading the emotion classifier is a start-up decision, not a
+        # per-request one (it costs ~1.2GB of VRAM held for the whole run),
+        # so it is a spawn flag; _build_request's use_emo_text below is only
+        # meaningful when the worker was started with this.
+        if self.engine_config.use_text_emotion:
+            cmd.append("--use_qwen_emo")
 
         return subprocess.Popen(
             cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -60,14 +66,29 @@ class IndexTTSSynthesizer(BaseWorkerSynthesizer):
         return self.tts_config.synth_timeout_seconds
 
     def _build_request(self, text: str, spk_prompt_path: str, output_wav: Path) -> dict[str, Any]:
-        """Deliberately sends no emo_vector: IndexTTS-2.5 infers its own
-        emotion/prosody straight from `text`'s own wording and punctuation
-        ("!"/"?"/"..." etc - see prompts/narration.md Rule 3) when none is
-        supplied, which is what makes narration sound naturally expressive
-        instead of a forced-flat reading of whatever the text actually
-        says. Temperature/top_p (IndexTTSConfig) are left at IndexTTS-2.5's own
-        recommended defaults for natural prosody within that inferred
-        emotion."""
+        """Asks the worker to derive this panel's emotion from `text` itself
+        (use_emo_text) rather than let IndexTTS-2.5 fall back to cloning it
+        off the reference clip.
+
+        That fallback is what happens when nothing is sent, and it is not
+        the "infers emotion from the wording and punctuation" behaviour it
+        reads like: with no emo_vector and no emo_audio_prompt,
+        infer_generator sets `emo_audio_prompt = spk_audio_prompt` and pins
+        `emo_alpha = 1.0`, so every panel in the chapter is spoken with the
+        emotional contour of the reference clip's first 15 seconds - the
+        same flat note whether the text is a battle cry or a whisper, and
+        exactly the opposite of what prompts/narration.md Rule 3 writes for.
+        Sending use_emo_text instead runs the text through the bundled
+        QwenEmotion classifier and blends its emotion vector into the GPT
+        emotion latent, so the delivery tracks what the panel actually says.
+
+        Still no explicit emo_vector: that would force one fixed emotion
+        onto every panel, which is the same flatness by another route.
+        Temperature/top_p (IndexTTSConfig) stay at IndexTTS-2.5's own
+        recommended defaults - they control sampling variety within
+        whichever emotion the classifier lands on, and emo_alpha
+        (text_emotion_strength) controls how far that emotion is allowed to
+        pull the delivery away from the narrator's own voice."""
         request: dict[str, Any] = {
             "cmd": "synthesize",
             "spk_audio_prompt": spk_prompt_path,
@@ -77,6 +98,9 @@ class IndexTTSSynthesizer(BaseWorkerSynthesizer):
             "temperature": self.engine_config.temperature,
             "top_p": self.engine_config.top_p,
         }
+        if self.engine_config.use_text_emotion:
+            request["use_emo_text"] = True
+            request["emo_alpha"] = self.engine_config.text_emotion_strength
         if abs(self.tts_config.speed - 1.0) >= 0.02:
             request["duration_factor"] = round(1.0 / self.tts_config.speed, 3)
         return request
