@@ -283,7 +283,7 @@ Just need to swap the reference voice WAV, BGM file, or the audio8 engine's tran
   "audio": {
     "sample_rate": 44100,
     "edge_fade_ms": 35,
-    "pause_between_panels_ms": 0,
+    "pause_between_panels_ms": 350,
     "bgm_enabled": false,
     "bgm_path": "",
     "bgm_volume_db": -22.0,

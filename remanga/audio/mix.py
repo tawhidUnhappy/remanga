@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 from pydub import AudioSegment
 
 from remanga import settings
+from remanga.audio.resample import load_audio
 from remanga.config import AudioConfig, RemangaConfig
 from remanga.console import console, escape as _esc
 from remanga.ffmpeg_io import run_ffmpeg
@@ -112,8 +113,12 @@ class AudioProcessor:
         # 2. Mix Background Music (BGM) if enabled
         if self.config.bgm_enabled and self.config.bgm_path and Path(self.config.bgm_path).exists():
             console.print(f"[cyan]Overlaying background music:[/] {_esc(str(self.config.bgm_path))}")
-            bgm_track = AudioSegment.from_file(self.config.bgm_path)
-            bgm_track = bgm_track.set_channels(2).set_frame_rate(self.config.sample_rate)
+            # Through resample.load_audio for the same reason the narration
+            # clips are (see audio/resample.py): BGM is rarely already at the
+            # project rate - the bundled track is 48 kHz against a 44.1 kHz
+            # project - and pydub's resampler would fold imaging noise across
+            # the whole music bed on the way down.
+            bgm_track = load_audio(Path(self.config.bgm_path), self.config.sample_rate, channels=2)
             bgm_track = bgm_track + self.config.bgm_volume_db  # Adjust volume gain
 
             # Loop BGM to match voice track length + tail

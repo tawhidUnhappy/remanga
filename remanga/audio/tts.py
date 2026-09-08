@@ -3,9 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from pydub import AudioSegment
+from pydub.silence import detect_leading_silence
 from rich.progress import BarColumn, Progress, TextColumn
 
 from remanga import settings
+from remanga.audio.resample import load_audio
 from remanga.audio.synth import create_synthesizer
 from remanga.config import AudioConfig, RemangaConfig, TTSConfig
 from remanga.console import console
@@ -30,6 +32,18 @@ _CLIPPING_DBFS = -0.1
 _MAX_BOOST_DB = 30.0
 
 
+# A fade this short is inaudible even when it lands directly on a consonant,
+# and it's already all it takes to stop a clip that begins on a non-zero
+# sample from clicking. It's the floor every clip gets; anything longer has
+# to be paid for out of the clip's own silence (see _apply_edge_fades).
+_DECLICK_FADE_MS = 6
+
+# What counts as silence when measuring how much room a clip has at its
+# edges. Well below speech but above the synthesizer's noise floor, so a
+# near-silent lead-in still reads as silence to fade over.
+_EDGE_SILENCE_DBFS = -50.0
+
+
 def _is_audible_gain(gain_db: float) -> bool:
     return abs(gain_db) >= _MIN_AUDIBLE_GAIN_DB
 
@@ -43,6 +57,29 @@ def _clamp_boost(raw: Any) -> float:
     except (TypeError, ValueError):
         return 0.0
     return max(-_MAX_BOOST_DB, min(_MAX_BOOST_DB, value))
+
+
+def _apply_edge_fades(segment: AudioSegment, edge_fade_ms: int) -> AudioSegment:
+    """De-clicks a clip's edges without ever ramping its speech.
+
+    `edge_fade_ms` is a ceiling, not a fixed length: each edge is faded over
+    at most the silence that edge actually has, so the fade shapes the
+    clip's own lead-in and tail rather than its first and last phonemes.
+    That distinction is the whole point. IndexTTS-2.5 returns audio that
+    starts within a few milliseconds of the first phoneme, so applying the
+    configured 35ms flat - as this used to - ramped the opening consonant
+    itself: across a finished chapter the first 35ms of 52 of 60 panels
+    came back ~36x quieter than the speech immediately following it, which
+    is what swallowed the start of nearly every line."""
+    if edge_fade_ms <= 0 or len(segment) < 4 * _DECLICK_FADE_MS:
+        return segment
+
+    lead_ms = detect_leading_silence(segment, silence_threshold=_EDGE_SILENCE_DBFS)
+    trail_ms = detect_leading_silence(segment.reverse(), silence_threshold=_EDGE_SILENCE_DBFS)
+
+    fade_in_ms = max(_DECLICK_FADE_MS, min(edge_fade_ms, lead_ms))
+    fade_out_ms = max(_DECLICK_FADE_MS, min(edge_fade_ms, trail_ms))
+    return segment.fade_in(int(fade_in_ms)).fade_out(int(fade_out_ms))
 
 
 class TTSEngine:
@@ -266,11 +303,17 @@ class TTSEngine:
                             output_wav=raw_clip_path,
                         )
 
-                        segment = AudioSegment.from_file(raw_clip_path)
-                        segment = segment.set_frame_rate(self.audio_config.sample_rate).set_channels(1)
+                        # Through resample.load_audio, not set_frame_rate: the
+                        # engines synthesize at their own rate (IndexTTS-2.5 at
+                        # 22.05 kHz) and pydub's resampler would fold a mirror
+                        # image of the whole clip in above 11 kHz on the way to
+                        # 44.1 kHz. See audio/resample.py for the measurement.
+                        segment = load_audio(raw_clip_path, self.audio_config.sample_rate, channels=1)
 
-                        if self.audio_config.edge_fade_ms > 0 and len(segment) > (self.audio_config.edge_fade_ms * 2):
-                            segment = segment.fade_in(self.audio_config.edge_fade_ms).fade_out(self.audio_config.edge_fade_ms)
+                        # Over the clip's own silence, never over its speech
+                        # - these de-click the edges, they aren't a volume
+                        # envelope. See _apply_edge_fades.
+                        segment = _apply_edge_fades(segment, self.audio_config.edge_fade_ms)
 
                         # After the fades, so the boost can't be partly faded
                         # back out at each edge, and before the export, so the

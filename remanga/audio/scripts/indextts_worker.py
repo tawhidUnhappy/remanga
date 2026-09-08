@@ -61,20 +61,41 @@ def _run_infer(model, call_kwargs: dict) -> None:
     so this chops mid-clause as often as not, and every fragment boundary
     gets the same flat gap a real sentence break would.
 
-    `infer()` itself only takes that crude path when NOT low_vram - the path
-    it takes otherwise is `list(model.infer_generator(...))[0]`, which
-    segments by whole tokens/sentences (`max_text_tokens_per_segment`,
-    default 120 - far more forgiving than a blind character count) and is
-    the same call this function makes directly. So on a `low_vram` model
-    this bypasses `infer()` entirely and calls `infer_generator()` the exact
-    same way `infer()` does on a higher-VRAM GPU, giving every GPU the same
-    natural segmentation instead of only the ones with 10GB+ of VRAM.
-    Anything that isn't IndexTTS2 v2.5 (no `low_vram` attribute, or no
-    `infer_generator` method - e.g. the older infer_v2 fallback import
-    above) never takes this path and just calls `infer()` as before."""
+    On a GPU with 10GB or more `infer()` instead runs
+    `list(model.infer_generator(...))[0]`, which segments by whole
+    tokens/sentences (`max_text_tokens_per_segment`, default 120 - far more
+    forgiving than a blind character count). So on a `low_vram` model this
+    bypasses `infer()` entirely and calls `infer_generator()` the same way
+    `infer()` would on a higher-VRAM GPU, giving every GPU that natural
+    segmentation instead of only the ones with 10GB+ of VRAM.
+    `infer_generator` writes `output_path` itself, so the yielded values are
+    just drained and discarded. Anything that isn't IndexTTS2 v2.5 (no
+    `low_vram` attribute, or no `infer_generator` method - e.g. the older
+    infer_v2 fallback import above) never takes this path and just calls
+    `infer()` as before.
+
+    Every extra keyword here is checked against `infer_generator`'s actual
+    signature before being passed, because it does NOT simply mirror
+    `infer()`'s: `infer()` takes `more_segment_before`, while
+    `infer_generator` calls the same knob `quick_streaming_tokens`. Anything
+    it doesn't declare lands in its `**generation_kwargs`, which it forwards
+    all the way down to HuggingFace `generate()` - and that rejects unknown
+    kwargs with a ValueError, not the TypeError a signature mismatch would
+    raise. Passing `infer()`'s spelling through blind would therefore fail
+    every single synthesis on exactly the low-VRAM GPUs this path exists to
+    help, and fail it somewhere no signature guard would catch."""
     if getattr(model, "low_vram", False) and hasattr(model, "infer_generator"):
+        gen_params = inspect.signature(model.infer_generator).parameters
+        extra: dict = {}
+        if "stream_return" in gen_params:
+            extra["stream_return"] = False
+        for segment_kwarg in ("quick_streaming_tokens", "more_segment_before"):
+            if segment_kwarg in gen_params:
+                extra[segment_kwarg] = 0
+                break
         try:
-            list(model.infer_generator(**call_kwargs, stream_return=False, more_segment_before=0))
+            for _ in model.infer_generator(**call_kwargs, **extra):
+                pass
             return
         except TypeError:
             pass  # signature mismatch on this checkout - fall through to infer()
