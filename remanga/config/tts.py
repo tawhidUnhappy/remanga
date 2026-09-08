@@ -1,25 +1,19 @@
 """Text-to-speech engine settings - see remanga/audio/synth/.
 
 Shape: the handful of settings that mean the same thing whichever engine is
-driving (which engine that is, the narration language, the speaking rate,
-how long to wait on a worker) sit at the top of TTSConfig, and everything
-that belongs to ONE engine - its model, its sampling knobs, and its own
-reference voice - lives in that engine's own block. So `tts.indextts` and
-`tts.audio8` are two parallel blocks, each self-contained, and switching
-engines switches which voice, which checkpoint and which sampling settings
-are in play without either engine's answers overwriting the other's.
+driving (which engine that is, the speaking rate, how long to wait on a
+worker) sit at the top of TTSConfig, and everything that belongs to ONE
+engine - its model, its sampling knobs, its voice - lives in that engine's
+own block. There is one engine today; the split is kept because it is what
+makes adding or removing one a contained change (see tts_engines.py).
 
-That symmetry is also why each engine has its OWN spk_audio_prompt rather
-than sharing one: the two models clone from a reference clip differently
-(audio8-tts-0.1b also wants a transcript of it, indextts-2.5 doesn't), so
-the clip that sounds best under one is routinely not the clip that sounds
-best under the other, and having to re-point a single shared field at a
-different WAV every time you switch engines is how you end up synthesizing
-a whole chapter in the wrong voice.
-
-Older config.json files - which had indextts-2.5's settings unnested at the
-`tts` top level and one shared `spk_audio_prompt` - are migrated on load by
-TTSConfig._migrate_flat_engine_block below, so upgrading changes nothing."""
+The big change from the IndexTTS-2.5 / Audio8 era: Kokoro does not clone a
+voice from a reference clip. It ships fixed, named voices, so the narrator
+is chosen from a list (config/kokoro_voices.py) rather than pointed at a
+WAV. Everything those engines needed and Kokoro does not - the reference
+clip, its transcript, per-engine sampling temperature - is gone rather than
+carried forward, and old config.json files are migrated on load by
+TTSConfig._migrate_retired_engines below."""
 
 from __future__ import annotations
 
@@ -27,6 +21,13 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
+from remanga.config.kokoro_voices import (
+    DEFAULT_VOICE,
+    KOKORO_VOICES,
+    KokoroVoice,
+    lang_code_for,
+    voice_spec,
+)
 from remanga.config.tts_engines import (
     TTS_ENGINE_SPECS,
     TTS_ENGINES,
@@ -38,10 +39,11 @@ from remanga.config.tts_engines import (
 # Re-exported so `from remanga.config.tts import engine_spec, TTS_ENGINES`
 # keeps working - see tts_engines.py for where these now live.
 __all__ = [
+    "KOKORO_VOICES",
     "TTS_ENGINES",
     "TTS_ENGINE_SPECS",
-    "Audio8Config",
-    "IndexTTSConfig",
+    "KokoroConfig",
+    "KokoroVoice",
     "TTSConfig",
     "TTSEngineSpec",
     "engine_spec",
@@ -49,91 +51,24 @@ __all__ = [
 ]
 
 
-class IndexTTSConfig(BaseModel):
-    """Settings specific to the indextts-2.5 engine (see TTSConfig.engine) -
-    IndexTeam/IndexTTS-2.5 on Hugging Face, zero-shot voice cloning from a
-    reference WAV alone, no transcript needed. Runs in its own isolated
-    `.tools/venv-indextts`.
+class KokoroConfig(BaseModel):
+    """Settings specific to the kokoro engine - hexgrad/Kokoro-82M on
+    Hugging Face, an 82M-parameter StyleTTS 2 / iSTFTNet model with fixed
+    built-in voices. Runs in its own isolated `.tools/venv-kokoro`.
 
-    Every field here used to sit unnested at the `tts` top level; it moved
-    into a block of its own so this engine and audio8-tts-0.1b are described
-    the same way and can hold different answers - above all a different
-    spk_audio_prompt. Existing config.json files are migrated automatically
-    (TTSConfig._migrate_flat_engine_block)."""
+    No reference clip and no cloning: `voice` names one of the model's own
+    voices (see config/kokoro_voices.py). That is the point of it - the
+    engines it replaced derived the narrator's whole delivery from a clip,
+    which made the clip the single largest source of quality problems."""
 
-    hf_repo_id: str = "IndexTeam/IndexTTS-2.5"
-    model_dir: str = "checkpoints/indextts_2.5"
-    cfg_path: str = "checkpoints/indextts_2.5/config.yaml"
-    # The reference clip THIS engine clones from - see the module docstring
-    # for why it isn't shared with audio8's.
-    spk_audio_prompt: str = ""
-    use_bf16: bool = True
-    # IndexTTS-2.5's own defaults (indextts/infer_v2_5.py's infer_generator),
-    # for natural-sounding prosody - a much lower temperature/top_p sounds
-    # more "consistent" but trades away natural pitch/pacing variation for a
-    # flatter, more robotic delivery. These control sampling variety only;
-    # WHICH emotion is being sampled within is use_text_emotion's job below.
-    temperature: float = 0.8
-    top_p: float = 0.8
-    # Whether each panel's emotion is derived from its own narration TEXT.
-    #
-    # OFF by default, and deliberately so for narration. With it off,
-    # IndexTTS-2.5 takes the emotional contour of spk_audio_prompt and reads
-    # every panel with it (`emo_audio_prompt = spk_audio_prompt` at
-    # `emo_alpha = 1.0` in infer_v2_5.py) - which, given a calm and steady
-    # reference clip, is exactly what a recap narrator should sound like: one
-    # even voice carrying the story, consistent from the first panel to the
-    # last.
-    #
-    # Turning it on runs each panel's text through the QwenEmotion classifier
-    # bundled with the checkpoint (model_dir's qwen0.6bemo4-merge/) and
-    # blends the emotion it returns into the GPT emotion latent, so delivery
-    # tracks what each panel says. That is genuinely expressive, and for
-    # continuous narration it is usually too much: measured on this repo's
-    # narrator, consecutive panels swing from 134Hz ("calm") to 200Hz
-    # ("afraid"), and a reader who is merely describing what happens does not
-    # change register that far that often. It reads as the narrator reacting
-    # to the story rather than telling it. Worth having for dialogue-driven
-    # or single-character work; not the default here.
-    #
-    # Costs ~1.2GB of VRAM for the classifier, held for the whole run, plus a
-    # few tens of milliseconds per panel. When off, audio/synth/indextts.py
-    # sends nothing extra and the worker never loads the classifier at all.
-    #
-    # NOTE: this is not the knob for "the narration sounds flat". Flatness
-    # is almost always the reference clip - see spk_audio_prompt, and keep in
-    # mind IndexTTS-2.5 truncates it to its first 15 seconds.
-    use_text_emotion: bool = False
-    # How strongly that text-derived emotion is applied when use_text_emotion
-    # is on, 0.0-1.0; ignored entirely when it is off. Passed as
-    # IndexTTS-2.5's `emo_alpha`, which scales the classifier's emotion
-    # vector before it is blended into the GPT emotion latent; whatever
-    # weight the vector does not claim stays with the emotion latent derived
-    # from spk_audio_prompt, i.e. with the narrator's own voice.
-    #
-    # Not 1.0, which is IndexTTS-2.5's own default and too much even for the
-    # expressive case. Measured on this repo's narrator clip, one shouted
-    # line ("angry" 0.85 from the classifier):
-    #
-    #   emotion off      mean f0 145Hz, sd 21   (clip itself: 159Hz, sd 28)
-    #   strength 0.5     mean f0 167Hz, sd 36
-    #   strength 0.7     mean f0 179Hz, sd 35
-    #   strength 1.0     mean f0 216Hz, sd 49
-    #
-    # At 1.0 the pitch runs ~57Hz above the reference, far enough that an
-    # intense panel stops sounding like the same narrator having a strong
-    # reaction and starts sounding like somebody else shouting. 0.7 keeps
-    # nearly all the expressive range while holding pitch closer to the
-    # narrator's own; drop toward 0.3-0.5 for emotion that colours the read
-    # without steering it.
-    text_emotion_strength: float = Field(default=0.7, ge=0.0, le=1.0)
-    sample_rate: int = 22050
-    # Gain applied to THIS engine's synthesized narration clips, in decibels
-    # (0.0 = untouched, positive = louder). Per engine because that is where
-    # the problem is: the two models return audio at noticeably different
-    # levels, so one narrator sits under the music while the other sits over
-    # it, and a single shared number would just move the problem to whichever
-    # engine wasn't being used that day.
+    hf_repo_id: str = "hexgrad/Kokoro-82M"
+    model_dir: str = "checkpoints/kokoro_82m"
+    # Which of Kokoro's built-in voices narrates. Defaults to its
+    # highest-graded voice; see kokoro_voices.DEFAULT_VOICE for why that is
+    # the default rather than the closest match to any particular narrator.
+    voice: str = DEFAULT_VOICE
+    # Gain applied to synthesized narration clips, in decibels (0.0 =
+    # untouched, positive = louder).
     #
     # Applied to each panel's clip as it is written (audio/tts.py), so the
     # WAVs on disk really are louder - not a flag read at mix time. The
@@ -150,172 +85,96 @@ class IndexTTSConfig(BaseModel):
     # see audio/tts.py. Boosting far enough to clip is possible (pydub
     # saturates rather than wraps); a run that clips says so.
     volume_boost_db: float = 0.0
+    # Kokoro's native output rate. Not a resampling knob - it is what the
+    # model emits, and the pipeline resamples from here (audio/resample.py).
+    sample_rate: int = 24000
+
+    @property
+    def spec(self) -> KokoroVoice:
+        """The active voice's catalogue entry - its label, grade and accent."""
+        return voice_spec(self.voice)
+
+    @property
+    def lang_code(self) -> str:
+        """Kokoro's one-character accent code for the active voice.
+
+        Derived rather than configured: Kokoro takes this separately from
+        the voice name, and a mismatch makes a voice speak through the wrong
+        accent's phonemes instead of raising anything."""
+        return lang_code_for(self.voice)
 
 
-class Audio8Config(BaseModel):
-    """Settings specific to the audio8-tts-0.1b engine (see TTSConfig.engine) -
-    Audio8/Audio8-TTS-Preview-0.1b on Hugging Face, a ~170M-parameter
-    Falcon-H1-based zero-shot voice-cloning model with its own 44.1kHz codec
-    decoder. Runs in its own isolated `.tools/venv-audio8` (transformers>=4.57,
-    trust_remote_code=True - a different, sometimes incompatible pin from
-    IndexTTS-2.5's own environment, hence the separate venv rather than
-    sharing IndexTTS's)."""
-    hf_repo_id: str = "Audio8/Audio8-TTS-Preview-0.1b"
-    model_dir: str = "checkpoints/audio8_tts_0.1b"
-    # The reference clip THIS engine clones from, independent of
-    # indextts.spk_audio_prompt - see the module docstring. reference_text_path
-    # below must be the transcript of THIS file, not of the other engine's.
-    spk_audio_prompt: str = ""
-    # Unlike IndexTTS-2.5 (a pure audio reference is enough for zero-shot
-    # cloning), this model's processor also wants a transcription of this
-    # engine's own spk_audio_prompt - accuracy of the transcript measurably
-    # affects cloning quality per the model card, so this is asked for
-    # explicitly rather than guessed/auto-transcribed.
-    #
-    # The transcript itself lives in its own text file, not inline here -
-    # it's easy to fat-finger a long paragraph of free text while editing
-    # config.json for something unrelated, and a broken transcript silently
-    # degrades cloning quality rather than erroring. This field is just the
-    # path to that file (read fresh by remanga/audio/synth/ at synth
-    # start); default points at global/tts_reference.txt, alongside the
-    # other shared assets (bgm_path) - see remanga.settings.read_reference_text.
-    reference_text_path: str = "global/tts_reference.txt"
-    use_bf16: bool = True
-    temperature: float = 0.7
-    top_p: float = 0.9
-    max_new_tokens: int = 512
-    sample_rate: int = 44100
-    # Gain applied to THIS engine's synthesized narration clips, in decibels
-    # (0.0 = untouched, positive = louder). Per engine because that is where
-    # the problem is: the two models return audio at noticeably different
-    # levels, so one narrator sits under the music while the other sits over
-    # it, and a single shared number would just move the problem to whichever
-    # engine wasn't being used that day.
-    #
-    # Applied to each panel's clip as it is written (audio/tts.py), so the
-    # WAVs on disk really are louder - not a flag read at mix time. The
-    # audible result in the finished video is mostly VOICE-VS-MUSIC balance
-    # rather than a louder file: audio/mix.py's EBU R128 loudnorm pass
-    # normalizes the whole master to a fixed target afterwards, so boosting
-    # the narration pushes the BGM down under it rather than raising the
-    # final output level. Turn off audio.enable_loudnorm if you want the
-    # boost to survive into the master's absolute level too.
-    #
-    # Changing this does NOT require re-synthesizing: audio_timing.json
-    # records the gain baked into the clips it describes, and the next tts
-    # run applies only the difference to clips it would otherwise reuse -
-    # see audio/tts.py. Boosting far enough to clip is possible (pydub
-    # saturates rather than wraps); a run that clips says so.
-    volume_boost_db: float = 0.0
-    # This model generates a fixed budget of audio codec tokens per call
-    # (max_new_tokens above) - text needing more than that budget's worth
-    # of speech just gets cut off mid-generation, silently, with no error.
-    # Any narration line longer than this many characters gets split on
-    # sentence boundaries into several bounded calls instead (see
-    # Audio8Synthesizer.chunk_max_chars / base.py's chunking path) and the
-    # resulting clips re-joined - the rest of the pipeline never sees the
-    # difference, it's still one WAV per panel. 220 chars is a conservative
-    # empirical fit under 512 tokens for this model/tokenizer; lower it if
-    # a chunk still gets truncated, raise it if chunks feel choppier than
-    # they need to be.
-    chunk_max_chars: int = 220
-
-
-# The fields that used to live unnested at the `tts` top level, all of them
-# indextts-2.5's own. Named here rather than inferred from IndexTTSConfig's
-# field list so that a NEW field added to that block later isn't
-# retroactively treated as something an old config.json might have had at
-# the top level.
-LEGACY_INDEXTTS_FIELDS = (
-    "hf_repo_id", "model_dir", "cfg_path", "use_bf16", "temperature", "top_p", "sample_rate",
+# Settings that belonged to the retired IndexTTS-2.5 / Audio8 blocks and
+# have no meaning under Kokoro. Named explicitly so migration can drop them
+# quietly rather than leaving them to fail validation on load.
+RETIRED_ENGINE_BLOCKS = ("indextts", "audio8")
+RETIRED_TOP_LEVEL_FIELDS = (
+    "hf_repo_id", "model_dir", "cfg_path", "use_bf16", "temperature", "top_p",
+    "sample_rate", "spk_audio_prompt",
 )
 
 
 class TTSConfig(BaseModel):
-    # Which engine actually synthesizes speech - one of TTS_ENGINES. Switch
-    # engines by changing this one field: remanga/audio/synth/ picks the
-    # matching Synthesizer, isolated venv, model directory and settings
-    # block automatically.
-    engine: str = "indextts-2.5"
-    # Settings below this line are engine-independent - they mean the same
-    # thing whichever engine is selected, which is exactly why they are not
-    # in either block. `lang` is the narration language, `speed` is applied
-    # by every engine (model-side where supported, ffmpeg atempo where not -
-    # see audio/synth/), and the timeout guards any engine's worker process.
+    # Which engine actually synthesizes speech - one of TTS_ENGINES.
+    engine: str = "kokoro"
+    # Settings below this line are engine-independent.
     lang: str = "EN"
     speed: float = 1.0
     # How long to wait for one panel's synthesize response before treating the
-    # worker as hung and killing it (see audio/synth/base.py:synthesize). A single
-    # 10-26 word panel normally finishes in well under a minute even on modest
-    # hardware, so this is a generous ceiling, not a tight budget.
+    # worker as hung and killing it (see audio/synth/base.py:synthesize). Kokoro
+    # synthesizes a panel in well under a second on any GPU and a few seconds on
+    # CPU, so this is a generous ceiling, not a tight budget.
     synth_timeout_seconds: int = 180
-    # One block per engine, each holding that engine's model, its sampling
-    # settings and its own reference voice. See the module docstring.
-    indextts: IndexTTSConfig = Field(default_factory=IndexTTSConfig)
-    audio8: Audio8Config = Field(default_factory=Audio8Config)
+    kokoro: KokoroConfig = Field(default_factory=KokoroConfig)
 
     @model_validator(mode="before")
     @classmethod
-    def _migrate_flat_engine_block(cls, data: Any) -> Any:
-        """Reads a config.json written before the per-engine blocks existed.
+    def _migrate_retired_engines(cls, data: Any) -> Any:
+        """Reads a config.json written for IndexTTS-2.5 or Audio8.
 
-        Back then indextts-2.5's settings sat unnested at the `tts` top
-        level and `tts.spk_audio_prompt` was one voice shared by both
-        engines. Pydantic ignores unknown keys, so without this an upgrade
-        would silently drop a customized model_dir, a tuned temperature, or
-        - worst of all - the reference voice, and fall back to defaults
-        with nothing said. Here each legacy key is folded into the
-        `indextts` block instead, and the shared voice seeds BOTH engines,
-        so the first run after an upgrade sounds exactly like the last run
-        before it and the two voices only diverge once someone changes one.
-
-        setdefault throughout, never overwrite: a config.json that already
-        has a real `indextts`/`audio8` block has been written by this
-        version or edited by hand, and its explicit answer outranks
-        whatever legacy key happens to be sitting next to it."""
+        Those engines cloned from a reference WAV; Kokoro has fixed voices,
+        so there is nothing in their settings worth carrying forward - a
+        `spk_audio_prompt` path is not a Kokoro voice name, and a
+        temperature it has no sampler for is noise. Pydantic ignores unknown
+        keys, so the practical job here is narrower than the old migration's:
+        drop the retired blocks and the older flat keys, and force `engine`
+        onto a name that still exists, so an upgraded install starts in a
+        valid state instead of failing validation or selecting an engine
+        whose code was deleted."""
         if not isinstance(data, dict):
             return data
 
         migrated: dict[str, Any] = dict(data)
-        indextts: dict[str, Any] = dict(migrated.get("indextts") or {})
-        for field_name in LEGACY_INDEXTTS_FIELDS:
-            if field_name in migrated:
-                indextts.setdefault(field_name, migrated.pop(field_name))
+        for block in RETIRED_ENGINE_BLOCKS:
+            migrated.pop(block, None)
+        for field_name in RETIRED_TOP_LEVEL_FIELDS:
+            migrated.pop(field_name, None)
 
-        legacy_voice = migrated.pop("spk_audio_prompt", None)
-        if legacy_voice is not None:
-            indextts.setdefault("spk_audio_prompt", legacy_voice)
-            audio8: dict[str, Any] = dict(migrated.get("audio8") or {})
-            audio8.setdefault("spk_audio_prompt", legacy_voice)
-            migrated["audio8"] = audio8
-
-        if indextts:
-            migrated["indextts"] = indextts
+        if str(migrated.get("engine", "")).strip().lower() not in TTS_ENGINES:
+            migrated["engine"] = TTS_ENGINES[0]
         return migrated
 
     @property
     def spec(self) -> TTSEngineSpec:
         """This config's engine as a TTSEngineSpec - the display name,
-        one-line summary, settings block and needs_reference_text flag every
-        screen and synthesizer reads instead of re-testing
-        `engine == "some-string"`."""
+        one-line summary and settings block every screen reads instead of
+        re-testing `engine == "some-string"`."""
         return engine_spec(self.engine)
 
     @property
     def engine_block(self) -> BaseModel:
-        """The active engine's own settings block - `indextts` or `audio8`,
-        resolved through its spec rather than by branching on the engine
-        name. Returns the live sub-model, not a copy, so a caller applying a
-        one-off override (see audio/tts.py's voice_override) can assign
-        straight through it."""
+        """The active engine's own settings block, resolved through its spec
+        rather than by branching on the engine name. Returns the live
+        sub-model, not a copy, so a caller applying a one-off override (see
+        audio/tts.py's voice_override) can assign straight through it."""
         return getattr(self, self.spec.config_attr)
 
     @property
-    def active_spk_audio_prompt(self) -> str:
-        """The reference voice the ACTIVE engine clones from. Every caller
-        that just wants "the voice being used" asks this instead of reaching
-        into a block and assuming which engine is selected."""
-        return getattr(self.engine_block, "spk_audio_prompt", "") or ""
+    def active_voice(self) -> str:
+        """The voice the ACTIVE engine narrates in. Every caller that just
+        wants "the voice being used" asks this instead of reaching into a
+        block and assuming which engine is selected."""
+        return getattr(self.engine_block, "voice", "") or ""
 
     @property
     def active_voice_field(self) -> str:
@@ -323,10 +182,3 @@ class TTSConfig(BaseModel):
         screens that edit a field by name (see remanga.settings.fields) and
         for error messages that tell someone where to fix it."""
         return voice_field_for(self.engine)
-
-    @property
-    def active_reference_text_path(self) -> str | None:
-        """Where the active engine's reference transcript lives, or None for
-        an engine that doesn't use one - so callers ask this rather than
-        reaching into `.audio8` and assuming which engine is selected."""
-        return self.audio8.reference_text_path if self.spec.needs_reference_text else None

@@ -38,7 +38,7 @@ from .marker import MarkerConfig
 from .ocr import OCRConfig
 from .reviewer import ReviewerConfig
 from .system import SystemConfig
-from .tts import LEGACY_INDEXTTS_FIELDS, TTSConfig
+from .tts import RETIRED_ENGINE_BLOCKS, RETIRED_TOP_LEVEL_FIELDS, TTSConfig
 from .video import VideoConfig
 from .writer import WriterConfig
 
@@ -79,20 +79,24 @@ def _flatten(model: BaseModel, prefix: str = "") -> dict[str, Any]:
 
 
 # Per-project overrides are stored as flat dotted keys, so a project.json
-# written before tts grew its per-engine blocks still names the old flat
-# paths. Same migration as TTSConfig's own (see its _migrate_flat_engine_block):
-# an engine-specific setting moves into the indextts block, and the one
-# formerly-shared voice seeds BOTH engines - a project that chose its own
-# narrator must keep it under whichever engine it is run with. Without this
-# the keys would simply not resolve and _apply would drop them in silence,
-# which is exactly how a project quietly reverts to the machine's voice.
+# written for a retired engine still names settings that no longer exist -
+# a reference-clip path, a sampling temperature, or a whole `tts.indextts.*`
+# / `tts.audio8.*` key. Those are dropped here rather than left to _apply,
+# which would silently ignore them one at a time: a project that pinned its
+# own narrator to a WAV must NOT have that path quietly land in a Kokoro
+# voice field, because a path is not a voice name and the failure would
+# surface as a whole chapter narrated in the wrong voice.
 def _migrate_override_key(dotted: str) -> tuple[str, ...]:
-    """The dotted path(s) an override key applies to today. Anything that
-    isn't a legacy tts key is returned unchanged, as a single path."""
-    if dotted == "tts.spk_audio_prompt":
-        return ("tts.indextts.spk_audio_prompt", "tts.audio8.spk_audio_prompt")
-    if dotted.startswith("tts.") and dotted[len("tts."):] in LEGACY_INDEXTTS_FIELDS:
-        return (f"tts.indextts.{dotted[len('tts.'):]}",)
+    """The dotted path(s) an override key applies to today. A key belonging
+    to a retired engine returns empty (drop it); anything else is returned
+    unchanged, as a single path."""
+    if not dotted.startswith("tts."):
+        return (dotted,)
+    tail = dotted[len("tts."):]
+    if tail.split(".")[0] in RETIRED_ENGINE_BLOCKS:
+        return ()
+    if tail in RETIRED_TOP_LEVEL_FIELDS:
+        return ()
     return (dotted,)
 
 

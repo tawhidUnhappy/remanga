@@ -1,6 +1,6 @@
 """Cross-project shared assets that live under global/ (see roots.GLOBAL_DIR):
 the narration-lessons log and the optional HF token file. Reference voice
-WAV, BGM file, and the audio8 TTS transcript path also default under
+BGM file also defaults under
 global/ (global/voice/, global/bgm/, global/tts_reference.txt) but are
 user-configurable paths in config.json (remanga/config/tts.py,
 remanga/config/audio.py) rather than fixed locations, so they're managed
@@ -61,7 +61,7 @@ def ensure_hf_token_file() -> Path:
             "token": "",
             "_hint": "Optional - paste a Hugging Face access token here (https://huggingface.co/settings/tokens, "
                      "'Read' scope is enough) to raise the Hub's per-IP rate limit/speed on model downloads "
-                     "(IndexTTS-2.5, Audio8 TTS, MAGI v3, DeepSeek-OCR-2). Leave \"token\" blank to keep "
+                     "(Kokoro-82M, MAGI v3, LightOnOCR-2). Leave \"token\" blank to keep "
                      "downloading unauthenticated - nothing breaks either way.",
         }
         p.write_text(json.dumps(placeholder, indent=2) + "\n", encoding="utf-8")

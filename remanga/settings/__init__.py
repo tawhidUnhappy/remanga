@@ -29,7 +29,8 @@ from __future__ import annotations
 from remanga.settings.assets import (
     ASSETS,
     ensure_valid_bgm,
-    ensure_valid_voice_prompt,
+    ensure_valid_voice,
+    pick_voice,
     run_asset_menu,
 )
 from remanga.settings.fields import get_field, set_field
@@ -37,8 +38,6 @@ from remanga.settings.files import (
     AUDIO_EXTENSIONS,
     discover_files,
     is_valid_file,
-    read_reference_text,
-    write_reference_text,
 )
 from remanga.settings.paths_ui import run_paths_manager
 from remanga.settings.summary import settings_summary
@@ -51,15 +50,14 @@ __all__ = [
     "configure_vision_outputs",
     "discover_files",
     "ensure_valid_bgm",
-    "ensure_valid_voice_prompt",
+    "ensure_valid_voice",
     "get_field",
     "is_valid_file",
     "package_summary",
-    "read_reference_text",
+    "pick_voice",
     "run_asset_menu",
     "run_paths_manager",
     "run_setup_wizard",
     "set_field",
     "settings_summary",
-    "write_reference_text",
 ]

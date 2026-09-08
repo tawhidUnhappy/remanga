@@ -18,7 +18,7 @@ pure local experiments the user didn't ask to keep.
 ## Layout in one pass
 
 ```
-.venv, .tools/venv-{indextts,audio8,magi,deepseek-ocr}  # 5 hermetic uv venvs, own torch/transformers pin each
+.venv, .tools/venv-{kokoro,magi,lighton-ocr}  # 4 hermetic uv venvs, own torch/transformers pin each
 remanga/                                     # package: json_io.py, ffmpeg_io.py, proc_io.py, humanize.py, pipeline.py, hardware.py, ...
   tui/                                       # arrow-key menus (select/multiselect/confirm) + non-tty fallback
   commands/{spec,selection,registry,categories,setup_rows,help_text}.py + catalog/{setup,chapter,project}.py + handlers/{setup,chapter,project,cleanup}.py
@@ -26,7 +26,7 @@ remanga/                                     # package: json_io.py, ffmpeg_io.py
   settings/{files,fields,assets,vision,presets,engine,video,sections,summary,wizard,paths_ui}.py
   full_recap/{discovery,timeline,compiler}.py   verify/{models,panels,probe,runner,report}.py
   reset/{modes,entries,actions}.py              status/{compute,panel,badges}.py
-  audio/{tts.py,mix.py,clips.py,resample.py,synth/{base,indextts,audio8}.py,scripts/*_worker.py}
+  audio/{tts.py,mix.py,clips.py,resample.py,synth/{base,kokoro}.py,scripts/kokoro_worker.py}
   cropper/{crop*.py,gutter/{sampling,bands,refine}.py,...}
   video/{compose.py,render.py}
   models/{weights.py,scripts/download_*.py}
@@ -133,63 +133,77 @@ new - the "which chapters do I actually have" screen:
   chapters very possibly not downloaded yet) - the flag is `--select`
   instead.
 
-## TTS engines (`config.json` → `tts.engine`)
+## TTS engine (`config.json` → `tts.engine`)
 
-| | `indextts-2.5` | `audio8-tts-0.1b` |
-|---|---|---|
-| cloning | audio-only zero-shot | needs `tts.audio8.reference_text` = accurate transcript of the ref clip, or synth raises |
-| arch | — | Falcon-H1 (Mamba/state-space), `trust_remote_code=True` |
-| speed | — | needs fused `mamba-ssm`/`causal-conv1d` kernels or silently falls back to naive per-token loop (~2-3x slower) |
+One engine: `kokoro` (hexgrad/Kokoro-82M, 82M params, StyleTTS 2 + iSTFTNet,
+Apache-2.0 code *and* weights). IndexTTS-2.5 and Audio8 TTS were removed -
+see branch `legacy/indextts-audio8` for what they did.
 
-Audio8 worker (`remanga/audio/scripts/audio8_worker.py`) fixed bugs, don't
-reintroduce:
-- `model.generate(..., return_dict_in_generate=True)` required, else you get
-  a bare Tensor with no `.codes`.
-- sample rate = `model.config.codec_sample_rate` (44100), NOT `sampling_rate`
-  (doesn't exist on this model - was silently defaulting instead of erroring).
-- `download_audio8.py` has no ModelScope mirror + needs a manual retry loop
-  (`snapshot_download`'s `max_retries` kwarg doesn't exist in this
-  `huggingface_hub` version).
+- **No cloning.** `tts.kokoro.voice` is a NAME from the model's own
+  catalogue (`config/kokoro_voices.py`), not a path. There is no reference
+  clip, no reference transcript, and no voice AssetSpec - the voice is a
+  `select()` picker, not a file browser.
+- **Voice grades are Kokoro's own** and the spread is wide (A down to F).
+  Default `af_heart` is its only grade-A voice; the best male is `am_fenrir`
+  at C+, three grades down. The picker shows grades for that reason.
+- **`lang_code` is derived from the voice, never configured** (`a` American /
+  `b` British). Kokoro takes it separately from the voice name and a mismatch
+  makes a voice speak through the wrong accent's phonemes instead of raising.
+- **Everything loads from `model_dir`, no Hub call at synth time.**
+  `download_kokoro.py` pulls weights + config + *every* voice pack; the
+  worker passes the voice as a `.pt` PATH, which is the one form Kokoro's
+  loader accepts without reaching for `huggingface_hub`.
+- **misaki (the G2P) needs spaCy's `en_core_web_sm`**, and `python -m spacy
+  download` SILENTLY NO-OPS under uv - it prints "Download and installation
+  successful" and installs nothing. Install the release wheel URL directly;
+  bootstrap.sh does.
+- Native rate 24 kHz (not 22.05k) - see the resampling note further down.
 
-## DeepSeek-OCR-2 (`config.json` → `ocr`) - powers the Narration Writer's OCR button
+## LightOnOCR-2 (`config.json` → `ocr`) - powers the Narration Writer's OCR button
 
-`deepseek-ai/DeepSeek-OCR-2` weights download via `remanga setup-models`
-(`config/ocr.py`, `models/scripts/download_deepseek_ocr.py`, via
+`lightonai/LightOnOCR-2-1B` weights download via `remanga setup-models`
+(`config/ocr.py`, `models/scripts/download_lighton_ocr.py`, via
 `OCREngine(config.ocr).model_manager` - `commands.py:_h_setup_models` reuses
 `OCREngine`'s own `ModelManager` rather than building a second one), into
-`checkpoints/deepseek_ocr_2`, with its own isolated `.tools/venv-deepseek-ocr`
-(provisioned in `bootstrap.sh` with a real torch/transformers inference
-stack, not download-only). Real repo layout (confirmed by an actual run):
-17 files, the weights themselves a single ~6.8GB
-`model-00001-of-000001.safetensors` (not sharded) - `ModelManager`'s
-`expected_files` uses that exact name now.
+`checkpoints/lighton_ocr_2_1b`, with its own isolated
+`.tools/venv-lighton-ocr` (provisioned in `bootstrap.sh` with a real
+torch/transformers inference stack, not download-only).
 
-**Three attempts, in order, self-supervised - not a static env-var guess.**
-`download_deepseek_ocr.py` runs each `snapshot_download()` attempt as its
-own child subprocess (`_run_hf_attempt()`) so it can watch and kill one that
-stalls instead of just picking a transfer mode and hoping:
-1. **HF Hub, Xet enabled** (HF's official high-performance transfer -
-   genuinely much faster when it works). Watched: polls total bytes across
-   every `*.incomplete` file under `<model_dir>/.cache/huggingface/download/`
-   every `POLL_INTERVAL_SECONDS`; if that total hasn't grown for
-   `XET_STALL_TIMEOUT_SECONDS` (after an initial `XET_STALL_GRACE_SECONDS`
-   warm-up), it's killed and attempt 2 runs. Confirmed live, repeatedly:
-   Xet hangs at 0 bytes/0% in this sandbox (process alive, ~2% CPU, no
-   progress) - possibly this sandbox's network blocking Xet's transfer
-   endpoint specifically, not a fact about every machine, which is exactly
-   why this earns a real supervised shot each run instead of a permanent
-   disable.
-2. **HF Hub, Xet explicitly disabled** (classic HTTP/LFS) - confirmed live
-   to make steady, unstalled progress once attempt 1 is killed. Not
-   stall-watched the same way; `MAX_ATTEMPTS` retries on outright failure/
-   exception instead (dropped connection etc.), same reasoning
-   `download_audio8.py`'s own retry loop uses. Still single-connection and
-   throttled - unauthenticated ~1-3MB/s observed - the Hub's own warning
-   ("set a HF_TOKEN...") is a real lever, see the HF-token section above.
-3. **ModelScope mirror**, last resort - a real run once saw *its* mirror
-   stall over an hour on the one big shard (repeated read-timeouts, one
-   hash-validation retry alone took 90+ min), which is why it's last here,
-   opposite priority from `download_indextts.py` (ModelScope first).
+Replaced DeepSeek-OCR-2, whose API this repo never verified - the old worker
+guessed `.infer()` from the v1 model card and carried a fallback for reading
+whatever file it might have written. **LightOnOCR-2 is supported natively in
+transformers** (`LightOnOcrForConditionalGeneration` / `LightOnOcrProcessor`,
+no `trust_remote_code`), so the worker calls a documented API.
+
+- **transformers>=5.0 is a hard requirement** - the classes do not exist in
+  4.x. This is also why it must stay in its own venv: MAGI v3 pins <4.52.
+- ~1B params, Apache-2.0, Pixtral vision encoder + Qwen3 decoder.
+- The chat template takes an image with **no text turn at all** for plain
+  page parsing; `ocr.prompt` defaults to `""` and is only appended when
+  non-empty. An empty text turn is NOT the same as no text turn.
+- `generate()` returns the prompt prepended - slice
+  `output_ids[0, inputs["input_ids"].shape[1]:]` before decoding, or the UI
+  gets the chat scaffolding back as if it were panel text.
+- bf16 on CUDA, float32 elsewhere (bf16 isn't reliable on MPS/CPU).
+
+**Hub download reliability - hard-won, keep.** `download_lighton_ocr.py` is
+deliberately simple (retry `snapshot_download()` up to 3x, HF Hub only), but
+it sets `HF_HUB_DISABLE_XET=1` and that is not cosmetic:
+
+- **Xet hangs at 0 bytes in this sandbox**, repeatedly and reproducibly -
+  process alive, ~2% CPU, no progress, no error, and no timeout of its own.
+  It just sits there. Classic HTTP/LFS is slower but actually finishes.
+- Unauthenticated Hub transfers are throttled (~1-3MB/s observed); an
+  `HF_TOKEN` is a real lever, see the HF-token section above.
+- The retired DeepSeek downloader ran each attempt as its own child
+  subprocess so it could watch `*.incomplete` byte growth and kill a stalled
+  one. That machinery is gone with it - if a big-model download ever wedges
+  again, that is the pattern to bring back, not a bigger timeout.
+- A ModelScope mirror is deliberately NOT used here: LightOn publishes on the
+  Hub, and a mirror that may not carry the repo is a second way to fail
+  slowly rather than a fallback. (A real run once saw ModelScope's mirror
+  stall over an hour on one shard, with a single hash-validation retry taking
+  90+ min.)
 
 Every attempt's subprocess output is relayed live, raw bytes straight
 through (`os.write(1, chunk)`), which is what makes the stall-then-fallback
@@ -203,13 +217,13 @@ Dead end already ruled out, confirmed live: `HF_HUB_ENABLE_HF_TRANSFER=1`
 use `HF_XET_HIGH_PERFORMANCE` instead").
 
 Inference itself lives in `remanga/ocr/engine.py` (`OCREngine`) +
-`remanga/ocr/scripts/deepseek_ocr_worker.py` - a persistent worker
+`remanga/ocr/scripts/lighton_ocr_worker.py` - a persistent worker
 subprocess mirroring `audio/synth.py`'s `_BaseWorkerSynthesizer` lifecycle
 (spawn, ready-handshake, auto-heal a missing dependency, bounded-timeout
 request/response, stderr draining, clean shutdown), NOT subclassed from it
 (TTS-specific interface) but hand-copied with the same reasoning. GPU
 preferred: `device = "cuda" if torch.cuda.is_available() else "cpu"` in the
-worker, same pattern as `audio8_worker.py`.
+worker, same pattern as `kokoro_worker.py`.
 
 Wired into the Narration Writer web UI: each panel card has a
 "🔎 OCR this panel" button (`app.js:runOcr()`) hitting
@@ -229,29 +243,19 @@ the Narration Writer - the first "OCR this panel" click is what triggers
 run) and spawns the worker; every click after that in the same session reuses
 the already-loaded model.
 
-**Unverified, flag if it breaks**: DeepSeek-OCR-2's actual HF repo/API
-wasn't reachable while building this. The worker calls
-`model.infer(tokenizer, prompt=, image_file=, output_path=, base_size=1024,
-image_size=640, crop_mode=True, save_results=True)` and falls back to
-reading a `.md`/`.mmd`/`.txt` file from `output_path` if `.infer()` doesn't
-return text directly - this mirrors DeepSeek-OCR (v1)'s published model
-card, assumed (not confirmed) to carry over to v2. `ModelManager`'s
-`expected_files=("config.json", "model.safetensors")` is similarly a guess
-at the repo's file layout; if the real weights ship sharded
-(`model-0000X-of-0000Y.safetensors`) the skip-if-present check just never
-short-circuits (redundant re-check each `setup-models` run, not a
-correctness bug - `snapshot_download` still skips/resumes correctly either
-way). Fix both once the real repo/API is confirmed.
+**`expected_files=("config.json", "model.safetensors")`** is the
+skip-if-present check. If the real weights ship sharded
+(`model-0000X-of-0000Y.safetensors`) that check simply never short-circuits
+- a redundant re-verify each `setup-models` run, not a
 
-Building the fused kernels in `bootstrap.sh` (best-effort, non-fatal):
-nvcc must match `torch.version.cuda` **major** (minor mismatch = warning
-only) → install `nvidia-cuda-nvcc` into `venv-audio8` itself, don't rely on
-system CUDA. Locate its nvcc by `find` (importable module path is
-unreliable) at `lib/python3.11/site-packages/nvidia/cu13/bin/nvcc` — **6
-levels under `$VENV/lib`, so `-maxdepth` must be ≥6** (an off-by-one at 5
-silently broke this once). Set `TORCH_CUDA_ARCH_LIST` from
-`nvidia-smi --query-gpu=compute_cap`. Always wrap in
-`(set -e; ...) && ok || warn-and-continue` - never let this abort bootstrap.
+A best-effort optional build in `bootstrap.sh` (no longer any such build,
+but the rules cost nothing to keep): nvcc must match `torch.version.cuda`
+**major** (minor mismatch = warning only) → install `nvidia-cuda-nvcc` into
+the target venv itself, don't rely on system CUDA. Locate its nvcc by `find`
+(importable module path is unreliable) — it sits **6 levels under
+`$VENV/lib`, so `-maxdepth` must be ≥6** (an off-by-one at 5 silently broke
+this once). Always wrap in `(set -e; ...) && ok || warn-and-continue` -
+never let an optional build abort bootstrap.
 
 ## Optional HF token for every model download (`config.json` → `system.hf_token_path`)
 
@@ -274,13 +278,13 @@ a bad token setup should never break a download that would work fine
 unauthenticated.
 
 Wired into every model download the same way: `ModelManager.ensure_model()`
-(`models/weights.py` - covers IndexTTS-2.5, Audio8 TTS, DeepSeek-OCR-2, i.e.
+(`models/weights.py` - covers Kokoro-82M, LightOnOCR-2, i.e.
 every `Command`/synthesizer that goes through `ModelManager`) and MAGI v3's
 own separate subprocess call (`webui/magi_assist.py:ensure_weights_downloaded`,
 doesn't use `ModelManager`) both call `resolve_hf_token()` and append it as
 an optional 4th positional CLI arg (`<model_dir> <repo_id> [hf_token]`) to
 their download script - every `download_*.py` script accepts it now
-(`models/scripts/download_{indextts,audio8,deepseek_ocr}.py`,
+(`models/scripts/download_{kokoro,lighton_ocr}.py`,
 `webui/scripts/download_magi.py`), passed straight through to
 `huggingface_hub.snapshot_download(..., token=hf_token)`. Deliberately HF
 Hub only, never ModelScope (a different service/token scheme - passing an
@@ -306,9 +310,9 @@ that must collapse to one line). Use `stream_subprocess()` /
 
 **Also always pass `-u` (unbuffered) to a spawned `python`**, not just
 piping it through `stream_subprocess()` - `ModelManager.ensure_model()`
-(`models/weights.py`) was missing it (worker spawns elsewhere - indextts_
-worker/audio8_worker/deepseek_ocr_worker - already had it right) and it
-looked hung: `Downloading DeepSeek-OCR-2 model weights...` printed, then
+(`models/weights.py`) was missing it (worker spawns elsewhere -
+kokoro_worker/lighton_ocr_worker - already had it right) and it
+looked hung: `Downloading model weights...` printed, then
 nothing for a long stretch, even though the download was actually
 progressing fine underneath (confirmed live: the on-disk `.incomplete` file
 was growing the whole time). Root cause: CPython switches stdout from
@@ -518,8 +522,8 @@ keeps), reachable from the menu like everything else.
   (unset) keeps `pages,crops.json,narration.json` (`DEFAULT_WIPE_KEEP` in
   `commands/selection.py`), `--keep none` for an absolute full wipe. Always
   re-verifies/re-fetches downloads afterward regardless of what was kept.
-- Every model downloader (`models/scripts/download_{indextts,audio8,
-  deepseek_ocr}.py`, `webui/scripts/download_magi.py`) now verifies each
+- Every model downloader (`models/scripts/download_{kokoro,
+  lighton_ocr}.py`, `webui/scripts/download_magi.py`) now verifies each
   LFS file's sha256 against the Hub's own recorded hash after downloading
   (`models/scripts/_hash_verify.py`) - `snapshot_download()`'s own check is
   size-only, never a real hash compare. One retry (delete+re-fetch just the
@@ -555,7 +559,7 @@ exists, and the app imports it, so installer and app can never disagree.
 `./run.sh hardware` prints what it decided. Footguns found the hard way:
 
 - **PyTorch wheel indexes do NOT all carry the same torch versions.**
-  IndexTTS pins `torch==2.8.*`; `cu118` stops at 2.7 and `cu130` starts at
+  This project targets `torch==2.8.*`; `cu118` stops at 2.7 and `cu130` starts at
   2.9, so neither can satisfy it. Never "pick the newest CUDA index" nor
   "pick whatever the driver supports" - pick the newest index that the
   driver can run AND that still has 2.8 (`_CUDA_INDEX_BY_DRIVER`: 580+ →
@@ -575,8 +579,6 @@ exists, and the app imports it, so installer and app can never disagree.
   steps, `try_step` for optional ones, warnings summarized at the end. An
   optional CUDA-kernel build must never abort a run that already fetched
   several GB.
-- Audio8's fused Mamba kernels are skipped entirely unless the backend is
-  CUDA (was a ~20 min guaranteed-to-fail build on every other machine).
 - ffmpeg: BtbN publishes `linux64`/`linuxarm64`/`win64`/`winarm64` only -
   macOS has no static build and uses the system one, which is normal there,
   not a fallback. Windows assets are `.zip` (needs `unzip`), others
@@ -619,13 +621,13 @@ Symptom was "words run together, metallic/glitchy".
 
 - **Never resample with pydub** (`AudioSegment.set_frame_rate`) - it's
   `audioop.ratecv`, linear interpolation with no anti-imaging filter.
-  Converting IndexTTS's native 22.05k to the project's 44.1k mirrored the
+  Converting a TTS engine's native 22.05k to the project's 44.1k mirrored the
   signal around the old Nyquist: measured on a fresh clip, the 11.5-16 kHz
   image came back **louder than the real 8-11 kHz speech**. Use
   `audio/resample.py:load_audio` (ffmpeg soxr) - puts it 47 dB down.
 - **Edge fades must be clamped to each clip's own silence**
   (`audio/clips.py:apply_edge_fades`). A flat `edge_fade_ms` ramped the
-  opening consonant, because IndexTTS returns audio trimmed tight to the
+  opening consonant, because the TTS engine returns audio trimmed tight to the
   speech (measured lead-in ranged 10ms-180ms across clips; a flat 35ms left
   the first 35ms of 52/60 panels ~36x quieter than the speech after it).
   `edge_fade_ms` is a ceiling, with a 6ms de-click floor.
@@ -634,12 +636,10 @@ Symptom was "words run together, metallic/glitchy".
   between one sentence's last phoneme and the next's, where a narrator
   takes 300-600ms. That was the run-together, and it was the *assembly*,
   not the synthesis.
-- Latent, fixed: `indextts_worker.py`'s low-VRAM path passed `infer()`'s
-  `more_segment_before` to `infer_generator()`, where the knob is called
-  `quick_streaming_tokens`; the unknown name fell through `**generation_kwargs`
-  into HF `generate()`, which rejects it with **ValueError, not TypeError** -
-  so the `except TypeError` guard there never caught it. Match extra kwargs
-  against the real signature; the two methods' signatures differ.
+- A kwarg an ML library forwards into HF `generate()` fails with
+  **ValueError, not TypeError**, so an `except TypeError` guard will not
+  catch a misspelled generation kwarg. Match extra kwargs against the real
+  signature before passing them.
 
 ## Maintenance rule (do this, don't just read this)
 

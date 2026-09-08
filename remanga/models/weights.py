@@ -14,20 +14,22 @@ class ModelManager:
     isolated `.tools/venv-<tool_name>` environment's modelscope/huggingface_hub
     install (those packages aren't part of the main env - see remanga/venvs.py).
 
-    Generic across every TTS engine remanga supports (IndexTTS-2.5, Audio8
-    TTS, ...) - what differs per engine is just which isolated venv talks to
-    the Hub, which download script it runs, and which files on disk prove the
-    download actually finished; everything else (skip-if-present check, the
-    status spinner, error handling) is identical."""
+    Generic across every model remanga fetches (Kokoro-82M, LightOnOCR-2,
+    ...) - what differs is just which isolated venv talks to the Hub, which
+    download script it runs, and which files on disk prove the download
+    actually finished; everything else (skip-if-present check, the status
+    spinner, error handling) is identical. There are no defaults for those:
+    a caller that forgets one should fail loudly here, not silently fetch
+    some other model's weights."""
 
     def __init__(
         self,
         model_dir: Path | str,
         repo_id: str,
-        tool_name: str = "indextts",
-        download_script: str = "download_indextts.py",
-        expected_files: Sequence[str] = ("gpt.pth", "s2mel.pth"),
-        display_name: str = "IndexTTS-2.5",
+        tool_name: str,
+        download_script: str,
+        expected_files: Sequence[str],
+        display_name: str,
     ):
         self.model_dir = Path(model_dir)
         self.repo_id = repo_id
@@ -62,8 +64,8 @@ class ModelManager:
         # actually reaching this process, so the console looks completely
         # stalled ("Downloading..." and then nothing) even though the
         # download is progressing fine underneath. Same reasoning every
-        # worker subprocess spawn elsewhere already applies (indextts_worker/
-        # audio8_worker/deepseek_ocr_worker's own -u flag).
+        # worker subprocess spawn elsewhere already applies (kokoro_worker/
+        # kokoro_worker/lighton_ocr_worker's own -u flag).
         cmd = [str(python), "-u", str(script), str(self.model_dir.resolve()), self.repo_id]
         if token:
             cmd.append(token)

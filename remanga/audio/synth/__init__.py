@@ -6,9 +6,8 @@ pins ever have to share a Python process or a dependency resolution - with
 each other, or with MAGI v3's environment. See remanga/venvs.py for how
 those environments are located.
 
-    base.py     - the worker lifecycle every engine shares
-    indextts.py - IndexTTS-2.5
-    audio8.py   - Audio8-TTS-Preview-0.1b
+    base.py   - the worker lifecycle every engine shares
+    kokoro.py - Kokoro-82M
 
 `create_synthesizer` below is the only place an engine *name* is mapped to
 an engine *class*; everything else asks config.TTSConfig.spec for the
@@ -18,9 +17,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from remanga.audio.synth.audio8 import Audio8Synthesizer
 from remanga.audio.synth.base import BaseWorkerSynthesizer
-from remanga.audio.synth.indextts import IndexTTSSynthesizer
+from remanga.audio.synth.kokoro import KokoroSynthesizer
 from remanga.config import AudioConfig, TTSConfig
 from remanga.config.tts import TTS_ENGINE_SPECS
 
@@ -29,7 +27,7 @@ from remanga.config.tts import TTS_ENGINE_SPECS
 # list at import time below, so adding an engine to the specs without a
 # driver - or the reverse - fails loudly here rather than at synthesis time,
 # deep inside a chapter's TTS run.
-ENGINE_CLASSES = (IndexTTSSynthesizer, Audio8Synthesizer)
+ENGINE_CLASSES = (KokoroSynthesizer,)
 
 SYNTHESIZER_BY_ENGINE: dict[str, Callable[..., BaseWorkerSynthesizer]] = {
     cls.spec.name: cls for cls in ENGINE_CLASSES
@@ -54,8 +52,7 @@ def create_synthesizer(tts_config: TTSConfig, audio_config: AudioConfig) -> Base
 
 __all__ = [
     "SYNTHESIZER_BY_ENGINE",
-    "Audio8Synthesizer",
     "BaseWorkerSynthesizer",
-    "IndexTTSSynthesizer",
+    "KokoroSynthesizer",
     "create_synthesizer",
 ]

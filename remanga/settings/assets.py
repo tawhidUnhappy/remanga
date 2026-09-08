@@ -1,7 +1,13 @@
-"""The shared assets remanga points at: the reference voice WAV, the
-background-music file, and the TTS reference transcript.
+"""The shared assets remanga points at - now just the background-music file.
 
-All three used to be described three times over - once in the settings
+The reference voice WAV and its transcript used to live here too, back when
+the TTS engine cloned a narrator from a clip. Kokoro ships fixed voices, so
+the narrator is a NAME chosen from a list rather than a file discovered on
+disk - see remanga/settings/engine.py's voice picker and
+remanga/config/kokoro_voices.py. Nothing about "find me an audio file"
+applies to it any more, which is why it is not an AssetSpec.
+
+These used to be described three times over - once in the settings
 walkthrough, once in `remanga paths`, and once more in each ensure_valid_*
 validator - with three different sets of wording, three different prompts,
 and no shared idea of what "configured" meant. Here each one is a single
@@ -13,10 +19,11 @@ same list."""
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 from remanga.config import RemangaConfig
+from remanga.config.kokoro_voices import DEFAULT_VOICE, KOKORO_VOICES, VOICE_BY_NAME
 from remanga.config.tts import engine_spec, voice_field_for
 from remanga.console import console, display_path, escape as _esc
 from remanga.settings.fields import get_field, set_field
@@ -26,10 +33,8 @@ from remanga.settings.files import (
     discover_files,
     is_valid_file,
     parent_dir_of,
-    read_reference_text,
-    write_reference_text,
 )
-from remanga.tui import Choice, ask_path, ask_text, confirm, is_cancel, select
+from remanga.tui import Choice, ask_path, confirm, is_cancel, select
 
 
 @dataclass(frozen=True)
@@ -39,14 +44,8 @@ class AssetSpec:
     dotted        - the config field holding its path (or, for a text asset,
                     the path of the file holding its content). Either a
                     fixed dotted string, or a function of the config for an
-                    asset whose home MOVES with another setting - the
-                    reference voice lives in whichever engine block is
-                    active now (tts.indextts.spk_audio_prompt or
-                    tts.audio8.spk_audio_prompt), so this row edits the
-                    voice of the engine you are about to run. Resolve it
+                    asset whose home MOVES with another setting. Resolve it
                     with .field(config), never by reading .dotted.
-    kind          - "file" (pick an existing file) or "text" (edit the
-                    contents of a small text file in place).
     subdir        - where files of this kind normally live under global/,
                     used to rank discovered candidates.
     enabled_field - optional dotted bool that turns the whole asset off
@@ -59,7 +58,6 @@ class AssetSpec:
     # .title(config).
     label: str | Callable[[RemangaConfig], str]
     dotted: str | Callable[[RemangaConfig], str]
-    kind: str = "file"
     subdir: str = ""
     extensions: Sequence[str] = AUDIO_EXTENSIONS
     enabled_field: str = ""
@@ -76,28 +74,10 @@ class AssetSpec:
 
 
 ASSETS: tuple[AssetSpec, ...] = (
-    # Per ENGINE, not per install: each TTS engine clones from its own
-    # reference clip (see config/tts.py), so this row follows tts.engine and
-    # names the engine it is editing. Changing engines changes which file
-    # this row shows and sets - which is the point, since the clip that
-    # sounds best under one model routinely isn't the one that sounds best
-    # under the other.
-    AssetSpec(
-        "voice",
-        lambda config: f"Reference voice WAV ({config.tts.spec.display_name})",
-        lambda config: config.tts.active_voice_field, subdir="voice",
-        required_for="zero-shot speaker cloning - a clean 3-10 second clip of a steady voice",
-    ),
     AssetSpec(
         "bgm", "Background music", "audio.bgm_path", subdir="bgm",
         enabled_field="audio.bgm_enabled",
         required_for="the music bed mixed under every recap",
-    ),
-    AssetSpec(
-        "transcript", "TTS reference transcript", "tts.audio8.reference_text_path", kind="text",
-        required_for="what Audio8 TTS's own reference clip says, word for word - cloning "
-                     "quality depends on it",
-        used_when="engine needs a transcript",
     ),
 )
 
@@ -105,12 +85,9 @@ ASSET_BY_KEY = {spec.key: spec for spec in ASSETS}
 
 
 def asset_relevant(config: RemangaConfig, spec: AssetSpec) -> bool:
-    """Whether this asset matters for the *current* engine. The transcript
-    is meaningless under an engine that clones from audio alone, so it's
-    shown greyed out with the reason rather than silently listed as
-    something to configure."""
-    if spec.key == "transcript":
-        return config.tts.spec.needs_reference_text
+    """Whether this asset matters for the *current* engine. Kept as a hook
+    (screens call it for every row) even though nothing is engine-specific
+    today - the transcript row that used it retired with Audio8 TTS."""
     return True
 
 
@@ -120,13 +97,6 @@ def asset_status(config: RemangaConfig, spec: AssetSpec) -> tuple[bool, str, str
 
     if spec.enabled_field and not get_field(config, spec.enabled_field):
         return True, "off", "disabled"
-
-    if spec.kind == "text":
-        text = read_reference_text(raw)
-        if not text:
-            return False, "empty", f"{raw or '(not set)'} - no text yet"
-        preview = text if len(text) <= 60 else text[:57] + "..."
-        return True, "set", f"{preview}  ({len(text)} chars)"
 
     valid = is_valid_file(raw)
     if valid:
@@ -154,14 +124,9 @@ def candidates_for(config: RemangaConfig, spec: AssetSpec) -> list[Path]:
 
 
 def edit_asset(config: RemangaConfig, spec: AssetSpec) -> None:
-    """Interactively changes one asset - a file picked from what's on disk,
-    or the transcript's text typed in place. Saves config.json/the
-    transcript file immediately; there is no separate save step anywhere in
-    the settings screens."""
-    if spec.kind == "text":
-        _edit_text_asset(config, spec)
-        return
-
+    """Interactively changes one asset - a file picked from what's on disk.
+    Saves config.json immediately; there is no separate save step anywhere
+    in the settings screens."""
     current = str(get_field(config, spec.field(config)) or "")
     # Created, not just named: "drop your files in global/voice/" is only
     # useful advice if that folder is actually there to drop them into.
@@ -195,17 +160,6 @@ def edit_asset(config: RemangaConfig, spec: AssetSpec) -> None:
     console.print(f"[bold green]✓ {spec.title(config)} saved:[/] {display_path(valid)}")
 
 
-def _edit_text_asset(config: RemangaConfig, spec: AssetSpec) -> None:
-    path_str = str(get_field(config, spec.field(config)) or "")
-    current = read_reference_text(path_str)
-    new_text = ask_text(
-        spec.title(config), default=current,
-        note=f"{spec.required_for}\nSaved to: {display_path(Path(path_str), wrap=False)}",
-    )
-    saved = write_reference_text(path_str, new_text)
-    console.print(f"[bold green]✓ Saved:[/] {display_path(saved)}")
-
-
 def run_asset_menu(config: RemangaConfig, *, title: str = "Assets") -> None:
     """The shared asset screen: every asset with its live status, pick one to
     change it, repeat until Back. This is both `remanga paths` and the
@@ -226,58 +180,77 @@ def run_asset_menu(config: RemangaConfig, *, title: str = "Assets") -> None:
 # ---------------------------------------------------------------------------
 
 
-def ensure_valid_voice_prompt(
+def ensure_valid_voice(
     config: RemangaConfig, interactive: bool = True, *, engine: str | None = None,
 ) -> str:
-    """The reference clip the running engine will clone from, validated.
+    """The voice the running engine will narrate in, validated.
+
+    Kokoro does not clone, so this validates a NAME against the engine's own
+    catalogue rather than checking a file exists. An unknown name is a real
+    failure worth stopping for: Kokoro's own loader would try to fetch it
+    from the Hub and fail mid-chapter, and `voice_spec` falling back to the
+    default would otherwise narrate a whole chapter in a voice nobody asked
+    for, silently.
 
     `engine` names the engine actually synthesizing, when that isn't the one
-    config.json selects - `remanga tts --engine X` swaps engines for a single
-    run without redefining later ones, and each engine has its own voice, so
-    validating (and, interactively, asking for) the CONFIGURED engine's clip
-    there would check one file and hand the worker another. Only the voice
-    field is ever written back; `tts.engine` is left exactly as it is, so a
-    one-off can't quietly become the project's engine by way of a save
-    inside the picker.
-
-    Every message names the engine and its own config field: with a voice
-    per engine, "the reference voice is missing" is not actionable on its
-    own - the file the other engine uses may well be sitting there perfectly
-    valid, and the one being asked for is the one that isn't."""
+    config.json selects - `remanga tts --engine X` swaps engines for a
+    single run without redefining later ones. Only the voice field is ever
+    written back; `tts.engine` is left exactly as it is, so a one-off can't
+    quietly become the project's engine by way of a save inside the picker."""
     active_engine = engine or config.tts.engine
     engine_name = engine_spec(active_engine).display_name
     field = voice_field_for(active_engine)
-    # A one-off copy of the voice spec pinned to THIS engine's field and
-    # label, so the picker edits and reports the right engine even when the
-    # config object it was handed names a different one.
-    spec = replace(
-        ASSET_BY_KEY["voice"], dotted=field, label=f"Reference voice WAV ({engine_name})",
-    )
-    raw_path = str(get_field(config, field) or "").strip()
-    valid = is_valid_file(raw_path)
-    if valid:
-        return str(valid.resolve())
+    raw = str(get_field(config, field) or "").strip()
+
+    if raw in VOICE_BY_NAME:
+        return raw
+
+    problem = f"{engine_name} has no voice set" if not raw else \
+        f"'{_esc(raw)}' is not one of {engine_name}'s voices"
 
     if not interactive:
-        raise FileNotFoundError(
-            f"Invalid or missing reference voice file for {engine_name}: '{raw_path}'. "
-            f"Set a valid WAV file in config.json under '{field}' "
-            f"(or run `remanga paths`). Each engine has its own reference voice - "
-            f"setting the other engine's does not cover this one."
+        raise ValueError(
+            f"{problem}. Set one in config.json under '{field}' (or run `remanga paths`). "
+            f"Valid voices: {', '.join(v.name for v in KOKORO_VOICES)}."
         )
 
-    console.print(
-        f"\n[bold]{engine_name} speaker voice setup[/]\n"
-        f"[dim]{spec.required_for}[/]\n"
-        f"[dim]This is {engine_name}'s own reference clip "
-        f"({field}) - the other engine keeps its own.[/]"
-    )
+    console.print(f"\n[bold]{engine_name} voice setup[/]\n[yellow]{problem}.[/]")
     while True:
-        edit_asset(config, spec)
-        valid = is_valid_file(get_field(config, field))
-        if valid:
-            return str(valid.resolve())
-        console.print("[bold red]A valid reference voice file is required to synthesize narration.[/]")
+        pick_voice(config, engine=active_engine)
+        chosen = str(get_field(config, field) or "").strip()
+        if chosen in VOICE_BY_NAME:
+            return chosen
+        console.print("[bold red]A valid voice is required to synthesize narration.[/]")
+
+
+def voice_choices(current: str) -> list[Choice]:
+    """Every Kokoro voice as a menu row, best-graded first (the catalogue is
+    already in that order). The grade is shown because the spread is wide -
+    Kokoro publishes voices graded from A down to F, and picking blind is
+    how a chapter ends up narrated in one of the bad ones."""
+    return [
+        Choice(
+            label=voice.label, hint=voice.name,
+            detail=f"grade {voice.grade} · {voice.accent}",
+            value=voice.name, badge="current" if voice.name == current else "",
+        )
+        for voice in KOKORO_VOICES
+    ]
+
+
+def pick_voice(config: RemangaConfig, *, engine: str | None = None) -> None:
+    """Interactively chooses the narrator's voice and saves it immediately."""
+    field = voice_field_for(engine or config.tts.engine)
+    current = str(get_field(config, field) or "")
+    picked = select(
+        "Narrator voice", voice_choices(current), default=current or DEFAULT_VOICE,
+        note="Kokoro's own voices - no reference clip; grades are Kokoro's published ones",
+    )
+    if is_cancel(picked):
+        return
+    set_field(config, field, picked)
+    voice = VOICE_BY_NAME[picked]
+    console.print(f"[bold green]✓ Narrator voice:[/] {voice.label} [dim]({voice.name}, grade {voice.grade})[/]")
 
 
 def ensure_valid_bgm(config: RemangaConfig, interactive: bool = True) -> str | None:

@@ -92,40 +92,23 @@
     "auto_open_browser": true
   },
   "tts": {
-    "engine": "indextts-2.5",
+    "engine": "kokoro",
     "lang": "EN",
     "speed": 1.0,
     "synth_timeout_seconds": 180,
-    "indextts": {
-      "hf_repo_id": "IndexTeam/IndexTTS-2.5",
-      "model_dir": "checkpoints/indextts_2.5",
-      "cfg_path": "checkpoints/indextts_2.5/config.yaml",
-      "spk_audio_prompt": "",
-      "use_bf16": true,
-      "temperature": 0.8,
-      "top_p": 0.8,
-      "use_text_emotion": false,
-      "text_emotion_strength": 0.7,
-      "sample_rate": 22050,
-      "volume_boost_db": 0.0
-    },
-    "audio8": {
-      "hf_repo_id": "Audio8/Audio8-TTS-Preview-0.1b",
-      "model_dir": "checkpoints/audio8_tts_0.1b",
-      "spk_audio_prompt": "",
-      "reference_text_path": "global/tts_reference.txt",
-      "use_bf16": true,
-      "temperature": 0.7,
-      "top_p": 0.9,
-      "max_new_tokens": 512,
-      "sample_rate": 44100,
+    "kokoro": {
+      "hf_repo_id": "hexgrad/Kokoro-82M",
+      "model_dir": "checkpoints/kokoro_82m",
+      "voice": "af_heart",
       "volume_boost_db": 0.0,
-      "chunk_max_chars": 220
+      "sample_rate": 24000
     }
   },
   "ocr": {
-    "hf_repo_id": "deepseek-ai/DeepSeek-OCR-2",
-    "model_dir": "checkpoints/deepseek_ocr_2"
+    "hf_repo_id": "lightonai/LightOnOCR-2-1B",
+    "model_dir": "checkpoints/lighton_ocr_2_1b",
+    "prompt": "",
+    "max_new_tokens": 512
   },
   "audio": {
     "sample_rate": 44100,

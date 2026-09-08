@@ -13,7 +13,7 @@ raw digits (each engine reads "3,000" in its own way, and none of them ask).
 KEPT - everything that carries delivery. `?`, `!` and `...` drive the
 engine's own phrasing and pacing - and the emotion classifier too, on a
 config that enables it (see prompts/narration.md Rule 3 and
-remanga/audio/synth/indextts.py), so they are never stripped. Runs of them collapse - "!!!" means the same as "!" to a
+remanga/audio/synth/kokoro.py), so they are never stripped. Runs of them collapse - "!!!" means the same as "!" to a
 model and only risks over-reading - and mixed "?!" survives intact, because
 that pairing is its own tone. Commas, periods, apostrophes and quotes stay:
 they're the phrasing.

@@ -77,7 +77,7 @@ def apply_edge_fades(segment: AudioSegment, edge_fade_ms: int) -> AudioSegment:
     `edge_fade_ms` is a ceiling, not a fixed length: each edge is faded over
     at most the silence that edge actually has, so the fade shapes the
     clip's own lead-in and tail rather than its first and last phonemes.
-    That distinction is the whole point. IndexTTS-2.5 returns audio that
+    That distinction is the whole point. A TTS engine returns audio that
     starts within a few milliseconds of the first phoneme, so applying the
     configured 35ms flat - as this used to - ramped the opening consonant
     itself: across a finished chapter the first 35ms of 52 of 60 panels

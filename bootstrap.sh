@@ -27,10 +27,9 @@ BIN_DIR="$SCRIPT_DIR/bin"
 CACHE_DIR="$SCRIPT_DIR/.cache"
 TOOLS_DIR="$SCRIPT_DIR/.tools"
 VENV_DIR="$SCRIPT_DIR/.venv"
-INDEXTTS_VENV_DIR="$TOOLS_DIR/venv-indextts"
-AUDIO8_VENV_DIR="$TOOLS_DIR/venv-audio8"
+KOKORO_VENV_DIR="$TOOLS_DIR/venv-kokoro"
 MAGI_VENV_DIR="$TOOLS_DIR/venv-magi"
-DEEPSEEK_OCR_VENV_DIR="$TOOLS_DIR/venv-deepseek-ocr"
+LIGHTON_OCR_VENV_DIR="$TOOLS_DIR/venv-lighton-ocr"
 
 WARNINGS=()
 
@@ -112,8 +111,8 @@ say "This machine: $REMANGA_SUMMARY"
 # from the wheel index that matches this machine instead of whatever plain
 # PyPI happens to serve. Deliberately an explicit backend rather than uv's own
 # `--torch-backend=auto`: auto maps the driver to the newest CUDA it supports,
-# and the newest indexes do not all carry the torch 2.8 that IndexTTS-2.5
-# pins (cu118 stops at 2.7, cu130 starts at 2.9). hardware.py only ever picks
+# and the newest indexes do not all carry the torch 2.8 this project targets
+# (cu118 stops at 2.7, cu130 starts at 2.9). hardware.py only ever picks
 # an index that actually has it - see its module docstring.
 TORCH_ARGS=()
 if [ -n "${REMANGA_TORCH_BACKEND:-}" ] && [ "$REMANGA_TORCH_BACKEND" != "default" ]; then
@@ -201,12 +200,12 @@ fi
 # ---------------------------------------------------------------------------
 # One lightweight main env plus one per heavy ML dependency, tucked under
 # .tools/. Their requirements genuinely conflict - MAGI v3 needs
-# transformers<4.52, Audio8 needs >=4.57, and nothing guarantees any two of
-# them would ever agree on one resolution - so five environments buys
-# permanent isolation instead of a pin that has to be re-verified by hand
-# every time one tool's install could clobber another's. Nothing "activates"
-# them: the main env invokes `.tools/venv-<tool>/bin/python` as a subprocess
-# (see remanga/paths/tools.py).
+# transformers<4.52 and LightOnOCR-2 needs >=5.0, and nothing guarantees
+# any two of them would ever agree on one resolution - so separate
+# environments buy permanent isolation instead of a pin that has to be
+# re-verified by hand every time one tool's install could clobber another's.
+# Nothing "activates" them: the main env invokes
+# `.tools/venv-<tool>/bin/python` as a subprocess (see remanga/paths/tools.py).
 make_venv() {
     "$UV" venv "$1" --python 3.11 --allow-existing >/dev/null 2>&1 || return 1
     return 0
@@ -216,77 +215,27 @@ say "Creating main environment ($VENV_DIR)..."
 make_venv "$VENV_DIR" || die "could not create the main virtual environment"
 "$UV" pip install --python "$VENV_DIR" -e . || die "could not install remanga into the main environment"
 
-say "Creating IndexTTS-2.5 environment [$REMANGA_TORCH_BACKEND wheels]..."
-if make_venv "$INDEXTTS_VENV_DIR"; then
-    # --torch-backend on BOTH installs: the second one re-resolves torch as a
-    # dependency of index-tts, and without the flag it would happily pull the
-    # plain-PyPI build straight over the machine-matched one just installed.
-    try_step "IndexTTS torch install" \
-        "$UV" pip install --python "$INDEXTTS_VENV_DIR" "${TORCH_ARGS[@]}" \
-        torch torchaudio transformers accelerate huggingface-hub modelscope
-    try_step "IndexTTS package install" \
-        "$UV" pip install --python "$INDEXTTS_VENV_DIR" "${TORCH_ARGS[@]}" \
-        "git+https://github.com/index-tts/index-tts.git"
+say "Creating Kokoro-82M environment [$REMANGA_TORCH_BACKEND wheels]..."
+if make_venv "$KOKORO_VENV_DIR"; then
+    try_step "Kokoro install" \
+        "$UV" pip install --python "$KOKORO_VENV_DIR" "${TORCH_ARGS[@]}" \
+        torch kokoro soundfile numpy huggingface-hub
 
-    # index-tts's own pyproject declares a `pytorch-cuda` index pinned to
-    # cu128 via [tool.uv.sources], and that pin WINS over --torch-backend:
-    # installing it resolves torch to 2.8.0+cu128 even when we asked for
-    # cpu or rocm. Verified by dry-run - `--torch-backend cpu` alone gives
-    # 2.8.0+cpu, but the same flag alongside the git package gives
-    # 2.8.0+cu128. Left alone that would put CUDA wheels on CPU-only and
-    # AMD machines, which is exactly the portability bug this file exists
-    # to fix, so the 2.8 line is re-pinned here from the index this machine
-    # actually wants. Every supported backend carries 2.8 (see
-    # hardware.py), so this resolves everywhere; it's a no-op when the
-    # detected backend already is cu128.
-    try_step "IndexTTS torch re-pin for this machine" \
-        "$UV" pip install --python "$INDEXTTS_VENV_DIR" "${TORCH_ARGS[@]}" \
-        "torch==2.8.*" "torchaudio==2.8.*"
+    # misaki (Kokoro's English G2P, pulled in above) loads a spaCy pipeline,
+    # and spaCy ships its models as separate packages rather than fetching
+    # them at runtime - without this every synthesis dies on
+    # "Can't find model 'en_core_web_sm'".
+    #
+    # Installed from the release URL rather than via `python -m spacy
+    # download`: that command shells out to the ambient installer, which
+    # under uv reports "Download and installation successful" and installs
+    # NOTHING into the target venv. Verified - it exits 0 and the model is
+    # still absent. The URL form is the only one that reliably lands here.
+    try_step "Kokoro G2P model install" \
+        "$UV" pip install --python "$KOKORO_VENV_DIR" \
+        "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
 else
-    warn "could not create the IndexTTS environment"
-fi
-
-say "Creating Audio8 TTS environment [$REMANGA_TORCH_BACKEND wheels]..."
-if make_venv "$AUDIO8_VENV_DIR"; then
-    try_step "Audio8 install" \
-        "$UV" pip install --python "$AUDIO8_VENV_DIR" "${TORCH_ARGS[@]}" \
-        "torch>=2.5.0" "torchaudio>=2.5.0" "transformers>=4.57.0,<5" "soundfile>=0.12" \
-        "safetensors>=0.4" accelerate huggingface-hub
-else
-    warn "could not create the Audio8 environment"
-fi
-
-# Audio8 is Falcon-H1-based (a Mamba/state-space hybrid), and its speed
-# depends on the fused mamba-ssm/causal-conv1d CUDA kernels; without them
-# transformers silently falls back to an unfused token-by-token recurrence
-# that measured ~2-3x slower per panel. These are real CUDA extension builds
-# (~10-20 min, need nvcc matching torch's CUDA major version), so this is
-# strictly best-effort - and it is skipped entirely unless there is actually
-# an NVIDIA GPU to build them for, which is the difference between a 20
-# minute wasted build and none at all on a CPU or Apple machine.
-if [ "$REMANGA_ACCEL" = "cuda" ] && [ -d "$AUDIO8_VENV_DIR" ]; then
-    say "Building Audio8's fused Mamba CUDA kernels (~10-20 min; optional, safe to fail)..."
-    (
-        set -e
-        # nvcc from pip rather than the system CUDA toolkit: torch's build only
-        # needs nvcc's MAJOR version to match torch.version.cuda, and the
-        # system toolkit is frequently a different major version.
-        "$UV" pip install --python "$AUDIO8_VENV_DIR" nvidia-cuda-nvcc
-        NVCC_BIN="$(find "$AUDIO8_VENV_DIR" -type f -path "*/nvidia/*/bin/nvcc" 2>/dev/null | head -n 1)"
-        [ -n "$NVCC_BIN" ] || { echo "no nvcc found after install"; exit 1; }
-        CUDA_HOME="$(dirname "$(dirname "$NVCC_BIN")")"
-        export CUDA_HOME PATH="$CUDA_HOME/bin:$PATH" MAX_JOBS=4
-        # Build only for the compute capability actually present, so nvcc
-        # doesn't spend the whole 20 minutes on architectures this machine
-        # will never run.
-        arch_list="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -n 1 | tr -d ' ')"
-        export TORCH_CUDA_ARCH_LIST="${arch_list:-7.5;8.0;8.6;8.9;9.0}"
-        "$UV" pip install --python "$AUDIO8_VENV_DIR" causal-conv1d --no-build-isolation
-        "$UV" pip install --python "$AUDIO8_VENV_DIR" mamba-ssm --no-build-isolation
-    ) && say "Fused Mamba CUDA kernels installed - Audio8 will use the fast path." \
-      || warn "fused Mamba kernels not built - Audio8 still works, just on its slower fallback path."
-else
-    say "Skipping Audio8's CUDA kernels (torch backend is '$REMANGA_TORCH_BACKEND', not CUDA) - Audio8 will use its portable fallback path."
+    warn "could not create the Kokoro environment"
 fi
 
 say "Creating MAGI v3 environment [$REMANGA_TORCH_BACKEND wheels]..."
@@ -302,13 +251,18 @@ else
     warn "could not create the MAGI v3 environment"
 fi
 
-say "Creating DeepSeek-OCR-2 environment [$REMANGA_TORCH_BACKEND wheels]..."
-if make_venv "$DEEPSEEK_OCR_VENV_DIR"; then
-    try_step "DeepSeek-OCR-2 install" \
-        "$UV" pip install --python "$DEEPSEEK_OCR_VENV_DIR" "${TORCH_ARGS[@]}" \
-        torch transformers accelerate pillow huggingface-hub modelscope einops addict easydict
+say "Creating LightOnOCR-2 environment [$REMANGA_TORCH_BACKEND wheels]..."
+if make_venv "$LIGHTON_OCR_VENV_DIR"; then
+    # transformers>=5.0 is a hard requirement, not a preference: LightOnOCR-2
+    # is supported natively there (LightOnOcrForConditionalGeneration /
+    # LightOnOcrProcessor) and simply does not exist in 4.x. This is also
+    # exactly why it gets its own environment - MAGI v3 pins
+    # transformers<4.52, so the two could never share one resolution.
+    try_step "LightOnOCR-2 install" \
+        "$UV" pip install --python "$LIGHTON_OCR_VENV_DIR" "${TORCH_ARGS[@]}" \
+        torch "transformers>=5.0.0" accelerate pillow huggingface-hub safetensors
 else
-    warn "could not create the DeepSeek-OCR-2 environment"
+    warn "could not create the LightOnOCR-2 environment"
 fi
 
 # ---------------------------------------------------------------------------

@@ -23,7 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 BIN_DIR = REPO_ROOT / "bin"
 UV_BIN = BIN_DIR / "uv"
 
-# Isolated per-tool virtualenvs (indextts, audio8, magi, ...) bootstrap.sh
+# Isolated per-tool virtualenvs (kokoro, magi, lighton-ocr, ...) bootstrap.sh
 # provisions alongside the main .venv - see remanga/paths/tools.py.
 TOOLS_DIR = REPO_ROOT / ".tools"
 
@@ -35,7 +35,7 @@ CONFIG_PATH = Path("config.json")
 CONFIG_EXAMPLE_PATH = Path("config.example.json")
 
 # Cross-project shared assets that aren't tied to any one manga: reference
-# voice WAV, BGM file, the audio8 TTS transcript, and the narration-lessons
+# BGM file and the narration-lessons
 # log (see remanga/paths/global_assets.py). Deliberately a SIBLING of
 # projects/, not a subdirectory of it - list_projects() (projects.py) walks
 # every directory under projects/ and treats each as a manga project, so a

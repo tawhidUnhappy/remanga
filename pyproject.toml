@@ -1,13 +1,13 @@
 [project]
 name = "remanga"
 version = "0.2.0"
-description = "High-retention, LLM-guided manga recap video production pipeline powered by IndexTTS-2.5"
+description = "High-retention, LLM-guided manga recap video production pipeline powered by Kokoro-82M"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     # Deliberately lightweight: heavy/conflicting ML stacks (torch, transformers,
     # modelscope, timm, shapely, pytorch-metric-learning, ...) live in their own
-    # isolated environments per tool - .venv-indextts and .venv-magi, provisioned
+    # isolated environments per tool - .venv-kokoro and .venv-magi, provisioned
     # by bootstrap.sh - and are only ever reached via subprocess. See
     # remanga/venvs.py, remanga/audio/synth/, remanga/webui/magi_assist.py.
     "numpy>=1.24.0",

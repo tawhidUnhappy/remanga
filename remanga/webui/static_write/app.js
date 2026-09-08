@@ -181,7 +181,7 @@ function buildCard(p) {
   return card;
 }
 
-// "OCR this panel" - runs DeepSeek-OCR-2 (see remanga/ocr/engine.py; GPU
+// "OCR this panel" - runs LightOnOCR-2 (see remanga/ocr/engine.py; GPU
 // preferred, falls back to CPU) on this panel's cropped image and offers
 // the recognized text as a starting draft, never silently overwriting
 // anything already typed:

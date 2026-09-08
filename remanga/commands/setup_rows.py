@@ -44,8 +44,8 @@ def asset_setup(key: str, label: str, detail: str) -> SetupAction:
     from that asset's own spec.
 
     Per-asset rather than the whole Assets screen on purpose: `mix` cares
-    about the BGM and nothing else, and offering it the reference voice as
-    well would be three rows of noise around the one that matters."""
+    about the BGM and nothing else, and offering it every other shared file
+    would be rows of noise around the one that matters."""
     spec = ASSET_BY_KEY[key]
     return SetupAction(
         label,
@@ -59,12 +59,8 @@ def asset_setup(key: str, label: str, detail: str) -> SetupAction:
 TTS_SETUP: tuple[SetupAction, ...] = (
     section_setup("engine", "which model synthesizes the narration voice - "
                    + ", ".join(spec.display_name for spec in TTS_ENGINE_SPECS)),
-    asset_setup("voice", "Reference voice",
-                 "the active engine's own clip, that this chapter's narration is cloned from - "
-                 "each engine keeps a separate one"),
-    asset_setup("transcript", "Reference transcript",
-                 "what that engine's own clip says, word for word - only the engines that "
-                 "need it show this"),
+    section_setup("voice", "which of the engine's built-in voices reads this chapter - "
+                   "a name from its own catalogue, not a clip to clone"),
     section_setup("language", "passed straight through to the engine"),
 )
 

@@ -15,7 +15,7 @@ Runs entirely inside the isolated `.venv-magi` environment as a subprocess
 (remanga/webui/scripts/magi_worker.py) - MAGI's own pinned dependencies (a
 `transformers` capped below 4.52 for its DaViT vision encoder, `timm`,
 `shapely`, `pytorch_metric_learning`, ...) never have to coexist with anything
-else remanga uses, including IndexTTS-2.5's own isolated environment. See
+else remanga uses, including Kokoro's own isolated environment. See
 remanga/venvs.py. Requires a CUDA GPU. Only invoked if `marker.magi_enabled` is
 true in config, so nothing about this stage costs anything when it's off.
 """
@@ -131,7 +131,7 @@ def ensure_weights_downloaded(config: MarkerConfig) -> Path | None:
     does a full load-and-release pass (auto-healing any missing dependency, see
     _spawn_worker_with_auto_heal) so the panel-marking assist is actually ready
     the first time someone opens the web UI, not just downloaded. Called from
-    `remanga setup-models` / bootstrap.sh, the same moment IndexTTS-2.5's
+    `remanga setup-models` / bootstrap.sh, the same moment Kokoro's
     weights are fetched. No-ops (with a note) if MAGI is disabled in config, or
     if `.venv-magi` / a GPU aren't available."""
     if not config.magi_enabled:

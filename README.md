@@ -1,6 +1,6 @@
 # remanga
 
-**remanga** is a 100% self-contained, modular manga recap video production engine. Powered by **IndexTTS-2.5**, it automates manga downloading, MAGI v3-assisted panel marking via a local web UI, LLM-guided narration writing, vision packaging, naturally expressive vocal synthesis, audio mastering with EBU R128 normalization, and GPU-accelerated video rendering.
+**remanga** is a 100% self-contained, modular manga recap video production engine. Powered by **Kokoro-82M**, it automates manga downloading, MAGI v3-assisted panel marking via a local web UI, LLM-guided narration writing, vision packaging, naturally expressive vocal synthesis, audio mastering with EBU R128 normalization, and GPU-accelerated video rendering.
 
 Built with strict environment isolation, `remanga` provisions its own tools, manages its own runtimes, and leaves zero files or modifications outside its root workspace directory.
 
@@ -41,11 +41,11 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
 - **One Flat Vision Output Checklist - What to Generate, What to Zip:**
   - Individual panel crops (`panels/`) are always produced. Everything else is an independent yes/no switch: `sheets` (contact sheets, 2x2 labeled composites merged at **full original resolution** - never downscaled), `sheets_zip`, `pdf`, `pdf_splite`, `pdf_zip`, `pdf_zip_splite`, `panels_zip`, `panels_zip_splites` - check any combination, losslessly re-encoded smaller than the raw files either way.
   - Configurable as a plain checklist, interactively (`./run.sh setup-config`, or a prompt in the main wizard each run) and persistent in `config.json` - see [Vision Outputs](#vision-outputs-what-to-generate-what-to-zip).
-- **Consistent, Natural Vocal Synthesis (IndexTTS-2.5):**
+- **Fast, Consistent Vocal Synthesis (Kokoro-82M):**
   - One even narrator register for the whole recap — the delivery is cloned from the reference clip and stays consistent panel to panel, instead of lurching between emotional registers while it describes what happens.
-  - Optional per-panel emotion classified from each panel's own text (`tts.indextts.use_text_emotion`, **off by default**) for work that wants an expressive read — see [Narration Voice & Delivery](#narration-voice--delivery).
-  - Temperature/top-p left at IndexTTS-2.5's own recommended defaults (`0.8`/`0.8`) for natural-sounding prosody.
-  - Zero-shot speaker cloning from any clean 10–15s reference voice WAV.
+  - **48x faster than real time** on an RTX 3060 (measured): a 450-panel recap synthesizes in under a minute instead of 58.
+  - 54 built-in studio voices, graded A–F by the model's authors and shown with their grades in the picker — no reference clip, no cloning, no transcript.
+  - Apache-2.0 weights, 327MB, ~2-3GB VRAM — see [The TTS Engine](#the-tts-engine).
 - **Strict Temporal Horizon Prompting (Anti-Spoiler & Anti-Hallucination):**
   - Forbids unintroduced character names, future plot reveals, motives, or hallucinated actions.
   - Strict 0–1000 normalized integer bounding box coordinate system (`[ymin, xmin, ymax, xmax]`).
@@ -90,7 +90,7 @@ and reported by `./run.sh hardware`:
 | Anything else | `cpu` | `libx264` |
 
 Why the CUDA index isn't simply "the newest your driver supports":
-IndexTTS-2.5 pins `torch==2.8.*`, and PyTorch's `cu130` index starts at 2.9
+This project targets `torch==2.8.*`, and PyTorch's `cu130` index starts at 2.9
 while `cu118` stops at 2.7 — neither has it. The table above picks the
 newest index that the driver can run *and* that still carries 2.8.
 
@@ -142,12 +142,11 @@ bash bootstrap.sh
 1. Downloads and provisions static `bin/uv`, `bin/ffmpeg`, and `bin/ffprobe` for this platform (macOS uses the system ffmpeg) — `ffmpeg` is pinned to a specific tested build rather than always the newest one, so its NVENC GPU encoder keeps working across a wide range of NVIDIA driver versions instead of silently requiring whatever driver was newest the day it was compiled (see [Troubleshooting #3](#troubleshooting--faq)).
 2. Provisions **five** isolated Python 3.11 virtual environments instead of one, each installed from the wheel index this machine needs:
    - `.venv/` — remanga's own lightweight core (Pillow, Pydantic, requests, rich, pydub, Flask). No ML libraries at all.
-   - `.tools/venv-indextts/` — PyTorch + IndexTTS-2.5's own pinned dependencies.
+   - `.tools/venv-kokoro/` — PyTorch + Kokoro and its misaki/spaCy G2P stack.
    - `.tools/venv-magi/` — PyTorch + MAGI v3's own pinned dependencies (including a `transformers` capped below its DaViT-breaking `4.52`).
 
-   IndexTTS and MAGI each pin their own, sometimes mutually incompatible, versions of shared libraries like `transformers` — separate environments mean neither can ever silently break the other. The main env only ever talks to them as subprocesses (see `remanga/venvs.py`); the storage trade-off buys permanent isolation instead of a pin that has to be babysat.
-3. Builds Audio8's fused Mamba CUDA kernels **only when there's an NVIDIA GPU to build them for** — a ~20 minute compile that is pure waste on any other machine, and is skipped there rather than attempted and failed.
-4. Turbo-downloads official `IndexTeam/IndexTTS-2.5` weights into `checkpoints/indextts_2.5` and `ragavsachdeva/magiv3` weights into `checkpoints/magiv3`.
+MAGI v3 pins `transformers<4.52` and LightOnOCR-2 needs `>=5.0` — separate environments mean neither can ever silently break the other. The main env only ever talks to them as subprocesses (see `remanga/venvs.py`); the storage trade-off buys permanent isolation instead of a pin that has to be babysat.
+3. Turbo-downloads official `hexgrad/Kokoro-82M` weights into `checkpoints/kokoro_82m` and `ragavsachdeva/magiv3` weights into `checkpoints/magiv3`.
 5. Initializes default `config.json`.
 
 ---
@@ -185,7 +184,7 @@ Five commands have a menu of their own — `tts`, `mix`, `render`, `full-recap` 
 ? tts
   Generate vocal audio from narration.json · or change what it runs with
 ❯ 1. Run tts  Generate vocal audio from narration.json
-  2. TTS engine  Audio8 TTS
+  2. TTS engine  Kokoro-82M
   3. Reference voice  global/voice/narrator.wav
   4. Reference transcript  In a world where you don't just die once, a frightened bo...  (651 chars)
   5. Narration language  English (EN)
@@ -237,7 +236,7 @@ If stdin isn't a terminal (a piped script, CI, an editor's output pane), every m
 
 ```json
 "settings": {
-  "tts.indextts.spk_audio_prompt": "global/voice/gravelly.wav",
+  "tts.kokoro.voice": "am_fenrir",
   "audio.bgm_path": "global/bgm/Dread.wav",
   "video.height": 1440
 }
@@ -256,7 +255,7 @@ Every row shows what that setting is **right now**, so the screen doubles as a p
 ```
 ? Settings
   changes save immediately
-❯ TTS engine                              Audio8 TTS
+❯ TTS engine                              Kokoro-82M
   Assets (voice, BGM, transcript)         voice: ok, bgm: ok, transcript: set
   Narration language                      English (EN)
   Vision outputs (what to generate/zip)   sheets, panels_zip (split at 50MB)
@@ -268,7 +267,7 @@ Every row shows what that setting is **right now**, so the screen doubles as a p
   Done
 ```
 
-Just need to swap the reference voice WAV, BGM file, or the audio8 engine's transcript? `./run.sh paths` opens that same Assets screen on its own — each asset with whether it currently resolves to a real file, and a picker listing the audio files already in `global/voice/` and `global/bgm/` so you rarely have to type a path at all. All three live under `global/` by default (`global/voice/`, `global/bgm/`, `global/tts_reference.txt`) — one shared, gitignored location for assets that aren't tied to any single manga project.
+Just need to swap the BGM file? `./run.sh paths` opens that same Assets screen on its own — showing whether it currently resolves to a real file, with a picker listing the audio files already in `global/bgm/` so you rarely have to type a path at all. It lives under `global/` by default — one shared, gitignored location for assets that aren't tied to any single manga project. (The narrator's voice isn't here: it's a name from Kokoro's own catalogue, so it has its own **Narrator voice** picker row.)
 
 ### Key Configurable Parameters (`config.json`):
 
@@ -305,22 +304,16 @@ Just need to swap the reference voice WAV, BGM file, or the audio8 engine's tran
     "click_to_select": true
   },
   "tts": {
-    "engine": "indextts-2.5",
+    "engine": "kokoro",
     "lang": "EN",
     "speed": 1.0,
     "synth_timeout_seconds": 180,
-    "indextts": {
-      "spk_audio_prompt": "path/to/reference_voice.wav",
-      "use_bf16": true,
-      "temperature": 0.8,
-      "top_p": 0.8,
-      "use_text_emotion": false,
-      "text_emotion_strength": 0.7,
-      "sample_rate": 22050
-    },
-    "audio8": {
-      "spk_audio_prompt": "path/to/another_reference_voice.wav",
-      "reference_text_path": "global/tts_reference.txt"
+    "kokoro": {
+      "hf_repo_id": "hexgrad/Kokoro-82M",
+      "model_dir": "checkpoints/kokoro_82m",
+      "voice": "af_heart",
+      "volume_boost_db": 0.0,
+      "sample_rate": 24000
     }
   },
   "audio": {
@@ -474,10 +467,10 @@ want to look back at what was flagged and fixed.
 ### 5. Synthesize Vocal Audio
 ```bash
 ./run.sh tts --project "my_manga" --chapter "1"
-./run.sh tts --project "my_manga" --chapter "1" --engine audio8-tts-0.1b
+./run.sh tts --project "my_manga" --chapter "1" --voice am_fenrir
 ```
 Uses the configured engine and reference voice unless you say otherwise:
-- **`--engine`** — synthesize this run with the other engine (`indextts-2.5` / `audio8-tts-0.1b`) without touching `config.json`; its weights download automatically the first time it's used. The wizard doesn't ask — it states which engine is configured and uses it, since that's not a per-chapter decision. Switch permanently in `setup-config` → **TTS engine**.
+- **`--voice`** — synthesize this run in a different Kokoro voice without touching `config.json`. The wizard doesn't ask — it states which voice is configured and uses it, since that's not a per-chapter decision. Change it permanently in `setup-config` → **Narrator voice**.
 - **`--voice`** — a different reference WAV for this run only.
 - **`--force`** — re-synthesize every panel instead of resuming.
 
@@ -641,7 +634,7 @@ The included prompt system in `prompts/` enforces strict narrative rules:
 1. **Zero Future Spoilers:** The LLM is forbidden from revealing plot twists, motives, or unrevealed identities.
 2. **Name Introduction Protocol:** Characters are referred to strictly by visible physical traits (*"a dark-haired student"*) until formally introduced by name in dialogue or captions.
 3. **Show-and-Synthesize:** Narrative commentary blends speech bubbles and actions into active present-tense storytelling.
-4. **Pacing Ceiling:** 10 to 20 words per panel (hard ceiling: 26 words) to ensure optimal retention and natural IndexTTS-2.5 speech pacing.
+4. **Pacing Ceiling:** 10 to 20 words per panel (hard ceiling: 26 words) to ensure optimal retention and natural Kokoro speech pacing.
 
 ### YouTube Upload Text (`prompts/youtube.md`)
 
@@ -653,42 +646,64 @@ It's written for reuse rather than for a fresh write-up every chapter: the descr
 
 ---
 
-## Switching TTS Engines
+## The TTS Engine
 
-remanga can drive more than one text-to-speech engine, each in its own isolated `.tools/venv-*` environment (see [Fresh PC Installation & Setup](#fresh-pc-installation--setup)) so their dependency pins never have to share a resolution:
+remanga drives **Kokoro-82M** (`tts.engine: "kokoro"`), an 82M-parameter StyleTTS 2 / iSTFTNet model with fixed built-in voices, in its own isolated `.tools/venv-kokoro` environment.
 
-| Engine (`tts.engine`) | Cloning input | Notes |
+It replaced IndexTTS-2.5 and Audio8 TTS, both of which cloned a narrator from a reference clip. If you need what those did, they're preserved on the **`legacy/indextts-audio8`** branch.
+
+**Why the change**, measured on an RTX 3060 (12GB):
+
+| | IndexTTS-2.5 | **Kokoro-82M** |
 |---|---|---|
-| `indextts-2.5` (default) | Reference voice WAV only | Zero-shot - delivery cloned from the reference clip, with optional per-panel emotion from the text (see below) |
-| `audio8-tts-0.1b` | Reference voice WAV **+ a text transcript of it** | [Audio8/Audio8-TTS-Preview-0.1b](https://huggingface.co/Audio8/Audio8-TTS-Preview-0.1b) - a ~170M-parameter Falcon-H1-based cloning model with its own 44.1kHz codec decoder |
+| real-time factor | 1.42 — *slower* than real time | **0.021 — 48x faster than real time** |
+| per panel | 7.7s | **0.12s** |
+| a 450-panel recap | **58 minutes** of synthesis | **under 1 minute** |
+| weights | 3.3GB | 327MB |
+| voice | you supply a reference clip | 54 built-in voices |
+| licence (weights) | — | Apache-2.0 |
 
-Switch from the wizard's `tts` row — **2. TTS engine**, a numbered list you answer with one keystroke, right next to **1. Run tts** (see [How the menus work](#how-the-menus-work)). `./run.sh setup-config` (the "TTS engine" row) and editing `tts.engine` in `config.json` directly both still work, and `tts --engine` overrides the engine for a single run without changing the setting. `bootstrap.sh` already provisions both engines' isolated venvs (`.tools/venv-indextts`, `.tools/venv-audio8`) regardless of which one is active, so switching never requires re-running it — only that engine's own model weights get downloaded, and only the first time it's actually used (`checkpoints/audio8_tts_0.1b/`, ~1.7GB).
+The reference clip was also the single largest source of quality problems: IndexTTS truncates it to its first 15 seconds and derives the narrator's entire delivery from that, so a badly-chosen clip — or one cut mid-word — poisoned every panel of every chapter. Kokoro removes that whole category of failure.
 
-### Each engine has its own voice
+### Choosing the voice
 
-The two engines are configured as **two parallel blocks**, `tts.indextts` and `tts.audio8`, and each holds its own `spk_audio_prompt` — so every engine gets its own reference voice, its own checkpoint and its own sampling settings:
+`tts.kokoro.voice` is a **name**, not a path — there is no clip to point at, and no transcript. Pick one from the wizard's **Narrator voice** row (`./run.sh setup-config`), or set it directly:
 
 ```json
 "tts": {
-  "engine": "indextts-2.5",
-  "lang": "EN", "speed": 1.0, "synth_timeout_seconds": 180,
-
-  "indextts": { "spk_audio_prompt": "global/voice/narrator_a.wav", "volume_boost_db": 0.0,
-                "temperature": 0.8, "top_p": 0.8 },
-  "audio8":   { "spk_audio_prompt": "global/voice/narrator_b.wav", "volume_boost_db": 4.0,
-                "temperature": 0.7, "top_p": 0.9, "reference_text_path": "global/tts_reference.txt" }
+  "engine": "kokoro",
+  "lang": "EN",
+  "speed": 1.0,
+  "synth_timeout_seconds": 180,
+  "kokoro": {
+    "hf_repo_id": "hexgrad/Kokoro-82M",
+    "model_dir": "checkpoints/kokoro_82m",
+    "voice": "af_heart",
+    "volume_boost_db": 0.0,
+    "sample_rate": 24000
+  }
 }
 ```
 
-Only the settings that mean the same thing under either engine — `engine`, `lang`, `speed`, `synth_timeout_seconds` — stay at the `tts` top level. Everything else belongs to one engine, because the two models clone differently and the clip that sounds best under one is routinely not the one that sounds best under the other. Sharing a single field meant re-pointing it at a different WAV every time you switched, which is how a whole chapter gets synthesized in the wrong voice.
+Kokoro publishes a quality grade per voice, and **the spread is wide — A down to F** — so the picker shows the grade on every row and lists them best-first. The ones worth knowing:
 
-The wizard's **Reference voice** row follows `tts.engine`: it names the engine it is editing (*"Reference voice WAV (Audio8 TTS)"*) and writes to that engine's block, so switching engines switches which file the row shows. Switching also states the voice now in effect, and offers to pick one if that engine hasn't got one yet. `tts --voice` still overrides for a single run, and applies to the engine actually running.
+| voice | grade | notes |
+|---|---|---|
+| **`af_heart`** (default) | **A** | the only grade-A voice it ships |
+| `af_bella` | A- | |
+| `af_nicole`, `bf_emma` | B- | |
+| **`am_fenrir`**, `am_michael`, `am_puck` | C+ | **the best male voices** |
+| `bm_fable`, `bm_george` | C | British male |
 
-### Per-engine volume boost
+If you want a male narrator, `am_fenrir` is the pick — but note it's three grades below the default, which is a real quality trade rather than a coin flip. That's exactly why `af_heart` is the default and nothing picks a male voice for you silently.
 
-`volume_boost_db` in each block is a gain applied to that engine's narration clips, in decibels (`0.0` = untouched, positive = louder). It's per engine for the same reason the voice is: the two models return audio at noticeably different levels, so one narrator sits under the music while the other sits over it.
+`lang_code` (American vs British phonemes) is **derived from the voice name**, never configured. Kokoro takes it separately, and a mismatch makes a voice speak through the wrong accent's phonemes instead of raising an error — so remanga doesn't offer you the chance to get it wrong.
 
-The gain is baked into each panel's WAV as it's written, so the clips on disk really are louder. **What you hear in the finished video depends on `audio.enable_loudnorm`:**
+`tts --voice <name>` overrides for a single run without touching `config.json`.
+
+### Volume boost
+
+`tts.kokoro.volume_boost_db` is a gain applied to the narration clips, in decibels (`0.0` = untouched, positive = louder). The gain is baked into each panel's WAV as it's written, so the clips on disk really are louder. **What you hear in the finished video depends on `audio.enable_loudnorm`:**
 
 | Your settings | What a boost does |
 |---|---|
@@ -698,55 +713,26 @@ The gain is baked into each panel's WAV as it's written, so the clips on disk re
 
 **Changing it does not re-synthesize.** `audio_timing.json` records the gain baked into the clips it describes, so going from `+3` to `+6` applies only the `+3` difference to the cached clips — no TTS re-run — and going back down applies a negative one. Because that file's mtime is what `mix` and `render` watch, turning the knob propagates all the way to the finished video on the next run with no extra flag. Values are clamped to ±30 dB, and any panel pushed into clipping is named in the output (pydub saturates rather than wrapping, so it distorts rather than exploding).
 
-**Upgrading is automatic.** A `config.json` from before the split — with IndexTTS's fields unnested at the `tts` top level and one shared `spk_audio_prompt` — is migrated on load: the flat settings fold into `tts.indextts`, and the shared voice seeds **both** engines, so the first run after upgrading sounds exactly like the last run before it and the two only diverge once you change one. Per-project `settings` overrides written against the old paths are migrated the same way.
-
-`audio8-tts-0.1b` needs one extra piece of configuration `indextts-2.5` doesn't: an accurate transcript of whatever WAV `tts.audio8.spk_audio_prompt` points at — the setup wizard asks for this right after the reference voice file whenever this engine is selected, since this model's cloning quality depends on transcript accuracy, not just the audio itself. Note that the transcript must match **that engine's own** clip, not the other's. The transcript lives in its own text file (`tts.audio8.reference_text_path`, default `global/tts_reference.txt`) rather than inline in config.json, so an unrelated config edit can't accidentally mangle a long paragraph of free text sitting next to it - read fresh at synth time, editable directly or via the setup wizard.
-
-Everything downstream — `remanga tts`, resuming, `full-recap`, `remix` — works identically regardless of which engine is active; `remanga/audio/synth/`'s `create_synthesizer()` is the only place that picks between them.
+**Upgrading is automatic.** A `config.json` written for IndexTTS-2.5 or Audio8 — with `tts.indextts` / `tts.audio8` blocks, or the older flat fields — loads without error: the retired blocks are dropped and `tts.engine` is forced onto a name that still exists. Nothing is carried across, deliberately: a `spk_audio_prompt` path is not a Kokoro voice name, and silently reinterpreting one as the other would narrate a whole chapter in the wrong voice. Per-project `settings` overrides written against the old paths are dropped the same way. **You will need to pick a voice after upgrading** (or accept the `af_heart` default).
 
 ---
 
 ## Narration Voice & Delivery
 
-A recap narrator should sound like one person telling the story evenly from start to finish — not like someone reacting to it. So the delivery is cloned from the reference clip and held constant for every panel, and the per-panel emotion feature is **opt-in**, not the default:
+A recap narrator should sound like one person telling the story evenly from start to finish — not like someone reacting to it. Kokoro reads every panel in the configured voice's own register, and there is no per-panel emotion system to tune.
 
-1. **Consistent Delivery (default):** `audio/synth/` sends nothing emotion-related, and IndexTTS-2.5 takes the emotional contour of `spk_audio_prompt` and reads every panel with it (`emo_audio_prompt = spk_audio_prompt` at `emo_alpha = 1.0`). With a calm, steady reference clip that is exactly right: one even register, first panel to last.
-
-   Worth knowing, because it is widely described the other way round (this README included, until recently): **IndexTTS-2.5 does not read emotion off your text by default.** Punctuation shapes phrasing and pacing, but the emotional register comes wholly from the reference clip. If narration sounds flat, the reference clip is the thing to fix — not the text.
-
-2. **Optional Per-Panel Emotion (`use_text_emotion`, default `false`):** turns on the QwenEmotion classifier bundled with the checkpoint (`checkpoints/indextts_2.5/qwen0.6bemo4-merge/`, downloaded with the weights). Each panel's text is classified and that emotion blended into the delivery, so a shouted line is shouted and a quiet one stays quiet.
-
-   Genuinely expressive — and for continuous narration, usually too much. Measured on this repo's narrator at the default strength, consecutive panels swing across a ~66Hz range:
-
-   | classified emotion | mean f0 | pitch sd |
-   |---|---|---|
-   | afraid `0.9` | 200.8 Hz | 33.7 |
-   | angry `0.85` | 191.2 Hz | 40.4 |
-   | *reference clip* | *156.8 Hz* | *27.5* |
-   | calm `1.0` | 134.6 Hz | 18.3 |
-   | sad `0.95` | 134.2 Hz | 33.9 |
-
-   A narrator describing what happens doesn't change register that far that often, and back to back it reads as distracting rather than expressive. Useful for dialogue-driven or single-character work; costs ~1.2GB of VRAM and a few tens of milliseconds per panel.
-
-3. **Emotion Strength (`text_emotion_strength`, default `0.7`):** how far the classified emotion may pull the delivery, when enabled — IndexTTS-2.5's `emo_alpha`. Whatever the emotion vector doesn't claim stays with the narrator's own voice, so this is the dial between "expressive" and "still the same narrator". `1.0` (IndexTTS-2.5's own default) puts a shouted line ~57Hz above the reference, far enough that it stops sounding like the same person; `0.3`–`0.5` colours the read without steering it.
-4. **Punctuate Anyway:** `prompts/narration.md` (Rule 3) has the LLM write real punctuation — `!`, `?`, `...` — wherever the panel genuinely is exclamatory, interrogative, or hesitant. That drives phrasing and pacing whether or not emotion classification is on (and feeds the classifier when it is). There's no emotion field in `narration.json` — each entry is just `panel_id` + `text`.
-5. **Natural Autoregressive Sampling:** `temperature`/`top_p` are left at IndexTTS-2.5's own recommended defaults (`0.8`/`0.8`, not artificially lowered) — this governs how natural a single reading *sounds* (pitch/pacing variation). Lowering these trades that away for a flatter, more robotic delivery; raising them adds variation, at some risk of instability on longer lines.
-6. **Reference Voice Sample Criteria** — this is the single biggest lever on how the narration sounds, since by default the delivery is cloned from it wholesale:
-   - **Length:** 10–15 seconds. **IndexTTS-2.5 hard-truncates the reference to its first 15 seconds** (`_load_and_cut_audio`) and ignores everything after, so pointing this at a long recording clones whatever happens to sit at the start of the file — including a cut landing mid-word. Cut the clip deliberately; don't hand it an audiobook.
-   - **Format:** Clean mono WAV. A lossy source (MP3) clones its compression artifacts along with the voice.
-   - **Quality:** Studio clean (zero background noise, room reverb, or vocal fry).
-   - **Delivery:** Calm, steady reading, starting and ending on a natural pause. Cut it at a pause rather than at the first syllable — starting exactly on a word attack leaves a 10–16dB transient that is audible as a "loud, weird" start and gets cloned along with the voice.
-
----
+1. **The voice is the delivery.** With no cloning and no emotion vector, what you choose in `tts.kokoro.voice` is what every panel sounds like, first to last. If narration sounds wrong, the voice is the thing to change — there is no reference clip to blame any more, which was the point.
+2. **Punctuate anyway.** `prompts/narration.md` (Rule 3) has the LLM write real punctuation — `!`, `?`, `...` — wherever the panel genuinely is exclamatory, interrogative, or hesitant. Kokoro reads punctuation for phrasing and pacing. There's no emotion field in `narration.json` — each entry is just `panel_id` + `text`.
+3. **Speed** (`tts.speed`) is applied by the model itself as a generation parameter, not by an ffmpeg pass afterwards, so it doesn't cost quality.
 
 ## Reliability: Crashes, Interrupts & Resuming
 
-TTS synthesis is the longest-running, most interruption-prone stage of the pipeline (one IndexTTS-2.5 call per panel, easily tens of minutes for a full chapter), so it's built to be safely stopped and resumed at any point:
+TTS synthesis is the longest-running, most interruption-prone stage of the pipeline (one Kokoro call per panel; far quicker than it used to be, but a full recap still runs unattended), so it's built to be safely stopped and resumed at any point:
 
-- **Ctrl+C is safe.** It's caught gracefully, the IndexTTS-2.5 worker is asked to shut down cleanly (a few seconds), and a second Ctrl+C during that wait force-kills it instead of leaving it orphaned holding GPU memory.
+- **Ctrl+C is safe.** It's caught gracefully, the Kokoro worker is asked to shut down cleanly (a few seconds), and a second Ctrl+C during that wait force-kills it instead of leaving it orphaned holding GPU memory.
 - **Panel exports are atomic.** Each panel's WAV is written to a temp file and only renamed into place once fully written, so a kill mid-export can never leave a truncated clip that looks finished.
 - **Resuming is conservative, not just fast.** `remanga tts` re-synthesizes the panel that was interrupted *and the two immediately before it*, instead of trusting whatever's already on disk near the resume point — cheap insurance against a truncated clip from an older run slipping through.
-- **A wedged worker gets replaced automatically.** If IndexTTS-2.5 stops responding for longer than `tts.synth_timeout_seconds` (default 180s), the worker is killed and the next attempt spawns a fresh one, instead of the whole run hanging indefinitely with the model still loaded and the GPU sitting idle.
+- **A wedged worker gets replaced automatically.** If Kokoro stops responding for longer than `tts.synth_timeout_seconds` (default 180s), the worker is killed and the next attempt spawns a fresh one, instead of the whole run hanging indefinitely with the model still loaded and the GPU sitting idle.
 
 In short: if a chapter's TTS run gets interrupted or a worker locks up, just re-run the same command. Nothing needs to be cleaned up by hand.
 
@@ -786,10 +772,10 @@ remanga/
 ├── bin/                        # Isolated standalone binaries (uv, ffmpeg, ffprobe)
 ├── .venv/                      # Main env - remanga's own lightweight core, no ML libs
 ├── .tools/
-│   ├── venv-indextts/          # Isolated env - PyTorch + IndexTTS-2.5's own pins
+│   ├── venv-kokoro/            # Isolated env - PyTorch + Kokoro + misaki/spaCy G2P
 │   └── venv-magi/              # Isolated env - PyTorch + MAGI v3's own pins
 ├── checkpoints/
-│   ├── indextts_2.5/           # IndexTTS-2.5 neural model weights
+│   ├── kokoro_82m/             # Kokoro-82M weights + all 54 voice packs
 │   └── magiv3/                 # MAGI v3 panel-detection weights (Panel Marker assist)
 ├── prompts/
 │   ├── narration.md         # Master objective scriptwriter prompt
@@ -840,11 +826,11 @@ remanga/
 │   │                           # vision.py (packaging checklist), presets.py, engine.py, video.py,
 │   │                           # sections.py (every setting as one list), wizard.py, paths_ui.py
 │   ├── audio/                  # tts.py + mix.py; synth/ = one module per engine over a shared worker base
-│   │   └── scripts/             # indextts_worker.py / audio8_worker.py - run inside their own venvs
+│   │   └── scripts/             # kokoro_worker.py - runs inside its own venv
 │   ├── cropper/                # crop.py (coordinate cropper), sheets.py, gutter/ (edge snapping), ...
 │   ├── downloader/             # mangadex.py (MangaDex client) & resolve.py (id/title/language lookup)
 │   ├── models/                 # weights.py (talks to the isolated venvs to fetch/verify weights)
-│   │   └── scripts/             # download_indextts.py, download_audio8.py, download_deepseek_ocr.py
+│   │   └── scripts/             # download_kokoro.py, download_lighton_ocr.py
 │   ├── webui/                  # Panel Marker: server.py (entry point/lifecycle), routes.py (Flask app/API),
 │   │   │                       # marker_state.py (session state), detection.py + magi_assist.py (MAGI v3),
 │   │   │                       # shortcuts_store.py (Shortcuts menu persistence)
@@ -875,13 +861,13 @@ remanga/
 
 ### 1. `CUDA out of memory` during TTS synthesis
 - In `config.json`, verify `"use_bf16": true`.
-- IndexTTS-2.5 runs comfortably on GPUs with 6GB+ VRAM in BF16 mode.
+- Kokoro-82M needs only ~2-3GB VRAM, and runs faster than real time on CPU alone.
 
 ### 2. A specific narration line sounds unstable, or too dramatic
-Delivery is cloned from the reference clip and is the same register for every panel (see [Narration Voice & Delivery](#narration-voice--delivery)), so an over-the-top or unstable-sounding line usually traces back to the reference clip or to what's written for that panel, not a synthesis bug — and if you enabled `use_text_emotion` and intense panels overshoot, lower `tts.indextts.text_emotion_strength`:
+Every panel is read in the same voice and the same register (see [Narration Voice & Delivery](#narration-voice--delivery)), so an odd-sounding line almost always traces back to what's written for that panel rather than to synthesis:
 - Check whether that panel's `narration.json` text over-punctuates — a line stacking multiple `!`/`?`/`...` reads as more dramatic than intended. `prompts/narration.md` Rule 3 asks the LLM to reserve emphatic punctuation for panels that genuinely call for it; if it slipped through anyway, trim the line's punctuation back to plain prose and re-run.
-- Inspect the active engine's reference speaker WAV (`tts.<engine>.spk_audio_prompt` — each engine has its own). A cleaner, steadier reference sample (see the criteria above) makes every inferred emotion sound more natural, not just calm ones.
-- If a specific line still sounds unstable even with clean text and a clean reference, `tts.indextts.temperature`/`top_p` default to IndexTTS-2.5's own recommended `0.8`/`0.8` for natural-sounding delivery — nudging them down (e.g. `0.6`) trades some of that naturalness for more stability, as a last resort rather than a first fix.
+- Run `./run.sh normalize-narration` — leftover markdown, emoji, raw digits and SHOUTED words all turn into artifacts, and it rewrites them into something speakable.
+- If the *whole* recap sounds wrong rather than one line, that's the voice, not the text: try a different `tts.kokoro.voice` (grades are shown in the picker; several of the 54 are graded D or F and are genuinely worse).
 
 ### 3. NVENC GPU encoder error during video rendering
 `bootstrap.sh` pins the bundled `bin/ffmpeg` to a specific, tested BtbN build (not the "latest" rolling one) precisely so NVENC works out of the box for a wide range of NVIDIA driver versions — a too-new build otherwise requires a driver version yours may not have yet, and it reports as a generic-looking failure. If GPU encoding still doesn't work:
@@ -928,7 +914,7 @@ They're the [Vision Outputs](#vision-outputs-what-to-generate-what-to-zip) packa
 Only for the MAGI v3 auto-detect assist. Marking itself is manual clicking/dragging in the browser and needs no GPU at all — set `"magi_enabled": false` under `"marker"` in `config.json` to skip it and mark every panel by hand.
 
 ### 6. TTS synthesis seems frozen — GPU memory is loaded but nothing's happening
-The worker now kills and replaces itself automatically after `tts.synth_timeout_seconds` (default 180s) of no response, so this should self-resolve on its own. If you're on an older run without that fix, or want to recover immediately: check `nvidia-smi` — a genuinely stuck worker shows near-idle GPU clocks/power draw despite holding VRAM. Kill the `indextts_worker.py` process (and the `remanga` process above it, or just Ctrl+C twice) and re-run the same command; see [Reliability](#reliability-crashes-interrupts--resuming) for why that's always safe to do.
+The worker now kills and replaces itself automatically after `tts.synth_timeout_seconds` (default 180s) of no response, so this should self-resolve on its own. If you're on an older run without that fix, or want to recover immediately: check `nvidia-smi` — a genuinely stuck worker shows near-idle GPU clocks/power draw despite holding VRAM. Kill the `kokoro_worker.py` process (and the `remanga` process above it, or just Ctrl+C twice) and re-run the same command; see [Reliability](#reliability-crashes-interrupts--resuming) for why that's always safe to do.
 
 ### 7. A mark keeps snapping back to a different position while I'm dragging it
 This was a real bug (fixed): a background MAGI detection poll could overwrite a page's marks mid-drag if that page's very first edit hadn't finished yet. Make sure you're on a current `remanga` checkout — it no longer happens. It's unrelated to the alignment guide lines, which are purely visual and never move a mark on their own.

@@ -32,26 +32,26 @@ class TTSEngine:
         force: bool = False,
     ) -> Path:
         """
-        Synthesizes narration audio per panel with IndexTTS-2.5.
+        Synthesizes narration audio per panel with Kokoro-82M.
         Resumes automatically by checking existing panel WAV clips.
         """
         # Scoped to the project: the validator below reads the voice out of this
         # config, and it has to be the one this manga uses.
         full_config = RemangaConfig.load().for_project(project_name)
-        # Both of these are per-ENGINE now (see config/tts.py): a --voice
-        # one-off means "use this clip for the engine actually running", and
-        # the validator is told which engine that is, since self.tts_config
-        # may be a one-off `--engine` copy naming a different one than
-        # config.json does. Writing through engine_block rather than a fixed
-        # field is what keeps the override on the right engine's block.
+        # Per-ENGINE (see config/tts.py): a --voice one-off means "narrate in
+        # this voice on the engine actually running", and the validator is
+        # told which engine that is, since self.tts_config may be a one-off
+        # `--engine` copy naming a different one than config.json does.
+        # Writing through engine_block rather than a fixed field is what
+        # keeps the override on the right engine's block.
         if voice_override:
-            self.tts_config.engine_block.spk_audio_prompt = voice_override
+            self.tts_config.engine_block.voice = voice_override
             set_field(full_config, self.tts_config.active_voice_field, voice_override, save=False)
 
-        spk_prompt_path = settings.ensure_valid_voice_prompt(
+        voice = settings.ensure_valid_voice(
             full_config, interactive=interactive, engine=self.tts_config.engine,
         )
-        self.tts_config.engine_block.spk_audio_prompt = spk_prompt_path
+        self.tts_config.engine_block.voice = voice
 
         chapter_dir = get_chapter_dir(project_name, chapter_num)
         narration_path = chapter_dir / "narration.json"
@@ -79,8 +79,8 @@ class TTSEngine:
         console.print(
             f"[cyan]Synthesizing consistent speech via {self._synth.display_name}[/] "
             f"[dim](Lang: {self.tts_config.lang}, "
-            f"Temp: {self.tts_config.engine_block.temperature}, "
-            f"Reference Voice: {spk_prompt_path})[/]"
+            f"Voice: {self.tts_config.kokoro.spec.label} [{voice}], "
+            f"Speed: {self.tts_config.speed}x)[/]"
         )
 
         # This engine's own gain (see config/tts.py), and how much of it the
@@ -188,16 +188,14 @@ class TTSEngine:
         ) as progress:
             task = progress.add_task("[yellow]Synthesizing vocal tracks...", total=len(narration_entries))
 
-            # narration.json entries only ever carry `panel_id` and `text` now
+            # narration.json entries only ever carry `panel_id` and `text`
             # (see prompts/narration.md) - there's no per-panel emotion or
-            # pause field in that schema. Emotion isn't set here at all: the
-            # engine takes it from the reference voice, or from each panel's
-            # own `text` where that's enabled (see
-            # IndexTTSSynthesizer._build_request and
-            # tts.indextts.use_text_emotion), never from a per-panel tag.
-            # Pausing uses the one configured gap
-            # (AudioConfig.pause_between_panels_ms) for every panel instead of
-            # a per-panel override.
+            # pause field in that schema, and nothing here sets one: Kokoro
+            # reads every panel in the configured voice's own register, which
+            # is what keeps a recap sounding like one narrator telling the
+            # story rather than reacting to it. Pausing uses the one
+            # configured gap (AudioConfig.pause_between_panels_ms) for every
+            # panel instead of a per-panel override.
             pause_after_ms = self.audio_config.pause_between_panels_ms
             for idx, entry in enumerate(narration_entries, start=1):
                 panel_id = panel_ids[idx - 1]
@@ -222,14 +220,14 @@ class TTSEngine:
                     if text:
                         self._synth.synthesize(
                             text=text,
-                            spk_prompt_path=spk_prompt_path,
+                            voice=voice,
                             output_wav=raw_clip_path,
                         )
 
                         # Through resample.load_audio, not set_frame_rate: the
-                        # engines synthesize at their own rate (IndexTTS-2.5 at
-                        # 22.05 kHz) and pydub's resampler would fold a mirror
-                        # image of the whole clip in above 11 kHz on the way to
+                        # engines synthesize at their own rate (Kokoro at
+                        # 24 kHz) and pydub's resampler would fold a mirror
+                        # image of the whole clip in above 12 kHz on the way to
                         # 44.1 kHz. See audio/resample.py for the measurement.
                         segment = load_audio(raw_clip_path, self.audio_config.sample_rate, channels=1)
 

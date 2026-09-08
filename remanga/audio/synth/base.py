@@ -6,7 +6,7 @@ didn't pin, send bounded-timeout requests, drain its stderr so it can't
 deadlock on a full pipe, and shut it down cleanly. An engine subclass fills
 in only what actually differs between engines - the command line and the
 per-request payload - which is what keeps adding a third engine to a small
-file (see indextts.py and audio8.py, both under 70 lines) rather than a
+file (see kokoro.py, under 80 lines) rather than a
 fourth copy of all of this."""
 
 from __future__ import annotations
@@ -97,7 +97,7 @@ class BaseWorkerSynthesizer:
     # Subclasses opt in when their engine has a fixed per-call generation
     # budget that silently truncates the audio - no error, it just stops
     # partway through - once the input text needs more than that budget's
-    # worth of output (e.g. audio8's max_new_tokens: see Audio8Synthesizer).
+    # worth of output (a fixed max_new_tokens budget, say).
     # None (the default) means synthesize() always makes exactly one call,
     # unchanged from before this existed.
     chunk_max_chars: int | None = None
@@ -114,7 +114,10 @@ class BaseWorkerSynthesizer:
     def _spawn_worker(self, model_dir: Path) -> subprocess.Popen:
         raise NotImplementedError
 
-    def _build_request(self, text: str, spk_prompt_path: str, output_wav: Path) -> dict[str, Any]:
+    def _build_request(self, text: str, voice: str, output_wav: Path) -> dict[str, Any]:
+        """One synthesize request. `voice` is whatever identifies the
+        narrator to this engine - a name for an engine with fixed voices, a
+        reference-clip path for one that clones."""
         raise NotImplementedError
 
     def _synth_timeout_seconds(self) -> float:
@@ -122,13 +125,13 @@ class BaseWorkerSynthesizer:
 
     def _post_synthesize(self, output_wav: Path, request: dict[str, Any]) -> None:
         """Optional per-engine post-processing after a successful synthesis
-        (e.g. IndexTTS's ffmpeg-atempo speed fallback). No-op by default."""
+        (e.g. an ffmpeg-atempo speed fallback). No-op by default."""
 
     # --- shared worker-process machinery -------------------------------
     def _drain_stderr(self, proc: subprocess.Popen) -> None:
         """Runs for the lifetime of one worker process, on its own daemon
         thread, continuously reading its stderr so the pipe can never fill
-        up and block the worker's next write to it - see indextts_worker.py's
+        up and block the worker's next write to it - see kokoro_worker.py's
         module docstring for the deadlock this specifically prevents. Only
         the last _STDERR_TAIL_LINES lines are kept, for error messages;
         everything older is simply dropped."""
@@ -240,7 +243,7 @@ class BaseWorkerSynthesizer:
         except Exception:
             pass
 
-    def synthesize(self, text: str, spk_prompt_path: str, output_wav: Path) -> None:
+    def synthesize(self, text: str, voice: str, output_wav: Path) -> None:
         """Synthesizes speech via this engine's worker process. Text longer
         than `chunk_max_chars` (when the engine sets one) is split on
         sentence boundaries into several bounded calls first and the
@@ -250,16 +253,16 @@ class BaseWorkerSynthesizer:
         if self.chunk_max_chars and len(text) > self.chunk_max_chars:
             chunks = _split_text_into_chunks(text, self.chunk_max_chars)
             if len(chunks) > 1:
-                self._synthesize_chunks(chunks, spk_prompt_path, output_wav)
+                self._synthesize_chunks(chunks, voice, output_wav)
                 return
-        self._synthesize_once(text, spk_prompt_path, output_wav)
+        self._synthesize_once(text, voice, output_wav)
 
-    def _synthesize_once(self, text: str, spk_prompt_path: str, output_wav: Path) -> None:
+    def _synthesize_once(self, text: str, voice: str, output_wav: Path) -> None:
         """One bounded worker call, start to finish - what synthesize() used
         to do inline before chunking existed. Also what each individual
         chunk goes through in the chunked path below."""
         proc = self._ensure_worker()
-        request = self._build_request(text, spk_prompt_path, output_wav)
+        request = self._build_request(text, voice, output_wav)
 
         try:
             proc.stdin.write(json.dumps(request) + "\n")
@@ -287,7 +290,7 @@ class BaseWorkerSynthesizer:
 
         self._post_synthesize(output_wav, request)
 
-    def _synthesize_chunks(self, chunks: list[str], spk_prompt_path: str, output_wav: Path) -> None:
+    def _synthesize_chunks(self, chunks: list[str], voice: str, output_wav: Path) -> None:
         """Synthesizes each chunk to its own temp WAV via the normal
         single-call path (so per-chunk post-processing like the speed
         ffmpeg-atempo fallback still applies), concatenates them in order,
@@ -299,10 +302,10 @@ class BaseWorkerSynthesizer:
         try:
             for i, chunk in enumerate(chunks):
                 # ".wav" suffix kept last (not ".wav.tmp") - some workers
-                # (audio8_worker.py included) pick their output format from
+                # pick their output format from
                 # the file extension and error on anything else.
                 part_path = output_wav.with_name(f"{output_wav.stem}.chunk{i:03d}.tmp.wav")
-                self._synthesize_once(chunk, spk_prompt_path, part_path)
+                self._synthesize_once(chunk, voice, part_path)
                 part_paths.append(part_path)
 
             combined = AudioSegment.empty()

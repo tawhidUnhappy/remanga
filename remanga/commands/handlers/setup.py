@@ -34,7 +34,7 @@ def setup_models(params: dict[str, Any], config: RemangaConfig) -> None:
 
     create_synthesizer(config.tts, config.audio).model_manager.ensure_model()
     ensure_weights_downloaded(config.marker)
-    # DeepSeek-OCR-2 powers the Narration Writer's "OCR this panel" button.
+    # LightOnOCR-2 powers the Narration Writer's "OCR this panel" button.
     OCREngine(config.ocr).model_manager.ensure_model()
 
 

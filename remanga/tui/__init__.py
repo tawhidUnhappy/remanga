@@ -20,7 +20,7 @@ has always had.
 
     from remanga.tui import Choice, confirm, multiselect, select, is_cancel
 
-    engine = select("TTS engine", [Choice("indextts-2.5", hint="voice-only cloning")],
+    engine = select("TTS engine", [Choice("kokoro", hint="fixed studio voices")],
                     default=config.tts.engine)
     if is_cancel(engine):
         return

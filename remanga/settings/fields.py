@@ -1,7 +1,7 @@
 """Reading and writing one config field by name.
 
 Settings screens are data-driven here - a screen is a list of specs, each
-naming the config field it edits ("tts.indextts.spk_audio_prompt",
+naming the config field it edits ("tts.kokoro.voice",
 "audio.bgm_enabled") rather than closing over a hand-written getter/setter
 pair. These two functions are what makes that possible, and they're the
 only place in the settings package that walks a dotted path."""

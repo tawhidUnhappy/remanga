@@ -1,12 +1,12 @@
-"""OCREngine: owns one long-lived `.tools/venv-deepseek-ocr` worker subprocess
-(remanga/ocr/scripts/deepseek_ocr_worker.py), spoken to over stdin/stdout so
-DeepSeek-OCR-2 loads onto the GPU once per Narration Writer session instead
+"""OCREngine: owns one long-lived `.tools/venv-lighton-ocr` worker subprocess
+(remanga/ocr/scripts/lighton_ocr_worker.py), spoken to over stdin/stdout so
+LightOnOCR-2 loads onto the GPU once per Narration Writer session instead
 of once per "OCR this panel" click. Mirrors remanga/audio/synth/'s
 _BaseWorkerSynthesizer lifecycle (spawn, ready-handshake, auto-heal a missing
 dependency, bounded-timeout request/response, stderr draining so a wedged
 worker can't deadlock, clean shutdown) - written standalone rather than
-subclassing that base, since its interface (spk_prompt_path/output_wav) is
-TTS-specific and OCR has exactly one engine, not several sharing a base."""
+subclassing that base, since its interface (voice/output_wav) is TTS-specific
+and OCR has exactly one engine, not several sharing a base."""
 
 from __future__ import annotations
 
@@ -26,14 +26,15 @@ from remanga.venvs import extract_missing_packages, get_scripts_dir, get_tool_py
 
 _MAX_AUTO_HEAL_ATTEMPTS = 8
 _STDERR_TAIL_LINES = 200
-# DeepSeek-OCR-2's exact load/inference time is unverified (see the
-# remanga-ops skill) - generous but bounded, same reasoning as TTSConfig's
-# own synth_timeout_seconds: a wedged worker should fail clearly, not hang
-# the Narration Writer UI's request forever.
+# Generous but bounded, same reasoning as TTSConfig's own
+# synth_timeout_seconds: a wedged worker should fail clearly, not hang the
+# Narration Writer UI's request forever. A 1B model reading one panel is
+# well inside this on a GPU; CPU is far slower, which is what the ceiling
+# is sized for.
 _RECOGNIZE_TIMEOUT_SECONDS = 120.0
 
-TOOL_NAME = "deepseek-ocr"
-DISPLAY_NAME = "DeepSeek-OCR-2"
+TOOL_NAME = "lighton-ocr"
+DISPLAY_NAME = "LightOnOCR-2"
 
 
 def _pip_install_into_tool_env(packages: set) -> bool:
@@ -62,8 +63,8 @@ class OCREngine:
         self.ocr_config = ocr_config
         self.model_manager = ModelManager(
             ocr_config.model_dir, ocr_config.hf_repo_id,
-            tool_name=TOOL_NAME, download_script="download_deepseek_ocr.py",
-            expected_files=("config.json", "model-00001-of-000001.safetensors"), display_name=DISPLAY_NAME,
+            tool_name=TOOL_NAME, download_script="download_lighton_ocr.py",
+            expected_files=("config.json", "model.safetensors"), display_name=DISPLAY_NAME,
         )
         self._proc: subprocess.Popen | None = None
         self._stderr_tail: collections.deque = collections.deque(maxlen=_STDERR_TAIL_LINES)
@@ -83,7 +84,7 @@ class OCREngine:
 
     def _spawn_worker(self, model_dir: Path) -> subprocess.Popen:
         python = get_tool_python(TOOL_NAME)
-        script = get_scripts_dir("ocr") / "deepseek_ocr_worker.py"
+        script = get_scripts_dir("ocr") / "lighton_ocr_worker.py"
         return subprocess.Popen(
             [str(python), "-u", str(script), str(model_dir.resolve())],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -152,9 +153,17 @@ class OCREngine:
         failure/timeout - the caller (writer_routes.py) turns that into an
         HTTP error the frontend surfaces, not a crash."""
         proc = self._ensure_worker()
-        request = {"cmd": "recognize", "image_path": str(Path(image_path).resolve())}
-        if prompt:
-            request["prompt"] = prompt
+        request = {
+            "cmd": "recognize",
+            "image_path": str(Path(image_path).resolve()),
+            "max_new_tokens": self.ocr_config.max_new_tokens,
+        }
+        # An explicit argument wins over the configured default, and an empty
+        # prompt is sent as nothing at all rather than as an empty text turn -
+        # see the worker for why those are not the same to the chat template.
+        chosen = prompt if prompt is not None else self.ocr_config.prompt
+        if chosen:
+            request["prompt"] = chosen
 
         try:
             proc.stdin.write(json.dumps(request) + "\n")

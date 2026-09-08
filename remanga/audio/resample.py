@@ -3,7 +3,7 @@
 pydub's `AudioSegment.set_frame_rate()` resamples with `audioop.ratecv`,
 which is plain linear interpolation with no anti-imaging filter at all.
 That is fine for a rough preview and audibly wrong for anything anyone
-listens to: upsampling IndexTTS-2.5's native 22.05 kHz output to the
+listens to: upsampling Kokoro's native 24 kHz output to the
 project's 44.1 kHz mirrors the whole signal back down around the source's
 old 11.025 kHz Nyquist point, and the mirror is not subtle. Measured on a
 finished narration clip from this repo:

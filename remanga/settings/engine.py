@@ -1,18 +1,18 @@
-"""Which TTS engine speaks the narration, and in what language.
+"""Which TTS engine speaks the narration, in which voice, and in what language.
 
-Both screens are built from data that already exists elsewhere: the engine
+Every screen is built from data that already exists elsewhere: the engine
 list comes from config.TTS_ENGINE_SPECS (the same specs remanga/audio/synth/
-maps to Synthesizer classes), and whether a transcript is needed comes from
-the chosen spec rather than from a name comparison written out again here."""
+maps to Synthesizer classes), and the voice list from the engine's own voice
+catalogue (config/kokoro_voices.py) rather than from anything written out
+again here."""
 
 from __future__ import annotations
 
 from remanga.config import RemangaConfig
 from remanga.config.tts import TTS_ENGINE_SPECS
 from remanga.console import console
-from remanga.settings.assets import ASSET_BY_KEY, edit_asset
+from remanga.settings.assets import pick_voice
 from remanga.settings.fields import set_field
-from remanga.settings.files import read_reference_text
 from remanga.settings.presets import CUSTOM, language_choices
 from remanga.tui import Choice, ask_text, confirm, is_cancel, select
 
@@ -35,33 +35,30 @@ def configure_engine(config: RemangaConfig) -> None:
     set_field(config, "tts.engine", picked)
     console.print(f"[green]✓ Engine:[/] {config.tts.spec.display_name}")
 
-    # Each engine clones from its OWN reference clip (see config/tts.py), so
-    # switching engines switches which WAV narration is spoken in. Say which
-    # one is now in effect - silently swapping the narrator's voice is the
-    # kind of change that is only noticed after a chapter has been
-    # synthesized - and offer to set it right here when that engine has
-    # none, since the alternative is discovering it at synth time.
-    voice = config.tts.active_spk_audio_prompt
-    if voice:
+    # Which voice narrates is the engine's own setting, so say which one is
+    # in effect after a switch - silently changing the narrator is the kind
+    # of thing only noticed after a chapter has been synthesized - and offer
+    # to set it here when that engine has none, since the alternative is
+    # discovering it at synth time.
+    if config.tts.active_voice:
+        voice = config.tts.kokoro.spec
         console.print(
-            f"[dim]{config.tts.spec.display_name} speaks with its own reference voice: "
-            f"{voice} ({config.tts.active_voice_field})[/]"
+            f"[dim]{config.tts.spec.display_name} narrates as {voice.label} "
+            f"({voice.name}, grade {voice.grade})[/]"
         )
     else:
-        console.print(
-            f"[yellow]{config.tts.spec.display_name} has no reference voice set yet[/] "
-            f"[dim]- each engine keeps its own ({config.tts.active_voice_field}).[/]"
-        )
-        if confirm(f"Pick {config.tts.spec.display_name}'s reference voice now?", default=True):
-            edit_asset(config, ASSET_BY_KEY["voice"])
+        console.print(f"[yellow]{config.tts.spec.display_name} has no voice set yet[/]")
+        if confirm(f"Pick {config.tts.spec.display_name}'s voice now?", default=True):
+            pick_voice(config)
 
-    # An engine that clones from audio alone needs nothing more. One that
-    # also wants a transcript of its reference clip is asked for it here,
-    # but only when there isn't one already.
-    if config.tts.spec.needs_reference_text and not read_reference_text(config.tts.audio8.reference_text_path):
-        console.print(f"[dim]{config.tts.spec.display_name} also wants a transcript of its reference clip.[/]")
-        if confirm("Add the reference transcript now?", default=True):
-            edit_asset(config, ASSET_BY_KEY["transcript"])
+
+def configure_voice(config: RemangaConfig) -> None:
+    """The narrator's voice, on its own settings row.
+
+    A picker rather than a file browser: Kokoro ships fixed voices and
+    clones nothing, so there is no clip to point at - see
+    remanga/config/kokoro_voices.py."""
+    pick_voice(config)
 
 
 def configure_language(config: RemangaConfig) -> None:

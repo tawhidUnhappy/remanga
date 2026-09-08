@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
 
 from remanga.config import RemangaConfig
 from remanga.settings import engine, video
@@ -51,15 +50,22 @@ SECTIONS: tuple[Section, ...] = (
         # engine row states both: picking an engine IS picking a narrator,
         # and a row that named only the model would hide half of what
         # changing it does.
-        lambda c: f"{c.tts.spec.display_name} · {Path(c.tts.active_spk_audio_prompt).name}"
-        if c.tts.active_spk_audio_prompt else f"{c.tts.spec.display_name} · no voice set",
+        lambda c: f"{c.tts.spec.display_name} · {c.tts.kokoro.spec.label}"
+        if c.tts.active_voice else f"{c.tts.spec.display_name} · no voice set",
         engine.configure_engine,
-        detail="which model synthesizes the narration, and the reference voice it clones",
+        detail="which model synthesizes the narration, and the voice it narrates in",
     ),
     Section(
-        "assets", "Assets (voice, BGM, transcript)",
+        "voice", "Narrator voice",
+        lambda c: f"{c.tts.kokoro.spec.label} ({c.tts.kokoro.spec.name}, grade {c.tts.kokoro.spec.grade})"
+        if c.tts.active_voice else "no voice set",
+        engine.configure_voice,
+        detail="which of the engine's built-in voices reads every panel",
+    ),
+    Section(
+        "assets", "Assets (BGM)",
         _assets_summary, run_asset_menu,
-        detail="the shared files every project narrates and mixes with",
+        detail="the shared files every project mixes with",
     ),
     Section(
         "language", "Narration language",

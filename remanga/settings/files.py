@@ -118,22 +118,3 @@ def parent_dir_of(raw_path: str) -> list[Path]:
     return [valid.parent] if valid else []
 
 
-def read_reference_text(path: str) -> str:
-    """Reads the TTS reference transcript from its own text file rather than
-    inline config.json (see Audio8Config.reference_text_path). A missing or
-    empty file reads as "" - the worker tolerates an empty transcript
-    (degraded cloning quality, not an error), so this stays a soft fallback
-    rather than raising."""
-    p = Path((path or "").strip()).expanduser()
-    if not p.exists() or not p.is_file():
-        return ""
-    return p.read_text(encoding="utf-8").strip()
-
-
-def write_reference_text(path: str, text: str) -> Path:
-    """Writes `text` to the reference-transcript file, creating its parent
-    directory (typically global/) if needed. Returns the resolved path."""
-    p = Path((path or "").strip()).expanduser()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text((text or "").strip(), encoding="utf-8")
-    return p.resolve()

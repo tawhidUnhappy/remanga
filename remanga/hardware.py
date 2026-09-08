@@ -19,8 +19,9 @@ what should therefore be installed on it". It is deliberately:
 
 The PyTorch wheel index is the part worth being careful about, because the
 obvious mapping is wrong. PyTorch publishes a separate index per compute
-backend, and they do NOT all carry the same torch versions. IndexTTS-2.5
-pins `torch==2.8.*`, and as of this writing:
+backend, and they do NOT all carry the same torch versions. This project
+targets `torch==2.8.*` across its isolated environments, and as of this
+writing:
 
     cu126, cu128, cu129   have 2.8   <- usable
     rocm6.4               has  2.8   <- usable
@@ -60,8 +61,8 @@ from pathlib import Path
 #   * the driver floor - a CUDA 13.x runtime needs a 580+ driver, while any
 #     CUDA 12.x runtime runs on 525+ (Linux) thanks to minor-version
 #     compatibility, and newer drivers stay backward compatible;
-#   * torch 2.8 has to exist in whichever index is chosen, because
-#     IndexTTS-2.5 pins it - which is what rules out cu130 (starts at 2.9)
+#   * torch 2.8 has to exist in whichever index is chosen, because this
+#     project targets it - which is what rules out cu130 (starts at 2.9)
 #     even on a machine whose driver could run it, and cu118 (stops at 2.7)
 #     on machines that could run nothing else.
 #
@@ -252,7 +253,7 @@ def detect(override: str | None = None) -> Hardware:
             ), override)
         notes.append(
             f"NVIDIA driver {driver or 'unknown'} is older than {minimum}, the minimum for the CUDA 12.x "
-            f"wheels this project needs (IndexTTS pins torch 2.8, which no CUDA 11 index carries). "
+            f"wheels this project needs (this project targets torch 2.8, which no CUDA 11 index carries). "
             f"Installing CPU builds for the ML models - update the driver and re-run bootstrap.sh for GPU speed."
         )
         # Still h264_nvenc, not libx264: video encoding runs on the card's

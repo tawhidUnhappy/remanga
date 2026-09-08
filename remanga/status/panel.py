@@ -22,7 +22,7 @@ def render_status_panel(project: str, chapter: str) -> str:
     # This project's settings, not the machine's - the panel says what a
     # render of THIS chapter would use.
     config = RemangaConfig.load().for_project(project)
-    active_voice = config.tts.active_spk_audio_prompt
+    active_voice = config.tts.active_voice
     voice_path = Path(active_voice).expanduser() if active_voice else None
     voice_status = (
         f"[green]Configured ({display_path(voice_path)})[/]"
@@ -57,7 +57,7 @@ def render_status_panel(project: str, chapter: str) -> str:
         if st["review_pending"] else off("no pending review")
     )
     audio_status = (
-        done("Generated (IndexTTS-2.5)") if st["master_audio_exist"]
+        done("Generated (Kokoro-82M)") if st["master_audio_exist"]
         else missing(f"Not built ({st['audio_clips_count']}/{st['total_narration_entries']} clips)")
     )
     video_status = (

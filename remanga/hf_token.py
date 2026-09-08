@@ -1,5 +1,5 @@
 """Optional Hugging Face token, shared by every model download in remanga
-(IndexTTS-2.5, Audio8 TTS, MAGI v3, DeepSeek-OCR-2) - config.json's
+(Kokoro-82M, MAGI v3, LightOnOCR-2) - config.json's
 `system.hf_token_path` points at a small JSON file:
 
     {"token": "hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}
@@ -9,7 +9,7 @@ path means the actual token value never has to sit in config.json itself,
 which gets displayed/printed/git-committed far more casually than a
 one-off secrets file would). Used to raise Hugging Face Hub's per-IP rate
 limit and download speed for unauthenticated requests (the Hub prints this
-suggestion itself - see the remanga-ops skill's DeepSeek-OCR-2 section).
+suggestion itself - see the remanga-ops skill's OCR section).
 
 Defaults to global/hf_token.json - auto-created (blank "token", plus a
 "_hint" field pointing at where to actually get one) the first time it's

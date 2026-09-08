@@ -18,8 +18,7 @@ from dataclasses import dataclass
 class TTSEngineSpec:
     """Everything about a TTS engine that isn't code: what config.json calls
     it, what a human should see it called, one line on how it differs from
-    the others, which TTSConfig block holds its settings, and whether it
-    needs a transcript of the reference clip.
+    the others, and which TTSConfig block holds its settings.
 
     This is the single description of an engine. The settings menu builds
     its engine picker from these specs (remanga/settings/engine.py) and
@@ -37,26 +36,25 @@ class TTSEngineSpec:
     display_name: str
     summary: str
     config_attr: str
-    needs_reference_text: bool = False
 
 
-# Every TTS engine remanga can drive, each in its own isolated `.tools/venv-*`
-# environment (see remanga/venvs.py) so their dependency pins - PyTorch,
-# transformers, whatever else - never have to share a resolution. Adding a
-# third engine later means: a new *Config class below, a spec here, a new
-# worker script/Synthesizer subclass (remanga/audio/synth/), and a new
-# isolated-venv provisioning block in bootstrap.sh - the same shape every
-# existing engine already follows.
+# Every TTS engine remanga can drive. There is one, and the machinery around
+# it is deliberately still plural: this catalogue, the per-engine settings
+# block and the name->class map in audio/synth/ are what made removing two
+# engines a contained change rather than a rewrite, and they are what would
+# make adding one back the same. A second engine means: a new *Config class
+# in tts.py, a spec here, a worker script and Synthesizer subclass
+# (remanga/audio/synth/), and a venv provisioning block in bootstrap.sh.
+#
+# Kokoro replaced IndexTTS-2.5 and Audio8 TTS, which both cloned a voice
+# from a reference clip. It does not clone at all - it ships fixed, named
+# voices - so `spk_audio_prompt` and the reference-transcript asset that
+# went with those engines are gone rather than renamed. See KokoroConfig.
 TTS_ENGINE_SPECS: tuple[TTSEngineSpec, ...] = (
     TTSEngineSpec(
-        "indextts-2.5", "IndexTTS-2.5",
-        "Zero-shot cloning from a reference voice WAV alone",
-        config_attr="indextts",
-    ),
-    TTSEngineSpec(
-        "audio8-tts-0.1b", "Audio8 TTS",
-        "Also wants a text transcript of the reference voice clip",
-        config_attr="audio8", needs_reference_text=True,
+        "kokoro", "Kokoro-82M",
+        "Fixed studio voices, no reference clip - fast and consistent",
+        config_attr="kokoro",
     ),
 )
 
@@ -76,9 +74,8 @@ def engine_spec(name: str) -> TTSEngineSpec:
 
 
 def voice_field_for(engine: str) -> str:
-    """Dotted config path of ONE engine's reference voice, by engine name -
-    for the callers that need an engine other than the active one:
-    `remanga tts --engine X` runs a single chapter on a different engine
-    without redefining what config.json says, and the voice it validates
-    and asks for has to be that engine's, not the configured engine's."""
-    return f"tts.{engine_spec(engine).config_attr}.spk_audio_prompt"
+    """Dotted config path of ONE engine's voice, by engine name - for the
+    callers that need an engine other than the active one: `remanga tts
+    --engine X` runs a single chapter on a different engine without
+    redefining what config.json says."""
+    return f"tts.{engine_spec(engine).config_attr}.voice"
