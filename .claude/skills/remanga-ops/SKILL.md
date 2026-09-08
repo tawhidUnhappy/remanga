@@ -23,7 +23,7 @@ remanga/                                     # package: json_io.py, ffmpeg_io.py
   tui/                                       # arrow-key menus (select/multiselect/confirm) + non-tty fallback
   commands/{spec,selection,registry,categories,setup_rows,help_text}.py + catalog/{setup,chapter,project}.py + handlers/{setup,chapter,project,cleanup}.py
   wizard/{app,projects,chapters,params,narration,review,uploads,handoff,pipeline_edit,checks}.py
-  settings/{files,fields,assets,vision,presets,engine,video,sections,summary,wizard,paths_ui}.py
+  settings/{files,fields,assets,vision,presets,engine,video,tuning,sections,summary,wizard,paths_ui}.py
   full_recap/{discovery,timeline,compiler}.py   verify/{models,panels,probe,runner,report}.py
   reset/{modes,entries,actions}.py              status/{compute,panel,badges}.py
   audio/{tts.py,mix.py,clips.py,resample.py,synth/{base,kokoro}.py,scripts/kokoro_worker.py}
@@ -286,6 +286,64 @@ the target venv itself, don't rely on system CUDA. Locate its nvcc by `find`
 `$VENV/lib`, so `-maxdepth` must be ≥6** (an off-by-one at 5 silently broke
 this once). Always wrap in `(set -e; ...) && ok || warn-and-continue` -
 never let an optional build abort bootstrap.
+
+## Swapping an engine leaves stale CHECKS behind, not just stale names
+
+The highest-yield bug class in this repo, and it has bitten three times.
+Renaming strings is the easy half; the dangerous half is code that still
+*tests* the old model's assumptions and now quietly answers wrong. None of
+these raised anything - each looked fine and reported something false:
+
+- **`status/panel.py` stat()'d the narrator voice as a file.** True when the
+  engine cloned from a WAV. After Kokoro, `tts.kokoro.voice` is a NAME, so
+  `Path("af_heart").exists()` is False and EVERY run reported
+  "Reference Voice Audio: Not set / Missing" for a correctly configured
+  voice.
+- **`bootstrap.sh` created `assets/voices` + `assets/bgm`.** Nothing has read
+  `assets/` in ages - assets live under `global/` (`GLOBAL_DIR`). A new user
+  would put their music in the folder bootstrap had just made for them and
+  remanga would never see it. Now creates `global/bgm`.
+- **`OCRConfig` had no migration.** Field names overlap between OCR models
+  (`hf_repo_id`, `model_dir`, `prompt`), so a config.json naming the retired
+  model does NOT fail validation - it silently keeps pointing at it and the
+  first click downloads GBs of the wrong model. Both `TTSConfig` and
+  `OCRConfig` now name their retired ids/blocks explicitly and reset them.
+
+**When retiring an engine, grep for its ASSUMPTIONS, not its name:**
+`.exists()`/`Path(` on anything that used to be a path, `mkdir` of folders it
+owned, overlapping config field names, and any `expected_files` tuple.
+
+## Where the knobs live (`settings/sections.py` + `commands/setup_rows.py`)
+
+Two registries, both data-driven, and adding a setting means adding a row -
+never a hardcoded menu entry:
+
+- `SECTIONS` (settings/sections.py) is the full settings menu. Each `Section`
+  is title + `describe(config)` + `run(config)`. **`describe` must render the
+  live value** ("1x speed · 350ms between panels", not "Narration pacing") -
+  that is what makes the settings menu double as the status screen.
+- `TTS_SETUP` / `BGM_SETUP` / `VIDEO_SETUP` / `CROP_SETUP`
+  (commands/setup_rows.py) are per-command subsets, attached via a Command's
+  `setup=`, so `tts` offers pacing and `render` offers framing without three
+  menus of noise. `section_setup(key)` POINTS at a Section - it never
+  re-implements one, so a row cannot describe a screen differently.
+
+Screens themselves live in `settings/{engine,video,tuning,vision}.py` and
+write through `set_field(config, "dotted.path", value)`, which saves
+immediately - every screen is escapable at any point, so an answer already
+given must survive backing out of the next question.
+
+**Audited 2026-09-09: 96 config fields, 18 reachable from the UI.** The
+remaining 78 are mostly internals, but check before assuming a setting is
+exposed - `tuning.py` exists because a dozen genuinely user-facing ones
+(narration speed, inter-panel pause, voice/music gain, MAGI on/off, the
+cropper's cleanup passes, panel padding/border) were config.json-only, and a
+knob you must hand-edit JSON to turn is a knob nobody turns.
+
+**There are no tests in this repo.** "It imports" and "the code reads
+correctly" prove nothing here - the voice-as-path bug above would have died
+to a single assertion. Run the actual path on real project data before
+reporting that anything works.
 
 ## Optional HF token for every model download (`config.json` → `system.hf_token_path`)
 
@@ -588,13 +646,18 @@ installed on it"; `bootstrap.sh` evals it (`--shell`) before any venv
 exists, and the app imports it, so installer and app can never disagree.
 `./run.sh hardware` prints what it decided. Footguns found the hard way:
 
-- **PyTorch wheel indexes do NOT all carry the same torch versions.**
-  This project targets `torch==2.8.*`; `cu118` stops at 2.7 and `cu130` starts at
-  2.9, so neither can satisfy it. Never "pick the newest CUDA index" nor
-  "pick whatever the driver supports" - pick the newest index that the
-  driver can run AND that still has 2.8 (`_CUDA_INDEX_BY_DRIVER`: 580+ →
-  cu129, 525+/528+win → cu128, older → cpu + a warning).
-- **`uv --torch-backend` is silently overridden by `git+index-tts`.** That
+- **PyTorch wheel indexes do NOT all carry the same torch versions.** The
+  selection rule is "newest index the driver can run that ALSO has the torch
+  this project targets" (`_CUDA_INDEX_BY_DRIVER`: 580+ → cu129, 525+/528+win
+  → cu128, older → cpu + a warning) - never "newest CUDA index" and never
+  "whatever the driver supports".
+- **That target is `2.8`, and it is now VESTIGIAL.** It existed because
+  IndexTTS-2.5 pinned `torch==2.8.*`. Nothing pins it any more: measured,
+  venv-kokoro resolves 2.13, venv-magi 2.13, venv-deepseek-ocr 2.14. The rule
+  is therefore conservative rather than wrong - it needlessly excludes cu130
+  - and is safe to revisit, but do it deliberately, with all three venvs
+  re-resolved, not as a drive-by.
+- **A package's own `[tool.uv.sources]` silently overrides `--torch-backend`.** Hit with `git+index-tts` (since removed): that
   package's own pyproject declares a `pytorch-cuda` index pinned to cu128
   via `[tool.uv.sources]`, and it wins: `--torch-backend cpu` alone gives
   `2.8.0+cpu`, but the same flag *alongside the git package* gives
