@@ -18,7 +18,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from remanga.config import RemangaConfig
-from remanga.settings import engine, video
+from remanga.settings import engine, tuning, video
 from remanga.settings.assets import ASSETS, asset_relevant, asset_status, run_asset_menu
 from remanga.settings.presets import background_label, language_label, resolution_label
 from remanga.settings.vision import configure_vision_outputs, package_summary
@@ -70,6 +70,36 @@ SECTIONS: tuple[Section, ...] = (
     Section(
         "language", "Narration language",
         language_label, engine.configure_language,
+    ),
+    Section(
+        "pacing", "Narration pacing",
+        lambda c: f"{c.tts.speed:g}x speed · {c.audio.pause_between_panels_ms}ms between panels",
+        tuning.configure_pacing,
+        detail="how fast the narration reads, and how long each panel is held after it",
+    ),
+    Section(
+        "levels", "Audio levels",
+        lambda c: (f"voice {c.tts.kokoro.volume_boost_db:+.1f}dB · music {c.audio.bgm_volume_db:+.1f}dB"
+                   f" · {'normalized' if c.audio.enable_loudnorm else 'not normalized'}"),
+        tuning.configure_levels,
+        detail="voice-vs-music balance, and whether the master is loudness-normalized",
+    ),
+    Section(
+        "detection", "Panel detection",
+        lambda c: ", ".join(n for n, on in (
+            ("MAGI", c.marker.magi_enabled), ("gutter-snap", c.cropper.snap_to_gutters),
+            ("trim", c.cropper.trim_panel_whitespace),
+            ("dedupe", c.cropper.dedupe_duplicate_panels)) if on) or "all passes off",
+        tuning.configure_panel_detection,
+        detail="which cleanup passes run between downloading a page and narrating it",
+    ),
+    Section(
+        "framing", "Panel framing",
+        lambda c: (f"{c.video.panel_padding_percent:g}% padding"
+                   f"{' (adaptive)' if c.video.auto_adaptive_padding else ''}"
+                   f" · {c.video.panel_border_width}px border"),
+        tuning.configure_framing,
+        detail="how each panel sits inside the video frame",
     ),
     Section(
         "vision", "Vision outputs (what to generate/zip)",

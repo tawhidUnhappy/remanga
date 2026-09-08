@@ -10,7 +10,7 @@ from remanga.commands.help_text import (
     DEFAULT_KEEP_TEXT,
     STEP_NAMES,
 )
-from remanga.commands.setup_rows import BGM_SETUP, TTS_SETUP, VIDEO_SETUP
+from remanga.commands.setup_rows import BGM_SETUP, CROP_SETUP, TTS_SETUP, VIDEO_SETUP
 from remanga.commands.spec import Command, Param, chapter_param, force_param, project_param
 from remanga.config.tts import TTS_ENGINE_SPECS, TTS_ENGINES
 from remanga.narration import NARRATION_FILE_MODES, TEMPLATE
@@ -146,6 +146,7 @@ CHAPTER_COMMANDS: list[Command] = [
             force_param("Force re-cropping even if panels exist"),
         ],
         category="Chapter Production",
+        setup=CROP_SETUP,
     ),
     Command(
         "package",

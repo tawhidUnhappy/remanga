@@ -62,14 +62,26 @@ TTS_SETUP: tuple[SetupAction, ...] = (
     section_setup("voice", "which of the engine's built-in voices reads this chapter - "
                    "a name from its own catalogue, not a clip to clone"),
     section_setup("language", "passed straight through to the engine"),
+    section_setup("pacing", "how fast this chapter reads, and the gap held after each panel"),
 )
 
 BGM_SETUP: tuple[SetupAction, ...] = (
     asset_setup("bgm", "Background music", "the music bed mixed under the narration"),
+    section_setup("levels", "how loud the narration sits over the music, and whether the "
+                   "master is loudness-normalized"),
 )
 
 VIDEO_SETUP: tuple[SetupAction, ...] = (
     section_setup("resolution", "the frame size every chapter is rendered at"),
     section_setup("background", "what fills the frame around each panel"),
     section_setup("hardware", "GPU encoding when it's available, CPU when it isn't"),
+    section_setup("framing", "how each panel sits inside that frame"),
+)
+
+# Cropping is where a bad page turns into bad panels, and every pass here is
+# normally right and occasionally wrong on a splash page or a spread - so the
+# toggles belong next to the command that runs them, not three menus away.
+CROP_SETUP: tuple[SetupAction, ...] = (
+    section_setup("detection", "which cleanup passes run over each page"),
+    section_setup("vision", "what a cropped chapter gets packaged into for an LLM upload"),
 )
