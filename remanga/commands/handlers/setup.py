@@ -22,10 +22,7 @@ def setup_models(params: dict[str, Any], config: RemangaConfig) -> None:
     """Downloads/verifies every model the current configuration will
     actually use.
 
-    Only the currently-configured TTS engine's weights are fetched -
-    switching tts.engine later downloads the other engine's weights the
-    first time it's used, same as every engine's own lazy ensure_model()
-    already does. Each ensure_model() call below reuses the owning
+    Each ensure_model() call below reuses the owning
     component's own ModelManager rather than building a second one here, so
     repo ids and expected files live in exactly one place per model."""
     from remanga.audio.synth import create_synthesizer

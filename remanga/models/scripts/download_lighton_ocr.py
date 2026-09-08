@@ -57,9 +57,15 @@ def main() -> int:
             snapshot_download(
                 repo_id=repo_id,
                 local_dir=str(model_dir),
-                # No .pth/.bin: the repo publishes safetensors, and pulling a
-                # duplicate format would double the download for nothing.
-                allow_patterns=["*.json", "*.safetensors", "*.txt", "*.model"],
+                # An IGNORE list, not an allow list. An allow list of
+                # extensions silently drops anything it did not think of,
+                # and it already did once: `chat_template.jinja` is not
+                # .json/.safetensors/.txt/.model, so it was skipped, and the
+                # model then loaded fine and failed on the first page with
+                # "this processor does not have a chat template". Excluding
+                # the few things that are definitely not needed is the safer
+                # direction to be wrong in.
+                ignore_patterns=["*.png", "*.jpg", "*.gif", ".eval_results/*", "*.pth", "*.bin"],
                 token=token,
             )
             break

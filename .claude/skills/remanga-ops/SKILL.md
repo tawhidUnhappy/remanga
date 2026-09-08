@@ -185,6 +185,21 @@ no `trust_remote_code`), so the worker calls a documented API.
   `output_ids[0, inputs["input_ids"].shape[1]:]` before decoding, or the UI
   gets the chat scaffolding back as if it were panel text.
 - bf16 on CUDA, float32 elsewhere (bf16 isn't reliable on MPS/CPU).
+- **Download with `ignore_patterns`, never `allow_patterns`.** An extension
+  allowlist silently skipped `chat_template.jinja` (not .json/.safetensors/
+  .txt/.model); the model then loaded fine and died on the first page with
+  "this processor does not have a chat template". Exclude the few things you
+  don't want, don't try to enumerate what you do.
+- **The model cannot be prompted out of its document habits.** Measured: an
+  explicit "plain text only, no LaTeX, no description" prompt changed the
+  LaTeX not at all and made the image descriptions *worse* (added a
+  `![image](...)` tag). It is a distilled document parser, not an
+  instruction-following VLM. `ocr.prompt` defaults to `""` for that reason;
+  the fix is post-processing (`ocr/cleanup.py`), which strips LaTeX-wrapped
+  sound effects (`$\frac{2}{7}\text{Gulp...}$`), markdown image tags and
+  "Note: The image contains..." asides.
+- Cleanup keeps punctuation-only lines on purpose - `...` is a real manga
+  bubble, and unwrapping already empties lines that held only LaTeX.
 
 **Hub download reliability - hard-won, keep.** `download_lighton_ocr.py` is
 deliberately simple (retry `snapshot_download()` up to 3x, HF Hub only), but

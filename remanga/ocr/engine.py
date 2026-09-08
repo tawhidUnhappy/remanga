@@ -21,6 +21,7 @@ from pathlib import Path
 from remanga.config import OCRConfig
 from remanga.console import console
 from remanga.models.weights import ModelManager
+from remanga.ocr.cleanup import clean_ocr_text
 from remanga.paths import UV_BIN
 from remanga.venvs import extract_missing_packages, get_scripts_dir, get_tool_python
 
@@ -186,7 +187,12 @@ class OCREngine:
         response = json.loads(response_line)
         if not response.get("ok"):
             raise RuntimeError(f"{DISPLAY_NAME} recognition failed: {response.get('error')}")
-        return response.get("text", "")
+        # Cleaned here rather than in the worker: the worker is meant to be a
+        # thin, dependency-free shell around the model, and this is a
+        # judgement about output quality that belongs where it can be read and
+        # changed without touching the isolated environment. See ocr/cleanup.py
+        # for why the model needs it at all.
+        return clean_ocr_text(response.get("text", ""))
 
     def shutdown(self) -> None:
         proc, self._proc = self._proc, None
