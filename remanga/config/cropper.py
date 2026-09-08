@@ -79,15 +79,19 @@ class PackageConfig(BaseModel):
     # remanga/settings/vision.py:package_toggles. `produces` is the example
     # output path shown next to the switch; `group` only orders the list.
     sheets: bool = Field(
-        True, title="sheets", description="2x2 labeled grid composites, merged at full original resolution - fewer, denser images for lower LLM vision-token cost",
+        True, title="sheets",
+        description="2x2 labeled grid composites, merged at full original resolution - fewer, "
+                    "denser images for lower LLM vision-token cost",
         json_schema_extra={"produces": "sheets/sheet_1.___, sheet_2.___, ...", "group": "sheets"},
     )
     sheets_zip: bool = Field(
-        False, title="sheets_zip", description="Zips those contact sheets; builds sheets/ automatically even when `sheets` itself is off",
+        False, title="sheets_zip",
+        description="Zips those contact sheets; builds sheets/ automatically even when `sheets` itself is off",
         json_schema_extra={"produces": "sheets_zip/sheets_1.zip", "group": "sheets"},
     )
     sheets_folders: bool = Field(
-        False, title="sheets_folders", description="No compositing at all - each panel crop copied as-is into small numbered subfolders",
+        False, title="sheets_folders",
+        description="No compositing at all - each panel crop copied as-is into small numbered subfolders",
         json_schema_extra={"produces": "sheets_folders/folder_1/ .. folder_N/", "group": "sheets"},
     )
     pdf: bool = Field(
@@ -95,11 +99,13 @@ class PackageConfig(BaseModel):
         json_schema_extra={"produces": "panels_pdf/panels_1.pdf", "group": "pdf"},
     )
     pdf_splite: bool = Field(
-        False, title="pdf_splite", description="That same PDF content split into size-capped raw .pdf files, not zipped",
+        False, title="pdf_splite",
+        description="That same PDF content split into size-capped raw .pdf files, not zipped",
         json_schema_extra={"produces": "panels_pdf/panels_1.pdf, panels_2.pdf, ...", "group": "pdf"},
     )
     pdf_zip: bool = Field(
-        False, title="pdf_zip", description="That same single PDF, wrapped in a zip - for upload interfaces that only accept zips",
+        False, title="pdf_zip",
+        description="That same single PDF, wrapped in a zip - for upload interfaces that only accept zips",
         json_schema_extra={"produces": "panels_pdf/panels_1.zip", "group": "pdf"},
     )
     pdf_zip_splite: bool = Field(
@@ -190,8 +196,10 @@ class CropperConfig(BaseModel):
     # into its own crop) - both symptoms of one wrong seam. See
     # remanga/cropper/seams.py:reconcile_adjacent_seams.
     reconcile_panel_seams: bool = True
-    seam_max_gap_fraction: float = 0.15           # ignore pairs whose facing edges are this far apart (not really adjacent)
-    seam_min_axis_overlap_fraction: float = 0.5   # how much of the shared axis must overlap to count as "stacked/side-by-side"
+    # ignore pairs whose facing edges are this far apart (not really adjacent)
+    seam_max_gap_fraction: float = 0.15
+    # how much of the shared axis must overlap to count as "stacked/side-by-side"
+    seam_min_axis_overlap_fraction: float = 0.5
     gutter_background_sample_strip_pixels: int = 12  # page-margin strip used to sample the background color
 
     # Final per-panel whitespace trim: after a panel is cropped (gutter-snapped,
@@ -200,7 +208,8 @@ class CropperConfig(BaseModel):
     # neighbor to reconcile a seam against. See remanga/cropper/trim.py.
     trim_panel_whitespace: bool = True
     trim_min_background_fraction: float = 0.985   # stricter than gutter detection - only trims near-pure blank bands
-    trim_max_margin_fraction: float = 0.04        # never trims more than this fraction of a panel's width/height per side
+    # never trims more than this fraction of a panel's width/height per side
+    trim_max_margin_fraction: float = 0.04
 
     # Duplicate-crop safety net: drops any crops.json panel whose box is
     # near-identical in both position and size to an earlier one on the same

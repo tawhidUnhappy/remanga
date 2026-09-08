@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from remanga.audio.synth.base import BaseWorkerSynthesizer
 from remanga.config import AudioConfig, TTSConfig
@@ -43,7 +43,7 @@ class IndexTTSSynthesizer(BaseWorkerSynthesizer):
         python = get_tool_python("indextts")
         script = get_scripts_dir("audio") / "indextts_worker.py"
 
-        cmd: List[str] = [
+        cmd: list[str] = [
             str(python), "-u", str(script),
             "--cfg_path", str(Path(self.engine_config.cfg_path).resolve()),
             "--model_dir", str(model_dir.resolve()),
@@ -59,7 +59,7 @@ class IndexTTSSynthesizer(BaseWorkerSynthesizer):
     def _synth_timeout_seconds(self) -> float:
         return self.tts_config.synth_timeout_seconds
 
-    def _build_request(self, text: str, spk_prompt_path: str, output_wav: Path) -> Dict[str, Any]:
+    def _build_request(self, text: str, spk_prompt_path: str, output_wav: Path) -> dict[str, Any]:
         """Deliberately sends no emo_vector: IndexTTS-2.5 infers its own
         emotion/prosody straight from `text`'s own wording and punctuation
         ("!"/"?"/"..." etc - see prompts/narration.md Rule 3) when none is
@@ -68,7 +68,7 @@ class IndexTTSSynthesizer(BaseWorkerSynthesizer):
         says. Temperature/top_p (IndexTTSConfig) are left at IndexTTS-2.5's own
         recommended defaults for natural prosody within that inferred
         emotion."""
-        request: Dict[str, Any] = {
+        request: dict[str, Any] = {
             "cmd": "synthesize",
             "spk_audio_prompt": spk_prompt_path,
             "text": text,
@@ -81,7 +81,7 @@ class IndexTTSSynthesizer(BaseWorkerSynthesizer):
             request["duration_factor"] = round(1.0 / self.tts_config.speed, 3)
         return request
 
-    def _post_synthesize(self, output_wav: Path, request: Dict[str, Any]) -> None:
+    def _post_synthesize(self, output_wav: Path, request: dict[str, Any]) -> None:
         # duration_factor already handles speed on the model side when supported;
         # only fall back to the ffmpeg post-process if the worker couldn't use it
         # (older IndexTTS checkouts without a duration_factor parameter).

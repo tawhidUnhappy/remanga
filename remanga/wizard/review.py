@@ -8,7 +8,10 @@ from remanga.config import RemangaConfig
 from remanga.console import console
 from remanga.json_io import has_real_json_content, read_json_or
 from remanga.paths import (
-    ensure_global_lessons_file, ensure_memory_file, get_chapter_dir, get_narration_review_path,
+    ensure_global_lessons_file,
+    ensure_memory_file,
+    get_chapter_dir,
+    get_narration_review_path,
 )
 from remanga.tui import confirm
 from remanga.webui import launch_and_wait_reviewer

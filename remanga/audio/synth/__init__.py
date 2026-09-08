@@ -16,7 +16,7 @@ engine's properties (see remanga/config/tts.py)."""
 
 from __future__ import annotations
 
-from typing import Callable, Dict
+from collections.abc import Callable
 
 from remanga.audio.synth.audio8 import Audio8Synthesizer
 from remanga.audio.synth.base import BaseWorkerSynthesizer
@@ -31,7 +31,7 @@ from remanga.config.tts import TTS_ENGINE_SPECS
 # deep inside a chapter's TTS run.
 ENGINE_CLASSES = (IndexTTSSynthesizer, Audio8Synthesizer)
 
-SYNTHESIZER_BY_ENGINE: Dict[str, Callable[..., BaseWorkerSynthesizer]] = {
+SYNTHESIZER_BY_ENGINE: dict[str, Callable[..., BaseWorkerSynthesizer]] = {
     cls.spec.name: cls for cls in ENGINE_CLASSES
 }
 
@@ -53,9 +53,9 @@ def create_synthesizer(tts_config: TTSConfig, audio_config: AudioConfig) -> Base
 
 
 __all__ = [
+    "SYNTHESIZER_BY_ENGINE",
     "Audio8Synthesizer",
     "BaseWorkerSynthesizer",
     "IndexTTSSynthesizer",
-    "SYNTHESIZER_BY_ENGINE",
     "create_synthesizer",
 ]

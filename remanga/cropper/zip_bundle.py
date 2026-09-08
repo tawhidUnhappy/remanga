@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import zipfile
 from pathlib import Path
-from typing import List, Tuple
 
 from remanga.console import console, escape as _esc
 from remanga.cropper.image_codec import smallest_lossless_encoding
@@ -21,7 +20,7 @@ from remanga.paths import chapter_identity_fields
 
 
 def build_zip_bundle(
-    image_paths: List[Path],
+    image_paths: list[Path],
     out_dir: Path,
     file_prefix: str,
     enabled: bool,
@@ -30,7 +29,7 @@ def build_zip_bundle(
     project_name: str,
     chapter_num: str,
     label: str,
-) -> List[Path]:
+) -> list[Path]:
     """Builds `out_dir`/`file_prefix`_1.zip, `file_prefix`_2.zip, ... from
     `image_paths` (already-produced images - individual panels or sheet
     composites, whichever the caller passes). A no-op returning [] if
@@ -57,7 +56,7 @@ def build_zip_bundle(
 
     max_bytes = max(1, int(max_mb * 1024 * 1024))
 
-    encoded: List[Tuple[str, str, bytes]] = []  # (item_id, arcname, data)
+    encoded: list[tuple[str, str, bytes]] = []  # (item_id, arcname, data)
     original_total = 0
     for path in sorted(image_paths):
         data, ext = smallest_lossless_encoding(path)
@@ -69,7 +68,7 @@ def build_zip_bundle(
     total_parts = len(parts)
     identity = chapter_identity_fields(project_name, chapter_num)
     full_ids = [item_id for item_id, _, _ in encoded]
-    written: List[Path] = []
+    written: list[Path] = []
     for idx, part in enumerate(parts, start=1):
         zip_path = out_dir / f"{file_prefix}_{idx}.zip"
         part_ids = [item_id for item_id, _, _ in part]

@@ -6,7 +6,6 @@ CoordinateCropper's loop isn't tangled up with reporting."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
 
 from remanga.config import CropperConfig
 from remanga.console import console, escape as _esc
@@ -16,7 +15,7 @@ from remanga.cropper.sheets import PanelSheetGenerator
 from remanga.paths import get_sheets_dir, get_sheets_folders_dir, update_manifest_chapter
 
 
-def write_manifest(project_name: str, chapter_num: str, panel_paths: List[Path]) -> None:
+def write_manifest(project_name: str, chapter_num: str, panel_paths: list[Path]) -> None:
     """Records that this chapter has been cropped into {manga}/manifest.json's
     "panels" section (see paths.update_manifest_chapter) - just the count,
     used as crop.py's own resume marker ("has this chapter been cropped
@@ -33,7 +32,9 @@ def write_manifest(project_name: str, chapter_num: str, panel_paths: List[Path])
     })
 
 
-def ensure_sheets_generated(config: CropperConfig, project_name: str, chapter_num, panel_paths: List[Path]) -> List[Path]:
+def ensure_sheets_generated(
+    config: CropperConfig, project_name: str, chapter_num, panel_paths: list[Path]
+) -> list[Path]:
     """Generates contact sheet composites into {manga}/sheets/chapter_N/ if
     anything actually needs them right now: `package.sheets` is on, or the
     sheets_zip package format (`PackageConfig.sheets_zip_active`) is -
@@ -57,7 +58,9 @@ def ensure_sheets_generated(config: CropperConfig, project_name: str, chapter_nu
     return sorted(p for p in sheets_dir.iterdir() if p.is_file()) if sheets_dir.exists() else []
 
 
-def ensure_panel_folders_generated(config: CropperConfig, project_name: str, chapter_num, panel_paths: List[Path]) -> List[Path]:
+def ensure_panel_folders_generated(
+    config: CropperConfig, project_name: str, chapter_num, panel_paths: list[Path]
+) -> list[Path]:
     """Generates the `sheets_folders` package format into
     {manga}/sheets_folders/chapter_N/ if `package.sheets_folders` is on -
     the plain-folder alternative to `ensure_sheets_generated` above (see
@@ -101,7 +104,7 @@ def print_crop_summary(
 
 def package_outputs(
     config: CropperConfig,
-    panel_paths: List[Path],
+    panel_paths: list[Path],
     project_name: str,
     chapter_num: str,
 ) -> None:

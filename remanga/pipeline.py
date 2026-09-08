@@ -1,6 +1,7 @@
 """Modular step-registry + JSON pipeline config: the download -> mark ->
-crop -> package -> narration -> review -> tts -> mix -> render sequence, now expressed as an ordered list of named, independently
-runnable steps instead of one hardcoded function. This lets a caller run
+crop -> package -> narration -> review -> tts -> mix -> render sequence,
+now expressed as an ordered list of named, independently runnable steps
+instead of one hardcoded function. This lets a caller run
 "just one tool" (a single step name), "a lot of them" (an arbitrary subset,
 in any order), or the full default pipeline - driven by the project's own
 saved step list (project.json's "pipeline") instead of code.
@@ -15,16 +16,15 @@ command, which calls run_pipeline(project, chapter, config, load_pipeline(projec
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Callable, List, Optional
 
 from remanga.audio import AudioProcessor, TTSEngine
 from remanga.config import RemangaConfig
 from remanga.console import console, display_path, print_path
 from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
-from remanga.json_io import has_real_json_content, read_json_or, write_json
+from remanga.json_io import has_real_json_content, read_json_or
 from remanga.packaging import package_chapter
 from remanga.paths import get_chapter_dir, get_pipeline_path
 from remanga.settings.project_prefs import cropper_config_for, remembered_pipeline
@@ -44,7 +44,7 @@ class Step:
     name: str
     description: str
     run: Callable[[str, str, RemangaConfig], None]
-    needs: List[str] = field(default_factory=list)
+    needs: list[str] = field(default_factory=list)
 
 
 def _run_download(project: str, chapter: str, config: RemangaConfig) -> None:
@@ -128,7 +128,7 @@ def _run_render(project: str, chapter: str, config: RemangaConfig) -> None:
 # Ordered, once - both STEP_REGISTRY (source of truth for what a step is/
 # does) and DEFAULT_STEPS (today's exact hardcoded wizard order, used as the
 # fallback whenever a project has never chosen) come from this one list.
-STEP_REGISTRY: List[Step] = [
+STEP_REGISTRY: list[Step] = [
     Step("download", "Download chapter pages from MangaDex", _run_download),
     Step("mark", "Mark panels via the Panel Marker web UI (writes crops.json)", _run_mark, needs=["download"]),
     Step("crop", "Crop panels out of the marked pages", _run_crop, needs=["mark"]),
@@ -143,10 +143,10 @@ STEP_REGISTRY: List[Step] = [
 ]
 
 _STEP_BY_NAME = {step.name: step for step in STEP_REGISTRY}
-DEFAULT_STEPS: List[str] = [step.name for step in STEP_REGISTRY]
+DEFAULT_STEPS: list[str] = [step.name for step in STEP_REGISTRY]
 
 
-def run_pipeline(project: str, chapter: str, config: RemangaConfig, steps: Optional[List[str]] = None) -> None:
+def run_pipeline(project: str, chapter: str, config: RemangaConfig, steps: list[str] | None = None) -> None:
     """Runs the named steps, in the given order. `steps` defaults to
     DEFAULT_STEPS (today's exact wizard sequence). An unknown step name is
     warned about and skipped, not fatal - a typo in a saved step list
@@ -160,7 +160,7 @@ def run_pipeline(project: str, chapter: str, config: RemangaConfig, steps: Optio
         step.run(project, chapter, config)
 
 
-def load_pipeline(project: str) -> List[str]:
+def load_pipeline(project: str) -> list[str]:
     """This project's ordered step list: project.json's "pipeline", else a
     legacy pipeline.json if the project still has one, else DEFAULT_STEPS -
     so a project that has never chosen runs today's exact order, unchanged.

@@ -8,7 +8,7 @@ move is a valid, and frequently correct, answer here."""
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -48,16 +48,13 @@ def _max_radius_before_neighbor(
     deeper inside (or past) the neighbor - which is the actual failure this
     function exists to prevent."""
     radius = requested_radius
-    for (l, t, r, b) in other_boxes:
-        other_lo, other_hi = (t, b) if axis == "x" else (l, r)
+    for left, top, right, bottom in other_boxes:
+        other_lo, other_hi = (top, bottom) if axis == "x" else (left, right)
         if other_hi <= perp_lo or other_lo >= perp_hi:
             continue  # no perpendicular overlap - this box isn't in this edge's path
 
-        near, far = (l, r) if axis == "x" else (t, b)
-        if direction > 0:
-            radius = min(radius, near - coord - 1)
-        else:
-            radius = min(radius, coord - far - 1)
+        near, far = (left, right) if axis == "x" else (top, bottom)
+        radius = min(radius, near - coord - 1) if direction > 0 else min(radius, coord - far - 1)
     return max(0, radius)
 
 
@@ -137,4 +134,4 @@ def refine_box_to_gutters(
 def count_adjusted_edges(original: PixelBox, refined: PixelBox, min_shift: int = 1) -> int:
     """How many of the 4 edges actually moved by at least `min_shift` px - used for
     the crop pipeline's summary line, not for any decision-making."""
-    return sum(1 for a, b in zip(original, refined) if abs(a - b) >= min_shift)
+    return sum(1 for a, b in zip(original, refined, strict=True) if abs(a - b) >= min_shift)

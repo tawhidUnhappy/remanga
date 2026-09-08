@@ -3,8 +3,6 @@ see remanga/webui/."""
 
 from __future__ import annotations
 
-from typing import List
-
 from pydantic import BaseModel, Field
 
 
@@ -22,13 +20,13 @@ class ShortcutsConfig(BaseModel):
     still makes sense on whichever OS opens it next. The non-modifier token is
     whatever KeyboardEvent.key lowercases to (e.g. 'arrowleft', 'delete', 's').
     """
-    save: List[str] = Field(default_factory=lambda: ["mod+s"])
-    mark_full_page: List[str] = Field(default_factory=lambda: ["mod+f"])
-    tool_draw: List[str] = Field(default_factory=lambda: ["d"])
-    tool_adjust: List[str] = Field(default_factory=lambda: ["v"])
-    prev_page: List[str] = Field(default_factory=lambda: ["arrowleft"])
-    next_page: List[str] = Field(default_factory=lambda: ["arrowright"])
-    delete_mark: List[str] = Field(default_factory=lambda: ["delete", "backspace"])
+    save: list[str] = Field(default_factory=lambda: ["mod+s"])
+    mark_full_page: list[str] = Field(default_factory=lambda: ["mod+f"])
+    tool_draw: list[str] = Field(default_factory=lambda: ["d"])
+    tool_adjust: list[str] = Field(default_factory=lambda: ["v"])
+    prev_page: list[str] = Field(default_factory=lambda: ["arrowleft"])
+    next_page: list[str] = Field(default_factory=lambda: ["arrowright"])
+    delete_mark: list[str] = Field(default_factory=lambda: ["delete", "backspace"])
     # A bare, unmodified key on purpose - not "mod+tab" (reserved by every
     # major browser for switching tabs) or "mod+0" (reserved for resetting
     # the *browser's* page zoom). Both fire a browser-chrome action a page can
@@ -36,7 +34,7 @@ class ShortcutsConfig(BaseModel):
     # either one would have been permanently dead as an actual default. A
     # bare digit has no such reservation, is easy to reach, and "0" reads
     # naturally as "reset to zero."
-    reset_view: List[str] = Field(default_factory=lambda: ["0"])
+    reset_view: list[str] = Field(default_factory=lambda: ["0"])
 
 
 class MarkerConfig(BaseModel):

@@ -10,11 +10,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
 
 from remanga.config import RemangaConfig
 from remanga.paths import (
-    get_chapter_dir, get_panels_pdf_dir, get_panels_zip_dir, get_sheets_dir, get_sheets_zip_dir,
+    get_chapter_dir,
+    get_panels_pdf_dir,
+    get_panels_zip_dir,
+    get_sheets_dir,
+    get_sheets_zip_dir,
 )
 
 
@@ -25,18 +28,18 @@ class UploadGroup:
     a size cap, and all of its parts go up together."""
 
     kind: str
-    parts: List[Path]
+    parts: list[Path]
 
     @property
     def is_split(self) -> bool:
         return len(self.parts) > 1
 
 
-def _files_in(directory: Path, pattern: str) -> List[Path]:
+def _files_in(directory: Path, pattern: str) -> list[Path]:
     return sorted(directory.glob(pattern)) if directory.exists() else []
 
 
-def upload_groups(project: str, chapter: str, config: RemangaConfig) -> List[UploadGroup]:
+def upload_groups(project: str, chapter: str, config: RemangaConfig) -> list[UploadGroup]:
     """Every upload option that exists for this chapter, best first.
 
     Packaged bundles come first, in the order they were configured to be
@@ -46,7 +49,7 @@ def upload_groups(project: str, chapter: str, config: RemangaConfig) -> List[Upl
     first (denser, fewer files, cheaper on vision tokens), then the
     always-generated panels/ directory."""
     package = config.cropper.package
-    groups: List[UploadGroup] = []
+    groups: list[UploadGroup] = []
 
     if package.pdf_active:
         pdf_dir = get_panels_pdf_dir(project, chapter, create=False)

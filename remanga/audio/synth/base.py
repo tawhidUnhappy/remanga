@@ -19,7 +19,7 @@ import select
 import subprocess
 import threading
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from remanga.config import AudioConfig
 from remanga.console import console
@@ -37,7 +37,7 @@ _STDERR_TAIL_LINES = 200
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 
 
-def _split_text_into_chunks(text: str, max_chars: int) -> List[str]:
+def _split_text_into_chunks(text: str, max_chars: int) -> list[str]:
     """Greedily packs sentences into chunks of at most `max_chars`, so a
     long narration line can be sent through an engine's fixed-generation-
     budget worker as several bounded calls instead of one that silently
@@ -47,7 +47,7 @@ def _split_text_into_chunks(text: str, max_chars: int) -> List[str]:
     being cut apart mid-word - rare in narration text, and still better
     than an engine truncating it further."""
     sentences = _SENTENCE_SPLIT_RE.split(text.replace("\n", " "))
-    chunks: List[str] = []
+    chunks: list[str] = []
     current = ""
     for sentence in sentences:
         sentence = sentence.strip()
@@ -100,27 +100,27 @@ class BaseWorkerSynthesizer:
     # worth of output (e.g. audio8's max_new_tokens: see Audio8Synthesizer).
     # None (the default) means synthesize() always makes exactly one call,
     # unchanged from before this existed.
-    chunk_max_chars: Optional[int] = None
+    chunk_max_chars: int | None = None
 
     def __init__(self, audio_config: AudioConfig, model_manager: ModelManager):
         self.audio_config = audio_config
         self.model_manager = model_manager
-        self._proc: Optional[subprocess.Popen] = None
+        self._proc: subprocess.Popen | None = None
         self._stderr_tail: collections.deque = collections.deque(maxlen=_STDERR_TAIL_LINES)
-        self._stderr_thread: Optional[threading.Thread] = None
+        self._stderr_thread: threading.Thread | None = None
         atexit.register(self.shutdown)
 
     # --- subclass hooks -----------------------------------------------
     def _spawn_worker(self, model_dir: Path) -> subprocess.Popen:
         raise NotImplementedError
 
-    def _build_request(self, text: str, spk_prompt_path: str, output_wav: Path) -> Dict[str, Any]:
+    def _build_request(self, text: str, spk_prompt_path: str, output_wav: Path) -> dict[str, Any]:
         raise NotImplementedError
 
     def _synth_timeout_seconds(self) -> float:
         raise NotImplementedError
 
-    def _post_synthesize(self, output_wav: Path, request: Dict[str, Any]) -> None:
+    def _post_synthesize(self, output_wav: Path, request: dict[str, Any]) -> None:
         """Optional per-engine post-processing after a successful synthesis
         (e.g. IndexTTS's ffmpeg-atempo speed fallback). No-op by default."""
 
@@ -179,7 +179,9 @@ class BaseWorkerSynthesizer:
                 raise RuntimeError(f"{self.display_name} worker failed to load: {error_text}")
             console.print(f"[dim]Retrying {self.display_name} worker startup with the newly installed package(s)...[/]")
 
-        raise RuntimeError(f"{self.display_name} worker still fails to load after installing: {', '.join(sorted(attempted))}")
+        raise RuntimeError(
+            f"{self.display_name} worker still fails to load after installing: {', '.join(sorted(attempted))}"
+        )
 
     def ensure_ready(self) -> None:
         """Loads the model weights and spawns the worker if that hasn't happened yet.
@@ -285,7 +287,7 @@ class BaseWorkerSynthesizer:
 
         self._post_synthesize(output_wav, request)
 
-    def _synthesize_chunks(self, chunks: List[str], spk_prompt_path: str, output_wav: Path) -> None:
+    def _synthesize_chunks(self, chunks: list[str], spk_prompt_path: str, output_wav: Path) -> None:
         """Synthesizes each chunk to its own temp WAV via the normal
         single-call path (so per-chunk post-processing like the speed
         ffmpeg-atempo fallback still applies), concatenates them in order,
@@ -293,7 +295,7 @@ class BaseWorkerSynthesizer:
         parts are always cleaned up, success or failure."""
         from pydub import AudioSegment  # already a hard dependency (see audio/tts.py)
 
-        part_paths: List[Path] = []
+        part_paths: list[Path] = []
         try:
             for i, chunk in enumerate(chunks):
                 # ".wav" suffix kept last (not ".wav.tmp") - some workers

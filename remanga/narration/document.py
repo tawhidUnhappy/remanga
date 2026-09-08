@@ -23,9 +23,10 @@ workflows:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any
 
 from remanga.console import console, display_path
 from remanga.json_io import has_real_json_content, read_json, write_json
@@ -50,7 +51,7 @@ class NarrationFileMode:
     detail: str
 
 
-NARRATION_FILE_MODES: Tuple[NarrationFileMode, ...] = (
+NARRATION_FILE_MODES: tuple[NarrationFileMode, ...] = (
     NarrationFileMode(
         TEMPLATE, "Full template",
         "one entry per cropped panel, every text empty",
@@ -71,7 +72,7 @@ def narration_path(project_name: str, chapter_num: str) -> Path:
     return get_chapter_dir(project_name, chapter_num) / "narration.json"
 
 
-def panel_ids(project_name: str, chapter_num: str) -> List[str]:
+def panel_ids(project_name: str, chapter_num: str) -> list[str]:
     """Every cropped panel's id for this chapter, in order.
 
     The id is the panel file's stem, because that's what render.py keys off
@@ -84,7 +85,7 @@ def panel_ids(project_name: str, chapter_num: str) -> List[str]:
     return sorted(p.stem for p in panels_dir.iterdir() if p.suffix.lower() in PANEL_IMAGE_EXTS)
 
 
-def narration_document(chapter_num: str, entries: Sequence[Tuple[str, str]]) -> Dict[str, Any]:
+def narration_document(chapter_num: str, entries: Sequence[tuple[str, str]]) -> dict[str, Any]:
     """The narration.json document for a chapter, from (panel_id, text)
     pairs. The one place this structure is spelled out."""
     narration = [{"panel_id": panel_id, "text": text or ""} for panel_id, text in entries]
@@ -150,10 +151,10 @@ class PanelChange:
     panel_id: str
     before: str
     after: str
-    rules: List[str]
+    rules: list[str]
 
 
-def normalize_narration(project_name: str, chapter_num: str) -> Tuple[Dict[str, Any], List[PanelChange]]:
+def normalize_narration(project_name: str, chapter_num: str) -> tuple[dict[str, Any], list[PanelChange]]:
     """Reads this chapter's narration.json and returns (normalized document,
     the panels that changed). Writes nothing - the caller previews, confirms,
     and only then saves, because narration text is hand-written or
@@ -168,7 +169,7 @@ def normalize_narration(project_name: str, chapter_num: str) -> Tuple[Dict[str, 
         )
 
     document = read_json(path)
-    changes: List[PanelChange] = []
+    changes: list[PanelChange] = []
     for entry in document.get("narration", []):
         before = entry.get("text", "") or ""
         after, rules = normalize_text(before)
@@ -178,7 +179,7 @@ def normalize_narration(project_name: str, chapter_num: str) -> Tuple[Dict[str, 
     return document, changes
 
 
-def save_narration(project_name: str, chapter_num: str, document: Dict[str, Any]) -> Path:
+def save_narration(project_name: str, chapter_num: str, document: dict[str, Any]) -> Path:
     """Writes narration.json back. Atomic, like every JSON write here."""
     path = narration_path(project_name, chapter_num)
     write_json(path, document)

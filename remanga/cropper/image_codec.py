@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
-from typing import Tuple
 
 from PIL import Image
 
@@ -47,7 +46,9 @@ def pixel_identical(reference: Image.Image, candidate_bytes: bytes) -> bool:
         return False
 
 
-def smallest_lossless_encoding_for_image(img: Image.Image, best_bytes: bytes = b"", best_ext: str = ".png") -> Tuple[bytes, str]:
+def smallest_lossless_encoding_for_image(
+    img: Image.Image, best_bytes: bytes = b"", best_ext: str = ".png"
+) -> tuple[bytes, str]:
     """The actual codec comparison behind `smallest_lossless_encoding` below,
     factored out so it can also run on an image that only exists in memory -
     a composited sheet canvas (remanga.cropper.sheets), not a file on disk.
@@ -85,7 +86,7 @@ def smallest_lossless_encoding_for_image(img: Image.Image, best_bytes: bytes = b
     return best_bytes, best_ext
 
 
-def smallest_lossless_encoding(path: Path) -> Tuple[bytes, str]:
+def smallest_lossless_encoding(path: Path) -> tuple[bytes, str]:
     """Returns (bytes, extension) for whichever lossless encoding of this
     panel image comes out smallest: the original file as-is, a re-optimized
     PNG, or a lossless WEBP - each of the latter two only wins if

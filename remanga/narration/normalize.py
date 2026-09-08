@@ -26,8 +26,8 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, List, Tuple
 
 from remanga.narration.delivery import ranks, speech_case, speech_quotes, titles
 from remanga.narration.numbers import decimal_to_words, int_to_words, ordinal_to_words
@@ -200,8 +200,7 @@ def _punctuation(text: str) -> str:
     text = re.sub(r"([,;:])(?=[A-Za-z])", r"\1 ", text)   # space after it
     text = re.sub(r"([.!?])(?=[A-Za-z])", r"\1 ", text)
     text = re.sub(r"(?<!\.)\.(?=\.\.)", ".", text)
-    text = re.sub(r"\s*-\s*$", "...", text)               # "What the-" -> a trailing pause
-    return text
+    return re.sub(r"\s*-\s*$", "...", text)               # "What the-" -> a trailing pause
 
 
 def _charset(text: str) -> str:
@@ -237,7 +236,7 @@ def _sentence_end(text: str) -> str:
 # Safety first (what would glitch), then delivery (what would read flat).
 # Delivery rules run last, on text that's already clean, so they never have
 # to reason about emoji or markdown - see remanga/narration/delivery.py.
-RULES: Tuple[Rule, ...] = (
+RULES: tuple[Rule, ...] = (
     Rule("unicode", "normalized unicode / removed invisible characters", _unicode_form),
     Rule("typographic", "converted smart quotes, dashes and ellipses", _typographic),
     Rule("markup", "removed leftover markdown", _markup),
@@ -259,11 +258,11 @@ RULES: Tuple[Rule, ...] = (
 RULE_BY_NAME = {rule.name: rule for rule in RULES}
 
 
-def normalize_text(text: str) -> Tuple[str, List[str]]:
+def normalize_text(text: str) -> tuple[str, list[str]]:
     """Returns the speakable text plus the names of the rules that actually
     changed something, in the order they ran. Idempotent: normalizing
     already-normalized text returns it unchanged with an empty rule list."""
-    applied: List[str] = []
+    applied: list[str] = []
     for rule in RULES:
         after = rule.apply(text)
         if after != text:

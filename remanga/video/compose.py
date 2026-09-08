@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Tuple
+
 from PIL import Image, ImageColor, ImageDraw, ImageEnhance, ImageFilter, ImageOps
 from rich.progress import BarColumn, Progress, TextColumn
 
@@ -11,7 +11,7 @@ from remanga.paths import get_chapter_dir, get_video_frames_dir
 
 
 class FrameCompositor:
-    def __init__(self, config: Optional[VideoConfig] = None):
+    def __init__(self, config: VideoConfig | None = None):
         self.config = config or VideoConfig()
         self.canvas_size = (self.config.width, self.config.height)
         self.bg_color = ImageColor.getrgb(self.config.background_color)
@@ -48,11 +48,10 @@ class FrameCompositor:
         # 4. Apply brightness dimming so foreground panel pops clearly
         dim_factor = max(0.1, min(1.0, getattr(self.config, "blur_brightness", 0.42)))
         enhancer = ImageEnhance.Brightness(blurred_canvas)
-        dark_blurred_canvas = enhancer.enhance(dim_factor)
+        return enhancer.enhance(dim_factor)
 
-        return dark_blurred_canvas
 
-    def _calculate_adaptive_bounds(self, img_w: int, img_h: int) -> Tuple[int, int, int, int]:
+    def _calculate_adaptive_bounds(self, img_w: int, img_h: int) -> tuple[int, int, int, int]:
         """
         Calculates recommended adaptive margins per panel aspect ratio:
         - Wide tiers: maximizes horizontal width while preserving breathing gutters.
@@ -124,7 +123,10 @@ class FrameCompositor:
             if border_w > 0:
                 draw = ImageDraw.Draw(canvas)
                 draw.rectangle(
-                    [offset_x - border_w, offset_y - border_w, offset_x + new_w + border_w - 1, offset_y + new_h + border_w - 1],
+                    [
+                        offset_x - border_w, offset_y - border_w,
+                        offset_x + new_w + border_w - 1, offset_y + new_h + border_w - 1,
+                    ],
                     outline=self.border_color,
                     width=border_w
                 )
@@ -145,7 +147,10 @@ class FrameCompositor:
             raise FileNotFoundError(f"No cropped panels found in: {panels_dir}")
 
         bg_mode = getattr(self.config, "background_style", "blur")
-        console.print(f"[cyan]Compositing {len(panels)} panels onto {self.config.width}x{self.config.height} canvas (Mode: {bg_mode})...[/]")
+        console.print(
+            f"[cyan]Compositing {len(panels)} panels onto {self.config.width}x{self.config.height} canvas (Mode: "
+            f"{bg_mode})...[/]"
+        )
 
         reused_count = 0
         to_composite = []

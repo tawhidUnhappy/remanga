@@ -8,12 +8,12 @@ reach a chapter this project doesn't have yet."""
 
 from __future__ import annotations
 
-from typing import List, Sequence
+from collections.abc import Sequence
 
 from remanga.full_recap.discovery import chapter_sort_key
 
 
-def parse_remote_chapter_selection(raw: str, available_chapters: Sequence[str]) -> List[str]:
+def parse_remote_chapter_selection(raw: str, available_chapters: Sequence[str]) -> list[str]:
     """Comma-separated chapter numbers and/or numeric ranges ('N-M'),
     expanded only against `available_chapters` (MangaDex's own listing for
     this manga) - so '1-9999' can't manufacture chapter numbers MangaDex

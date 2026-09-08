@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from remanga.json_io import has_real_json_content, read_json, read_json_or
 
@@ -37,7 +37,7 @@ class ReviewerState:
             )
         narration = read_json(narration_path)
         self.chapter_label = str(narration.get("chapter", chapter_num))
-        self.narration_entries: List[Dict[str, Any]] = narration.get("narration", [])
+        self.narration_entries: list[dict[str, Any]] = narration.get("narration", [])
 
         self.round = self._next_round_number()
 
@@ -46,7 +46,7 @@ class ReviewerState:
         # this round's narration.json still shows the same text (the LLM
         # missed the fix) - the user can see and re-submit it instead of
         # re-typing from scratch.
-        self.flags: Dict[str, Dict[str, Any]] = {}
+        self.flags: dict[str, dict[str, Any]] = {}
         self._preload_previous_round()
 
     def _history_dir(self) -> Path:
@@ -84,14 +84,14 @@ class ReviewerState:
             if pid and current_text.get(pid) == entry.get("text_at_flag"):
                 self.flags[pid] = {"issue": entry.get("issue", ""), "tag": entry.get("tag", "")}
 
-    def panel_image_filename(self, panel_id: str) -> Optional[str]:
+    def panel_image_filename(self, panel_id: str) -> str | None:
         for ext in (".png", ".jpg", ".jpeg", ".webp"):
             candidate = self.panels_dir / f"{panel_id}{ext}"
             if candidate.exists():
                 return candidate.name
         return None
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         panels = []
         for entry in self.narration_entries:
             pid = entry.get("panel_id")
@@ -115,7 +115,7 @@ class ReviewerState:
             return
         self.flags[panel_id] = {"issue": issue, "tag": (tag or "").strip()}
 
-    def build_review_json(self, general_note: str, approved: bool) -> Dict[str, Any]:
+    def build_review_json(self, general_note: str, approved: bool) -> dict[str, Any]:
         current_text = {e.get("panel_id"): e.get("text", "") for e in self.narration_entries}
         flagged_panels = [
             {

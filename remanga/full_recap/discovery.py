@@ -7,8 +7,6 @@ stack."""
 
 from __future__ import annotations
 
-from typing import List
-
 from remanga.paths import get_project_dir
 
 
@@ -23,17 +21,18 @@ def chapter_sort_key(chapter_num: str):
         return (1, chapter_num)
 
 
-def discover_chapters(project_name: str) -> List[str]:
+def discover_chapters(project_name: str) -> list[str]:
     """Every chapter this project has a chapters/chapter_N/ directory for,
     in reading order. Doesn't filter by production status - callers decide
     what "ready" means for their own purpose."""
     chapters_root = get_project_dir(project_name) / "chapters"
     if not chapters_root.exists():
         return []
-    nums = []
-    for d in chapters_root.iterdir():
-        if d.is_dir() and d.name.startswith("chapter_"):
-            nums.append(d.name[len("chapter_"):])
+    nums = [
+        d.name[len("chapter_"):]
+        for d in chapters_root.iterdir()
+        if d.is_dir() and d.name.startswith("chapter_")
+    ]
     return sorted(nums, key=chapter_sort_key)
 
 

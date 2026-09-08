@@ -13,7 +13,8 @@ regardless of how many items that particular menu has."""
 
 from __future__ import annotations
 
-from typing import Any, List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from rich.prompt import Confirm, Prompt
 
@@ -29,7 +30,7 @@ class _ExitRow:
 _EXIT_ROW = _ExitRow()
 
 
-def _print_choices(title: str, choices: Sequence[Choice], back_label: Optional[str]) -> None:
+def _print_choices(title: str, choices: Sequence[Choice], back_label: str | None) -> None:
     console.print(f"\n[bold]{_safe(title)}[/]")
     for i, choice in enumerate(choices, start=1):
         badge = f"[yellow]\\[{_safe(choice.badge)}][/] " if choice.badge else ""
@@ -48,7 +49,7 @@ def _safe(text: str) -> str:
     return escape(str(text))
 
 
-def ask_index(prompt: str, count: int, default: int = 1, zero_label: Optional[str] = None) -> int:
+def ask_index(prompt: str, count: int, default: int = 1, zero_label: str | None = None) -> int:
     """Prompts for a 1-based index without Rich's `choices=[...]` echo,
     which is fine for three options and unreadable for twenty
     ("[1/2/3/4/5/6/7/8/...]"). Loops until the answer is an in-range
@@ -63,7 +64,7 @@ def ask_index(prompt: str, count: int, default: int = 1, zero_label: Optional[st
 
 
 def select(title: str, choices: Sequence[Choice], *, default_index: int = 0,
-           back_label: Optional[str] = None, exit_label: Optional[str] = None, **_ignored) -> Any:
+           back_label: str | None = None, exit_label: str | None = None, **_ignored) -> Any:
     selectable = [c for c in choices if not c.disabled]
     if not selectable:
         console.print(f"[dim]{_safe(title)}: nothing to choose from.[/]")
@@ -83,7 +84,7 @@ def select(title: str, choices: Sequence[Choice], *, default_index: int = 0,
     return picked
 
 
-def multiselect(title: str, choices: Sequence[Choice], *, back_label: Optional[str] = None,
+def multiselect(title: str, choices: Sequence[Choice], *, back_label: str | None = None,
                 ordered: bool = False, **_ignored) -> Any:
     """Comma-separated numbers instead of space-toggling. In `ordered` mode
     the order they're typed in is the order they're returned in, which is
@@ -102,7 +103,7 @@ def multiselect(title: str, choices: Sequence[Choice], *, back_label: Optional[s
     if not raw:
         return [c.value for c in selectable if c.checked]
 
-    picked: List[Any] = []
+    picked: list[Any] = []
     for token in raw.split(","):
         token = token.strip()
         if token.isdigit() and 1 <= int(token) <= len(selectable):

@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from typing import List, Tuple
 
-
-def calculate_pixel_bounds(box: List[int], img_w: int, img_h: int, is_1000: bool) -> Tuple[int, int, int, int]:
+def calculate_pixel_bounds(box: list[int], img_w: int, img_h: int, is_1000: bool) -> tuple[int, int, int, int]:
     """Converts [ymin, xmin, ymax, xmax] into a Pillow crop box (left, upper, right, lower)."""
     ymin, xmin, ymax, xmax = box
 
@@ -28,7 +26,7 @@ def calculate_pixel_bounds(box: List[int], img_w: int, img_h: int, is_1000: bool
     return (left, top, right, bottom)
 
 
-def pixel_bounds_to_box_1000(bounds: Tuple[int, int, int, int], img_w: int, img_h: int) -> List[int]:
+def pixel_bounds_to_box_1000(bounds: tuple[int, int, int, int], img_w: int, img_h: int) -> list[int]:
     """Inverse of calculate_pixel_bounds: converts a Pillow crop box (left, upper,
     right, lower) in pixel space back into normalized [ymin, xmin, ymax, xmax] on
     the 0-1000 scale crops.json uses. Used by the panel-marking web UI to save
@@ -48,7 +46,7 @@ def pixel_bounds_to_box_1000(bounds: Tuple[int, int, int, int], img_w: int, img_
     ]
 
 
-def apply_padding(bounds: Tuple[int, int, int, int], img_w: int, img_h: int, padding: int) -> Tuple[int, int, int, int]:
+def apply_padding(bounds: tuple[int, int, int, int], img_w: int, img_h: int, padding: int) -> tuple[int, int, int, int]:
     """Expands bounds by padding pixels while preserving image bounds."""
     left, top, right, bottom = bounds
     return (

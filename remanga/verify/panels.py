@@ -6,13 +6,11 @@ explicit `verify`."""
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 from remanga.json_io import has_real_json_content, read_json
 from remanga.paths import get_chapter_dir
 
 
-def check_panel_narration_mismatch(project_name: str, chapter_num: str) -> Optional[str]:
+def check_panel_narration_mismatch(project_name: str, chapter_num: str) -> str | None:
     """Fast, cheap cross-check between panels/ and narration.json's entries -
     no ffprobe/media decode, just directory listing + one JSON read, so it's
     safe to run automatically and often (the wizard runs this the moment a
@@ -55,12 +53,12 @@ def check_panel_narration_mismatch(project_name: str, chapter_num: str) -> Optio
     return "; ".join(parts)
 
 
-def project_panel_narration_mismatches(project_name: str) -> List[tuple]:
+def project_panel_narration_mismatches(project_name: str) -> list[tuple]:
     """Every chapter of this project with a panel/narration mismatch right
     now, as (chapter_num, issue) pairs - see check_panel_narration_mismatch.
     Cheap enough to call on every project selection, not just an explicit
     `verify` run."""
-    from remanga.full_recap import discover_chapters, chapter_sort_key
+    from remanga.full_recap import chapter_sort_key, discover_chapters
 
     results = []
     for chapter_num in sorted(discover_chapters(project_name), key=chapter_sort_key):

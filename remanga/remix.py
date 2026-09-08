@@ -15,8 +15,6 @@ one call, and optionally re-joining the whole-manga video afterward."""
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 from remanga.audio.mix import AudioProcessor
 from remanga.config import RemangaConfig
 from remanga.console import console, escape as _esc
@@ -27,9 +25,9 @@ from remanga.video.render import VideoRenderer
 
 def remix_project(
     project_name: str,
-    config: Optional[RemangaConfig] = None,
-    chapters: Optional[List[str]] = None,
-    bgm_override: Optional[str] = None,
+    config: RemangaConfig | None = None,
+    chapters: list[str] | None = None,
+    bgm_override: str | None = None,
     rejoin: bool = True,
 ) -> None:
     """Re-mixes and re-renders every chapter in `chapters` (default: every
@@ -48,7 +46,10 @@ def remix_project(
     mixer = AudioProcessor(config.audio)
     renderer = VideoRenderer(config.system, config.video)
 
-    console.print(f"[bold cyan]Remixing {len(chapter_list)} chapter(s) for '{project_name}'[/] [dim](audio mix + video re-encode only - no re-narration)[/]")
+    console.print(
+        f"[bold cyan]Remixing {len(chapter_list)} chapter(s) for '{project_name}'[/] [dim](audio mix + video re-encode "
+        f"only - no re-narration)[/]"
+    )
     for i, chapter_num in enumerate(chapter_list, start=1):
         console.print(f"[cyan]({i}/{len(chapter_list)}) Chapter {chapter_num}...[/]")
         # force=True: remix's whole purpose is "redo the mix" - if the user
@@ -69,8 +70,14 @@ def remix_project(
         # forcing them again here would just repeat identical ffmpeg work.
         FullRecapCompiler(config).compile_full_manga(project_name, force=True, force_chapters=False)
     elif full_video is None:
-        console.print(f"[dim](No existing full-recap video for '{project_name}' to re-join - run `remanga full-recap` first if you want one.)[/]")
+        console.print(
+            f"[dim](No existing full-recap video for '{project_name}' to re-join - run `remanga full-recap` first if "
+            f"you want one.)[/]"
+        )
 
     console.print(f"[bold green]✓ Remix complete for {len(chapter_list)} chapter(s).[/]")
     for chapter_num in chapter_list:
-        console.print(f"  [dim]Chapter {chapter_num}:[/] {_esc(str(get_final_video_path(project_name, chapter_num, create=False)))}")
+        console.print(
+            f"  [dim]Chapter {chapter_num}:[/] "
+            f"{_esc(str(get_final_video_path(project_name, chapter_num, create=False)))}"
+        )

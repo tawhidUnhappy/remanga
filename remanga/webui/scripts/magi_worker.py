@@ -46,7 +46,7 @@ def extract_panel_boxes(page_result: dict, score_threshold: float):
         return []
     scores = page_result.get("panel_scores") or page_result.get("scores")
     if scores is not None and len(scores) == len(boxes):
-        boxes = [b for b, s in zip(boxes, scores) if float(s) >= score_threshold]
+        boxes = [b for b, s in zip(boxes, scores, strict=True) if float(s) >= score_threshold]
     return [[float(v) for v in box] for box in boxes]
 
 

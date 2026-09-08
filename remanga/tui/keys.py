@@ -136,7 +136,7 @@ class _PosixReader:
         # replaced rather than raising, and are discarded by the caller.
         self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
-    def __enter__(self) -> "_PosixReader":
+    def __enter__(self) -> _PosixReader:
         self._saved = termios.tcgetattr(self._fd)
         mode = termios.tcgetattr(self._fd)
         mode[3] &= ~(termios.ECHO | termios.ICANON | termios.ISIG)
@@ -199,7 +199,7 @@ class _WindowsReader:  # pragma: no cover - exercised only on Windows
     and special keys arrive as a two-byte (prefix, code) pair rather than an
     ANSI escape sequence."""
 
-    def __enter__(self) -> "_WindowsReader":
+    def __enter__(self) -> _WindowsReader:
         return self
 
     def __exit__(self, *exc) -> None:

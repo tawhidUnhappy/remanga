@@ -9,13 +9,12 @@ loop."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
 
 from remanga.paths import GENERATED_KINDS, get_chapter_dir, get_generated_dir, get_project_dir
 from remanga.reset.modes import PROJECT_KEEP, keep_set
 
 
-def generated_dirs_for_chapter(project_name: str, chapter_num: str) -> List[Path]:
+def generated_dirs_for_chapter(project_name: str, chapter_num: str) -> list[Path]:
     """Every {manga}/{kind}/chapter_N/ directory that currently exists for
     this chapter, across every GENERATED_KINDS - what every restart mode
     wipes in full, regardless of mode."""
@@ -27,7 +26,7 @@ def generated_dirs_for_chapter(project_name: str, chapter_num: str) -> List[Path
     return dirs
 
 
-def project_wipe_candidates(project_name: str) -> List[Path]:
+def project_wipe_candidates(project_name: str) -> list[Path]:
     """Everything a whole-project wipe would delete: every top-level entry
     under projects/{manga}/ whose name isn't in PROJECT_KEEP - audio/,
     video/, panels_zip/ and every other generated directory, in full,
@@ -45,7 +44,7 @@ def project_wipe_candidates(project_name: str) -> List[Path]:
     return [entry for entry in sorted(project_dir.iterdir()) if entry.name not in PROJECT_KEEP]
 
 
-def restart_candidates(project_name: str, chapter_num: str, *, mode: str = "hard") -> List[Path]:
+def restart_candidates(project_name: str, chapter_num: str, *, mode: str = "hard") -> list[Path]:
     """Everything a restart of this `mode` would delete (before the
     narration.json re-emptying a marks_only restart also does - see
     restart_chapter): the not-kept part of the chapter's source folder, plus
@@ -56,7 +55,7 @@ def restart_candidates(project_name: str, chapter_num: str, *, mode: str = "hard
     return source + generated_dirs_for_chapter(project_name, chapter_num)
 
 
-def wipeable_entries(project_name: str, chapter_num: str) -> List[Path]:
+def wipeable_entries(project_name: str, chapter_num: str) -> list[Path]:
     """Every deletable item for this chapter right now: the chapter's own
     source-folder entries (pages/, crops.json, panels/, narration.json, ...)
     plus every generated {kind}/chapter_N/ directory that currently exists.

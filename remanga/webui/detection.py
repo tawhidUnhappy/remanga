@@ -6,8 +6,6 @@ instead of blocking on the whole chapter.
 
 from __future__ import annotations
 
-from typing import List
-
 from remanga.config import MarkerConfig
 from remanga.console import console, escape as _esc
 from remanga.webui.marker_state import MarkerState
@@ -36,7 +34,7 @@ def run_detection(state: MarkerState, config: MarkerConfig) -> None:
         state.detect_running = False
         return
 
-    def on_page_done(filename: str, boxes: List[List[float]]) -> None:
+    def on_page_done(filename: str, boxes: list[list[float]]) -> None:
         state.apply_detected(filename, boxes)
         state.detect_done += 1
 

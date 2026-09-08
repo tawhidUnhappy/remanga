@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from PIL import Image
 
@@ -26,13 +26,13 @@ class MarkerState:
         self.chapter_dir = chapter_dir.resolve()
         self.chapter_num = chapter_num
         self.pages_dir = self.chapter_dir / "pages"
-        self.pages: List[Dict[str, Any]] = []
-        self.marks: Dict[str, List[Dict[str, Any]]] = {}
+        self.pages: list[dict[str, Any]] = []
+        self.marks: dict[str, list[dict[str, Any]]] = {}
         self.touched: set = set()  # filenames the user has edited - MAGI won't overwrite these
         self.detect_running = False
         self.detect_done = 0
         self.detect_total = 0
-        self.detect_error: Optional[str] = None
+        self.detect_error: str | None = None
         self.finished = threading.Event()
         self._load_pages()
 
@@ -92,7 +92,9 @@ class MarkerState:
                 if not box:
                     continue
                 is_normalized = "box_1000" in panel or max(box) <= 1000
-                left, top, right, bottom = calculate_pixel_bounds(box, page["width"], page["height"], is_1000=is_normalized)
+                left, top, right, bottom = calculate_pixel_bounds(
+                    box, page["width"], page["height"], is_1000=is_normalized
+                )
                 panel_id = panel.get("panel_id")
                 marks.append({
                     "id": str(panel_id) if panel_id is not None else f"loaded-{i}",
@@ -103,11 +105,11 @@ class MarkerState:
                 self.marks[filename] = marks
                 self.touched.add(filename)
 
-    def set_marks(self, filename: str, marks: List[Dict[str, Any]]) -> None:
+    def set_marks(self, filename: str, marks: list[dict[str, Any]]) -> None:
         self.marks[filename] = marks
         self.touched.add(filename)
 
-    def apply_detected(self, filename: str, boxes: List[List[float]]) -> None:
+    def apply_detected(self, filename: str, boxes: list[list[float]]) -> None:
         """Fills in MAGI's detected boxes for a page, unless the user already
         touched that page (never clobber a manual edit with a late-arriving
         background detection)."""
@@ -118,7 +120,7 @@ class MarkerState:
             for i, b in enumerate(boxes)
         ]
 
-    def build_crops_json(self) -> Dict[str, Any]:
+    def build_crops_json(self) -> dict[str, Any]:
         pages_out = []
         for page in self.pages:
             filename = page["filename"]

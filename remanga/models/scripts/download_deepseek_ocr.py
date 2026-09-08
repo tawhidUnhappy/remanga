@@ -50,6 +50,7 @@ caller (remanga/models/weights.py) just needs the exit code.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import select
@@ -57,10 +58,9 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _hash_verify import delete_files_for_retry, verify_repo_files  # noqa: E402
+from _hash_verify import delete_files_for_retry, verify_repo_files
 
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 os.environ.setdefault("MODELSCOPE_LOG_LEVEL", "40")
@@ -112,16 +112,15 @@ def _incomplete_bytes(model_dir: str) -> int:
         return 0
     total = 0
     for f in d.glob("*.incomplete"):
-        try:
+        # file finished/renamed between glob() and stat() - fine, just skip it
+        with contextlib.suppress(OSError):
             total += f.stat().st_size
-        except OSError:
-            pass  # file finished/renamed between glob() and stat() - fine, just skip it
     return total
 
 
 def _run_hf_attempt(
-    model_dir: str, repo_id: str, hf_token: Optional[str], disable_xet: bool,
-    stall_timeout: Optional[float], label: str,
+    model_dir: str, repo_id: str, hf_token: str | None, disable_xet: bool,
+    stall_timeout: float | None, label: str,
 ) -> bool:
     """Runs one snapshot_download() attempt as a child subprocess, relaying
     its output live. If `stall_timeout` is set, kills it and returns False

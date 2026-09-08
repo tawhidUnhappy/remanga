@@ -38,12 +38,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 from remanga.console import console
 
 
-def resolve_hf_token() -> Optional[str]:
+def resolve_hf_token() -> str | None:
     """Reads config.json's system.hf_token_path and returns the token string
     inside it - or None (falls back to unauthenticated) for every "nothing
     configured / can't use it" case. Loads RemangaConfig fresh each call

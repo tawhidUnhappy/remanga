@@ -6,7 +6,8 @@ yes/no-with-context question is this function plus a list of Choices."""
 
 from __future__ import annotations
 
-from typing import Any, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from remanga.tui import fallback, keys
 from remanga.tui.choices import Choice, index_of_value
@@ -29,9 +30,9 @@ def select(
     default_index: int = 0,
     note: str = "",
     numbered: bool = False,
-    footer: Optional[str] = None,
-    back_label: Optional[str] = "Back",
-    exit_label: Optional[str] = "Exit remanga",
+    footer: str | None = None,
+    back_label: str | None = "Back",
+    exit_label: str | None = "Exit remanga",
     echo: bool = True,
 ) -> Any:
     """Returns the chosen Choice's `value`, or CANCEL if the user backed out.
@@ -66,9 +67,9 @@ def select(
     # `plain` keeps the two action rows out of the numbering (see
     # frame.numbered_rows); it has no other effect on a single-select menu.
     if back_label:
-        rows = rows + [Choice(label=back_label, value=CANCEL, hint="", plain=True)]
+        rows = [*rows, Choice(label=back_label, value=CANCEL, hint="", plain=True)]
     if exit_label:
-        rows = rows + [Choice(label=exit_label, value=EXIT, hint="quit from here", plain=True)]
+        rows = [*rows, Choice(label=exit_label, value=EXIT, hint="quit from here", plain=True)]
 
     if footer is None:
         footer = NUMBERED_FOOTER.format(count=min(len(choices), 9)) if numbered else FOOTER
@@ -112,7 +113,7 @@ def select(
     return picked
 
 
-def _row_numbered(state: MenuState, number: int) -> Optional[Choice]:
+def _row_numbered(state: MenuState, number: int) -> Choice | None:
     """The row currently showing `number`, or None if nothing does. Resolved
     against the same numbering the frame drew (frame.numbered_rows over the
     visible rows), never against the raw list index - otherwise a disabled

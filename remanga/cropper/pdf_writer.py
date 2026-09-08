@@ -23,8 +23,8 @@ implements. Not a general-purpose PDF library.
 from __future__ import annotations
 
 import zlib
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -51,7 +51,7 @@ class ImagePage:
     height: int
     flate_data: bytes
     colors: int = 3
-    predictor: Optional[int] = 2
+    predictor: int | None = 2
 
 
 def encode_predictor2(arr: np.ndarray) -> bytes:
@@ -67,7 +67,7 @@ def encode_predictor2(arr: np.ndarray) -> bytes:
     return zlib.compress(diff.astype(np.uint8).tobytes(), 9)
 
 
-def decode_predictor2(flate_data: bytes, shape: Tuple[int, int, int]) -> np.ndarray:
+def decode_predictor2(flate_data: bytes, shape: tuple[int, int, int]) -> np.ndarray:
     """Inverse of encode_predictor2 - decompresses and reverses the
     per-row horizontal differencing via a cumulative sum (mod 256) along the
     column axis, which telescopes back to the original values exactly."""
@@ -84,7 +84,7 @@ def encode_flate_raw(arr: np.ndarray) -> bytes:
     return zlib.compress(arr.astype(np.uint8).tobytes(), 9)
 
 
-def decode_flate_raw(flate_data: bytes, shape: Tuple[int, int, int]) -> np.ndarray:
+def decode_flate_raw(flate_data: bytes, shape: tuple[int, int, int]) -> np.ndarray:
     return np.frombuffer(zlib.decompress(flate_data), dtype=np.uint8).reshape(shape)
 
 
@@ -114,7 +114,7 @@ def build_pdf(image_pages: Sequence[ImagePage], info_lines: Sequence[str]) -> by
     `_LINES_PER_TEXT_PAGE` - so a long manifest still gets a plain flowing
     list instead of overflowing a single page), followed by one full-page
     image per `image_pages`, in order."""
-    objects: List[bytes] = [b""]  # 1-indexed - objects[0] is an unused placeholder
+    objects: list[bytes] = [b""]  # 1-indexed - objects[0] is an unused placeholder
 
     def add_object(body: bytes) -> int:
         objects.append(body)
@@ -126,9 +126,12 @@ def build_pdf(image_pages: Sequence[ImagePage], info_lines: Sequence[str]) -> by
         b"<< /Type /Font /Subtype /Type1 /BaseFont /" + _TEXT_FONT.encode("ascii") + b" >>"
     )
 
-    kids: List[int] = []
+    kids: list[int] = []
 
-    text_pages = [info_lines[i:i + _LINES_PER_TEXT_PAGE] for i in range(0, len(info_lines), _LINES_PER_TEXT_PAGE)] or [[]]
+    text_pages = [
+        info_lines[i:i + _LINES_PER_TEXT_PAGE]
+        for i in range(0, len(info_lines), _LINES_PER_TEXT_PAGE)
+    ] or [[]]
     for page_lines in text_pages:
         content = _text_page_content(page_lines)
         content_id = add_object(
@@ -182,7 +185,7 @@ def build_pdf(image_pages: Sequence[ImagePage], info_lines: Sequence[str]) -> by
     return _assemble(objects, catalog_id)
 
 
-def _assemble(objects: List[bytes], catalog_id: int) -> bytes:
+def _assemble(objects: list[bytes], catalog_id: int) -> bytes:
     """Writes every object in order, then a byte-accurate xref table and
     trailer - the bookkeeping every PDF reader expects to be able to jump
     straight to any object by its recorded offset."""

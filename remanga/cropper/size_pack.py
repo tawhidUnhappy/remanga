@@ -7,7 +7,8 @@ size."""
 
 from __future__ import annotations
 
-from typing import Callable, List, Sequence, TypeVar
+from collections.abc import Callable, Sequence
+from typing import TypeVar
 
 T = TypeVar("T")
 
@@ -17,7 +18,7 @@ def pack_by_size(
     size_of: Callable[[T], int],
     max_bytes: int,
     split_enabled: bool = True,
-) -> List[List[T]]:
+) -> list[list[T]]:
     """Groups `items` into parts, in the given order. `size_of(item)`
     computes each item's own byte contribution to a part.
 
@@ -34,7 +35,7 @@ def pack_by_size(
     if not split_enabled:
         return [list(items)]
 
-    parts: List[List[T]] = [[]]
+    parts: list[list[T]] = [[]]
     part_sizes = [0]
     for item in items:
         size = size_of(item)

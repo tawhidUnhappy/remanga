@@ -12,16 +12,21 @@ same list."""
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Callable, List, Optional, Sequence, Tuple, Union
 
 from remanga.config import RemangaConfig
 from remanga.config.tts import engine_spec, voice_field_for
 from remanga.console import console, display_path, escape as _esc
 from remanga.settings.fields import get_field, set_field
 from remanga.settings.files import (
-    AUDIO_EXTENSIONS, asset_dir, discover_files, is_valid_file, parent_dir_of, read_reference_text,
+    AUDIO_EXTENSIONS,
+    asset_dir,
+    discover_files,
+    is_valid_file,
+    parent_dir_of,
+    read_reference_text,
     write_reference_text,
 )
 from remanga.tui import Choice, ask_path, ask_text, confirm, is_cancel, select
@@ -52,8 +57,8 @@ class AssetSpec:
     # Like `dotted`: a plain string, or a function of the config for a label
     # that has to name what it is currently pointing at. Resolve with
     # .title(config).
-    label: Union[str, Callable[[RemangaConfig], str]]
-    dotted: Union[str, Callable[[RemangaConfig], str]]
+    label: str | Callable[[RemangaConfig], str]
+    dotted: str | Callable[[RemangaConfig], str]
     kind: str = "file"
     subdir: str = ""
     extensions: Sequence[str] = AUDIO_EXTENSIONS
@@ -70,7 +75,7 @@ class AssetSpec:
         return self.label(config) if callable(self.label) else self.label
 
 
-ASSETS: Tuple[AssetSpec, ...] = (
+ASSETS: tuple[AssetSpec, ...] = (
     # Per ENGINE, not per install: each TTS engine clones from its own
     # reference clip (see config/tts.py), so this row follows tts.engine and
     # names the engine it is editing. Changing engines changes which file
@@ -109,7 +114,7 @@ def asset_relevant(config: RemangaConfig, spec: AssetSpec) -> bool:
     return True
 
 
-def asset_status(config: RemangaConfig, spec: AssetSpec) -> Tuple[bool, str, str]:
+def asset_status(config: RemangaConfig, spec: AssetSpec) -> tuple[bool, str, str]:
     """(ok, badge, description) for one asset, as every screen shows it."""
     raw = str(get_field(config, spec.field(config)) or "")
 
@@ -141,7 +146,7 @@ def asset_choice(config: RemangaConfig, spec: AssetSpec) -> Choice:
     )
 
 
-def candidates_for(config: RemangaConfig, spec: AssetSpec) -> List[Path]:
+def candidates_for(config: RemangaConfig, spec: AssetSpec) -> list[Path]:
     return discover_files(
         spec.extensions, preferred_subdir=spec.subdir,
         extra_dirs=parent_dir_of(str(get_field(config, spec.field(config)) or "")),
@@ -222,7 +227,7 @@ def run_asset_menu(config: RemangaConfig, *, title: str = "Assets") -> None:
 
 
 def ensure_valid_voice_prompt(
-    config: RemangaConfig, interactive: bool = True, *, engine: Optional[str] = None,
+    config: RemangaConfig, interactive: bool = True, *, engine: str | None = None,
 ) -> str:
     """The reference clip the running engine will clone from, validated.
 
@@ -275,7 +280,7 @@ def ensure_valid_voice_prompt(
         console.print("[bold red]A valid reference voice file is required to synthesize narration.[/]")
 
 
-def ensure_valid_bgm(config: RemangaConfig, interactive: bool = True) -> Optional[str]:
+def ensure_valid_bgm(config: RemangaConfig, interactive: bool = True) -> str | None:
     if not config.audio.bgm_enabled:
         return None
 

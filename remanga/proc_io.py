@@ -15,10 +15,10 @@ exactly like running the subprocess directly in a terminal would."""
 from __future__ import annotations
 
 import subprocess
-from typing import List, Optional, Sequence, Tuple
+from collections.abc import Sequence
 
 
-def stream_subprocess(args: Sequence[str], cwd: Optional[str] = None) -> Tuple[int, str]:
+def stream_subprocess(args: Sequence[str], cwd: str | None = None) -> tuple[int, str]:
     """Runs `args`, streaming its combined stdout/stderr live to this
     process's own stdout - `\\r`-terminated updates overwrite the previous
     line, a real `\\n` starts a fresh one. Returns (returncode, full
@@ -26,7 +26,7 @@ def stream_subprocess(args: Sequence[str], cwd: Optional[str] = None) -> Tuple[i
     the text for an error message."""
     proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=cwd, bufsize=0)
     buf = bytearray()
-    chunks: List[str] = []
+    chunks: list[str] = []
     last_len = 0
     assert proc.stdout is not None
     while True:

@@ -4,11 +4,15 @@ runs - shared by the argparse CLI and the interactive wizard.
 Was one 600-line module holding the dataclasses, twenty handler functions
 and the registry itself back to back. Split by role:
 
-    spec.py      - what a Command/Param is, and the argparse glue
-    selection.py - parsing chapter selections and wipe keep-lists
-    handlers/    - the handlers themselves, grouped the way the wizard
-                   groups them (setup / chapter / project / cleanup)
-    registry.py  - the ordered list of commands, and their categories
+    spec.py       - what a Command/Param is, and the argparse glue
+    selection.py  - parsing chapter selections and wipe keep-lists
+    handlers/     - the handlers themselves, grouped the way the wizard
+                    groups them (setup / chapter / project / cleanup)
+    catalog/      - the commands themselves, one module per category
+    categories.py - the wizard's menu groups
+    setup_rows.py - the settings rows a command offers from inside itself
+    help_text.py  - help strings derived from the registries they describe
+    registry.py   - assembles the catalog into the one ordered list
 
 Every name the rest of the codebase imported from the old module is
 re-exported here, so `from remanga.commands import COMMAND_REGISTRY` and
@@ -17,23 +21,36 @@ friends keep working unchanged."""
 from __future__ import annotations
 
 from remanga.commands.registry import (
-    CATEGORIES, COMMAND_BY_NAME, COMMAND_REGISTRY, Category, commands_by_category,
+    CATEGORIES,
+    COMMAND_BY_NAME,
+    COMMAND_REGISTRY,
+    Category,
+    commands_by_category,
 )
 from remanga.commands.selection import (
-    DEFAULT_WIPE_KEEP, parse_chapter_selection, resolve_wipe_keep, split_chapters,
+    DEFAULT_WIPE_KEEP,
+    parse_chapter_selection,
+    resolve_wipe_keep,
+    split_chapters,
 )
 from remanga.commands.spec import (
-    Command, Param, SetupAction, add_param_to_parser, chapter_param, force_param,
-    params_from_namespace, project_param,
+    Command,
+    Param,
+    SetupAction,
+    add_param_to_parser,
+    chapter_param,
+    force_param,
+    params_from_namespace,
+    project_param,
 )
 
 __all__ = [
     "CATEGORIES",
     "COMMAND_BY_NAME",
     "COMMAND_REGISTRY",
+    "DEFAULT_WIPE_KEEP",
     "Category",
     "Command",
-    "DEFAULT_WIPE_KEEP",
     "Param",
     "SetupAction",
     "add_param_to_parser",

@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import collections
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Dict, List, Sequence
+from typing import Any
 
 # prompts/narration.md Rule 4: "Never exceed 26 words on any single panel"
 # (~3.5-5.0s of audio at the 10-20 word target).
@@ -38,16 +39,16 @@ class Advisory:
     name: str
     message: str
     fix: str
-    examples: List[str]
+    examples: list[str]
 
 
-def advise(entries: Sequence[Dict[str, Any]]) -> List[Advisory]:
+def advise(entries: Sequence[dict[str, Any]]) -> list[Advisory]:
     """Every advisory that applies to this chapter's narration entries."""
     texts = [(e.get("panel_id", "?"), (e.get("text") or "")) for e in entries]
     if not texts:
         return []
 
-    found: List[Advisory] = []
+    found: list[Advisory] = []
     for check in (_empty_lines, _over_word_ceiling, _duplicate_lines, _repeated_openers):
         advisory = check(texts)
         if advisory is not None:

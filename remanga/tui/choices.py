@@ -10,8 +10,9 @@ same everywhere by construction."""
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable, List, Optional, Sequence
+from typing import Any
 
 
 @dataclass
@@ -53,12 +54,12 @@ class Choice:
             self.value = self.label
 
 
-def to_choices(items: Iterable[Any], *, label: Optional[Callable[[Any], str]] = None,
-               hint: Optional[Callable[[Any], str]] = None) -> List[Choice]:
+def to_choices(items: Iterable[Any], *, label: Callable[[Any], str] | None = None,
+               hint: Callable[[Any], str] | None = None) -> list[Choice]:
     """Turns any iterable into Choices, keeping the original objects as the
     values so the caller gets its own object back from select() rather than
     a string it then has to look up again."""
-    out: List[Choice] = []
+    out: list[Choice] = []
     for item in items:
         if isinstance(item, Choice):
             out.append(item)
@@ -93,4 +94,4 @@ class Toggle:
     hint: str = ""
     detail: str = ""
     enabled: bool = False
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)

@@ -12,7 +12,8 @@ are not the same number."""
 from __future__ import annotations
 
 import time
-from typing import Any, List, NamedTuple, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, NamedTuple
 
 from remanga.console import console
 from remanga.full_recap import chapter_sort_key, discover_chapters
@@ -34,7 +35,7 @@ class ChapterSuggestion(NamedTuple):
     origin: str
 
 
-def chapter_choices(project_name: str, chapters: Optional[Sequence[str]] = None) -> List[Choice]:
+def chapter_choices(project_name: str, chapters: Sequence[str] | None = None) -> list[Choice]:
     listing = list(chapters) if chapters is not None else discover_chapters(project_name)
     return [
         Choice(label=f"Chapter {chapter}",
@@ -62,11 +63,11 @@ def _numeric_successor(chapters: Sequence[str]) -> str:
     return str(int(nxt)) if float(nxt).is_integer() else str(nxt)
 
 
-def _numbers_of(entries: Sequence[dict]) -> List[str]:
+def _numbers_of(entries: Sequence[dict]) -> list[str]:
     return [str(entry["chapter"]) for entry in entries if entry.get("chapter")]
 
 
-def _remote_chapter_numbers(project_name: str) -> List[str]:
+def _remote_chapter_numbers(project_name: str) -> list[str]:
     """Every chapter number MangaDex lists for this project's manga, in
     reading order - from the same cached feed the download picker reads,
     under the same 24h freshness rule (downloader/mangadex.py's
@@ -172,7 +173,7 @@ def select_chapter(project_name: str, *, title: str = "Chapter") -> Any:
 
 
 def select_chapters(project_name: str, *, title: str = "Chapters",
-                    preselected: Optional[Sequence[str]] = None) -> Any:
+                    preselected: Sequence[str] | None = None) -> Any:
     """Any number of chapters, as a checklist. Returns a list of chapter
     numbers in reading order (empty means "all of them", which is what every
     caller's `--chapters` flag already means when left unset), or CANCEL."""

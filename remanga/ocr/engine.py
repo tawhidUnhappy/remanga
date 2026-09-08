@@ -17,7 +17,6 @@ import select
 import subprocess
 import threading
 from pathlib import Path
-from typing import Optional
 
 from remanga.config import OCRConfig
 from remanga.console import console
@@ -66,10 +65,10 @@ class OCREngine:
             tool_name=TOOL_NAME, download_script="download_deepseek_ocr.py",
             expected_files=("config.json", "model-00001-of-000001.safetensors"), display_name=DISPLAY_NAME,
         )
-        self._proc: Optional[subprocess.Popen] = None
+        self._proc: subprocess.Popen | None = None
         self._stderr_tail: collections.deque = collections.deque(maxlen=_STDERR_TAIL_LINES)
-        self._stderr_thread: Optional[threading.Thread] = None
-        self.device: Optional[str] = None
+        self._stderr_thread: threading.Thread | None = None
+        self.device: str | None = None
         atexit.register(self.shutdown)
 
     def _drain_stderr(self, proc: subprocess.Popen) -> None:
@@ -128,7 +127,9 @@ class OCREngine:
                 raise RuntimeError(f"{DISPLAY_NAME} worker failed to load: {error_text}")
             console.print(f"[dim]Retrying {DISPLAY_NAME} worker startup with the newly installed package(s)...[/]")
 
-        raise RuntimeError(f"{DISPLAY_NAME} worker still fails to load after installing: {', '.join(sorted(attempted))}")
+        raise RuntimeError(
+            f"{DISPLAY_NAME} worker still fails to load after installing: {', '.join(sorted(attempted))}"
+        )
 
     def _read_response_line(self, proc: subprocess.Popen, timeout: float) -> str:
         ready, _, _ = select.select([proc.stdout], [], [], timeout)
@@ -145,7 +146,7 @@ class OCREngine:
         except Exception:
             pass
 
-    def recognize(self, image_path: Path, prompt: Optional[str] = None) -> str:
+    def recognize(self, image_path: Path, prompt: str | None = None) -> str:
         """Runs OCR on one panel image, returning the recognized text (empty
         string if the model found none). Raises RuntimeError on a worker
         failure/timeout - the caller (writer_routes.py) turns that into an

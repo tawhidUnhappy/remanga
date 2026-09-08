@@ -15,9 +15,9 @@ run."""
 
 from __future__ import annotations
 
-from typing import Any, List
+from typing import Any
 
-from remanga.commands import Command, SetupAction, commands_by_category
+from remanga.commands import Command, commands_by_category
 from remanga.config import RemangaConfig
 from remanga.console import console
 from remanga.tui import Choice, is_cancel, select
@@ -39,7 +39,7 @@ def _short(text: str) -> str:
     return first if len(first) <= _HINT_LIMIT else first[:_HINT_LIMIT - 1] + "…"
 
 
-def _command_rows(commands: List[Command]) -> List[Choice]:
+def _command_rows(commands: list[Command]) -> list[Choice]:
     return [
         Choice(label=cmd.name, hint=_short(cmd.help), detail=cmd.detail or cmd.help, value=cmd)
         for cmd in commands
@@ -102,7 +102,7 @@ def run_command_menu(cmd: Command, project: str, config: RemangaConfig) -> None:
             picked.run(config)
 
 
-def run_category_menu(category, commands: List[Command], project: str, config: RemangaConfig) -> None:
+def run_category_menu(category, commands: list[Command], project: str, config: RemangaConfig) -> None:
     """One category's commands. Stays open after running one, so several
     commands from the same category (mark, then crop, then write) don't mean
     re-picking the category each time."""

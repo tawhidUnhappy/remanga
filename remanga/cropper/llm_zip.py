@@ -14,7 +14,6 @@ panels_dir's images and the panels_zip/ folder.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
 
 from remanga.config import CropperConfig
 from remanga.cropper.zip_bundle import build_zip_bundle
@@ -25,8 +24,8 @@ def build_llm_zip_bundle(
     config: CropperConfig,
     project_name: str,
     chapter_num: str,
-    panel_paths: List[Path],
-) -> List[Path]:
+    panel_paths: list[Path],
+) -> list[Path]:
     """Builds {manga}/panels_zip/chapter_N/panels_1.zip, panels_2.zip, ... -
     see module docstring."""
     package = config.package

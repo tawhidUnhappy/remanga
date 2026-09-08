@@ -50,7 +50,7 @@ def int_to_words(value: int) -> str:
 def ordinal_to_words(value: int) -> str:
     """3 -> "third", 21 -> "twenty-first". Only the final word changes."""
     words = int_to_words(value)
-    head, _, last = words.rpartition("-") if "-" in words.split()[-1] else ("", "", "")
+    _head, _, last = words.rpartition("-") if "-" in words.split()[-1] else ("", "", "")
     if last:
         return f"{words[: -len(last)]}{_ordinal_word(last)}"
     prefix, _, final = words.rpartition(" ")

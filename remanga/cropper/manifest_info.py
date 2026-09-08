@@ -17,16 +17,17 @@ Shared by:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 
 def build_part_info(
-    identity: Dict[str, Any],
+    identity: dict[str, Any],
     full_ids: Sequence[str],
     part_ids: Sequence[str],
     part_index: int,
     total_parts: int,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """One part's chapter_info.json payload - `identity` is
     remanga.paths.chapter_identity_fields' project/manga/chapter dict,
     `full_ids` is every item name in this format across every part, in
@@ -40,7 +41,7 @@ def build_part_info(
     return info
 
 
-def info_to_text_lines(info: Dict[str, Any]) -> List[str]:
+def info_to_text_lines(info: dict[str, Any]) -> list[str]:
     """Renders a build_part_info() dict as plain lines of text - used for
     the PDF formats' leading info page(s) and the sheets formats' info
     sheet. List-valued keys (`contents`/`full_manifest`) get their own

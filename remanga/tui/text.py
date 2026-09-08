@@ -12,8 +12,9 @@ file rather than typing its path from memory."""
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any, Callable, Optional, Sequence
+from typing import Any
 
 from rich.markup import escape
 from rich.prompt import Prompt
@@ -30,7 +31,7 @@ def ask_text(
     default: str = "",
     note: str = "",
     allow_empty: bool = True,
-    validate: Optional[Callable[[str], Optional[str]]] = None,
+    validate: Callable[[str], str | None] | None = None,
 ) -> str:
     """Prompts until the answer validates. `validate` returns an error
     message to reject the answer, or None to accept it."""
@@ -52,9 +53,9 @@ def ask_text(
 def ask_number(
     label: str,
     *,
-    default: Optional[float] = None,
-    minimum: Optional[float] = None,
-    maximum: Optional[float] = None,
+    default: float | None = None,
+    minimum: float | None = None,
+    maximum: float | None = None,
     integer: bool = False,
     note: str = "",
 ) -> float:
@@ -70,7 +71,7 @@ def ask_number(
     elif maximum is not None:
         bounds = f" (max {maximum:g})"
 
-    def validate(raw: str) -> Optional[str]:
+    def validate(raw: str) -> str | None:
         try:
             value = float(raw)
         except ValueError:
@@ -136,7 +137,7 @@ def ask_path(
     if picked is not _TYPE_IT:
         return picked
 
-    def validate(raw: str) -> Optional[str]:
+    def validate(raw: str) -> str | None:
         if not must_exist:
             return None
         expanded = Path(raw).expanduser()

@@ -167,10 +167,11 @@ def get_final_video_path(project_name: str, chapter_num: str, create: bool = Tru
     can rebuild just the mix + this file without re-running TTS or frame
     compositing. See remanga/full_recap/, which builds these before joining them."""
     clean_chap = _clean_chapter(chapter_num)
-    return get_generated_dir(project_name, "video", chapter_num, create=create) / f"{project_name}_ch{clean_chap}_recap.mp4"
+    video_dir = get_generated_dir(project_name, "video", chapter_num, create=create)
+    return video_dir / f"{project_name}_ch{clean_chap}_recap.mp4"
 
 
-def find_full_recap_video(project_name: str) -> "Path | None":
+def find_full_recap_video(project_name: str) -> Path | None:
     """The most recently written whole-manga joined video for this project,
     if one exists - for callers that only need to know "is there one to
     rejoin/verify" without already knowing its exact chapter range (remix's

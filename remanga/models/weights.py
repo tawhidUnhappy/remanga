@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from remanga.console import console
 from remanga.hf_token import resolve_hf_token
@@ -42,7 +42,10 @@ class ModelManager:
 
         # Check if already present to skip unnecessary network hits (and the
         # subprocess spin-up entirely)
-        if all((self.model_dir / f).exists() and (self.model_dir / f).stat().st_size > 100000 for f in self.expected_files):
+        if all(
+            (self.model_dir / f).exists() and (self.model_dir / f).stat().st_size > 100000
+            for f in self.expected_files
+        ):
             return self.model_dir
 
         python = get_tool_python(self.tool_name)

@@ -3,7 +3,8 @@ from __future__ import annotations
 import time
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 import requests
 from rich.progress import BarColumn, DownloadColumn, Progress, TextColumn, TimeRemainingColumn
 
@@ -12,11 +13,17 @@ from remanga.console import console, escape as _esc
 from remanga.cropper.naming import page_stem
 from remanga.downloader.resolve import BASE_URL, MangaDexResolver
 from remanga.full_recap.discovery import chapter_sort_key  # direct submodule import -
+
 # full_recap's own __init__ also pulls in compiler.py (audio/video stack),
 # which this module has no other reason to import
 from remanga.paths import (
-    get_chapter_dir, get_pages_zip_path, load_project_metadata, read_manifest,
-    read_remote_chapter_cache, save_project_metadata, update_manifest_chapter,
+    get_chapter_dir,
+    get_pages_zip_path,
+    load_project_metadata,
+    read_manifest,
+    read_remote_chapter_cache,
+    save_project_metadata,
+    update_manifest_chapter,
     write_remote_chapter_cache,
 )
 
@@ -30,7 +37,7 @@ CHAPTER_LIST_CACHE_TTL_SECONDS = 24 * 60 * 60
 
 
 class MangaDexDownloader:
-    def __init__(self, config: Optional[DownloaderConfig] = None):
+    def __init__(self, config: DownloaderConfig | None = None):
         self.config = config or DownloaderConfig()
         self.session = requests.Session()
         self.session.headers.update({
@@ -53,7 +60,7 @@ class MangaDexDownloader:
         return zip_path
 
     def download_chapter(
-        self, manga_id_or_url: Optional[str], chapter_num: str, project_name: str, force: bool = False,
+        self, manga_id_or_url: str | None, chapter_num: str, project_name: str, force: bool = False,
     ) -> Path:
         """Download high-resolution chapter images with idempotency check, metadata tracking, and auto-zip.
 
@@ -75,7 +82,10 @@ class MangaDexDownloader:
                 for stray in dest_dir.iterdir():
                     if stray.is_file():
                         stray.unlink()
-                console.print(f"[yellow]Force reverify: cleared existing pages for chapter {chapter_num} before re-downloading.[/]")
+                console.print(
+                    f"[yellow]Force reverify: cleared existing pages for chapter {chapter_num} before "
+                    f"re-downloading.[/]"
+                )
         if not manga_id_or_url:
             meta = load_project_metadata(project_name)
             manga_id_or_url = meta.get("manga_url") or meta.get("manga_id")
@@ -232,7 +242,9 @@ class MangaDexDownloader:
 
         if all_present:
             record_pages(True)
-            console.print(f"[bold green]✓ All {len(filenames)} pages verified and already downloaded! Skipping download.[/]")
+            console.print(
+                f"[bold green]✓ All {len(filenames)} pages verified and already downloaded! Skipping download.[/]"
+            )
             if self.config.zip_pages_enabled:
                 self._create_pages_zip(project_name, chapter_num, dest_dir)
             return dest_dir
@@ -269,7 +281,7 @@ class MangaDexDownloader:
 
                 url = f"{base_url}/{quality_key}/{hash_code}/{filename}"
                 r = self.resolver.request_with_retry("GET", url)
-                with open(out_path, "wb") as f:
+                with out_path.open("wb") as f:
                     f.write(r.content)
 
                 if self.config.request_delay_seconds > 0:
@@ -286,7 +298,7 @@ class MangaDexDownloader:
 
         return dest_dir
 
-    def _resolve_manga_id(self, project_name: str, manga_id_or_url: Optional[str]) -> str:
+    def _resolve_manga_id(self, project_name: str, manga_id_or_url: str | None) -> str:
         if not manga_id_or_url:
             meta = load_project_metadata(project_name)
             manga_id_or_url = meta.get("manga_url") or meta.get("manga_id")
@@ -296,7 +308,7 @@ class MangaDexDownloader:
                 )
         return self.resolver.parse_manga_id(manga_id_or_url)
 
-    def _local_chapter_status(self, project_name: str, chapter_num: str, expected_pages: Optional[int]) -> str:
+    def _local_chapter_status(self, project_name: str, chapter_num: str, expected_pages: int | None) -> str:
         """One of "downloaded" (every expected page present and this
         chapter's cached pages-record says verified), "partial" (some
         pages on disk but not verified-complete for the current listing),
@@ -315,8 +327,8 @@ class MangaDexDownloader:
         return "partial"
 
     def list_chapters_with_status(
-        self, project_name: str, manga_id_or_url: Optional[str] = None, force_refresh: bool = False,
-    ) -> List[Dict[str, Any]]:
+        self, project_name: str, manga_id_or_url: str | None = None, force_refresh: bool = False,
+    ) -> list[dict[str, Any]]:
         """Every chapter MangaDex has for this project's manga, in reading
         order, each annotated with this project's own local download status
         ("downloaded" / "partial" / "missing") - the one call a chapter-
@@ -363,9 +375,9 @@ class MangaDexDownloader:
         return remote_chapters
 
     def download_chapters(
-        self, project_name: str, chapter_nums: List[str], manga_id_or_url: Optional[str] = None,
+        self, project_name: str, chapter_nums: list[str], manga_id_or_url: str | None = None,
         force: bool = False,
-    ) -> List[Path]:
+    ) -> list[Path]:
         """Downloads several chapters in one call - "download all", a
         range, or an explicit multi-select all reduce to this. Duplicate
         chapter numbers are collapsed (picking one chapter twice in a
@@ -380,7 +392,7 @@ class MangaDexDownloader:
         seen: set = set()
         ordered_nums = [n for n in chapter_nums if not (n in seen or seen.add(n))]
 
-        results: List[Path] = []
+        results: list[Path] = []
         for i, chapter_num in enumerate(ordered_nums, start=1):
             console.print(f"[bold cyan]({i}/{len(ordered_nums)}) Chapter {chapter_num}[/]")
             results.append(self.download_chapter(manga_id_or_url, chapter_num, project_name, force=force))

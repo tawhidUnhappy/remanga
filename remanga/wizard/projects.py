@@ -8,7 +8,7 @@ of?", and that's a question a list of bare folder names can't answer."""
 
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import Any
 
 from remanga.config import RemangaConfig
 from remanga.console import console
@@ -33,10 +33,10 @@ READING_DIRECTION_BY_LANGUAGE = {
 }
 
 
-def project_choices() -> List[Choice]:
+def project_choices() -> list[Choice]:
     """Every project on disk, newest-progress first glance: chapter count,
     saved manga source, and the production state of its latest chapter."""
-    rows: List[Choice] = []
+    rows: list[Choice] = []
     for project in list_projects():
         chapters = project["chapters"]
         source = project["manga_url"] or project["manga_id"] or ""
@@ -86,7 +86,7 @@ def create_project() -> Any:
     accident, and the folder it creates then follows the project forever."""
     existing = {p["name"].casefold() for p in list_projects()}
 
-    def validate(raw: str) -> Optional[str]:
+    def validate(raw: str) -> str | None:
         if any(ch in raw for ch in "/\\"):
             return "A project name can't contain / or \\ - it becomes a folder under projects/."
         if raw.casefold() in existing:

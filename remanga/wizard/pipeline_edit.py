@@ -22,15 +22,13 @@ Three doors to one checklist, one of them naming the wrong step."""
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 from remanga.config import RemangaConfig
 from remanga.console import console
 from remanga.settings.project_prefs import remember_pipeline
 from remanga.tui import Choice, is_cancel, multiselect
 
 
-def choose_pipeline_steps(project_name: str, *, title: str, note: str = "") -> Optional[List[str]]:
+def choose_pipeline_steps(project_name: str, *, title: str, note: str = "") -> list[str] | None:
     """The ordered checklist, opened on this project's current pipeline and
     saved to the project's own metadata (project.json's "pipeline", alongside
     everything else that project remembers). Returns the chosen steps, or None
@@ -57,7 +55,7 @@ def choose_pipeline_steps(project_name: str, *, title: str, note: str = "") -> O
     # numbering shown on screen opens as the order that's actually saved.
     rows.sort(key=lambda row: current.index(row.value) if row.value in current else len(current))
 
-    picked: List[str] = multiselect(
+    picked: list[str] = multiselect(
         title, rows, ordered=True, allow_empty=False,
         note=note or "the number is the run order - check them in the order you want them to run",
     )

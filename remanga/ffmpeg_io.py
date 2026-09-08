@@ -5,9 +5,9 @@ terminal directly."""
 
 from __future__ import annotations
 
+import contextlib
 import subprocess
 import threading
-from typing import List, Optional
 
 from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn
 
@@ -33,11 +33,11 @@ _PROGRESS_FLAGS = ("-hide_banner", "-nostats", "-loglevel", "error", "-progress"
 
 
 def run_ffmpeg(
-    args: List[str],
+    args: list[str],
     check: bool = False,
     capture: bool = False,
     show_progress: bool = False,
-    total_seconds: Optional[float] = None,
+    total_seconds: float | None = None,
     description: str = "Encoding",
 ) -> subprocess.CompletedProcess:
     """
@@ -54,12 +54,12 @@ def run_ffmpeg(
     if show_progress:
         return _run_with_progress(args, check, total_seconds, description)
     if capture:
-        return subprocess.run(args, check=check, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        return subprocess.run(args, check=check, capture_output=True, text=True)
     return subprocess.run(args, check=check, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def _run_with_progress(
-    args: List[str], check: bool, total_seconds: Optional[float], description: str,
+    args: list[str], check: bool, total_seconds: float | None, description: str,
 ) -> subprocess.CompletedProcess:
     cmd = [args[0], *_PROGRESS_FLAGS, *args[1:]]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
@@ -67,14 +67,12 @@ def _run_with_progress(
     # Drained on its own thread: ffmpeg writes errors here, and a full stderr
     # pipe would block the encode itself - the same deadlock the TTS workers
     # guard against.
-    stderr_lines: List[str] = []
+    stderr_lines: list[str] = []
 
     def drain_stderr() -> None:
-        try:
-            for line in proc.stderr:
-                stderr_lines.append(line)
-        except (ValueError, OSError):
-            pass
+        # pipe closed under us (ffmpeg exited) - nothing left to drain
+        with contextlib.suppress(ValueError, OSError):
+            stderr_lines.extend(proc.stderr)
 
     stderr_thread = threading.Thread(target=drain_stderr, daemon=True)
     stderr_thread.start()

@@ -40,8 +40,8 @@ from remanga.tui.text import ask_number, ask_path, ask_text
 __all__ = [
     "CANCEL",
     "EXIT",
-    "PromptExit",
     "Choice",
+    "PromptExit",
     "Toggle",
     "ask_index",
     "ask_number",

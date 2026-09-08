@@ -27,14 +27,27 @@ provably the same listing the delete loop consumes."""
 from __future__ import annotations
 
 from remanga.reset.actions import (
-    restart_chapter, reverify_chapter_downloads, wipe_chapter, wipe_project,
+    restart_chapter,
+    reverify_chapter_downloads,
+    wipe_chapter,
+    wipe_project,
 )
 from remanga.reset.entries import (
-    generated_dirs_for_chapter, project_wipe_candidates, restart_candidates, wipeable_entries,
+    generated_dirs_for_chapter,
+    project_wipe_candidates,
+    restart_candidates,
+    wipeable_entries,
 )
 from remanga.reset.modes import (
-    KEEP_ON_MARKS_ONLY_RESTART, KEEP_ON_RESTART, KEEP_ON_SOFT_RESTART, PROJECT_KEEP,
-    RESTART_MODE_BY_NAME, RESTART_MODE_NAMES, RESTART_MODES, RestartMode, keep_set,
+    KEEP_ON_MARKS_ONLY_RESTART,
+    KEEP_ON_RESTART,
+    KEEP_ON_SOFT_RESTART,
+    PROJECT_KEEP,
+    RESTART_MODE_BY_NAME,
+    RESTART_MODE_NAMES,
+    RESTART_MODES,
+    RestartMode,
+    keep_set,
 )
 
 __all__ = [

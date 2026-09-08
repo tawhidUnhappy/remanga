@@ -15,9 +15,10 @@ just chosen from whichever lossless container happens to hold it smallest."""
 
 from __future__ import annotations
 
+import contextlib
 import math
 from pathlib import Path
-from typing import List
+
 from PIL import Image, ImageDraw, ImageFont
 
 from remanga.console import console, escape as _esc
@@ -42,20 +43,18 @@ class PanelSheetGenerator:
     def create_panel_sheets(
         project_name: str,
         chapter_num,
-        panel_paths: List[Path],
+        panel_paths: list[Path],
         output_dir: Path,
         panels_per_sheet: int = 4,
-    ) -> List[Path]:
+    ) -> list[Path]:
         output_dir.mkdir(parents=True, exist_ok=True)
         # Clear anything previously in output_dir - a full wipe, not a
         # pattern-matched one, so a stray file or a leftover from an old
         # naming scheme never survives into the fresh set of sheets.
         for old_file in output_dir.iterdir():
             if old_file.is_file():
-                try:
+                with contextlib.suppress(Exception):
                     old_file.unlink()
-                except Exception:
-                    pass
 
         if not panel_paths:
             return []
@@ -71,7 +70,7 @@ class PanelSheetGenerator:
         except Exception:
             font = None
 
-        generated_sheets: List[Path] = []
+        generated_sheets: list[Path] = []
         total_sheets = math.ceil(len(panel_paths) / panels_per_sheet)
 
         console.print(
@@ -110,7 +109,7 @@ class PanelSheetGenerator:
             for h in row_heights[:-1]:
                 row_y.append(row_y[-1] + h + gen.HEADER_HEIGHT + gen.GAP)
 
-            for i, (p_path, img) in enumerate(zip(chunk, images)):
+            for i, (p_path, img) in enumerate(zip(chunk, images, strict=True)):
                 r, c = divmod(i, cols)
                 cell_x, cell_y, cell_w = col_x[c], row_y[r], col_widths[c]
 
@@ -154,7 +153,9 @@ class PanelSheetGenerator:
         info_sheet_path = gen._render_info_sheet(info, output_dir)
         generated_sheets.insert(0, info_sheet_path)
 
-        console.print(f"[bold green]✓ Created {len(generated_sheets)} full-resolution panel sheets in:[/] {_esc(str(output_dir))}")
+        console.print(
+            f"[bold green]✓ Created {len(generated_sheets)} full-resolution panel sheets in:[/] {_esc(str(output_dir))}"
+        )
         return generated_sheets
 
     @staticmethod
@@ -162,7 +163,6 @@ class PanelSheetGenerator:
         """Renders `info` (see manifest_info.info_to_text_lines) as a plain
         left-aligned text image - the sheets bundle's own leading info
         sheet, the same role the PDF formats' leading text page plays."""
-        gen = PanelSheetGenerator
         lines = info_to_text_lines(info)
 
         try:

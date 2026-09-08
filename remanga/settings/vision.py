@@ -10,8 +10,6 @@ three lists; now it means adding one field."""
 
 from __future__ import annotations
 
-from typing import List
-
 from remanga.config import PackageConfig, RemangaConfig
 from remanga.console import console
 from remanga.tui import Choice, ask_number, is_cancel, multiselect
@@ -22,7 +20,7 @@ from remanga.tui import Choice, ask_number, is_cancel, multiselect
 _SPLIT_SUFFIXES = ("_splite", "_splites")
 
 
-def package_switch_names() -> List[str]:
+def package_switch_names() -> list[str]:
     """Every packaging switch, in model order - the one list of what a
     "format" can be. Read off PackageConfig itself so a new format needs no
     second registration anywhere (this screen, the summary line, the
@@ -38,14 +36,14 @@ def is_split_switch(name: str) -> bool:
     return name.endswith(_SPLIT_SUFFIXES)
 
 
-def package_choices(config: RemangaConfig) -> List[Choice]:
+def package_choices(config: RemangaConfig) -> list[Choice]:
     """One Choice per switch, pre-checked to its current value, with the
     field's own description as the fine print and its example output as the
     hint. `sheets_folders` gets the live panels-per-folder count folded into
     its hint - a number that's already in config.json and would otherwise be
     something the user has to go look up."""
     package = config.cropper.package
-    rows: List[Choice] = []
+    rows: list[Choice] = []
     for name in package_switch_names():
         field = PackageConfig.model_fields[name]
         extra = field.json_schema_extra or {}

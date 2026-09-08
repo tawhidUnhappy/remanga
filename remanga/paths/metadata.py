@@ -5,7 +5,7 @@ bookkeeping), and the project listing the wizard's picker reads."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from remanga.json_io import read_json_or, write_json
 
@@ -30,11 +30,11 @@ def ensure_memory_file(project_name: str) -> Path:
     return memory_path
 
 
-def load_project_metadata(project_name: str) -> Dict[str, Any]:
+def load_project_metadata(project_name: str) -> dict[str, Any]:
     return read_json_or(get_project_metadata_path(project_name), {})
 
 
-def chapter_identity_fields(project_name: str, chapter_num: str) -> Dict[str, Any]:
+def chapter_identity_fields(project_name: str, chapter_num: str) -> dict[str, Any]:
     """The project/manga/chapter identity fields every chapter_info.json starts
     from - shared by the primary vision archive (cropper/crop_report.py's
     write_chapter_info) and the size-capped LLM zip bundle (cropper/llm_zip.py),
@@ -56,7 +56,7 @@ def chapter_identity_fields(project_name: str, chapter_num: str) -> Dict[str, An
     }
 
 
-def save_project_metadata(project_name: str, data: Dict[str, Any]) -> None:
+def save_project_metadata(project_name: str, data: dict[str, Any]) -> None:
     meta_path = get_project_metadata_path(project_name)
     existing = load_project_metadata(project_name)
     existing.update(data)
@@ -93,11 +93,11 @@ def get_manifest_path(project_name: str) -> Path:
     return get_project_dir(project_name) / "manifest.json"
 
 
-def read_manifest(project_name: str) -> Dict[str, Any]:
+def read_manifest(project_name: str) -> dict[str, Any]:
     return read_json_or(get_manifest_path(project_name), {"chapters": {}})
 
 
-def read_remote_chapter_cache(project_name: str) -> Dict[str, Any]:
+def read_remote_chapter_cache(project_name: str) -> dict[str, Any]:
     """manifest.json['remote_chapters'] - the last MangaDex chapter-feed
     fetch for this project, cached whole (not merged into the per-chapter
     "chapters" sections above, which only ever describe chapters this
@@ -109,7 +109,9 @@ def read_remote_chapter_cache(project_name: str) -> Dict[str, Any]:
     return read_manifest(project_name).get("remote_chapters", {})
 
 
-def write_remote_chapter_cache(project_name: str, manga_id: str, chapters: List[Dict[str, Any]], fetched_at: float) -> None:
+def write_remote_chapter_cache(
+    project_name: str, manga_id: str, chapters: list[dict[str, Any]], fetched_at: float
+) -> None:
     manifest = read_manifest(project_name)
     manifest["remote_chapters"] = {"manga_id": manga_id, "fetched_at": fetched_at, "chapters": chapters}
     write_json(get_manifest_path(project_name), manifest)
@@ -128,7 +130,7 @@ def update_manifest_chapter(project_name: str, chapter_num: str, section: str, d
     write_json(get_manifest_path(project_name), manifest)
 
 
-def list_projects() -> List[Dict[str, Any]]:
+def list_projects() -> list[dict[str, Any]]:
     root = get_projects_dir()
     results = []
     if not root.exists():

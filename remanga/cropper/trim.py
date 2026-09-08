@@ -16,13 +16,11 @@ exists specifically to protect speech bubbles and bleed art.
 
 from __future__ import annotations
 
-from typing import Tuple
-
 import numpy as np
 from PIL import Image
 
 # (left, top, right, bottom) in the image's own local pixel space.
-LocalBox = Tuple[int, int, int, int]
+LocalBox = tuple[int, int, int, int]
 
 
 def trim_panel_margins(
@@ -31,7 +29,7 @@ def trim_panel_margins(
     tolerance: float = 20.0,
     min_bg_fraction: float = 0.985,
     max_trim_fraction: float = 0.04,
-) -> Tuple[Image.Image, LocalBox]:
+) -> tuple[Image.Image, LocalBox]:
     """Trims a thin band of near-pure background gray off each of the four edges
     of an already-cropped panel image, stopping the instant a row/column no
     longer qualifies as background. Returns the (possibly) trimmed image plus the

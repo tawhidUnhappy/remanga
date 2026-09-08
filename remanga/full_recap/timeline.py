@@ -19,7 +19,6 @@ from the audio side."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Tuple
 
 from pydub import AudioSegment
 from rich.progress import BarColumn, Progress, TextColumn
@@ -30,13 +29,16 @@ from remanga.console import console, escape as _esc
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.json_io import read_json
 from remanga.paths import (
-    get_audio_dir, get_audio_timing_path, get_full_recap_master_audio_path, get_video_frames_dir,
+    get_audio_dir,
+    get_audio_timing_path,
+    get_full_recap_master_audio_path,
+    get_video_frames_dir,
 )
 
 
 def assemble_combined_audio(
-    config: RemangaConfig, project_name: str, chapters: List[str],
-) -> Tuple[Path, List[Tuple[Path, float]]]:
+    config: RemangaConfig, project_name: str, chapters: list[str],
+) -> tuple[Path, list[tuple[Path, float]]]:
     """Returns the finished master WAV path plus the (frame_path,
     duration_sec) timeline every frame in the whole manga plays for, in
     order, for the video side to reuse without re-deriving it."""
@@ -44,7 +46,7 @@ def assemble_combined_audio(
     valid_bgm = settings.ensure_valid_bgm(config, interactive=False)
 
     combined_voice = AudioSegment.empty()
-    frame_timeline: List[Tuple[Path, float]] = []
+    frame_timeline: list[tuple[Path, float]] = []
 
     # Load every chapter's panel timing up front so the progress bar below
     # can show a real total (every panel across the whole manga) instead
@@ -90,7 +92,9 @@ def assemble_combined_audio(
     master_audio = combined_voice.set_channels(2).set_frame_rate(audio_config.sample_rate)
 
     if valid_bgm and audio_config.bgm_enabled:
-        console.print(f"[cyan]Overlaying one continuous background music track (no per-chapter restarts):[/] {_esc(valid_bgm)}")
+        console.print(
+            f"[cyan]Overlaying one continuous background music track (no per-chapter restarts):[/] {_esc(valid_bgm)}"
+        )
         bgm_track = AudioSegment.from_file(valid_bgm)
         bgm_track = bgm_track.set_channels(2).set_frame_rate(audio_config.sample_rate)
         bgm_track = bgm_track + audio_config.bgm_volume_db
@@ -126,7 +130,10 @@ def assemble_combined_audio(
                        description="Normalizing full-manga audio")
             raw_path.unlink(missing_ok=True)
         except Exception as e:
-            console.print(f"[yellow]Loudnorm filter warning: {_esc(str(e))}. Falling back to the un-normalized full-manga track.[/]")
+            console.print(
+                f"[yellow]Loudnorm filter warning: {_esc(str(e))}. Falling back to the un-normalized full-manga "
+                f"track.[/]"
+            )
             raw_path.rename(final_path)
     else:
         raw_path.rename(final_path)

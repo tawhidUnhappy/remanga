@@ -26,25 +26,27 @@ it shouldn't be a question."""
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from remanga.commands import Command, Param, resolve_wipe_keep
 from remanga.config import RemangaConfig
 from remanga.console import console, display_path
 from remanga.reset import wipeable_entries
 from remanga.settings.project_prefs import (
-    active_package_formats, remembered_package_formats, remembered_wipe_keep,
+    active_package_formats,
+    remembered_package_formats,
+    remembered_wipe_keep,
 )
 from remanga.settings.vision import package_choices
 from remanga.tui import CANCEL, Choice, ask_text, confirm, is_cancel, multiselect, select
 from remanga.wizard.chapters import select_chapter, select_chapters
 
 
-def collect_params(cmd: Command, project: str, config: RemangaConfig) -> Optional[Dict[str, Any]]:
+def collect_params(cmd: Command, project: str, config: RemangaConfig) -> dict[str, Any] | None:
     """Every parameter this command needs, in order. Returns None if the
     user backed out of any of them - backing out of a question means "don't
     run this command", not "run it with a blank answer"."""
-    values: Dict[str, Any] = {}
+    values: dict[str, Any] = {}
     for param in cmd.params:
         if param.name == "project":
             values["project"] = project
@@ -62,7 +64,7 @@ def collect_params(cmd: Command, project: str, config: RemangaConfig) -> Optiona
 
 
 def prompt_param(param: Param, *, project: str, config: RemangaConfig,
-                 values: Dict[str, Any]) -> Any:
+                 values: dict[str, Any]) -> Any:
     special = _SPECIAL.get(param.name)
     if special is not None:
         return special(param, project, config, values)
@@ -76,11 +78,11 @@ def prompt_param(param: Param, *, project: str, config: RemangaConfig,
 # --- discoverable parameters ----------------------------------------------
 
 
-def _prompt_chapter(param: Param, project: str, config: RemangaConfig, values: Dict[str, Any]) -> Any:
+def _prompt_chapter(param: Param, project: str, config: RemangaConfig, values: dict[str, Any]) -> Any:
     return select_chapter(project, title=param.label)
 
 
-def _prompt_chapters(param: Param, project: str, config: RemangaConfig, values: Dict[str, Any]) -> Any:
+def _prompt_chapters(param: Param, project: str, config: RemangaConfig, values: dict[str, Any]) -> Any:
     picked = select_chapters(project, title=param.label)
     if is_cancel(picked):
         return CANCEL
@@ -96,7 +98,7 @@ def _prompt_chapters(param: Param, project: str, config: RemangaConfig, values: 
     return ",".join(picked)
 
 
-def _prompt_keep(param: Param, project: str, config: RemangaConfig, values: Dict[str, Any]) -> Any:
+def _prompt_keep(param: Param, project: str, config: RemangaConfig, values: dict[str, Any]) -> Any:
     """The wipe keep-list, as a checklist of what this chapter actually has
     right now - so nobody has to remember whether it's "panels" or
     "panels/", or which generated directories exist for this chapter at
@@ -122,14 +124,15 @@ def _prompt_keep(param: Param, project: str, config: RemangaConfig, values: Dict
     # literally called "chapter_<n>" - so panels_zip/chapter_1 and
     # audio/chapter_1 are one decision, not two. Showing them as separate
     # rows would imply you could keep one and drop the other.
-    grouped: Dict[str, list] = {}
+    grouped: dict[str, list] = {}
     for entry in entries:
         grouped.setdefault(entry.name, []).append(entry)
 
     rows = []
     for name, paths in grouped.items():
         kind = "directory" if paths[0].is_dir() else "file"
-        where = ", ".join(sorted(p.parent.name for p in paths)) if len(paths) > 1 or paths[0].parent.name != f"chapter_{chapter}" else ""
+        show_where = len(paths) > 1 or paths[0].parent.name != f"chapter_{chapter}"
+        where = ", ".join(sorted(p.parent.name for p in paths)) if show_where else ""
         hint = kind + (f" · in {where}" if where else "") + (f" · {source}" if name in keep_now else "")
         rows.append(Choice(
             label=name,
@@ -148,7 +151,7 @@ def _prompt_keep(param: Param, project: str, config: RemangaConfig, values: Dict
     return ",".join(picked) if picked else "none"
 
 
-def _prompt_formats(param: Param, project: str, config: RemangaConfig, values: Dict[str, Any]) -> Any:
+def _prompt_formats(param: Param, project: str, config: RemangaConfig, values: dict[str, Any]) -> Any:
     """Which upload formats to build, as a checklist - the same one the
     settings screen uses, opened on what this project builds right now
     (its remembered choice, else config.json's switches). Whatever comes
@@ -170,7 +173,7 @@ def _prompt_formats(param: Param, project: str, config: RemangaConfig, values: D
     return ",".join(picked) if picked else "none"
 
 
-def _prompt_steps(param: Param, project: str, config: RemangaConfig, values: Dict[str, Any]) -> Any:
+def _prompt_steps(param: Param, project: str, config: RemangaConfig, values: dict[str, Any]) -> Any:
     """Which steps this run executes - which is the same question as what
     this project's pipeline is, so it's the same checklist the Pipeline row
     opens, and confirming it saves projects/<name>/pipeline.json.
@@ -208,7 +211,7 @@ def _not_asked(current_value, where: str):
     setting one row above (Command.setup - see commands/registry.py), so the
     screen is already open in front of you."""
 
-    def prompt(param: Param, project: str, config: RemangaConfig, values: Dict[str, Any]) -> Any:
+    def prompt(param: Param, project: str, config: RemangaConfig, values: dict[str, Any]) -> Any:
         configured = current_value(config)
         flag = param.flags[0]
         label = param.prompt or param.name
@@ -221,7 +224,7 @@ def _not_asked(current_value, where: str):
     return prompt
 
 
-def _prompt_url(param: Param, project: str, config: RemangaConfig, values: Dict[str, Any]) -> Any:
+def _prompt_url(param: Param, project: str, config: RemangaConfig, values: dict[str, Any]) -> Any:
     """The manga source. Asked only when the project doesn't have one saved -
     the downloader falls back to project.json's manga_url/manga_id whenever
     this is None, so re-typing the same URL for every chapter of the same

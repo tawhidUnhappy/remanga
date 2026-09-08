@@ -3,7 +3,7 @@ status and integrity verification."""
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from remanga.commands.selection import split_chapters
 from remanga.config import RemangaConfig
@@ -14,7 +14,7 @@ from remanga.status import render_status_panel
 from remanga.verify import verify_project
 
 
-def full_recap(params: Dict[str, Any], config: RemangaConfig) -> None:
+def full_recap(params: dict[str, Any], config: RemangaConfig) -> None:
     FullRecapCompiler(config).compile_full_manga(
         params["project"], force=bool(params.get("force")),
         chapters=split_chapters(params.get("chapters")),
@@ -22,18 +22,18 @@ def full_recap(params: Dict[str, Any], config: RemangaConfig) -> None:
     )
 
 
-def remix(params: Dict[str, Any], config: RemangaConfig) -> None:
+def remix(params: dict[str, Any], config: RemangaConfig) -> None:
     remix_project(
         params["project"], config, chapters=split_chapters(params.get("chapters")),
         bgm_override=params.get("bgm"), rejoin=not params.get("no_rejoin"),
     )
 
 
-def status(params: Dict[str, Any], config: RemangaConfig) -> None:
+def status(params: dict[str, Any], config: RemangaConfig) -> None:
     console.print(render_status_panel(params["project"], params["chapter"]))
 
 
-def verify(params: Dict[str, Any], config: RemangaConfig) -> None:
+def verify(params: dict[str, Any], config: RemangaConfig) -> None:
     verify_project(
         params["project"], chapters=split_chapters(params.get("chapters")),
         check_video=not params.get("no_video"),

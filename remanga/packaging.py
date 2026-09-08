@@ -10,7 +10,7 @@ want it."""
 
 from __future__ import annotations
 
-from typing import List, Optional, Sequence
+from collections.abc import Sequence
 
 from remanga.config import RemangaConfig
 from remanga.console import console
@@ -19,7 +19,7 @@ from remanga.settings import package_summary
 from remanga.settings.project_prefs import cropper_config_for, remember_package_formats
 
 
-def chapter_panels(project_name: str, chapter_num: str) -> List:
+def chapter_panels(project_name: str, chapter_num: str) -> list:
     """Every cropped panel file for this chapter, in order. Empty when the
     chapter hasn't been cropped yet."""
     panels_dir = get_chapter_dir(project_name, chapter_num) / "panels"
@@ -32,7 +32,7 @@ def package_chapter(
     config: RemangaConfig,
     project_name: str,
     chapter_num: str,
-    formats: Optional[Sequence[str]] = None,
+    formats: Sequence[str] | None = None,
     *,
     remember: bool = False,
     required: bool = True,

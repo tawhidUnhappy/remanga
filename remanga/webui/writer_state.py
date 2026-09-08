@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from remanga.json_io import has_real_json_content, read_json_or
 from remanga.narration import PANEL_IMAGE_EXTS, narration_document
@@ -43,14 +43,14 @@ class WriterState:
         # If narration.json already has real content (e.g. re-opening this UI
         # to finish/edit a draft), preload each panel's existing text instead
         # of blanking it out.
-        existing_text: Dict[str, str] = {}
+        existing_text: dict[str, str] = {}
         if has_real_json_content(self.narration_path):
             existing = read_json_or(self.narration_path, {})
             for entry in existing.get("narration", []):
                 existing_text[entry.get("panel_id")] = entry.get("text", "")
 
-        self.texts: Dict[str, str] = {pid: existing_text.get(pid, "") for pid in panel_ids}
-        self.panel_order: List[str] = panel_ids
+        self.texts: dict[str, str] = {pid: existing_text.get(pid, "") for pid in panel_ids}
+        self.panel_order: list[str] = panel_ids
 
         # Generate the empty narration.json placeholder up front (same
         # convention as the wizard's own narration.json step) so the file
@@ -59,14 +59,14 @@ class WriterState:
         if not has_real_json_content(self.narration_path):
             self.narration_path.write_text("", encoding="utf-8")
 
-    def panel_image_filename(self, panel_id: str) -> Optional[str]:
+    def panel_image_filename(self, panel_id: str) -> str | None:
         for ext in PANEL_IMAGE_EXTS:
             candidate = self.panels_dir / f"{panel_id}{ext}"
             if candidate.exists():
                 return candidate.name
         return None
 
-    def to_payload(self) -> Dict[str, Any]:
+    def to_payload(self) -> dict[str, Any]:
         panels = [
             {
                 "panel_id": pid,
@@ -85,7 +85,7 @@ class WriterState:
         if panel_id in self.texts:
             self.texts[panel_id] = text or ""
 
-    def build_narration_json(self) -> Dict[str, Any]:
+    def build_narration_json(self) -> dict[str, Any]:
         """Built through remanga.narration.narration_document - the same
         function `narration-init --mode template` uses, so a hand-started
         template and a Writer-produced file are structurally identical."""

@@ -24,9 +24,73 @@ dependencies = [
 [project.scripts]
 remanga = "remanga.cli:main"
 
+[dependency-groups]
+# PEP 735. `uv run --group dev ruff check remanga` - or just `./bin/uv tool
+# run ruff check remanga`, since ruff needs nothing from this project's env.
+dev = [
+    "ruff>=0.16",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["remanga"]
+
+[tool.ruff]
+# py310 is what pyproject's requires-python promises, so it's what the
+# modernization rules below are allowed to assume - notably PEP 604 (`str |
+# None`) and PEP 585 (`list[str]`) as real runtime syntax, not just as
+# strings under `from __future__ import annotations`.
+target-version = "py310"
+# Not 88. This codebase carries a lot of deliberate explanatory prose in
+# comments and docstrings, wrapped by hand to read well; 88 would force a
+# reflow of hundreds of those lines and win nothing. 120 is close to where
+# the code already sits (only 72 of 17k lines exceeded it) so the rule
+# catches genuine runaway lines instead of ordinary ones.
+line-length = 120
+src = ["remanga"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes - unused imports/variables, undefined names
+    "I",        # isort - one import order, mechanically enforced
+    "UP",       # pyupgrade - PEP 585/604 and other >=3.10 modernizations
+    "B",        # bugbear - likely bugs (mutable defaults, unstrict zip, ...)
+    "SIM",      # flake8-simplify
+    "C4",       # comprehensions
+    "RET",      # returns
+    "PTH",      # prefer pathlib over os.path
+    "PIE",
+    "PERF",     # obvious performance anti-patterns
+    "RUF",
+]
+ignore = [
+    # The narration front-end exists precisely to handle typographic
+    # characters (smart quotes, en/em dashes, the ellipsis) and names them
+    # literally in its tables and its prose - see narration/normalize.py.
+    # Flagging those as "ambiguous unicode" is the linter misreading the
+    # subject matter.
+    "RUF001", "RUF002", "RUF003",
+    # Per-item try/except inside a loop is the point in the few places this
+    # fires: one bad chapter/page/entry is skipped rather than killing the
+    # whole batch. The overhead is irrelevant next to the network and
+    # subprocess work in those loops.
+    "PERF203",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The isolated-venv workers (see remanga/venvs.py) run under their own
+# interpreters against their own pinned deps, and deliberately import
+# nothing from `remanga` - so they can't be held to this project's import
+# graph, and their `sys.path` juggling has to come before their imports.
+"remanga/*/scripts/*.py" = ["E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["remanga"]
+# Keep `from x import a, b as c` on one line instead of splitting the
+# aliased name onto its own import - the codebase already reads that way
+# (`from remanga.console import console, escape as _esc`).
+combine-as-imports = true

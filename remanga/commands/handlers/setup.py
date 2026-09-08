@@ -3,21 +3,21 @@ weights."""
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from remanga.config import RemangaConfig
 from remanga.settings import run_paths_manager, run_setup_wizard
 
 
-def setup_config(params: Dict[str, Any], config: RemangaConfig) -> None:
+def setup_config(params: dict[str, Any], config: RemangaConfig) -> None:
     run_setup_wizard(config)
 
 
-def paths(params: Dict[str, Any], config: RemangaConfig) -> None:
+def paths(params: dict[str, Any], config: RemangaConfig) -> None:
     run_paths_manager(config)
 
 
-def setup_models(params: Dict[str, Any], config: RemangaConfig) -> None:
+def setup_models(params: dict[str, Any], config: RemangaConfig) -> None:
     """Downloads/verifies every model the current configuration will
     actually use.
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 from remanga.config import RemangaConfig
 from remanga.console import console
 from remanga.settings.assets import ASSETS, asset_relevant, asset_status
-from remanga.settings.sections import SECTIONS, SECTION_BY_KEY
+from remanga.settings.sections import SECTION_BY_KEY, SECTIONS
 from remanga.settings.summary import settings_summary
 from remanga.tui import Choice, is_cancel, select
 

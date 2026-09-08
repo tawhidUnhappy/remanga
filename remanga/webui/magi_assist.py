@@ -25,14 +25,12 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Optional, Set
 
 from remanga.config import MarkerConfig
 from remanga.console import console, escape as _esc
 from remanga.hf_token import resolve_hf_token
 from remanga.paths import UV_BIN
 from remanga.venvs import extract_missing_packages, get_scripts_dir, get_tool_python
-
 
 _MAX_AUTO_HEAL_ATTEMPTS = 8
 
@@ -54,7 +52,7 @@ def is_gpu_available() -> bool:
         return False
 
 
-def _pip_install_into_magi_env(packages: Set[str]) -> bool:
+def _pip_install_into_magi_env(packages: set[str]) -> bool:
     """Installs `packages` into `.venv-magi`, preferring this repo's own
     `bin/uv` (that isolated venv has no `pip` module at all)."""
     names = sorted(packages)
@@ -97,11 +95,13 @@ def _spawn_worker_with_auto_heal(config: MarkerConfig) -> subprocess.Popen:
     package(s) into `.venv-magi` and retries, up to _MAX_AUTO_HEAL_ATTEMPTS
     distinct packages, instead of raising mid-session over something one pip
     install would have fixed."""
-    attempted: Set[str] = set()
+    attempted: set[str] = set()
 
     for _ in range(_MAX_AUTO_HEAL_ATTEMPTS + 1):
         # refresh_per_second=4: see downloader/mangadex.py's Progress() note.
-        with console.status(f"[bold cyan]Loading MAGI v3 ({config.magi_repo_id})...[/]", spinner="dots", refresh_per_second=4):
+        with console.status(
+            f"[bold cyan]Loading MAGI v3 ({config.magi_repo_id})...[/]", spinner="dots", refresh_per_second=4
+        ):
             proc = _spawn_worker(config)
             first_line = proc.stdout.readline()
 
@@ -126,7 +126,7 @@ def _spawn_worker_with_auto_heal(config: MarkerConfig) -> subprocess.Popen:
     raise RuntimeError(f"MAGI v3 worker still fails to load after installing: {', '.join(sorted(attempted))}")
 
 
-def ensure_weights_downloaded(config: MarkerConfig) -> Optional[Path]:
+def ensure_weights_downloaded(config: MarkerConfig) -> Path | None:
     """Pre-fetches the MAGI v3 weights via `.venv-magi`'s HF Hub install, then
     does a full load-and-release pass (auto-healing any missing dependency, see
     _spawn_worker_with_auto_heal) so the panel-marking assist is actually ready
@@ -161,7 +161,9 @@ def ensure_weights_downloaded(config: MarkerConfig) -> Optional[Path]:
     if token:
         cmd.append(token)
 
-    with console.status(f"[bold cyan]Fetching MAGI v3 weights ({config.magi_repo_id})...[/]", spinner="dots", refresh_per_second=4):
+    with console.status(
+        f"[bold cyan]Fetching MAGI v3 weights ({config.magi_repo_id})...[/]", spinner="dots", refresh_per_second=4
+    ):
         result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         console.print(f"[bold red]Error downloading MAGI v3 weights:[/] {result.stderr.strip()}")
@@ -178,10 +180,10 @@ def ensure_weights_downloaded(config: MarkerConfig) -> Optional[Path]:
 
 
 def detect_panels_for_pages(
-    page_paths: List[Path],
+    page_paths: list[Path],
     config: MarkerConfig,
     on_page_done=None,
-) -> Dict[str, List[List[float]]]:
+) -> dict[str, list[list[float]]]:
     """Runs MAGI v3 panel detection over a batch of page images via the
     `.venv-magi` worker subprocess. Returns {page_filename: [[x1, y1, x2, y2],
     ...]} in pixel space. Calls `on_page_done(filename, boxes)` after each page
@@ -191,7 +193,7 @@ def detect_panels_for_pages(
     proc = _spawn_worker_with_auto_heal(config)
     console.print("[bold green]✓ MAGI v3 loaded.[/]")
 
-    results: Dict[str, List[List[float]]] = {}
+    results: dict[str, list[list[float]]] = {}
     try:
         for path in page_paths:
             proc.stdin.write(str(path.resolve()) + "\n")

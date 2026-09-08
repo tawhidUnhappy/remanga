@@ -12,7 +12,9 @@ from remanga.config import ReviewerConfig
 from remanga.console import console, escape as _esc
 from remanga.json_io import write_json
 from remanga.paths import (
-    REVIEWER_STATIC_DIR, get_narration_review_history_dir, get_narration_review_path,
+    REVIEWER_STATIC_DIR,
+    get_narration_review_history_dir,
+    get_narration_review_path,
 )
 from remanga.webui.reviewer_state import ReviewerState
 
@@ -55,7 +57,8 @@ def create_reviewer_app(state: ReviewerState, config: ReviewerConfig, project_na
             review_path.write_text("", encoding="utf-8")
         else:
             write_json(review_path, review)
-            history_path = get_narration_review_history_dir(project_name, state.chapter_num) / f"round_{state.round}.json"
+            history_dir = get_narration_review_history_dir(project_name, state.chapter_num)
+            history_path = history_dir / f"round_{state.round}.json"
             write_json(history_path, review)
 
         console.print(

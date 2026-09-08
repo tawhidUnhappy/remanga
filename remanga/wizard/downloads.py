@@ -10,7 +10,7 @@ around it (see MangaDexDownloader.list_chapters_with_status and
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from remanga.config import RemangaConfig
 from remanga.console import console
@@ -23,7 +23,7 @@ _PICK = "__pick__"
 _STATUS_BADGE = {"downloaded": "done", "partial": "partial", "missing": ""}
 
 
-def _row_for(entry: Dict[str, Any]) -> Choice:
+def _row_for(entry: dict[str, Any]) -> Choice:
     pages = entry.get("pages")
     pages_note = f"{pages} page(s)" if pages else "page count unknown"
     title = f" - {entry['title']}" if entry.get("title") else ""
@@ -36,7 +36,7 @@ def _row_for(entry: Dict[str, Any]) -> Choice:
     )
 
 
-def run_download_chapters(project_name: str, config: RemangaConfig, manga_id_or_url: Optional[str] = None) -> None:
+def run_download_chapters(project_name: str, config: RemangaConfig, manga_id_or_url: str | None = None) -> None:
     """The whole interactive flow: fetch (cached up to 24h, refetchable on
     demand) -> pick chapters (pre-checked: everything not already fully
     downloaded) -> optionally force a clean reverify-and-redownload -> go.

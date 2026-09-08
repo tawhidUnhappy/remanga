@@ -11,8 +11,6 @@ them together instead of separately.
 
 from __future__ import annotations
 
-from typing import List
-
 import numpy as np
 
 from remanga.cropper.gutter import PixelBox, locate_gutter_band
@@ -27,7 +25,7 @@ def _range_overlap_fraction(a0: float, a1: float, b0: float, b1: float) -> float
 
 def reconcile_adjacent_seams(
     gray: np.ndarray,
-    boxes: List[PixelBox],
+    boxes: list[PixelBox],
     bg: float,
     search_radius: int = 120,
     tolerance: float = 20.0,
@@ -35,7 +33,7 @@ def reconcile_adjacent_seams(
     min_bg_fraction: float = 0.96,
     max_seam_gap_fraction: float = 0.15,
     min_axis_overlap_fraction: float = 0.5,
-) -> List[PixelBox]:
+) -> list[PixelBox]:
     """Second pass over one page's already gutter-snapped panel boxes, in reading
     order. For every consecutive pair of boxes that looks like stacked or
     side-by-side tiles (their shared axis overlaps substantially and their facing
@@ -59,7 +57,9 @@ def reconcile_adjacent_seams(
             center = (b1 + t2) // 2
             radius = max(search_radius, abs(gap) // 2 + search_radius)
             perp_lo, perp_hi = max(l1, l2), min(r1, r2)
-            mid = locate_gutter_band(gray, h, center, perp_lo, perp_hi, True, bg, tolerance, radius, min_run, min_bg_fraction)
+            mid = locate_gutter_band(
+                gray, h, center, perp_lo, perp_hi, True, bg, tolerance, radius, min_run, min_bg_fraction
+            )
             if mid is not None and t1 < mid < b2:
                 boxes[i] = (l1, t1, r1, mid)
                 boxes[i + 1] = (l2, mid, r2, b2)
@@ -73,7 +73,9 @@ def reconcile_adjacent_seams(
             center = (r1 + l2) // 2
             radius = max(search_radius, abs(gap_x) // 2 + search_radius)
             perp_lo, perp_hi = max(t1, t2), min(b1, b2)
-            mid = locate_gutter_band(gray, w, center, perp_lo, perp_hi, False, bg, tolerance, radius, min_run, min_bg_fraction)
+            mid = locate_gutter_band(
+                gray, w, center, perp_lo, perp_hi, False, bg, tolerance, radius, min_run, min_bg_fraction
+            )
             if mid is not None and l1 < mid < r2:
                 boxes[i] = (l1, t1, mid, b1)
                 boxes[i + 1] = (mid, t2, r2, b2)

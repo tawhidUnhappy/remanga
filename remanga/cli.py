@@ -10,7 +10,6 @@ from remanga.console import console, escape as _esc
 from remanga.tui import PromptExit
 from remanga.wizard import run_interactive_pipeline
 
-
 PAUSED_MESSAGE = "\n[bold yellow]👋 Production paused. You can resume at any time![/]"
 
 

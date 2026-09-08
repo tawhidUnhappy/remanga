@@ -12,8 +12,8 @@ leaves typing a path as the escape hatch for the file that lives elsewhere."""
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Iterable, List, Optional, Sequence
 
 from remanga.paths import GLOBAL_DIR
 
@@ -25,7 +25,7 @@ AUDIO_EXTENSIONS = (".wav", ".mp3", ".flac", ".m4a", ".ogg", ".aac", ".opus")
 TEXT_EXTENSIONS = (".txt", ".md")
 
 
-def is_valid_file(raw_path: str, min_size: int = 0) -> Optional[Path]:
+def is_valid_file(raw_path: str, min_size: int = 0) -> Path | None:
     """Returns the resolved Path if `raw_path` points at an existing,
     non-empty-enough file, else None."""
     raw_path = (raw_path or "").strip()
@@ -48,7 +48,7 @@ def asset_dir(subdir: str, create: bool = False) -> Path:
 
 
 def _scan(roots: Iterable[Path], extensions: Sequence[str], limit: int,
-          seen: set, found: List[Path], recursive: bool) -> None:
+          seen: set, found: list[Path], recursive: bool) -> None:
     for root in roots:
         if not root or not root.is_dir():
             continue
@@ -78,7 +78,7 @@ def discover_files(
     preferred_subdir: str = "",
     extra_dirs: Iterable[Path] = (),
     limit: int = 40,
-) -> List[Path]:
+) -> list[Path]:
     """Candidate files for ONE kind of asset - searched where that kind
     lives, not everywhere.
 
@@ -99,7 +99,7 @@ def discover_files(
     Capped at `limit` so a folder someone has pointed at a sample library
     produces a usable menu rather than a thousand-row wall."""
     seen: set = set()
-    found: List[Path] = []
+    found: list[Path] = []
 
     _scan([asset_dir(preferred_subdir)] if preferred_subdir else [], extensions, limit, seen, found,
           recursive=True)
@@ -110,7 +110,7 @@ def discover_files(
     return found
 
 
-def parent_dir_of(raw_path: str) -> List[Path]:
+def parent_dir_of(raw_path: str) -> list[Path]:
     """The directory holding whatever is configured right now, as a
     single-item list ready to pass to `discover_files(extra_dirs=...)`.
     Empty when nothing is configured or it no longer exists."""

@@ -12,8 +12,8 @@ just wires the stages together in order."""
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
-from typing import List, Optional
 
 from remanga.config import CropperConfig
 from remanga.console import console
@@ -24,10 +24,10 @@ from remanga.paths import get_chapter_dir, read_manifest
 
 
 class CoordinateCropper:
-    def __init__(self, config: Optional[CropperConfig] = None):
+    def __init__(self, config: CropperConfig | None = None):
         self.config = config or CropperConfig()
 
-    def crop_chapter_from_json(self, project_name: str, chapter_num: str, force: bool = False) -> List[Path]:
+    def crop_chapter_from_json(self, project_name: str, chapter_num: str, force: bool = False) -> list[Path]:
         """
         Reads crops.json in the chapter directory and crops every panel.
         Skips if already cropped and force is False.
@@ -71,10 +71,8 @@ class CoordinateCropper:
         panels_dir.mkdir(parents=True, exist_ok=True)
         for old_file in panels_dir.iterdir():
             if old_file.is_file():
-                try:
+                with contextlib.suppress(Exception):
                     old_file.unlink()
-                except Exception:
-                    pass
 
         crop_data = read_json(crops_json_path)
         pages_list = crop_data.get("pages", [])
@@ -83,7 +81,7 @@ class CoordinateCropper:
 
         console.print(f"[cyan]Processing panel cropping for chapter {chapter_num}...[/]")
 
-        output_panel_paths: List[Path] = []
+        output_panel_paths: list[Path] = []
         gutter_panels_adjusted = 0
         gutter_edges_adjusted = 0
         duplicate_panels_dropped = 0

@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _hash_verify import delete_files_for_retry, verify_repo_files  # noqa: E402
+from _hash_verify import delete_files_for_retry, verify_repo_files
 
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "0")

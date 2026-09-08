@@ -10,8 +10,9 @@ used to do."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 from remanga.config import RemangaConfig
 
@@ -26,11 +27,11 @@ class Param:
     (str + `choices`)."""
 
     name: str
-    flags: List[str]
+    flags: list[str]
     type: str = "str"
     required: bool = False
     default: Any = None
-    choices: Optional[List[str]] = None
+    choices: list[str] | None = None
     help: str = ""
     # Short label for the interactive prompt. `help` is written for
     # `--help` output and is often a paragraph; a menu needs a line.
@@ -42,8 +43,8 @@ class Param:
     # are filled from whatever module owns those choices (restart modes from
     # remanga.reset, narration file modes from remanga.narration), so the
     # descriptions live with the behavior rather than being retyped here.
-    choice_help: Dict[str, str] = field(default_factory=dict)
-    choice_detail: Dict[str, str] = field(default_factory=dict)
+    choice_help: dict[str, str] = field(default_factory=dict)
+    choice_detail: dict[str, str] = field(default_factory=dict)
     # A flag that exists for the CLI only, because the handler asks the same
     # thing itself in a purpose-built interactive screen (download-chapters'
     # chapter picker - see remanga/wizard/downloads.py). The wizard skips
@@ -82,8 +83,8 @@ class SetupAction:
 class Command:
     name: str
     help: str
-    handler: Callable[[Dict[str, Any], RemangaConfig], None]
-    params: List[Param] = field(default_factory=list)
+    handler: Callable[[dict[str, Any], RemangaConfig], None]
+    params: list[Param] = field(default_factory=list)
     # Grouping hint for the wizard's menus (see remanga.commands.registry's
     # CATEGORIES). argparse ignores it entirely, so it can never make the
     # CLI and the wizard disagree about anything that matters.
@@ -99,14 +100,14 @@ class Command:
     # ignores this completely (each setting already has its own screen under
     # `setup-config`), so it can't make the CLI and the wizard disagree about
     # what the *command* does.
-    setup: Tuple[SetupAction, ...] = ()
+    setup: tuple[SetupAction, ...] = ()
 
 
 def add_param_to_parser(parser, param: Param) -> None:
     """Adds one Param to an argparse (sub)parser exactly the way the
     hand-written add_argument() calls used to, so --help output stays
     byte-identical."""
-    kwargs: Dict[str, Any] = {"help": param.help}
+    kwargs: dict[str, Any] = {"help": param.help}
     if param.type == "bool":
         kwargs["action"] = "store_true"
     else:
@@ -117,7 +118,7 @@ def add_param_to_parser(parser, param: Param) -> None:
     parser.add_argument(*param.flags, **kwargs)
 
 
-def params_from_namespace(cmd: Command, ns) -> Dict[str, Any]:
+def params_from_namespace(cmd: Command, ns) -> dict[str, Any]:
     """Pulls this command's own params out of an argparse Namespace (or
     anything with matching attributes) into a plain dict keyed by param
     name."""

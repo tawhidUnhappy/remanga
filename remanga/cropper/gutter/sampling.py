@@ -7,15 +7,13 @@ per-page cost that must not become a per-panel one."""
 
 from __future__ import annotations
 
-from typing import Tuple
-
 import numpy as np
 from PIL import Image
 
 # (left, top, right, bottom) - Pillow crop-box order. Defined here, with the
 # page-level primitives, because it's the vocabulary every other module in
 # this package speaks in.
-PixelBox = Tuple[int, int, int, int]
+PixelBox = tuple[int, int, int, int]
 
 
 def page_grayscale_array(img: Image.Image) -> np.ndarray:

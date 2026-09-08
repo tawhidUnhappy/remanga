@@ -7,13 +7,13 @@ POST /api/shortcuts, which is the only caller.
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from remanga.json_io import read_json_or, write_json
 from remanga.paths import CONFIG_EXAMPLE_PATH, CONFIG_PATH as CONFIG_JSON_PATH
 
 
-def persist_shortcuts(shortcuts: Dict[str, Any]) -> None:
+def persist_shortcuts(shortcuts: dict[str, Any]) -> None:
     """Writes marker.shortcuts into config.json, read-merge-write style (same
     pattern as remanga.paths.save_project_metadata) so every other section is
     left untouched. If config.json doesn't exist yet - the app was running on

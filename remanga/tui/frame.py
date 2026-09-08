@@ -16,7 +16,7 @@ remember to escape anything."""
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Sequence
+from collections.abc import Sequence
 
 from rich.console import Group
 from rich.text import Text
@@ -36,7 +36,7 @@ _STYLE_ON = "green"
 _STYLE_DISABLED = "dim strike"
 
 
-def numbered_rows(choices: Sequence[Choice]) -> Dict[int, int]:
+def numbered_rows(choices: Sequence[Choice]) -> dict[int, int]:
     """Which rows get a number, and which number - {row index: 1-based
     position}, counted over the rows a number could actually pick.
 
@@ -44,7 +44,7 @@ def numbered_rows(choices: Sequence[Choice]) -> Dict[int, int]:
     numbers never point at something that can't be chosen with them. Shared
     by the renderer and by the key handler that resolves a typed digit, which
     is what keeps the digit you press and the digit you see the same."""
-    numbers: Dict[int, int] = {}
+    numbers: dict[int, int] = {}
     for index, choice in enumerate(choices):
         if choice.plain or choice.disabled:
             continue
@@ -52,7 +52,7 @@ def numbered_rows(choices: Sequence[Choice]) -> Dict[int, int]:
     return numbers
 
 
-def window_bounds(cursor: int, total: int, page_size: int) -> "tuple[int, int]":
+def window_bounds(cursor: int, total: int, page_size: int) -> tuple[int, int]:
     """The slice of a long list to actually draw, kept centered-ish on the
     cursor. Returns (start, end) as a half-open range; both are clamped so
     the window never runs past either end of the list, which is what stops
@@ -64,8 +64,8 @@ def window_bounds(cursor: int, total: int, page_size: int) -> "tuple[int, int]":
     return start, start + page_size
 
 
-def _row(choice: Choice, *, active: bool, checkable: bool, order: Optional[int],
-         number: Optional[int] = None, number_width: int = 0) -> Text:
+def _row(choice: Choice, *, active: bool, checkable: bool, order: int | None,
+         number: int | None = None, number_width: int = 0) -> Text:
     line = Text()
     line.append(f"{POINTER} " if active else "  ", style=_STYLE_MARK if active else "")
 
@@ -113,7 +113,7 @@ def menu_frame(
     note: str = "",
     checkable: bool = False,
     numbered: bool = False,
-    order: Optional[Dict[int, int]] = None,
+    order: dict[int, int] | None = None,
     empty_text: str = "no matches",
 ) -> Group:
     """Assembles one complete menu screen.
@@ -124,7 +124,7 @@ def menu_frame(
     a short menu whose answer is typed rather than arrowed to (see
     remanga.tui.select). `note` is a single line under the title for context
     the user needs while choosing (a path, a warning, a count)."""
-    lines: List[Text] = []
+    lines: list[Text] = []
 
     header = Text()
     header.append("? ", style=_STYLE_MARK)
@@ -148,12 +148,14 @@ def menu_frame(
         start, end = window_bounds(cursor, len(choices), page_size)
         if start > 0:
             lines.append(Text(f"  ↑ {start} more", style=_STYLE_HINT))
-        for i in range(start, end):
-            lines.append(_row(
+        lines.extend(
+            _row(
                 choices[i], active=(i == cursor), checkable=checkable,
                 order=(order or {}).get(i) if order is not None else None,
                 number=numbers.get(i), number_width=number_width,
-            ))
+            )
+            for i in range(start, end)
+        )
         remaining = len(choices) - end
         if remaining > 0:
             lines.append(Text(f"  ↓ {remaining} more", style=_STYLE_HINT))

@@ -23,11 +23,12 @@ from .video import VideoConfig
 from .writer import WriterConfig
 
 __all__ = [
-    "AudioConfig",
+    "TTS_ENGINES",
     "Audio8Config",
-    "IndexTTSConfig",
+    "AudioConfig",
     "CropperConfig",
     "DownloaderConfig",
+    "IndexTTSConfig",
     "MarkerConfig",
     "OCRConfig",
     "PackageConfig",
@@ -36,7 +37,6 @@ __all__ = [
     "ShortcutsConfig",
     "SystemConfig",
     "TTSConfig",
-    "TTS_ENGINES",
     "VideoConfig",
     "WriterConfig",
 ]

@@ -17,7 +17,7 @@ from pathlib import Path
 # `remanga` package itself, same as its models/scripts/ siblings, so it can't
 # import remanga.models.scripts either).
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "models" / "scripts"))
-from _hash_verify import delete_files_for_retry, verify_repo_files  # noqa: E402
+from _hash_verify import delete_files_for_retry, verify_repo_files
 
 
 def main() -> int:

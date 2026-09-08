@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import List, Optional
 
 from remanga.audio.mix import AudioProcessor
 from remanga.audio.tts import TTSEngine
@@ -28,7 +27,10 @@ from remanga.full_recap.timeline import assemble_combined_audio
 from remanga.humanize import fmt_duration
 from remanga.paths import get_chapter_dir, get_final_video_path, get_full_recap_concat_path, get_full_recap_video_path
 from remanga.reset import (
-    PROJECT_KEEP, project_wipe_candidates, reverify_chapter_downloads, wipe_project,
+    PROJECT_KEEP,
+    project_wipe_candidates,
+    reverify_chapter_downloads,
+    wipe_project,
 )
 from remanga.settings.project_prefs import cropper_config_for
 from remanga.video.compose import FrameCompositor
@@ -42,7 +44,7 @@ class FullRecapCompiler:
     own cross-chapter audio/frame assembly and a single ffmpeg encode for
     the join."""
 
-    def __init__(self, config: Optional[RemangaConfig] = None):
+    def __init__(self, config: RemangaConfig | None = None):
         self.config = config or RemangaConfig.load()
         self._tts = TTSEngine(self.config.tts, self.config.audio)
         self._mixer = AudioProcessor(self.config.audio)
@@ -139,8 +141,8 @@ class FullRecapCompiler:
         return self._renderer.render_video(project_name, chapter_num, force=force)
 
     def compile_full_manga(
-        self, project_name: str, force: bool = False, chapters: Optional[List[str]] = None,
-        force_chapters: Optional[bool] = None, regenerate_all: bool = False,
+        self, project_name: str, force: bool = False, chapters: list[str] | None = None,
+        force_chapters: bool | None = None, regenerate_all: bool = False,
     ) -> Path:
         """force controls both "recompile the join even if already compiled"
         and, by default, "force each chapter's own render too". Pass
@@ -203,13 +205,16 @@ class FullRecapCompiler:
         start_time = time.perf_counter()
         mode_note = (" [dim](regenerating everything from scratch: pages, panels, voice, mix, "
                      "render, and the join)[/]") if regenerate_all else ""
-        console.print(f"[bold cyan]Compiling {len(chapter_list)} chapter(s) into one continuous recap:[/] {', '.join(chapter_list)}{mode_note}")
+        console.print(
+            f"[bold cyan]Compiling {len(chapter_list)} chapter(s) into one continuous recap:[/] "
+            f"{', '.join(chapter_list)}{mode_note}"
+        )
 
         # Phase 1: every chapter's OWN final video first (kept, not a
         # throwaway) - each one independently resumable/cheap-to-rebuild via
         # TTSEngine/AudioProcessor/VideoRenderer's own caching (unless
         # regenerate_all says to ignore that caching entirely).
-        chapter_videos: List[Path] = []
+        chapter_videos: list[Path] = []
         for i, chapter_num in enumerate(chapter_list, start=1):
             console.print(f"[cyan]({i}/{len(chapter_list)}) Preparing chapter {chapter_num}...[/]")
             chapter_videos.append(self._ensure_chapter_video(
@@ -226,7 +231,7 @@ class FullRecapCompiler:
             raise RuntimeError("No panels found across any chapter - nothing to compile.")
 
         concat_file = get_full_recap_concat_path(project_name)
-        with open(concat_file, "w", encoding="utf-8") as f:
+        with concat_file.open("w", encoding="utf-8") as f:
             for frame_path, duration in frame_timeline:
                 f.write(f"file '{frame_path.resolve()}'\n")
                 f.write(f"duration {duration}\n")
@@ -237,7 +242,10 @@ class FullRecapCompiler:
         use_gpu = gpu_ffmpeg is not None
         codec = self.config.system.gpu_codec if use_gpu else self.config.system.fallback_codec
         ffmpeg_bin = gpu_ffmpeg or "ffmpeg"
-        console.print(f"[cyan]Rendering full-manga video using codec:[/] [bold]{codec}[/] [dim]({'Hardware GPU' if use_gpu else 'CPU fallback'})[/]")
+        console.print(
+            f"[cyan]Rendering full-manga video using codec:[/] [bold]{codec}[/] "
+            f"[dim]({'Hardware GPU' if use_gpu else 'CPU fallback'})[/]"
+        )
         if note:
             console.print(f"[dim]({note})[/]")
 
@@ -268,7 +276,10 @@ class FullRecapCompiler:
                        f"[dim]({len(chapter_list)} chapters, {fmt_duration(total_video_sec)} runtime, "
                        f"{fmt_duration(elapsed_sec)} to compile)[/]")
         console.print(f"[bold green]Location:[/] {_esc(str(final_video))}")
-        console.print(f"[dim]Per-chapter videos kept at:[/] {_esc(str(get_final_video_path(project_name, chapter_list[0]).parent.parent))}/*/")
+        console.print(
+            f"[dim]Per-chapter videos kept at:[/] "
+            f"{_esc(str(get_final_video_path(project_name, chapter_list[0]).parent.parent))}/*/"
+        )
         return final_video
 
 

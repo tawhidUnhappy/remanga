@@ -8,7 +8,7 @@ audio/video/webui call the CLI has always made, uniform in shape
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 from rich.markup import escape
 
@@ -17,14 +17,13 @@ from remanga.config import RemangaConfig
 from remanga.console import console
 from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
-from remanga.pipeline import load_pipeline, run_pipeline
 from remanga.narration import TEMPLATE, create_narration_file
 from remanga.packaging import package_chapter
+from remanga.pipeline import load_pipeline, run_pipeline
 from remanga.settings.project_prefs import cropper_config_for, parse_package_formats
-from remanga.video import VideoRenderer
-from remanga.webui import launch_and_wait as launch_panel_marker
-from remanga.webui import launch_and_wait_writer
 from remanga.tui import confirm
+from remanga.video import VideoRenderer
+from remanga.webui import launch_and_wait as launch_panel_marker, launch_and_wait_writer
 
 # How many changed lines to show in full before summarizing the rest - enough
 # to judge whether the normalizer is doing what you want, short of scrolling
@@ -32,13 +31,13 @@ from remanga.tui import confirm
 PREVIEW_LIMIT = 8
 
 
-def download(params: Dict[str, Any], config: RemangaConfig) -> None:
+def download(params: dict[str, Any], config: RemangaConfig) -> None:
     MangaDexDownloader(config.downloader).download_chapter(
         params.get("url"), params["chapter"], params["project"]
     )
 
 
-def download_chapters(params: Dict[str, Any], config: RemangaConfig) -> None:
+def download_chapters(params: dict[str, Any], config: RemangaConfig) -> None:
     """Download several chapters at once - a comma list and/or numeric
     ranges ('1,3,7-9'), 'all' for every chapter MangaDex has, or (the
     common case, and the only option when --chapters is left unset from an
@@ -79,11 +78,11 @@ def download_chapters(params: Dict[str, Any], config: RemangaConfig) -> None:
     downloader.download_chapters(project, chapter_nums, manga_id_or_url, force=force)
 
 
-def mark(params: Dict[str, Any], config: RemangaConfig) -> None:
+def mark(params: dict[str, Any], config: RemangaConfig) -> None:
     launch_panel_marker(params["project"], params["chapter"], config.marker)
 
 
-def narration_init(params: Dict[str, Any], config: RemangaConfig) -> None:
+def narration_init(params: dict[str, Any], config: RemangaConfig) -> None:
     """Creates the chapter's narration.json - a full per-panel template, or a
     genuinely empty file. See remanga/narration.py for what each mode
     writes and why both exist."""
@@ -93,7 +92,7 @@ def narration_init(params: Dict[str, Any], config: RemangaConfig) -> None:
     )
 
 
-def normalize_narration_cmd(params: Dict[str, Any], config: RemangaConfig) -> None:
+def normalize_narration_cmd(params: dict[str, Any], config: RemangaConfig) -> None:
     """Rewrites this chapter's narration.json into text that's safe to
     synthesize - see remanga/narration/normalize.py for exactly what gets
     removed and what is deliberately kept (`?`, `!` and `...` always are).
@@ -151,7 +150,7 @@ def normalize_narration_cmd(params: Dict[str, Any], config: RemangaConfig) -> No
     _print_advisories(advise(entries))
 
 
-def _print_advisories(advisories: List[Any]) -> None:
+def _print_advisories(advisories: list[Any]) -> None:
     """Prints what the normalizer noticed but deliberately did not touch -
     problems whose only honest fix is a rewrite (see
     remanga/narration/advisories.py). Reported on every run, including the
@@ -167,17 +166,17 @@ def _print_advisories(advisories: List[Any]) -> None:
         console.print(f"    [dim]{escape(advisory.fix)}[/]")
 
 
-def _rule_summary(rules: List[str]) -> str:
+def _rule_summary(rules: list[str]) -> str:
     from remanga.narration import RULE_BY_NAME
 
     return ", ".join(RULE_BY_NAME[name].summary for name in rules)
 
 
-def write(params: Dict[str, Any], config: RemangaConfig) -> None:
+def write(params: dict[str, Any], config: RemangaConfig) -> None:
     launch_and_wait_writer(params["project"], params["chapter"], config.writer, config.ocr)
 
 
-def review(params: Dict[str, Any], config: RemangaConfig) -> None:
+def review(params: dict[str, Any], config: RemangaConfig) -> None:
     # Deferred import: the wizard imports the command registry, so a
     # top-level import of it here would be circular.
     from remanga.wizard import run_narration_review_loop
@@ -185,7 +184,7 @@ def review(params: Dict[str, Any], config: RemangaConfig) -> None:
     run_narration_review_loop(params["project"], params["chapter"], config)
 
 
-def crop(params: Dict[str, Any], config: RemangaConfig) -> None:
+def crop(params: dict[str, Any], config: RemangaConfig) -> None:
     """Cuts the panels, and only that - packaging is `package`'s job."""
     from remanga.settings import package_summary
 
@@ -198,7 +197,7 @@ def crop(params: Dict[str, Any], config: RemangaConfig) -> None:
         console.print(f"[dim]Run `package` to build the upload formats ({formats}).[/]")
 
 
-def package(params: Dict[str, Any], config: RemangaConfig) -> None:
+def package(params: dict[str, Any], config: RemangaConfig) -> None:
     """Builds the chosen upload formats from an already-cropped chapter's
     panels/ - the only thing that packages a chapter (`crop` cuts panels and
     stops; see remanga/packaging.py).
@@ -214,7 +213,7 @@ def package(params: Dict[str, Any], config: RemangaConfig) -> None:
     )
 
 
-def tts(params: Dict[str, Any], config: RemangaConfig) -> None:
+def tts(params: dict[str, Any], config: RemangaConfig) -> None:
     """Synthesizes this chapter's narration. `--engine` swaps the engine for
     this run only - config.json keeps whatever it says, since a one-off
     "try the other voice model on this chapter" shouldn't silently redefine
@@ -235,19 +234,19 @@ def tts(params: Dict[str, Any], config: RemangaConfig) -> None:
     )
 
 
-def mix(params: Dict[str, Any], config: RemangaConfig) -> None:
+def mix(params: dict[str, Any], config: RemangaConfig) -> None:
     AudioProcessor(config.audio).mix_master_audio(
         params["project"], params["chapter"], bgm_override=params.get("bgm"), interactive=True
     )
 
 
-def render(params: Dict[str, Any], config: RemangaConfig) -> None:
+def render(params: dict[str, Any], config: RemangaConfig) -> None:
     VideoRenderer(config.system, config.video).render_video(
         params["project"], params["chapter"], force=bool(params.get("force"))
     )
 
 
-def run(params: Dict[str, Any], config: RemangaConfig) -> None:
+def run(params: dict[str, Any], config: RemangaConfig) -> None:
     """Runs this project's pipeline.json, or an explicit --steps override."""
     steps_raw = params.get("steps")
     steps = [s.strip() for s in steps_raw.split(",") if s.strip()] if steps_raw else load_pipeline(params["project"])

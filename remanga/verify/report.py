@@ -30,9 +30,15 @@ def print_chapter_result(r: ChapterVerification) -> None:
     console.print(line + "[bold red]ISSUES FOUND[/]")
     if r.panel_narration_mismatch:
         console.print(f"  [red]panels/narration.json mismatch:[/] {_esc(r.panel_narration_mismatch)}")
-        console.print(f"  [dim]-> fix: re-run crop/write/review for chapter {r.chapter_num} so panels and narration line up again[/]")
+        console.print(
+            f"  [dim]-> fix: re-run crop/write/review for chapter {r.chapter_num} so panels and narration line up "
+            f"again[/]"
+        )
     if r.audio_clips_missing:
-        console.print(f"  [red]{len(r.audio_clips_missing)}/{r.narration_entries} voice clip(s) missing:[/] {', '.join(r.audio_clips_missing[:10])}{' ...' if len(r.audio_clips_missing) > 10 else ''}")
+        console.print(
+            f"  [red]{len(r.audio_clips_missing)}/{r.narration_entries} voice clip(s) missing:[/] "
+            f"{', '.join(r.audio_clips_missing[:10])}{' ...' if len(r.audio_clips_missing) > 10 else ''}"
+        )
         console.print(f"  [dim]-> fix: remanga tts --project <p> --chapter {r.chapter_num}[/]")
     if r.master_audio and not r.master_audio.ok:
         console.print(f"  [red]master_audio.wav corrupt/truncated:[/] {_esc(r.master_audio.error)}")

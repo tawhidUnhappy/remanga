@@ -28,7 +28,6 @@ from __future__ import annotations
 import json
 import zipfile
 from pathlib import Path
-from typing import List, Tuple
 
 import numpy as np
 
@@ -82,8 +81,8 @@ def build_llm_pdf_bundle(
     config: CropperConfig,
     project_name: str,
     chapter_num: str,
-    panel_paths: List[Path],
-) -> List[Path]:
+    panel_paths: list[Path],
+) -> list[Path]:
     """Builds panels_pdf/panels_1.pdf, panels_2.pdf, ... - see module
     docstring. A no-op returning [] if disabled or there are no panels.
     Clears out any stale parts from a previous run first. If any single panel
@@ -110,7 +109,7 @@ def build_llm_pdf_bundle(
 
     max_bytes = max(1, int(package.max_mb * 1024 * 1024))
 
-    encoded: List[Tuple[str, ImagePage]] = []
+    encoded: list[tuple[str, ImagePage]] = []
     for path in sorted(panel_paths):
         try:
             page = _encode_panel(path)
@@ -132,7 +131,7 @@ def build_llm_pdf_bundle(
     total_parts = len(parts)
     identity = chapter_identity_fields(project_name, chapter_num)
     full_ids = [item_id for item_id, _ in encoded]
-    written: List[Path] = []
+    written: list[Path] = []
     for idx, part in enumerate(parts, start=1):
         part_ids = [item_id for item_id, _ in part]
         info = build_part_info(identity, full_ids, part_ids, idx, total_parts)

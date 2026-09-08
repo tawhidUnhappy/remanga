@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
+
 from pydub import AudioSegment
 
 from remanga import settings
@@ -14,11 +15,11 @@ from remanga.paths import get_audio_dir, get_audio_timing_path, get_master_audio
 
 
 class AudioProcessor:
-    def __init__(self, config: Optional[AudioConfig] = None):
+    def __init__(self, config: AudioConfig | None = None):
         self.config = config or AudioConfig()
 
     @staticmethod
-    def _fingerprint(timing_path: Path, config: AudioConfig) -> Dict[str, Any]:
+    def _fingerprint(timing_path: Path, config: AudioConfig) -> dict[str, Any]:
         """Everything that determines mix_master_audio's output for a given
         audio_timing.json: the timing file's own mtime (a reliable "did the
         synthesized audio change" signal now that tts.py only rewrites it
@@ -38,7 +39,7 @@ class AudioProcessor:
         self,
         project_name: str,
         chapter_num: str,
-        bgm_override: Optional[str] = None,
+        bgm_override: str | None = None,
         interactive: bool = True,
         force: bool = False,
     ) -> Path:
@@ -83,10 +84,12 @@ class AudioProcessor:
         timing_info = read_json(timing_path)
 
         fingerprint = self._fingerprint(timing_path, self.config)
-        if not force and master_final_path.exists() and master_final_path.stat().st_size > 1000:
-            if read_json_or(fingerprint_path, None) == fingerprint:
-                console.print(f"[dim]✓ master_audio.wav for chapter {chapter_num} is already up to date - skipping remix.[/]")
-                return master_final_path
+        if (not force and master_final_path.exists() and master_final_path.stat().st_size > 1000
+                and read_json_or(fingerprint_path, None) == fingerprint):
+            console.print(
+                f"[dim]✓ master_audio.wav for chapter {chapter_num} is already up to date - skipping remix.[/]"
+            )
+            return master_final_path
 
         panels = timing_info.get("panels", [])
         console.print(f"[cyan]Assembling master audio stream for chapter {chapter_num}...[/]")
@@ -132,7 +135,10 @@ class AudioProcessor:
             # Overlay voice over BGM
             master_audio = bgm_loop.overlay(master_audio)
         elif self.config.bgm_enabled:
-            console.print(f"[yellow]BGM is enabled in config, but file was not found at: {_esc(str(self.config.bgm_path))}. Continuing without BGM.[/]")
+            console.print(
+                f"[yellow]BGM is enabled in config, but file was not found at: {_esc(str(self.config.bgm_path))}. "
+                f"Continuing without BGM.[/]"
+            )
 
         # 3. Export Raw Master Track
         master_audio.export(master_raw_path, format="wav")
@@ -152,7 +158,9 @@ class AudioProcessor:
                 if master_raw_path.exists():
                     master_raw_path.unlink()
             except Exception as e:
-                console.print(f"[yellow]Loudnorm filter warning: {_esc(str(e))}. Falling back to standard raw master audio.[/]")
+                console.print(
+                    f"[yellow]Loudnorm filter warning: {_esc(str(e))}. Falling back to standard raw master audio.[/]"
+                )
                 master_raw_path.rename(master_final_path)
         else:
             master_raw_path.rename(master_final_path)

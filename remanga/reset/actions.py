@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
-from typing import List
 
 from remanga.console import console
 from remanga.json_io import write_json
@@ -14,7 +13,7 @@ from remanga.paths import get_chapter_dir, get_manifest_path, read_manifest
 from remanga.reset.entries import project_wipe_candidates, restart_candidates, wipeable_entries
 
 
-def _delete_all(entries: List[Path]) -> None:
+def _delete_all(entries: list[Path]) -> None:
     for entry in entries:
         if entry.is_dir():
             shutil.rmtree(entry)
@@ -39,7 +38,7 @@ def restart_chapter(
     *,
     mode: str = "hard",
     reverify_downloads: bool = True,
-) -> List[Path]:
+) -> list[Path]:
     """Deletes generated chapter artifacts while preserving the source folder
     (or the part of it the mode keeps) - see remanga.reset.modes for what
     each mode keeps. Every mode wipes every generated {manga}/{kind}/
@@ -72,7 +71,7 @@ def restart_chapter(
 
 def wipe_chapter(
     project_name: str, chapter_num: str, keep_names: set, *, reverify_downloads: bool = True,
-) -> List[Path]:
+) -> list[Path]:
     """Deletes every entry from wipeable_entries() whose name isn't in
     `keep_names` - the fully dynamic counterpart to the fixed restart modes,
     letting a caller keep any combination at all (e.g. keep video/ and
@@ -95,7 +94,7 @@ def wipe_chapter(
     return candidates
 
 
-def wipe_project(project_name: str) -> List[Path]:
+def wipe_project(project_name: str) -> list[Path]:
     """Deletes every generated artifact in the whole project in one sweep -
     audio/, video/, panels_zip/ and every other directory under
     projects/{manga}/ - keeping only PROJECT_KEEP (chapters/ and the

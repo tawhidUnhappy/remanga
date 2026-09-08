@@ -28,7 +28,6 @@ and the sheets_zip/ folder.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
 
 from remanga.config import CropperConfig
 from remanga.cropper.zip_bundle import build_zip_bundle
@@ -39,8 +38,8 @@ def build_llm_sheets_bundle(
     config: CropperConfig,
     project_name: str,
     chapter_num: str,
-    sheet_paths: List[Path],
-) -> List[Path]:
+    sheet_paths: list[Path],
+) -> list[Path]:
     """Builds {manga}/sheets_zip/chapter_N/sheets_1.zip, sheets_2.zip, ... -
     see module docstring."""
     package = config.package

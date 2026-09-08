@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from remanga.audio.synth.base import BaseWorkerSynthesizer
 from remanga.config import AudioConfig, TTSConfig
@@ -50,7 +50,7 @@ class Audio8Synthesizer(BaseWorkerSynthesizer):
         python = get_tool_python("audio8")
         script = get_scripts_dir("audio") / "audio8_worker.py"
 
-        cmd: List[str] = [
+        cmd: list[str] = [
             str(python), "-u", str(script),
             "--model_dir", str(model_dir.resolve()),
         ]
@@ -65,7 +65,7 @@ class Audio8Synthesizer(BaseWorkerSynthesizer):
     def _synth_timeout_seconds(self) -> float:
         return self.tts_config.synth_timeout_seconds
 
-    def _build_request(self, text: str, spk_prompt_path: str, output_wav: Path) -> Dict[str, Any]:
+    def _build_request(self, text: str, spk_prompt_path: str, output_wav: Path) -> dict[str, Any]:
         # Read fresh each call rather than caching at __init__ - the file is
         # small, this runs once per panel not per token, and it means an
         # edit to the transcript file takes effect on the very next panel
@@ -81,7 +81,7 @@ class Audio8Synthesizer(BaseWorkerSynthesizer):
             "max_new_tokens": self.engine_config.max_new_tokens,
         }
 
-    def _post_synthesize(self, output_wav: Path, request: Dict[str, Any]) -> None:
+    def _post_synthesize(self, output_wav: Path, request: dict[str, Any]) -> None:
         # No model-side speed control for this engine - fall back to the
         # shared ffmpeg-atempo path whenever tts.speed isn't 1.0.
         if abs(self.tts_config.speed - 1.0) >= 0.02:

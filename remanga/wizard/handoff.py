@@ -12,8 +12,8 @@ opened."""
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Iterable, Sequence, Tuple
 
 from remanga.console import console, display_path, print_path
 from remanga.tui import ask_text
@@ -24,7 +24,7 @@ def print_section(title: str) -> None:
     console.print(f"\n[bold]{title}[/]")
 
 
-def print_paths(items: Iterable[Tuple[Path, str]], indent: str = "  ") -> None:
+def print_paths(items: Iterable[tuple[Path, str]], indent: str = "  ") -> None:
     """Prints (path, note) pairs, one clickable path per line."""
     for path, note in items:
         suffix = f"  [dim]({note})[/]" if note else ""

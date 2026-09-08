@@ -12,10 +12,10 @@ Written to sheets_folders/folder_001/, sheets_folders/folder_002/, ....
 
 from __future__ import annotations
 
+import contextlib
 import math
 import shutil
 from pathlib import Path
-from typing import List
 
 from remanga.console import console, escape as _esc
 
@@ -28,10 +28,10 @@ class PanelFolderGenerator:
 
     @staticmethod
     def create_panel_folders(
-        panel_paths: List[Path],
+        panel_paths: list[Path],
         output_dir: Path,
         panels_per_folder: int = 10,
-    ) -> List[Path]:
+    ) -> list[Path]:
         output_dir.mkdir(parents=True, exist_ok=True)
         # Full wipe first, same rule as sheets.py - a stray leftover folder
         # from a previous run (different group size, different panel count)
@@ -40,10 +40,8 @@ class PanelFolderGenerator:
             if old.is_dir():
                 shutil.rmtree(old, ignore_errors=True)
             elif old.is_file():
-                try:
+                with contextlib.suppress(Exception):
                     old.unlink()
-                except Exception:
-                    pass
 
         if not panel_paths:
             return []
@@ -57,7 +55,7 @@ class PanelFolderGenerator:
             f"({panels_per_folder} panels/folder)...[/]"
         )
 
-        folder_paths: List[Path] = []
+        folder_paths: list[Path] = []
         for folder_idx in range(total_folders):
             chunk = panel_paths[folder_idx * panels_per_folder: (folder_idx + 1) * panels_per_folder]
             folder_name = f"folder_{str(folder_idx + 1).zfill(PanelFolderGenerator.FOLDER_WIDTH)}"

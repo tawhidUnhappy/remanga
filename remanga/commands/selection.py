@@ -8,8 +8,6 @@ against chapters the project really has."""
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 from remanga.full_recap import chapter_sort_key, discover_chapters
 
 # Applied whenever --keep is left unset entirely (None) - the three things
@@ -20,7 +18,7 @@ from remanga.full_recap import chapter_sort_key, discover_chapters
 DEFAULT_WIPE_KEEP = {"pages", "crops.json", "narration.json"}
 
 
-def split_chapters(raw: Optional[str]) -> Optional[List[str]]:
+def split_chapters(raw: str | None) -> list[str] | None:
     """A plain comma list, deduplicated and sorted in reading order. None
     stays None, which every caller reads as "every chapter"."""
     if not raw:
@@ -28,7 +26,7 @@ def split_chapters(raw: Optional[str]) -> Optional[List[str]]:
     return sorted({c.strip() for c in raw.split(",") if c.strip()}, key=chapter_sort_key)
 
 
-def parse_chapter_selection(raw: str, project_name: str) -> List[str]:
+def parse_chapter_selection(raw: str, project_name: str) -> list[str]:
     """Comma-separated chapter numbers and/or numeric ranges ('N-M') - e.g.
     '1,3,7-9'.
 
@@ -62,7 +60,7 @@ def parse_chapter_selection(raw: str, project_name: str) -> List[str]:
     return sorted(result, key=chapter_sort_key)
 
 
-def resolve_wipe_keep(keep_raw: Optional[str], project_name: Optional[str] = None) -> set:
+def resolve_wipe_keep(keep_raw: str | None, project_name: str | None = None) -> set:
     """What a wipe keeps: 'none'/'nothing' -> absolutely everything goes;
     any other value -> that comma list, verbatim.
 

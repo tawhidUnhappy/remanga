@@ -9,8 +9,9 @@ of them reports the same way."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List
+from typing import Any
 
 from remanga import reset
 from remanga.commands.selection import parse_chapter_selection, resolve_wipe_keep
@@ -21,7 +22,7 @@ from remanga.tui import confirm
 from remanga.webui import launch_and_wait as launch_panel_marker
 
 
-def _preview(per_chapter: Dict[str, List[Path]]) -> int:
+def _preview(per_chapter: dict[str, list[Path]]) -> int:
     """Prints exactly what's about to be deleted, chapter by chapter, and
     returns the total count. One chapter prints as a flat list; several
     print grouped, since "42 items" across nine chapters is not something
@@ -40,7 +41,7 @@ def _preview(per_chapter: Dict[str, List[Path]]) -> int:
 
 def _confirm_and_delete(
     *,
-    per_chapter: Dict[str, List[Path]],
+    per_chapter: dict[str, list[Path]],
     kept: str,
     force: bool,
     delete: Callable[[str], None],
@@ -73,7 +74,7 @@ def _confirm_and_delete(
     return True
 
 
-def _remember_keep_choice(project: str, params: Dict[str, Any], keep_names: set, wiped: bool) -> None:
+def _remember_keep_choice(project: str, params: dict[str, Any], keep_names: set, wiped: bool) -> None:
     """Saves an explicitly-chosen keep-list to the project so the next
     chapter's wipe opens with it already selected.
 
@@ -85,7 +86,7 @@ def _remember_keep_choice(project: str, params: Dict[str, Any], keep_names: set,
         console.print(f"[dim]Keep-list remembered for '{project}' - the next wipe starts from it.[/]")
 
 
-def restart(params: Dict[str, Any], config: RemangaConfig) -> None:
+def restart(params: dict[str, Any], config: RemangaConfig) -> None:
     project, chapter = params["project"], params["chapter"]
     mode = reset.RESTART_MODE_BY_NAME[params.get("mode") or "hard"]
     candidates = reset.restart_candidates(project, chapter, mode=mode.deletes_like)
@@ -106,12 +107,14 @@ def restart(params: Dict[str, Any], config: RemangaConfig) -> None:
     )
 
     if deleted and mode.reopen_marker:
-        console.print("[yellow]Reopening the Panel Marker - your existing marks are pre-loaded (MAGI won't touch them).[/]")
+        console.print(
+            "[yellow]Reopening the Panel Marker - your existing marks are pre-loaded (MAGI won't touch them).[/]"
+        )
         launch_panel_marker(project, chapter, config.marker)
         console.print(f"[bold green]✓ Marks for Chapter {chapter} updated and saved.[/]")
 
 
-def wipe(params: Dict[str, Any], config: RemangaConfig) -> None:
+def wipe(params: dict[str, Any], config: RemangaConfig) -> None:
     project, chapter = params["project"], params["chapter"]
     keep_names = resolve_wipe_keep(params.get("keep"), project)
     candidates = [e for e in reset.wipeable_entries(project, chapter) if e.name not in keep_names]
@@ -130,7 +133,7 @@ def wipe(params: Dict[str, Any], config: RemangaConfig) -> None:
     _remember_keep_choice(project, params, keep_names, wiped)
 
 
-def wipe_chapters(params: Dict[str, Any], config: RemangaConfig) -> None:
+def wipe_chapters(params: dict[str, Any], config: RemangaConfig) -> None:
     project = params["project"]
     keep_names = resolve_wipe_keep(params.get("keep"), project)
     chapters = parse_chapter_selection(params["chapters"], project)

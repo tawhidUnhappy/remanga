@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import tempfile
@@ -11,7 +12,7 @@ from typing import Any
 
 def read_json(path: Path | str) -> Any:
     """Reads and parses a JSON file. Raises FileNotFoundError/JSONDecodeError if missing or invalid."""
-    with open(path, "r", encoding="utf-8") as f:
+    with Path(path).open(encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -26,7 +27,7 @@ def read_json_or(path: Path | str, default: Any = None) -> Any:
 def write_json(path: Path | str, data: Any, indent: int = 2) -> None:
     """Serializes `data` as indented JSON, creating parent directories as needed.
     Writes to a temp file in the same directory, then atomically renames it over
-    the target (os.replace) - a write-in-place here would leave `path` holding a
+    the target (Path.replace) - a write-in-place here would leave `path` holding a
     truncated/corrupt file if the process is killed mid-write, which matters more
     now that narration.json gets autosaved on close to every keystroke pause in
     the Narration Writer (see webui/writer_routes.py) rather than only on an
@@ -37,12 +38,10 @@ def write_json(path: Path | str, data: Any, indent: int = 2) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=indent)
-        os.replace(tmp_path, path)
+        Path(tmp_path).replace(path)
     except BaseException:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
+        with contextlib.suppress(OSError):
+            Path(tmp_path).unlink()
         raise
 
 

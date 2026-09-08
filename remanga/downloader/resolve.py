@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import re
 import time
-from typing import Any, Dict, List
+from typing import Any
+
 import requests
 from rich.progress import BarColumn, Progress, TextColumn
 
 from remanga.config import DownloaderConfig
 from remanga.console import console, escape as _esc
-
 
 BASE_URL = "https://api.mangadex.org"
 
@@ -68,10 +68,10 @@ class MangaDexResolver:
         return self.search_manga_by_title(raw_id)
 
     @staticmethod
-    def _pick_title(title_map: Dict[str, str]) -> str:
+    def _pick_title(title_map: dict[str, str]) -> str:
         """MangaDex's `attributes.title` is a locale -> title map (`{"en": ..., "ja": ...}`);
         prefer English, otherwise whatever locale happens to be present."""
-        return title_map.get("en") or (list(title_map.values())[0] if title_map else "Unknown Title")
+        return title_map.get("en") or (next(iter(title_map.values())) if title_map else "Unknown Title")
 
     def search_manga_by_title(self, title: str) -> str:
         """Search MangaDex for a manga title and return the top matching ID."""
@@ -90,7 +90,7 @@ class MangaDexResolver:
         console.print(f"[green]Found:[/] {found_title} [dim]({manga_id})[/]")
         return manga_id
 
-    def get_manga_info(self, manga_id: str) -> Dict[str, str]:
+    def get_manga_info(self, manga_id: str) -> dict[str, str]:
         """Fetch the facts about a manga that remanga persists in
         project.json, in one request: its display title and its original
         language.
@@ -118,9 +118,9 @@ class MangaDexResolver:
         """Just the display title - see get_manga_info."""
         return self.get_manga_info(manga_id)["title"]
 
-    def list_chapters(self, manga_id: str) -> List[Dict[str, Any]]:
+    def list_chapters(self, manga_id: str) -> list[dict[str, Any]]:
         """Fetch all chapters for a manga filtered by language with pagination and polite pacing."""
-        chapters: List[Dict[str, Any]] = []
+        chapters: list[dict[str, Any]] = []
         limit = 100
         offset = 0
 
@@ -129,7 +129,9 @@ class MangaDexResolver:
         # redrawing at Rich's ~10-12.5Hz default is what a stuck-terminal-
         # after-screen-lock report traced back to; 4Hz is still smooth and
         # writes a lot less while nothing's actually draining the terminal.
-        with Progress(TextColumn("[progress.description]{task.description}"), BarColumn(), refresh_per_second=4) as progress:
+        with Progress(
+            TextColumn("[progress.description]{task.description}"), BarColumn(), refresh_per_second=4
+        ) as progress:
             task = progress.add_task("[cyan]Fetching chapter feed...", total=None)
             while True:
                 res = self.request_with_retry(

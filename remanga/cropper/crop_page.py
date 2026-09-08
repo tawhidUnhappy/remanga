@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from PIL import Image, ImageOps
 
@@ -26,7 +26,7 @@ class PageCropResult:
     """Everything one page's worth of cropping produced, so the chapter-level
     loop in crop.py only has to accumulate these, not track loose counters."""
 
-    panel_paths: List[Path] = field(default_factory=list)
+    panel_paths: list[Path] = field(default_factory=list)
     gutter_panels_adjusted: int = 0
     gutter_edges_adjusted: int = 0
     duplicate_panels_dropped: int = 0
@@ -34,13 +34,13 @@ class PageCropResult:
 
 
 def crop_page(
-    page_entry: Dict[str, Any],
+    page_entry: dict[str, Any],
     pages_dir: Path,
     panels_dir: Path,
     chapter_num,
     page_number: int,
     config: CropperConfig,
-) -> Optional[PageCropResult]:
+) -> PageCropResult | None:
     """Crops every panel on one crops.json page entry. Returns None if the
     page was skipped (not a story page, no panels, or its image couldn't be
     located) - the caller just moves on to the next page_entry in that case.
@@ -106,12 +106,12 @@ def crop_page(
             if gray_arr is not None else None
         )
 
-        valid_panels, original_boxes, panel_boxes = resolve_page_panel_boxes(
+        _valid_panels, original_boxes, panel_boxes = resolve_page_panel_boxes(
             panels, img_w, img_h, gray_arr, bg_level, config
         )
 
         panel_number = 1  # resets every page - see panel_stem's docstring
-        for panel, original_box, crop_box in zip(valid_panels, original_boxes, panel_boxes):
+        for original_box, crop_box in zip(original_boxes, panel_boxes, strict=True):
             if config.snap_to_gutters:
                 adjusted = count_adjusted_edges(original_box, crop_box)
                 if adjusted:

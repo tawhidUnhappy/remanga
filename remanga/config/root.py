@@ -19,13 +19,16 @@ lands depends only on which config object it was handed."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from pydantic import BaseModel, Field, PrivateAttr
 
 from remanga.json_io import read_json, write_json
 from remanga.paths import (
-    CONFIG_EXAMPLE_PATH, CONFIG_PATH, load_project_metadata, save_project_metadata,
+    CONFIG_EXAMPLE_PATH,
+    CONFIG_PATH,
+    load_project_metadata,
+    save_project_metadata,
 )
 
 from .audio import AudioConfig
@@ -38,7 +41,6 @@ from .system import SystemConfig
 from .tts import LEGACY_INDEXTTS_FIELDS, TTSConfig
 from .video import VideoConfig
 from .writer import WriterConfig
-
 
 # Where a project's own overrides live inside its project.json.
 PROJECT_SETTINGS_KEY = "settings"
@@ -62,10 +64,10 @@ def is_project_scoped(dotted: str) -> bool:
     return dotted.startswith(PROJECT_SCOPED_PREFIXES)
 
 
-def _flatten(model: BaseModel, prefix: str = "") -> Dict[str, Any]:
+def _flatten(model: BaseModel, prefix: str = "") -> dict[str, Any]:
     """Every leaf field of a config model as {dotted name: value}. Nested
     models recurse; anything else (including lists) is a leaf."""
-    flat: Dict[str, Any] = {}
+    flat: dict[str, Any] = {}
     for name in type(model).model_fields:
         value = getattr(model, name)
         dotted = f"{prefix}{name}"
@@ -84,7 +86,7 @@ def _flatten(model: BaseModel, prefix: str = "") -> Dict[str, Any]:
 # narrator must keep it under whichever engine it is run with. Without this
 # the keys would simply not resolve and _apply would drop them in silence,
 # which is exactly how a project quietly reverts to the machine's voice.
-def _migrate_override_key(dotted: str) -> Tuple[str, ...]:
+def _migrate_override_key(dotted: str) -> tuple[str, ...]:
     """The dotted path(s) an override key applies to today. Anything that
     isn't a legacy tts key is returned unchanged, as a single path."""
     if dotted == "tts.spk_audio_prompt":
@@ -122,13 +124,13 @@ class RemangaConfig(BaseModel):
     # The manga this instance is scoped to, if any. Set by for_project() and
     # read by save() - it's the whole difference between "change this setting"
     # and "change this setting for this manga".
-    _project: Optional[str] = PrivateAttr(default=None)
+    _project: str | None = PrivateAttr(default=None)
 
     @property
-    def project(self) -> Optional[str]:
+    def project(self) -> str | None:
         return self._project
 
-    def for_project(self, project_name: str) -> "RemangaConfig":
+    def for_project(self, project_name: str) -> RemangaConfig:
         """This machine's configuration as it applies to one manga: a copy
         with that project's saved overrides layered on, tagged so that saving
         it writes them back where they came from.
@@ -146,7 +148,7 @@ class RemangaConfig(BaseModel):
         return scoped
 
     @classmethod
-    def load(cls, config_path: Optional[Path | str] = None) -> "RemangaConfig":
+    def load(cls, config_path: Path | str | None = None) -> RemangaConfig:
         """Load configuration from JSON file or create with defaults."""
         target_path = Path(config_path) if config_path else CONFIG_PATH
         if not target_path.exists():

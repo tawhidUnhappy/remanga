@@ -20,7 +20,9 @@ def configure_resolution(config: RemangaConfig) -> None:
         return
     if picked == CUSTOM:
         width = int(ask_number("Width in pixels", default=config.video.width, minimum=16, maximum=15360, integer=True))
-        height = int(ask_number("Height in pixels", default=config.video.height, minimum=16, maximum=8640, integer=True))
+        height = int(ask_number(
+            "Height in pixels", default=config.video.height, minimum=16, maximum=8640, integer=True
+        ))
     else:
         width, height = picked
     set_field(config, "video.width", width, save=False)

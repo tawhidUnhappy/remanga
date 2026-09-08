@@ -12,12 +12,15 @@ keeps working unchanged."""
 from __future__ import annotations
 
 import re
-from typing import Set
 
 from remanga.paths import REPO_ROOT, TOOLS_DIR, get_scripts_dir, get_tool_python
 
 __all__ = [
-    "REPO_ROOT", "TOOLS_DIR", "get_tool_python", "get_scripts_dir", "extract_missing_packages",
+    "REPO_ROOT",
+    "TOOLS_DIR",
+    "extract_missing_packages",
+    "get_scripts_dir",
+    "get_tool_python",
 ]
 
 # Two shapes of "you're missing a package" error get auto-healed (see
@@ -41,7 +44,7 @@ _IMPORT_TO_PIP_NAME = {
 }
 
 
-def extract_missing_packages(error_text: str) -> Set[str]:
+def extract_missing_packages(error_text: str) -> set[str]:
     """Parses an error message for missing package name(s), pip-installable
     as-is. Returns an empty set if the message doesn't match a known shape."""
     match = _HF_MISSING_PKG_RE.search(error_text)

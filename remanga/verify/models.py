@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
 
 
 @dataclass
@@ -15,7 +14,7 @@ class MediaCheck:
     path: Path
     exists: bool = False
     decodable: bool = False
-    duration_sec: Optional[float] = None
+    duration_sec: float | None = None
     has_audio: bool = False
     has_video: bool = False
     error: str = ""
@@ -30,9 +29,9 @@ class ChapterVerification:
     chapter_num: str
     narration_entries: int = 0
     audio_clips_found: int = 0
-    audio_clips_missing: List[str] = field(default_factory=list)
-    master_audio: Optional[MediaCheck] = None
-    video: Optional[MediaCheck] = None
+    audio_clips_missing: list[str] = field(default_factory=list)
+    master_audio: MediaCheck | None = None
+    video: MediaCheck | None = None
     duration_mismatch: str = ""
     panel_narration_mismatch: str = ""
 

@@ -7,12 +7,10 @@ gutter.refine is what turns those measurements into a moved edge."""
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
-
 import numpy as np
 
 
-def _find_nearest_run(mask: np.ndarray, center_offset: int, min_run: int) -> Optional[Tuple[int, int]]:
+def _find_nearest_run(mask: np.ndarray, center_offset: int, min_run: int) -> tuple[int, int] | None:
     """Given a 1D boolean array (True = background/gutter) over a search window,
     returns the (start, end_exclusive) of the contiguous True run of length >=
     min_run closest to center_offset, or None if no such run exists.
@@ -40,7 +38,7 @@ def _find_nearest_run(mask: np.ndarray, center_offset: int, min_run: int) -> Opt
     if not runs:
         return None
 
-    def distance(run: Tuple[int, int]) -> int:
+    def distance(run: tuple[int, int]) -> int:
         start, end = run
         if start <= center_offset < end:
             return 0
@@ -61,7 +59,7 @@ def locate_gutter_band(
     search_radius: int,
     min_run: int,
     min_bg_fraction: float,
-) -> Optional[int]:
+) -> int | None:
     """Core search shared by single-edge refinement (below) and seam reconciliation
     (`remanga.cropper.seams`): looks for the background/gutter band nearest `center`
     within `search_radius` along one axis, scored over the perpendicular span

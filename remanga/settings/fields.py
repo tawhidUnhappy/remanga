@@ -8,12 +8,12 @@ only place in the settings package that walks a dotted path."""
 
 from __future__ import annotations
 
-from typing import Any, Tuple
+from typing import Any
 
 from remanga.config import RemangaConfig
 
 
-def _resolve(config: RemangaConfig, dotted: str) -> Tuple[Any, str]:
+def _resolve(config: RemangaConfig, dotted: str) -> tuple[Any, str]:
     *parents, attr = dotted.split(".")
     obj: Any = config
     for name in parents:

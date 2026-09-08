@@ -4,21 +4,24 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 from remanga.config import SystemConfig, VideoConfig
 from remanga.console import console, escape as _escape_path
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.json_io import read_json
 from remanga.paths import (
-    BIN_DIR, get_audio_timing_path, get_final_video_path, get_master_audio_path,
-    get_video_concat_path, get_video_frames_dir,
+    BIN_DIR,
+    get_audio_timing_path,
+    get_final_video_path,
+    get_master_audio_path,
+    get_video_concat_path,
+    get_video_frames_dir,
 )
 from remanga.video.compose import FrameCompositor
 
 
 class VideoRenderer:
-    def __init__(self, system_config: Optional[SystemConfig] = None, video_config: Optional[VideoConfig] = None):
+    def __init__(self, system_config: SystemConfig | None = None, video_config: VideoConfig | None = None):
         self.system_config = system_config or SystemConfig()
         self.video_config = video_config or VideoConfig()
         self.compositor = FrameCompositor(self.video_config)
@@ -29,7 +32,10 @@ class VideoRenderer:
         # than the minimum supported value") - indistinguishable from a real
         # failure unless the test frame is comfortably above that floor.
         # 256x256 clears it with real margin while still encoding instantly.
-        cmd = [ffmpeg_bin, "-y", "-f", "lavfi", "-i", "nullsrc=s=256x256:d=0.1", "-c:v", self.system_config.gpu_codec, "-f", "null", "-"]
+        cmd = [
+            ffmpeg_bin, "-y", "-f", "lavfi", "-i", "nullsrc=s=256x256:d=0.1",
+            "-c:v", self.system_config.gpu_codec, "-f", "null", "-",
+        ]
         return run_ffmpeg(cmd, capture=True)
 
     def _probe_error_summary(self, stderr: str) -> str:
@@ -45,7 +51,7 @@ class VideoRenderer:
             return " / ".join(m.split("]", 1)[1].strip() for m in matches)
         return " / ".join(stderr.strip().splitlines()[-2:]) or "unknown error"
 
-    def _find_system_ffmpeg(self) -> Optional[str]:
+    def _find_system_ffmpeg(self) -> str | None:
         """The first `ffmpeg` on PATH that ISN'T remanga's own isolated bin/ffmpeg -
         run.sh prepends bin/ to PATH, so a plain shutil.which("ffmpeg") always
         resolves to that one first. Returns whatever the OS/package manager
@@ -63,7 +69,7 @@ class VideoRenderer:
                 return candidate
         return None
 
-    def _resolve_gpu_ffmpeg(self) -> tuple[Optional[str], str]:
+    def _resolve_gpu_ffmpeg(self) -> tuple[str | None, str]:
         """Finds an ffmpeg binary whose GPU encoder actually works against the
         driver installed on THIS machine right now, and returns (path, note) -
         note explains why the bundled binary was skipped, if it was, for the
@@ -122,12 +128,18 @@ class VideoRenderer:
         # this (cheap) step even though nobody passed --force. TTS and frame
         # compositing are untouched either way - see prepare_composited_frames
         # below, which stays a no-op for every already-cached frame.
-        stale_audio = final_video.exists() and master_audio.exists() and master_audio.stat().st_mtime > final_video.stat().st_mtime
+        stale_audio = (
+            final_video.exists() and master_audio.exists()
+            and master_audio.stat().st_mtime > final_video.stat().st_mtime
+        )
         if not force and final_video.exists() and final_video.stat().st_size > 1000 and not stale_audio:
             console.print(f"[bold green]✓ Recap video already rendered:[/] {_escape_path(str(final_video))}")
             return final_video
         if stale_audio:
-            console.print("[dim]master_audio.wav is newer than the last render (BGM/volume likely changed) - re-encoding video only.[/]")
+            console.print(
+                "[dim]master_audio.wav is newer than the last render (BGM/volume likely changed) - re-encoding video "
+                "only.[/]"
+            )
 
         if not master_audio.exists():
             raise FileNotFoundError(f"Master audio not found: {master_audio}")
@@ -141,7 +153,7 @@ class VideoRenderer:
         panels = timing_info.get("panels", [])
         concat_file = get_video_concat_path(project_name, chapter_num)
 
-        with open(concat_file, "w", encoding="utf-8") as f:
+        with concat_file.open("w", encoding="utf-8") as f:
             for p in panels:
                 panel_id = p["panel_id"]
                 frame_file = frames_dir / f"frame_{panel_id}.png"
@@ -159,7 +171,10 @@ class VideoRenderer:
         use_gpu = gpu_ffmpeg is not None
         codec = self.system_config.gpu_codec if use_gpu else self.system_config.fallback_codec
         ffmpeg_bin = gpu_ffmpeg or "ffmpeg"
-        console.print(f"[cyan]Rendering video using codec:[/] [bold]{codec}[/] [dim]({'Hardware GPU' if use_gpu else 'CPU fallback'})[/]")
+        console.print(
+            f"[cyan]Rendering video using codec:[/] [bold]{codec}[/] "
+            f"[dim]({'Hardware GPU' if use_gpu else 'CPU fallback'})[/]"
+        )
         if note:
             console.print(f"[dim]({note})[/]")
 

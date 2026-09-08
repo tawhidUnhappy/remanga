@@ -20,7 +20,7 @@ other project does."""
 
 from __future__ import annotations
 
-from typing import Iterable, List, Optional, Sequence, Set
+from collections.abc import Iterable, Sequence
 
 from remanga.config import CropperConfig, RemangaConfig
 from remanga.paths import get_pipeline_path, load_project_metadata, save_project_metadata
@@ -36,7 +36,7 @@ PIPELINE_KEY = "pipeline"
 _NOTHING = ("none", "nothing")
 
 
-def _stored_list(project_name: str, key: str) -> Optional[List[str]]:
+def _stored_list(project_name: str, key: str) -> list[str] | None:
     """The remembered list, or None when this project has never answered.
     None and [] are different answers here - "never chosen" falls back to
     config.json, "chose nothing" is an empty selection the user meant."""
@@ -49,7 +49,7 @@ def _stored_list(project_name: str, key: str) -> Optional[List[str]]:
 # --- packaging formats -----------------------------------------------------
 
 
-def parse_package_formats(raw: Optional[str]) -> Optional[List[str]]:
+def parse_package_formats(raw: str | None) -> list[str] | None:
     """`--formats` (or the wizard's checklist) as a validated list of switch
     names. None stays None ("not answered this run"); 'none' becomes []."""
     if raw is None:
@@ -74,7 +74,7 @@ def parse_package_formats(raw: Optional[str]) -> Optional[List[str]]:
     return names
 
 
-def remembered_package_formats(project_name: str) -> Optional[List[str]]:
+def remembered_package_formats(project_name: str) -> list[str] | None:
     return _stored_list(project_name, PACKAGE_FORMATS_KEY)
 
 
@@ -83,7 +83,7 @@ def remember_package_formats(project_name: str, formats: Sequence[str]) -> None:
 
 
 def active_package_formats(config: RemangaConfig, project_name: str,
-                           formats: Optional[Sequence[str]] = None) -> List[str]:
+                           formats: Sequence[str] | None = None) -> list[str]:
     """Which formats are actually on for this project right now, applying the
     full precedence: this run's answer, else the project's memory, else
     config.json's switches."""
@@ -97,7 +97,7 @@ def active_package_formats(config: RemangaConfig, project_name: str,
 
 
 def cropper_config_for(config: RemangaConfig, project_name: str,
-                       formats: Optional[Sequence[str]] = None) -> CropperConfig:
+                       formats: Sequence[str] | None = None) -> CropperConfig:
     """A CropperConfig whose packaging switches reflect this project's active
     formats, leaving every other cropper setting (padding, gutter snapping,
     trimming, the size cap) exactly as configured.
@@ -114,7 +114,7 @@ def cropper_config_for(config: RemangaConfig, project_name: str,
 # --- wipe keep-list --------------------------------------------------------
 
 
-def remembered_wipe_keep(project_name: str) -> Optional[Set[str]]:
+def remembered_wipe_keep(project_name: str) -> set[str] | None:
     remembered = _stored_list(project_name, WIPE_KEEP_KEY)
     return set(remembered) if remembered is not None else None
 
@@ -126,7 +126,7 @@ def remember_wipe_keep(project_name: str, keep_names: Iterable[str]) -> None:
 # --- the project's pipeline ------------------------------------------------
 
 
-def remembered_pipeline(project_name: str) -> Optional[List[str]]:
+def remembered_pipeline(project_name: str) -> list[str] | None:
     """This project's ordered pipeline step names, or None if it has never
     chosen - in which case remanga.pipeline falls back to DEFAULT_STEPS.
 

@@ -14,10 +14,9 @@ doubles as the status screen for settings."""
 
 from __future__ import annotations
 
-from pathlib import Path
-
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, List, Tuple
+from pathlib import Path
 
 from remanga.config import RemangaConfig
 from remanga.settings import engine, video
@@ -36,16 +35,16 @@ class Section:
 
 
 def _assets_summary(config: RemangaConfig) -> str:
-    parts: List[str] = []
+    parts: list[str] = []
     for spec in ASSETS:
         if not asset_relevant(config, spec):
             continue
-        ok, badge, _ = asset_status(config, spec)
+        _ok, badge, _ = asset_status(config, spec)
         parts.append(f"{spec.key}: {badge}")
     return ", ".join(parts)
 
 
-SECTIONS: Tuple[Section, ...] = (
+SECTIONS: tuple[Section, ...] = (
     Section(
         "engine", "TTS engine",
         # The voice belongs to the engine now (see config/tts.py), so the

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 from remanga.console import console
 from remanga.json_io import has_real_json_content, read_json, read_json_or
 from remanga.paths import (
-    find_full_recap_video, get_audio_dir, get_audio_timing_path, get_chapter_dir, get_final_video_path,
+    find_full_recap_video,
+    get_audio_dir,
+    get_audio_timing_path,
+    get_chapter_dir,
+    get_final_video_path,
     get_master_audio_path,
 )
 from remanga.verify.models import ChapterVerification
@@ -58,18 +60,21 @@ def verify_chapter(project_name: str, chapter_num: str, check_video: bool = True
         expected_sec = timing.get("total_timeline_sec")
     if expected_sec:
         for label, media in (("master_audio.wav", result.master_audio), ("video", result.video)):
-            if media and media.ok and media.duration_sec is not None:
-                if media.duration_sec < expected_sec - 2.0:  # a couple seconds' ffmpeg/container slack is normal
-                    result.duration_mismatch = (
-                        f"{label} is {expected_sec - media.duration_sec:.1f}s shorter than the "
-                        f"{expected_sec:.1f}s the synthesized audio timeline expects - likely truncated mid-write"
-                    )
+            if (media and media.ok and media.duration_sec is not None
+                    # a couple seconds' ffmpeg/container slack is normal
+                    and media.duration_sec < expected_sec - 2.0):
+                result.duration_mismatch = (
+                    f"{label} is {expected_sec - media.duration_sec:.1f}s shorter than the "
+                    f"{expected_sec:.1f}s the synthesized audio timeline expects - likely truncated mid-write"
+                )
 
     return result
 
 
-def verify_project(project_name: str, chapters: Optional[List[str]] = None, check_video: bool = True) -> List[ChapterVerification]:
-    from remanga.full_recap import discover_chapters, chapter_sort_key
+def verify_project(
+    project_name: str, chapters: list[str] | None = None, check_video: bool = True
+) -> list[ChapterVerification]:
+    from remanga.full_recap import chapter_sort_key, discover_chapters
 
     chapter_list = sorted(chapters or discover_chapters(project_name), key=chapter_sort_key)
     results = []

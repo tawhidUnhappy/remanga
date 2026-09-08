@@ -9,6 +9,7 @@ from remanga.config import RemangaConfig
 from remanga.console import display_path, escape as _esc, wrap_at_slashes
 from remanga.paths import load_project_metadata
 from remanga.settings import package_summary
+from remanga.status.badges import absent, artifact, counted, done, flagged, missing, off, pending
 from remanga.status.compute import get_chapter_status
 
 
@@ -23,10 +24,18 @@ def render_status_panel(project: str, chapter: str) -> str:
     config = RemangaConfig.load().for_project(project)
     active_voice = config.tts.active_spk_audio_prompt
     voice_path = Path(active_voice).expanduser() if active_voice else None
-    voice_status = f"[green]Configured ({display_path(voice_path)})[/]" if (voice_path and voice_path.exists()) else f"[yellow]Not set / Missing ({display_path(voice_path) if voice_path else 'n/a'})[/]"
+    voice_status = (
+        f"[green]Configured ({display_path(voice_path)})[/]"
+        if (voice_path and voice_path.exists())
+        else f"[yellow]Not set / Missing ({display_path(voice_path) if voice_path else 'n/a'})[/]"
+    )
 
     bgm_path = Path(config.audio.bgm_path).expanduser() if config.audio.bgm_path else None
-    bgm_status = f"[green]Enabled ({display_path(bgm_path)})[/]" if (config.audio.bgm_enabled and bgm_path and bgm_path.exists()) else "[dim]Disabled / None[/]"
+    bgm_status = (
+        f"[green]Enabled ({display_path(bgm_path)})[/]"
+        if (config.audio.bgm_enabled and bgm_path and bgm_path.exists())
+        else "[dim]Disabled / None[/]"
+    )
 
     res_str = f"{config.video.width}x{config.video.height} ({config.video.background_style.title()} Canvas)"
     package = config.cropper.package
@@ -40,6 +49,21 @@ def render_status_panel(project: str, chapter: str) -> str:
     # line (the old behavior) made this panel wrap mid-directory-name on
     # anything narrower than a very wide terminal; a bare filename never
     # needs to wrap at all.
+    # Hoisted out of the template below rather than inlined like the
+    # shorter rows: inside a triple-quoted f-string there is nowhere to wrap
+    # a long expression - every newline would land in the printed report.
+    review_status = (
+        flagged(f"{st['review_flagged_count']} flagged, awaiting LLM fix pass")
+        if st["review_pending"] else off("no pending review")
+    )
+    audio_status = (
+        done("Generated (IndexTTS-2.5)") if st["master_audio_exist"]
+        else missing(f"Not built ({st['audio_clips_count']}/{st['total_narration_entries']} clips)")
+    )
+    video_status = (
+        done(f"Ready ({_esc(st['video_path'].name)})") if st["video_exist"] else missing("Not rendered")
+    )
+
     status_str = f"""
 [bold]Project:[/] {project} | [bold]Chapter:[/] {chapter}
 [bold]Saved Manga Source:[/] {saved_url}
@@ -49,17 +73,17 @@ def render_status_panel(project: str, chapter: str) -> str:
 [bold]Reference Voice Audio:[/] {voice_status}
 [bold]Background Music:[/] {bgm_status}
 
-   1. Pages Downloaded    : {'[green]✓ Yes (' + str(st['pages_count']) + ' pages)[/]' if st['pages_count'] > 0 else '[red]✗ Missing[/]'}
-   2. Pages ZIP Archive   : {'[green]✓ Ready (pages.zip)[/]' if st['pages_zip_exist'] else '[dim yellow]✗ Not generated[/]'}
-   3. Crop Instructions   : {'[green]✓ Present (crops.json)[/]' if st['crops_exist'] else '[yellow]✗ Missing/Empty placeholder[/]'}
-   4. Panels Cropped      : {'[green]✓ Yes (' + str(st['panels_count']) + ' panels)[/]' if st['panels_count'] > 0 else '[red]✗ Missing[/]'}
-   5. Panel Contact Sheets: {'[green]✓ Yes (' + str(st['sheets_count']) + ' sheets)[/]' if st['sheets_count'] > 0 else '[dim yellow]✗ Not generated[/]'}
-   6. panels_zip          : {'[green]✓ Built[/]' if st['panels_zip_built'] else ('[dim yellow]✗ Not generated[/]' if package.panels_zip_active else '[dim]— off[/]')}
-   7. pdf                 : {'[green]✓ Built[/]' if st['panels_pdf_built'] else ('[dim yellow]✗ Not generated[/]' if package.pdf_active else '[dim]— off[/]')}
-   8. sheets_zip          : {'[green]✓ Built[/]' if st['sheets_zip_built'] else ('[dim yellow]✗ Not generated[/]' if package.sheets_zip_active else '[dim]— off[/]')}
-   9. Narration Script    : {'[green]✓ Present (narration.json)[/]' if st['narration_exist'] else '[yellow]✗ Missing/Empty placeholder[/]'}
-   9b. Narration Review   : {'[yellow]⚑ ' + str(st['review_flagged_count']) + ' flagged, awaiting LLM fix pass[/]' if st['review_pending'] else '[dim]— no pending review[/]'}
-  10. Master Audio Track  : {'[green]✓ Generated (IndexTTS-2.5)[/]' if st['master_audio_exist'] else '[red]✗ Not built (' + str(st['audio_clips_count']) + '/' + str(st['total_narration_entries']) + ' clips)[/]'}
-  11. Final Recap Video   : {'[green]✓ Ready (' + _esc(st['video_path'].name) + ')[/]' if st['video_exist'] else '[red]✗ Not rendered[/]'}
+   1. Pages Downloaded    : {counted(st['pages_count'], 'pages')}
+   2. Pages ZIP Archive   : {done('Ready (pages.zip)') if st['pages_zip_exist'] else pending()}
+   3. Crop Instructions   : {done('Present (crops.json)') if st['crops_exist'] else absent()}
+   4. Panels Cropped      : {counted(st['panels_count'], 'panels')}
+   5. Panel Contact Sheets: {counted(st['sheets_count'], 'sheets', empty=pending())}
+   6. panels_zip          : {artifact(st['panels_zip_built'], package.panels_zip_active)}
+   7. pdf                 : {artifact(st['panels_pdf_built'], package.pdf_active)}
+   8. sheets_zip          : {artifact(st['sheets_zip_built'], package.sheets_zip_active)}
+   9. Narration Script    : {done('Present (narration.json)') if st['narration_exist'] else absent()}
+   9b. Narration Review   : {review_status}
+  10. Master Audio Track  : {audio_status}
+  11. Final Recap Video   : {video_status}
 """
     return status_str.strip()

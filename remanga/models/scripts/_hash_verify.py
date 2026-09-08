@@ -31,12 +31,11 @@ from __future__ import annotations
 import hashlib
 import os
 from pathlib import Path
-from typing import Optional
 
 
 def _sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
     h = hashlib.sha256()
-    with open(path, "rb") as f:
+    with path.open("rb") as f:
         while True:
             chunk = f.read(chunk_size)
             if not chunk:
@@ -45,7 +44,7 @@ def _sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
     return h.hexdigest()
 
 
-def _resolve_local_path(model_dir: str, rfilename: str, cache_layout: bool) -> Optional[Path]:
+def _resolve_local_path(model_dir: str, rfilename: str, cache_layout: bool) -> Path | None:
     """Finds where `rfilename` actually landed on disk. `local_dir=` downloads
     (indextts/audio8/deepseek_ocr) put it directly at model_dir/rfilename.
     `cache_dir=` downloads (magi) put the real blob under
@@ -66,7 +65,7 @@ def _resolve_local_path(model_dir: str, rfilename: str, cache_layout: bool) -> O
 
 
 def verify_repo_files(
-    model_dir: str, repo_id: str, hf_token: Optional[str], cache_layout: bool = False,
+    model_dir: str, repo_id: str, hf_token: str | None, cache_layout: bool = False,
 ) -> tuple[bool, list[str]]:
     """Compares every LFS file's recorded sha256 (from the Hub's own repo
     metadata) against the freshly-downloaded file on disk. Prints one line

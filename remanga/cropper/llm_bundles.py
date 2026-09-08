@@ -8,7 +8,6 @@ a fourth format later only means wiring it in here."""
 
 from __future__ import annotations
 
-from typing import List
 from pathlib import Path
 
 from remanga.config import CropperConfig
@@ -22,8 +21,8 @@ def build_llm_bundles(
     config: CropperConfig,
     project_name: str,
     chapter_num: str,
-    panel_paths: List[Path],
-    sheet_paths: List[Path],
+    panel_paths: list[Path],
+    sheet_paths: list[Path],
 ) -> None:
     build_llm_zip_bundle(config, project_name, chapter_num, panel_paths)
     build_llm_pdf_bundle(config, project_name, chapter_num, panel_paths)
@@ -38,7 +37,11 @@ def is_up_to_date(config: CropperConfig, project_name: str, chapter_num: str) ->
     panels_pdf_dir = get_panels_pdf_dir(project_name, chapter_num, create=False)
     zip_ok = not config.package.panels_zip_active or any(
         get_panels_zip_dir(project_name, chapter_num, create=False).glob("panels_*.zip"))
-    pdf_ok = not config.package.pdf_active or any(panels_pdf_dir.glob("panels_*.pdf")) or any(panels_pdf_dir.glob("panels_*.zip"))
+    pdf_ok = (
+        not config.package.pdf_active
+        or any(panels_pdf_dir.glob("panels_*.pdf"))
+        or any(panels_pdf_dir.glob("panels_*.zip"))
+    )
     sheets_ok = not config.package.sheets_zip_active or any(
         get_sheets_zip_dir(project_name, chapter_num, create=False).glob("sheets_*.zip"))
     return zip_ok and pdf_ok and sheets_ok

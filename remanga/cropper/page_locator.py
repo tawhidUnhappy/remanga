@@ -4,12 +4,11 @@ downloaded page image on disk."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 from remanga.cropper.naming import page_stem
 
 
-def locate_page_file(pages_dir: Path, filename: Optional[str], page_index: Optional[int], chapter_num=None) -> Optional[Path]:
+def locate_page_file(pages_dir: Path, filename: str | None, page_index: int | None, chapter_num=None) -> Path | None:
     """Resolves target page image path using filename or numeric index fallback."""
     if filename and (pages_dir / filename).exists():
         return pages_dir / filename

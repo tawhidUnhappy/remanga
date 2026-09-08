@@ -12,7 +12,8 @@ Two shapes, one implementation:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from remanga.tui import fallback, keys
 from remanga.tui.choices import Choice
@@ -30,10 +31,10 @@ def multiselect(
     *,
     ordered: bool = False,
     note: str = "",
-    footer: Optional[str] = None,
+    footer: str | None = None,
     allow_empty: bool = True,
-    back_label: Optional[str] = "Back",
-    exit_label: Optional[str] = "Exit remanga",
+    back_label: str | None = "Back",
+    exit_label: str | None = "Exit remanga",
     echo: bool = True,
 ) -> Any:
     """Returns the checked values as a list (in check order when `ordered`,
@@ -59,11 +60,11 @@ def multiselect(
     # reachable with the arrow keys, but it is never checkable: Space and
     # Enter on it quit, ctrl+a skips it, and it can't end up in the result.
     if exit_label:
-        rows = rows + [Choice(label=exit_label, hint="quit from here", value=EXIT, plain=True)]
+        rows = [*rows, Choice(label=exit_label, hint="quit from here", value=EXIT, plain=True)]
 
     # Check order, which is the run order in `ordered` mode. Seeded from
     # whatever arrived pre-checked so an existing pipeline keeps its order.
-    order: List[Any] = [c.value for c in rows if c.checked]
+    order: list[Any] = [c.value for c in rows if c.checked]
 
     def toggle(choice: Choice) -> None:
         if choice.disabled or choice.value is EXIT:
@@ -84,13 +85,13 @@ def multiselect(
             if checked:
                 order.append(choice.value)
 
-    def order_of() -> Dict[int, int]:
+    def order_of() -> dict[int, int]:
         """index-in-the-visible-list -> 1-based run position, rebuilt every
         redraw so it stays correct while the list is being filtered."""
         positions = {value: i + 1 for i, value in enumerate(order)}
         return {i: positions[c.value] for i, c in enumerate(state.visible) if c.value in positions}
 
-    def result() -> List[Any]:
+    def result() -> list[Any]:
         if ordered:
             return list(order)
         return [c.value for c in rows if c.checked and c.value is not EXIT]
@@ -134,11 +135,11 @@ def multiselect(
     )
 
 
-def _labels(rows: Sequence[Choice], values: Any) -> List[str]:
+def _labels(rows: Sequence[Choice], values: Any) -> list[str]:
     if values is CANCEL or not isinstance(values, list):
         return []
     by_value = {id(c.value): c.label for c in rows}
-    labels = []
-    for value in values:
-        labels.append(by_value.get(id(value)) or next((c.label for c in rows if c.value == value), str(value)))
-    return labels
+    return [
+        by_value.get(id(value)) or next((c.label for c in rows if c.value == value), str(value))
+        for value in values
+    ]

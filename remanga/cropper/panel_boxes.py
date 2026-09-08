@@ -11,7 +11,7 @@ Two passes, both optional/config-gated:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -32,13 +32,13 @@ def adaptive_gutter_radius(config: CropperConfig, img_w: int, img_h: int) -> int
 
 
 def resolve_page_panel_boxes(
-    panels: List[Dict[str, Any]],
+    panels: list[dict[str, Any]],
     img_w: int,
     img_h: int,
-    gray_arr: Optional[np.ndarray],
-    bg_level: Optional[float],
+    gray_arr: np.ndarray | None,
+    bg_level: float | None,
     config: CropperConfig,
-) -> Tuple[List[Dict[str, Any]], List[PixelBox], List[PixelBox]]:
+) -> tuple[list[dict[str, Any]], list[PixelBox], list[PixelBox]]:
     """Returns (valid_panels, original_boxes, refined_boxes) - three parallel
     lists, one entry per panel with valid coordinates (invalid entries are
     skipped and logged). `refined_boxes` have been through gutter-snap and, if
@@ -48,8 +48,8 @@ def resolve_page_panel_boxes(
     do_gutter_snap = gray_arr is not None and config.snap_to_gutters
     gutter_radius = adaptive_gutter_radius(config, img_w, img_h) if do_gutter_snap else 0
 
-    valid_panels: List[Dict[str, Any]] = []
-    original_boxes: List[PixelBox] = []
+    valid_panels: list[dict[str, Any]] = []
+    original_boxes: list[PixelBox] = []
 
     # First pass: resolve every panel's original marked box up front, before any
     # snapping - refine_box_to_gutters (below) needs every OTHER panel's box
@@ -64,7 +64,7 @@ def resolve_page_panel_boxes(
         valid_panels.append(panel)
         original_boxes.append(calculate_pixel_bounds(box, img_w, img_h, is_1000=is_normalized))
 
-    panel_boxes: List[PixelBox] = []
+    panel_boxes: list[PixelBox] = []
     for idx, original_box in enumerate(original_boxes):
         crop_box = original_box
 

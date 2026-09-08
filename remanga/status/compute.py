@@ -7,17 +7,25 @@ actually decodes media."""
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from remanga.json_io import has_real_json_content, read_json_or
 from remanga.paths import (
-    get_audio_dir, get_audio_timing_path, get_chapter_dir, get_final_video_path,
-    get_master_audio_path, get_narration_review_path, get_pages_zip_path, get_panels_pdf_dir,
-    get_panels_zip_dir, get_sheets_dir, get_sheets_zip_dir,
+    get_audio_dir,
+    get_audio_timing_path,
+    get_chapter_dir,
+    get_final_video_path,
+    get_master_audio_path,
+    get_narration_review_path,
+    get_pages_zip_path,
+    get_panels_pdf_dir,
+    get_panels_zip_dir,
+    get_sheets_dir,
+    get_sheets_zip_dir,
 )
 
 
-def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
+def get_chapter_status(project_name: str, chapter_num: str) -> dict[str, Any]:
     chap_dir = get_chapter_dir(project_name, chapter_num)
     pages_dir = chap_dir / "pages"
     panels_dir = chap_dir / "panels"
@@ -50,7 +58,9 @@ def get_chapter_status(project_name: str, chapter_num: str) -> Dict[str, Any]:
     if review_pending:
         review_flagged_count = read_json_or(review_path, {}).get("flagged_count", 0)
 
-    audio_clips_count = len([p for p in audio_dir.glob("*.wav") if not p.stem.endswith("_raw")]) if audio_dir.exists() else 0
+    audio_clips_count = (
+        len([p for p in audio_dir.glob("*.wav") if not p.stem.endswith("_raw")]) if audio_dir.exists() else 0
+    )
     timing_exist = get_audio_timing_path(project_name, chapter_num, create=False).exists()
     master_audio_exist = get_master_audio_path(project_name, chapter_num, create=False).exists()
 

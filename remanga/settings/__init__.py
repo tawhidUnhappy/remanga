@@ -27,11 +27,18 @@ ensure_valid_bgm, ...`) are re-exported below.
 from __future__ import annotations
 
 from remanga.settings.assets import (
-    ASSETS, ensure_valid_bgm, ensure_valid_voice_prompt, run_asset_menu,
+    ASSETS,
+    ensure_valid_bgm,
+    ensure_valid_voice_prompt,
+    run_asset_menu,
 )
 from remanga.settings.fields import get_field, set_field
 from remanga.settings.files import (
-    AUDIO_EXTENSIONS, discover_files, is_valid_file, read_reference_text, write_reference_text,
+    AUDIO_EXTENSIONS,
+    discover_files,
+    is_valid_file,
+    read_reference_text,
+    write_reference_text,
 )
 from remanga.settings.paths_ui import run_paths_manager
 from remanga.settings.summary import settings_summary

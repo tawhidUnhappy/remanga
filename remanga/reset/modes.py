@@ -14,7 +14,6 @@ whole-project wipe keeps, as data."""
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Tuple
 
 # Chapter-source entries kept by each deletion mode. "pages" (the downloaded
 # scans) is always kept - a restart never re-downloads unless
@@ -25,7 +24,7 @@ KEEP_ON_SOFT_RESTART = KEEP_ON_RESTART | {
     "crops.json", "panels", "narration.json", "narration_review.json", "narration_reviews",
 }
 
-_KEEP_SETS: Dict[str, set] = {
+_KEEP_SETS: dict[str, set] = {
     "hard": KEEP_ON_RESTART,
     "marks_only": KEEP_ON_MARKS_ONLY_RESTART,
     "soft": KEEP_ON_SOFT_RESTART,
@@ -55,7 +54,7 @@ _KEEP_SETS: Dict[str, set] = {
 # exactly the stale state a full regenerate exists to clear, and a
 # delete-list built from the current GENERATED_KINDS would walk straight
 # past every one of them.
-PROJECT_KEEP: Tuple[str, ...] = (
+PROJECT_KEEP: tuple[str, ...] = (
     "chapters", "manifest.json", "memory.json", "pipeline.json", "project.json",
 )
 
@@ -82,7 +81,7 @@ class RestartMode:
         return self.deletion_mode or self.name
 
 
-RESTART_MODES: Tuple[RestartMode, ...] = (
+RESTART_MODES: tuple[RestartMode, ...] = (
     RestartMode(
         "hard", "Hard restart", "downloaded pages",
         "back to just the downloaded pages - re-mark, re-crop, re-narrate",

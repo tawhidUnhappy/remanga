@@ -9,7 +9,8 @@ once."""
 
 from __future__ import annotations
 
-from typing import Any, Callable, List, Optional, Sequence
+from collections.abc import Callable, Sequence
+from typing import Any
 
 from rich.live import Live
 
@@ -41,9 +42,9 @@ class MenuState:
     an index into *that* - so filtering never leaves the highlight pointing
     at a row nobody can see."""
 
-    def __init__(self, choices: Sequence[Choice], *, cursor: int = 0, page_size: Optional[int] = None,
+    def __init__(self, choices: Sequence[Choice], *, cursor: int = 0, page_size: int | None = None,
                  filterable: bool = True, space_filters: bool = False):
-        self.choices: List[Choice] = list(choices)
+        self.choices: list[Choice] = list(choices)
         self.query = ""
         # A two-row yes/no menu has nothing worth filtering, and swallowing
         # "y"/"n" into a filter box there would break the very shortcuts
@@ -54,16 +55,16 @@ class MenuState:
         # it; False for checklists, where Space is the toggle key.
         self.space_filters = space_filters
         self.page_size = page_size or default_page_size()
-        self._visible: List[Choice] = list(self.choices)
+        self._visible: list[Choice] = list(self.choices)
         self.cursor = self._clamp(cursor)
 
     # --- view ---------------------------------------------------------
     @property
-    def visible(self) -> List[Choice]:
+    def visible(self) -> list[Choice]:
         return self._visible
 
     @property
-    def current(self) -> Optional[Choice]:
+    def current(self) -> Choice | None:
         if not self._visible:
             return None
         return self._visible[self.cursor]
@@ -178,9 +179,9 @@ def run_menu(
     note: str = "",
     checkable: bool = False,
     numbered: bool = False,
-    order_of: Optional[Callable[[], dict]] = None,
-    on_key: Callable[[MenuState, str], Optional[tuple]],
-    echo: Optional[Callable[[Any], str]] = None,
+    order_of: Callable[[], dict] | None = None,
+    on_key: Callable[[MenuState, str], tuple | None],
+    echo: Callable[[Any], str] | None = None,
 ) -> Any:
     """Draws `state` and pumps keys through `on_key` until it answers.
 
@@ -199,29 +200,28 @@ def run_menu(
     Ctrl+C raises KeyboardInterrupt with the terminal already restored -
     cli.py's SIGINT handler prints the same "production paused" message it
     always has."""
-    with keys.key_reader() as reader:
-        with Live(console=console, auto_refresh=False, transient=True) as live:
-            while True:
-                live.update(menu_frame(
-                    title=title, choices=state.visible, cursor=state.cursor,
-                    page_size=state.page_size, query=state.query, footer=footer,
-                    note=note, checkable=checkable, numbered=numbered,
-                    order=order_of() if order_of else None,
-                ), refresh=True)
+    with keys.key_reader() as reader, Live(console=console, auto_refresh=False, transient=True) as live:
+        while True:
+            live.update(menu_frame(
+                title=title, choices=state.visible, cursor=state.cursor,
+                page_size=state.page_size, query=state.query, footer=footer,
+                note=note, checkable=checkable, numbered=numbered,
+                order=order_of() if order_of else None,
+            ), refresh=True)
 
-                key = reader.read_key()
-                if key == keys.CTRL_C:
-                    raise KeyboardInterrupt
-                if key in _EXIT_KEYS:
-                    raise PromptExit
-                if key == keys.UNKNOWN:
-                    continue  # mouse report/unsupported sequence - never a keystroke
+            key = reader.read_key()
+            if key == keys.CTRL_C:
+                raise KeyboardInterrupt
+            if key in _EXIT_KEYS:
+                raise PromptExit
+            if key == keys.UNKNOWN:
+                continue  # mouse report/unsupported sequence - never a keystroke
 
-                outcome = on_key(state, key)
-                if outcome is not None:
-                    value = outcome[0]
-                    break
-                state.handle_common(key)
+            outcome = on_key(state, key)
+            if outcome is not None:
+                value = outcome[0]
+                break
+            state.handle_common(key)
 
     # Printed outside both context managers: a console.print issued while a
     # transient Live is open scrolls the live region rather than replacing

@@ -88,7 +88,10 @@ def create_app(state: MarkerState, config: MarkerConfig) -> Flask:
         crops_path = state.chapter_dir / "crops.json"
         write_json(crops_path, crops)
         total_panels = sum(len(p["panels"]) for p in crops["pages"])
-        console.print(f"[bold green]✓ Saved {total_panels} marked panel(s) across {len(crops['pages'])} page(s) to:[/] {_esc(str(crops_path))}")
+        console.print(
+            f"[bold green]✓ Saved {total_panels} marked panel(s) across {len(crops['pages'])} page(s) to:[/] "
+            f"{_esc(str(crops_path))}"
+        )
         state.finished.set()
         return jsonify({"ok": True})
 
