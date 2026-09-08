@@ -24,6 +24,13 @@ SETUP_COMMANDS: list[Command] = [
         detail="picks from the audio files already in global/ instead of asking you to type a path",
     ),
     Command(
+        "hardware",
+        "Show the detected GPU/CPU, the PyTorch wheels chosen for it, and the video encoder in use",
+        setup_handlers.hardware,
+        category="Setup",
+        detail="the same detection bootstrap.sh used - check here if a machine didn't get the GPU build",
+    ),
+    Command(
         "setup-models",
         "Verify and download model weights with SHA-256 verification",
         setup_handlers.setup_models,

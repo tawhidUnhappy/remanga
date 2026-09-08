@@ -34,7 +34,7 @@ class VideoRenderer:
         # 256x256 clears it with real margin while still encoding instantly.
         cmd = [
             ffmpeg_bin, "-y", "-f", "lavfi", "-i", "nullsrc=s=256x256:d=0.1",
-            "-c:v", self.system_config.gpu_codec, "-f", "null", "-",
+            "-c:v", self.system_config.resolve_gpu_codec(), "-f", "null", "-",
         ]
         return run_ffmpeg(cmd, capture=True)
 
@@ -45,7 +45,7 @@ class VideoRenderer:
         teardown noise ("Terminating thread with error: ...", "Nothing was
         written...") that surrounds it and says nothing about the actual
         cause. Falls back to the last couple of lines if nothing matches."""
-        tag = f"[{self.system_config.gpu_codec} @ "
+        tag = f"[{self.system_config.resolve_gpu_codec()} @ "
         matches = [ln.strip() for ln in stderr.splitlines() if ln.strip().startswith(tag)]
         if matches:
             return " / ".join(m.split("]", 1)[1].strip() for m in matches)
@@ -104,12 +104,12 @@ class VideoRenderer:
             res = self._probe_nvenc(system_ffmpeg)
             if res.returncode == 0:
                 note = (
-                    f"the bundled ffmpeg's {self.system_config.gpu_codec} didn't work here "
+                    f"the bundled ffmpeg's {self.system_config.resolve_gpu_codec()} didn't work here "
                     f"({bundled_error}) - using the system ffmpeg ({system_ffmpeg}) instead, which does"
                 )
                 return system_ffmpeg, note
 
-        return None, f"falling back to CPU - {self.system_config.gpu_codec} didn't work: {bundled_error}"
+        return None, f"falling back to CPU - {self.system_config.resolve_gpu_codec()} didn't work: {bundled_error}"
 
     def render_video(self, project_name: str, chapter_num: str, force: bool = False) -> Path:
         """
@@ -169,7 +169,7 @@ class VideoRenderer:
         # _resolve_gpu_ffmpeg - not necessarily the bundled one).
         gpu_ffmpeg, note = self._resolve_gpu_ffmpeg()
         use_gpu = gpu_ffmpeg is not None
-        codec = self.system_config.gpu_codec if use_gpu else self.system_config.fallback_codec
+        codec = self.system_config.resolve_gpu_codec() if use_gpu else self.system_config.fallback_codec
         ffmpeg_bin = gpu_ffmpeg or "ffmpeg"
         console.print(
             f"[cyan]Rendering video using codec:[/] [bold]{codec}[/] "

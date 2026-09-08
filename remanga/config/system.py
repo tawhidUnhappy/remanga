@@ -4,11 +4,33 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from remanga.hardware import detect_cached
+
 
 class SystemConfig(BaseModel):
     prefer_gpu: bool = True
-    gpu_codec: str = "h264_nvenc"
+
+    # "auto" asks remanga/hardware.py what this machine's hardware encoder
+    # actually is - h264_nvenc on NVIDIA, h264_videotoolbox on a Mac,
+    # h264_vaapi on AMD, and plain libx264 where there is no hardware
+    # encoder at all. The old default was a bare "h264_nvenc", which is
+    # simply wrong on any machine without an NVIDIA card: the render would
+    # probe an encoder that could never exist there and fall back to CPU
+    # having learned nothing. An explicit codec name still wins, so a config
+    # that names one keeps working exactly as before, and anyone who wants
+    # to force a specific encoder still can.
+    gpu_codec: str = "auto"
     fallback_codec: str = "libx264"
+
+    def resolve_gpu_codec(self) -> str:
+        """The hardware encoder to actually attempt on this machine.
+
+        Resolution happens here rather than at load time so a config file
+        stays portable: the same config.json can be copied between an
+        NVIDIA box and a Mac and ask for the right encoder on each."""
+        if self.gpu_codec and self.gpu_codec != "auto":
+            return self.gpu_codec
+        return detect_cached().video_encoder
     threads: int = 4
     log_level: str = "INFO"
 

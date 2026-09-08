@@ -18,15 +18,15 @@ pure local experiments the user didn't ask to keep.
 ## Layout in one pass
 
 ```
-.venv, .tools/venv-{indextts,audio8,magi}   # 4 hermetic uv venvs, own torch/transformers pin each
-remanga/                                     # package: json_io.py, ffmpeg_io.py, proc_io.py, humanize.py, pipeline.py, ...
+.venv, .tools/venv-{indextts,audio8,magi,deepseek-ocr}  # 5 hermetic uv venvs, own torch/transformers pin each
+remanga/                                     # package: json_io.py, ffmpeg_io.py, proc_io.py, humanize.py, pipeline.py, hardware.py, ...
   tui/                                       # arrow-key menus (select/multiselect/confirm) + non-tty fallback
-  commands/{spec,selection,registry}.py + handlers/{setup,chapter,project,cleanup}.py
+  commands/{spec,selection,registry,categories,setup_rows,help_text}.py + catalog/{setup,chapter,project}.py + handlers/{setup,chapter,project,cleanup}.py
   wizard/{app,projects,chapters,params,narration,review,uploads,handoff,pipeline_edit,checks}.py
   settings/{files,fields,assets,vision,presets,engine,video,sections,summary,wizard,paths_ui}.py
   full_recap/{discovery,timeline,compiler}.py   verify/{models,panels,probe,runner,report}.py
-  reset/{modes,entries,actions}.py              status/{compute,panel}.py
-  audio/{tts.py,mix.py,synth/{base,indextts,audio8}.py,scripts/*_worker.py}
+  reset/{modes,entries,actions}.py              status/{compute,panel,badges}.py
+  audio/{tts.py,mix.py,clips.py,resample.py,synth/{base,indextts,audio8}.py,scripts/*_worker.py}
   cropper/{crop*.py,gutter/{sampling,bands,refine}.py,...}
   video/{compose.py,render.py}
   models/{weights.py,scripts/download_*.py}
@@ -547,7 +547,51 @@ anything that doesn't, a long encode lands thousands of near-identical
 still the right tool for the model downloaders (tqdm bars, no `-progress`
 equivalent), just not for ffmpeg.
 
+## Hardware detection / cross-platform install (`remanga/hardware.py`)
+
+One stdlib-only module answers "what is this machine and what should be
+installed on it"; `bootstrap.sh` evals it (`--shell`) before any venv
+exists, and the app imports it, so installer and app can never disagree.
+`./run.sh hardware` prints what it decided. Footguns found the hard way:
+
+- **PyTorch wheel indexes do NOT all carry the same torch versions.**
+  IndexTTS pins `torch==2.8.*`; `cu118` stops at 2.7 and `cu130` starts at
+  2.9, so neither can satisfy it. Never "pick the newest CUDA index" nor
+  "pick whatever the driver supports" - pick the newest index that the
+  driver can run AND that still has 2.8 (`_CUDA_INDEX_BY_DRIVER`: 580+ →
+  cu129, 525+/528+win → cu128, older → cpu + a warning).
+- **`uv --torch-backend` is silently overridden by `git+index-tts`.** That
+  package's own pyproject declares a `pytorch-cuda` index pinned to cu128
+  via `[tool.uv.sources]`, and it wins: `--torch-backend cpu` alone gives
+  `2.8.0+cpu`, but the same flag *alongside the git package* gives
+  `2.8.0+cu128` - i.e. CUDA wheels on CPU-only and AMD machines. Fix is the
+  re-pin step after that install (`torch==2.8.* torchaudio==2.8.*` with the
+  backend flag). Verified by dry-run both ways; don't drop that step.
+- Pass `--torch-backend` to **every** ML install, not just the first: a
+  later install re-resolves torch as a dependency and will happily replace
+  a machine-matched build with the plain-PyPI one. Before this, the four
+  venvs on one box had drifted to cu128/cu130/cu130/cu130.
+- `bootstrap.sh` deliberately has **no `set -e`** - `die` for critical
+  steps, `try_step` for optional ones, warnings summarized at the end. An
+  optional CUDA-kernel build must never abort a run that already fetched
+  several GB.
+- Audio8's fused Mamba kernels are skipped entirely unless the backend is
+  CUDA (was a ~20 min guaranteed-to-fail build on every other machine).
+- ffmpeg: BtbN publishes `linux64`/`linuxarm64`/`win64`/`winarm64` only -
+  macOS has no static build and uses the system one, which is normal there,
+  not a fallback. Windows assets are `.zip` (needs `unzip`), others
+  `.tar.xz`.
+
 ## GPU/ffmpeg
+
+`system.gpu_codec` defaults to **`"auto"`** now, resolved per-machine by
+`SystemConfig.resolve_gpu_codec()` → `hardware.detect_cached().video_encoder`
+(nvenc / videotoolbox / vaapi / libx264). An explicit codec string still
+wins. The old bare `"h264_nvenc"` default was simply wrong on any non-NVIDIA
+machine. Note the encoder is chosen from GPU *vendor presence*, not from the
+torch backend - an old-driver NVIDIA box gets cpu torch but still gets
+`h264_nvenc`, because NVENC is separate silicon and `_resolve_gpu_ffmpeg()`
+probes it for real anyway.
 
 Bundled `bin/ffmpeg` (pinned BtbN build) has working `h264_nvenc` on this
 box (RTX 3060) - confirmed by direct probe (`ffmpeg -f lavfi -i
@@ -567,6 +611,35 @@ anything - Ubuntu's default Resources app (net.nokyan.Resources, NVML-backed)
 shows the same split as a "Video Encoder" figure on its GPU tab, and as an
 optional per-process column. The CPU side is the unavoidable prep: PNG decode, rgb24→yuv420p,
 duplicating each panel's frame out to fps, AAC, muxing.
+
+## Audio quality: three post-synthesis bugs, all fixed - don't reintroduce
+
+The engine's raw output was fine; everything after it degraded the audio.
+Symptom was "words run together, metallic/glitchy".
+
+- **Never resample with pydub** (`AudioSegment.set_frame_rate`) - it's
+  `audioop.ratecv`, linear interpolation with no anti-imaging filter.
+  Converting IndexTTS's native 22.05k to the project's 44.1k mirrored the
+  signal around the old Nyquist: measured on a fresh clip, the 11.5-16 kHz
+  image came back **louder than the real 8-11 kHz speech**. Use
+  `audio/resample.py:load_audio` (ffmpeg soxr) - puts it 47 dB down.
+- **Edge fades must be clamped to each clip's own silence**
+  (`audio/clips.py:apply_edge_fades`). A flat `edge_fade_ms` ramped the
+  opening consonant, because IndexTTS returns audio trimmed tight to the
+  speech (measured lead-in ranged 10ms-180ms across clips; a flat 35ms left
+  the first 35ms of 52/60 panels ~36x quieter than the speech after it).
+  `edge_fade_ms` is a ceiling, with a 6ms de-click floor.
+- **`audio.pause_between_panels_ms` must not be 0** (now 350). Panels were
+  butt-joined; with a median 35ms lead-in and 81ms tail that left ~115ms
+  between one sentence's last phoneme and the next's, where a narrator
+  takes 300-600ms. That was the run-together, and it was the *assembly*,
+  not the synthesis.
+- Latent, fixed: `indextts_worker.py`'s low-VRAM path passed `infer()`'s
+  `more_segment_before` to `infer_generator()`, where the knob is called
+  `quick_streaming_tokens`; the unknown name fell through `**generation_kwargs`
+  into HF `generate()`, which rejects it with **ValueError, not TypeError** -
+  so the `except TypeError` guard there never caught it. Match extra kwargs
+  against the real signature; the two methods' signatures differ.
 
 ## Maintenance rule (do this, don't just read this)
 

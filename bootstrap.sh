@@ -1,10 +1,27 @@
 #!/usr/bin/env bash
-set -e
+#
+# Provisions a complete, self-contained remanga environment on whatever
+# machine it is run on: Linux, macOS or Windows (Git Bash / MSYS), x86_64 or
+# arm64, with an NVIDIA GPU, an AMD ROCm GPU, Apple Silicon, or no GPU at
+# all. Nothing here is specific to the machine it was written on.
+#
+# Everything hardware-shaped is decided in ONE place - remanga/hardware.py -
+# and read back here as shell variables. That module runs on a bare
+# interpreter with no dependencies, so it can answer "what is this machine"
+# before a single package has been installed, and the application imports the
+# same module later so the installer and the app can never disagree.
+#
+# Failure policy: this script does NOT use `set -e`. Provisioning is a long
+# sequence of steps of very different importance - failing to build an
+# optional CUDA kernel must not abort a run that has already downloaded
+# several GB of working environment. Critical steps call `die`, optional ones
+# go through `try_step` and only warn. The summary at the end says what
+# actually happened.
+
+set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
-
-echo "=== Initializing 100% Self-Contained remanga Environment ==="
+cd "$SCRIPT_DIR" || exit 1
 
 BIN_DIR="$SCRIPT_DIR/bin"
 CACHE_DIR="$SCRIPT_DIR/.cache"
@@ -15,202 +32,313 @@ AUDIO8_VENV_DIR="$TOOLS_DIR/venv-audio8"
 MAGI_VENV_DIR="$TOOLS_DIR/venv-magi"
 DEEPSEEK_OCR_VENV_DIR="$TOOLS_DIR/venv-deepseek-ocr"
 
-mkdir -p "$BIN_DIR" "$CACHE_DIR/uv" "$CACHE_DIR/huggingface" "$CACHE_DIR/torch" "$TOOLS_DIR" assets/voices assets/bgm projects
+WARNINGS=()
 
-# Force all caches strictly inside remanga directory
+say()  { printf '[+] %s\n' "$*"; }
+warn() { printf '[-] %s\n' "$*" >&2; WARNINGS+=("$*"); }
+die()  { printf '\n[!] FATAL: %s\n' "$*" >&2; exit 1; }
+
+# Runs an optional step. Its failure is recorded and reported at the end,
+# but never stops provisioning - see the failure policy above.
+try_step() {
+    local label="$1"; shift
+    if "$@"; then
+        return 0
+    fi
+    warn "$label failed - continuing without it."
+    return 1
+}
+
+echo "=== Initializing self-contained remanga environment ==="
+
+mkdir -p "$BIN_DIR" "$CACHE_DIR/uv" "$CACHE_DIR/huggingface" "$CACHE_DIR/torch" \
+         "$TOOLS_DIR" assets/voices assets/bgm projects || die "could not create working directories"
+
+# Every cache stays inside the repo, so provisioning never writes to (or is
+# poisoned by) a shared machine-wide cache.
 export PATH="$BIN_DIR:$PATH"
 export UV_CACHE_DIR="$CACHE_DIR/uv"
 export HF_HOME="$CACHE_DIR/huggingface"
-export TRANSFORMERS_CACHE="$CACHE_DIR/huggingface"
 export TORCH_HOME="$CACHE_DIR/torch"
 unset HF_HUB_ENABLE_HF_TRANSFER
 
-# 1. Install standalone uv locally inside remanga/bin
-if [ ! -f "$BIN_DIR/uv" ]; then
-    echo "[+] Installing standalone uv binary into $BIN_DIR/uv..."
-    curl -LsSf https://astral.sh/uv/install.sh | env CARGO_HOME="$SCRIPT_DIR" UV_INSTALL_DIR="$BIN_DIR" sh
+# ---------------------------------------------------------------------------
+# 1. Local uv
+# ---------------------------------------------------------------------------
+UV_EXE="uv"
+case "$(uname -s 2>/dev/null || echo unknown)" in
+    MINGW*|MSYS*|CYGWIN*) UV_EXE="uv.exe" ;;
+esac
+
+if [ ! -x "$BIN_DIR/$UV_EXE" ]; then
+    say "Installing standalone uv into $BIN_DIR..."
+    if command -v curl >/dev/null 2>&1; then
+        curl -LsSf https://astral.sh/uv/install.sh | env CARGO_HOME="$SCRIPT_DIR" UV_INSTALL_DIR="$BIN_DIR" sh
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO- https://astral.sh/uv/install.sh | env CARGO_HOME="$SCRIPT_DIR" UV_INSTALL_DIR="$BIN_DIR" sh
+    else
+        die "neither curl nor wget is available - install one, or install uv yourself and put it in $BIN_DIR"
+    fi
+fi
+[ -x "$BIN_DIR/$UV_EXE" ] || die "uv did not install into $BIN_DIR - see https://docs.astral.sh/uv/getting-started/installation/"
+UV="$BIN_DIR/$UV_EXE"
+say "Using local uv: $("$UV" --version)"
+
+say "Provisioning standalone Python 3.11 runtime..."
+"$UV" python install 3.11 || die "could not provision Python 3.11 via uv"
+
+# ---------------------------------------------------------------------------
+# 2. Detect the machine
+# ---------------------------------------------------------------------------
+# Run through uv's own managed interpreter with --no-project, so this works
+# before .venv exists and regardless of what (if any) system python is
+# installed. remanga/hardware.py is stdlib-only precisely so this is possible.
+say "Detecting hardware..."
+DETECTED="$("$UV" run --no-project --python 3.11 "$SCRIPT_DIR/remanga/hardware.py" --shell 2>/dev/null)"
+if [ -z "$DETECTED" ]; then
+    warn "hardware detection failed - falling back to CPU-only builds."
+    REMANGA_OS="linux"; REMANGA_ARCH="x86_64"; REMANGA_ACCEL="cpu"
+    REMANGA_TORCH_BACKEND="cpu"; REMANGA_VIDEO_ENCODER="libx264"
+    REMANGA_FFMPEG_KIND="btbn"; REMANGA_FFMPEG_ASSET="linux64"; REMANGA_FFMPEG_ARCHIVE="tar.xz"
+    REMANGA_SUMMARY="detection failed; assuming linux/x86_64 CPU"; REMANGA_NOTES=""
+else
+    eval "$DETECTED"
 fi
 
-echo "[+] Using local uv: $("$BIN_DIR/uv" --version)"
+say "This machine: $REMANGA_SUMMARY"
+[ -n "${REMANGA_NOTES:-}" ] && warn "$REMANGA_NOTES"
 
-# 2. Download standalone static FFmpeg and FFprobe from BtbN GitHub into remanga/bin
+# Passed to every install that pulls a torch-ecosystem package, so uv fetches
+# from the wheel index that matches this machine instead of whatever plain
+# PyPI happens to serve. Deliberately an explicit backend rather than uv's own
+# `--torch-backend=auto`: auto maps the driver to the newest CUDA it supports,
+# and the newest indexes do not all carry the torch 2.8 that IndexTTS-2.5
+# pins (cu118 stops at 2.7, cu130 starts at 2.9). hardware.py only ever picks
+# an index that actually has it - see its module docstring.
+TORCH_ARGS=()
+if [ -n "${REMANGA_TORCH_BACKEND:-}" ] && [ "$REMANGA_TORCH_BACKEND" != "default" ]; then
+    TORCH_ARGS=(--torch-backend "$REMANGA_TORCH_BACKEND")
+fi
+
+# ---------------------------------------------------------------------------
+# 3. FFmpeg
+# ---------------------------------------------------------------------------
+# The pinned BtbN build below is deliberately a specific dated snapshot, NOT
+# the "latest" rolling tag. BtbN only publishes master snapshots, each built
+# against whatever NVENC SDK was current that day, and NVENC's minimum
+# required driver only ever goes UP. "latest" therefore silently raises the
+# driver floor for GPU encoding every day it rebuilds. Pinning an older,
+# known-good snapshot keeps working on newer drivers too (NVENC is backward
+# compatible in that direction), so it trades changelog nobody here needs for
+# GPU encoding that works across a far wider range of drivers.
 #
-# Deliberately pinned to a specific dated build, NOT the "latest" rolling tag.
-# BtbN only ever publishes master-branch snapshots (there's no separate stable
-# channel), each compiled against whatever NVIDIA NVENC SDK/driver-API version
-# was current on build day - and NVENC's minimum required driver only ever
-# goes UP over time. "latest" therefore silently raises the minimum driver
-# GPU rendering needs every single day it's rebuilt, with no warning: a user
-# whose driver was perfectly current a few months ago can suddenly get a
-# bundled ffmpeg whose NVENC refuses to open ("Driver does not support the
-# required nvenc API version") on a perfectly real, working GPU. NVENC is
-# backward-compatible in the other direction though - a build pinned to an
-# OLDER, known-good snapshot keeps working fine on NEWER drivers too - so
-# pinning trades a few months of ffmpeg changelog (nothing this project's
-# actual usage - concat demux, h264_nvenc/libx264, aac - needs) for GPU
-# encoding that just works out of the box for a much wider range of driver
-# versions. remanga/video/render.py additionally falls back to a system
-# ffmpeg for GPU encoding specifically if even this pinned build's NVENC
-# doesn't work - see its _resolve_gpu_ffmpeg() - as a last-resort safety net,
-# not the primary way GPU rendering is meant to work.
-#
-# To bump this pin (e.g. to pick up newer codec/bugfix work), pick a recent
-# tag from https://github.com/BtbN/FFmpeg-Builds/releases, find its actual
-# linux64-gpl asset filename (NOT "master-latest" - that name only exists on
-# the "latest" alias) via:
+# To bump: pick a tag from https://github.com/BtbN/FFmpeg-Builds/releases and
+# find its real asset name (NOT "master-latest") via:
 #   curl -s https://github.com/BtbN/FFmpeg-Builds/releases/expanded_assets/<tag> \
-#     | grep -oE 'ffmpeg-[^"]*linux64-gpl\.tar\.xz' | grep -v shared
-# and test its h264_nvenc against your own driver before trusting it further.
-if [ ! -f "$BIN_DIR/ffmpeg" ] || [ ! -f "$BIN_DIR/ffprobe" ]; then
-    echo "[+] Downloading isolated static FFmpeg into $BIN_DIR..."
-    FFMPEG_TAG="autobuild-2026-03-31-13-11"
-    FFMPEG_ASSET="ffmpeg-N-123777-g53537f6cf5-linux64-gpl.tar.xz"
-    FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/$FFMPEG_TAG/$FFMPEG_ASSET"
-    FFMPEG_TMP="$CACHE_DIR/ffmpeg.tar.xz"
+#     | grep -oE 'ffmpeg-[^"]*-gpl\.(tar\.xz|zip)' | grep -v shared
+FFMPEG_TAG="autobuild-2026-03-31-13-11"
+FFMPEG_BUILD="N-123777-g53537f6cf5"
 
-    if curl -fL -A "Mozilla/5.0" "$FFMPEG_URL" -o "$FFMPEG_TMP" 2>/dev/null; then
-        tar -xf "$FFMPEG_TMP" -C "$CACHE_DIR"
-        EXTRACTED_DIR="$(find "$CACHE_DIR" -maxdepth 1 -type d -name "ffmpeg-*-linux64-gpl" | head -n 1)"
-        if [ -n "$EXTRACTED_DIR" ] && [ -d "$EXTRACTED_DIR" ]; then
-            cp "$EXTRACTED_DIR/bin/ffmpeg" "$BIN_DIR/ffmpeg"
-            cp "$EXTRACTED_DIR/bin/ffprobe" "$BIN_DIR/ffprobe"
-            chmod +x "$BIN_DIR/ffmpeg" "$BIN_DIR/ffprobe"
-            rm -rf "$FFMPEG_TMP" "$EXTRACTED_DIR"
-            echo "[+] Static FFmpeg and FFprobe installed locally in $BIN_DIR"
-        fi
-    fi
-
-    if [ ! -f "$BIN_DIR/ffmpeg" ]; then
-        if command -v ffmpeg >/dev/null 2>&1; then
-            cp "$(command -v ffmpeg)" "$BIN_DIR/ffmpeg"
-            cp "$(command -v ffprobe 2>/dev/null || command -v ffmpeg)" "$BIN_DIR/ffprobe"
-            chmod +x "$BIN_DIR/ffmpeg" "$BIN_DIR/ffprobe"
-        else
-            echo "[-] Error: Failed to setup FFmpeg binaries."
-            exit 1
-        fi
-    fi
+FFMPEG_BIN="$BIN_DIR/ffmpeg"
+FFPROBE_BIN="$BIN_DIR/ffprobe"
+FF_EXT=""
+if [ "$REMANGA_OS" = "windows" ]; then
+    FF_EXT=".exe"; FFMPEG_BIN="$BIN_DIR/ffmpeg.exe"; FFPROBE_BIN="$BIN_DIR/ffprobe.exe"
 fi
 
-# 3. Provision standalone Python 3.11 & create the five isolated virtual
-# environments: the main env (remanga's own lightweight core) at the repo
-# root, plus one per heavy ML dependency, tucked under .tools/ for easy
-# management, so their conflicting requirements never have to share a
-# resolution - IndexTTS-2.5, Audio8 TTS, and MAGI v3 each pin their own
-# torch/transformers stack, sometimes incompatibly (MAGI v3 needs
-# transformers<4.52; Audio8 needs transformers>=4.57; nothing guarantees any
-# two of them would ever agree on one shared resolution). DeepSeek-OCR-2
-# gets its own venv for the same reason - its own trust_remote_code modeling
-# code and dependency pins, isolated from the other three's. The storage
-# trade-off (five venvs instead of one) buys permanent isolation
-# instead of a pin that has to be re-asserted and re-verified by hand every
-# time one tool's install could clobber another's. Nothing "activates" these -
-# the main env only ever invokes `.tools/venv-<tool>/bin/python` directly as a
-# subprocess (see remanga/venvs.py), which needs no shell activation step at all.
-echo "[+] Provisioning standalone Python 3.11 runtime..."
-"$BIN_DIR/uv" python install 3.11
-
-echo "[+] Creating main environment ($VENV_DIR)..."
-"$BIN_DIR/uv" venv "$VENV_DIR" --python 3.11 --allow-existing
-"$BIN_DIR/uv" pip install --python "$VENV_DIR" -e .
-
-echo "[+] Creating isolated IndexTTS-2.5 environment ($INDEXTTS_VENV_DIR)..."
-"$BIN_DIR/uv" venv "$INDEXTTS_VENV_DIR" --python 3.11 --allow-existing
-"$BIN_DIR/uv" pip install --python "$INDEXTTS_VENV_DIR" torch torchaudio transformers accelerate huggingface-hub modelscope
-"$BIN_DIR/uv" pip install --python "$INDEXTTS_VENV_DIR" git+https://github.com/index-tts/index-tts.git
-
-# Second, alternative TTS engine - Audio8/Audio8-TTS-Preview-0.1b on Hugging
-# Face (config.json's tts.engine picks which one actually runs; see
-# remanga/config.py's TTS_ENGINES and remanga/audio/synth.py). Its own
-# isolated venv, same reasoning as IndexTTS-2.5's: a `transformers>=4.57,<5`
-# pin (for its trust_remote_code=True custom modeling files) that has no
-# business sharing a resolution with IndexTTS's own pin, let alone MAGI v3's
-# `transformers<4.52`. Provisioned unconditionally alongside the other two
-# so switching engines later (config.json, or `setup-config`) never requires
-# re-running bootstrap.sh - only the weights themselves (checkpoints/
-# audio8_tts_0.1b/, ~1.7GB) are fetched lazily, the first time this engine
-# is actually selected and used (ModelManager.ensure_model(), same lazy
-# pattern IndexTTS-2.5's own weights already follow).
-echo "[+] Creating isolated Audio8 TTS environment ($AUDIO8_VENV_DIR)..."
-"$BIN_DIR/uv" venv "$AUDIO8_VENV_DIR" --python 3.11 --allow-existing
-"$BIN_DIR/uv" pip install --python "$AUDIO8_VENV_DIR" "torch>=2.5.0" "torchaudio>=2.5.0" "transformers>=4.57.0,<5" "soundfile>=0.12" "safetensors>=0.4" accelerate huggingface-hub
-
-# Audio8 is Falcon-H1-based (a Mamba/state-space hybrid, not a plain
-# transformer) - its speed depends on the fused `mamba-ssm`/`causal-conv1d`
-# CUDA kernels for the state-space recurrence. Without them,
-# audio8_worker.py's `transformers` call silently falls back to a naive,
-# unfused, token-by-token recurrence loop that's dramatically slower
-# (measured ~2-3x slower per panel on an RTX 3060) - small parameter count
-# barely matters on that path. Best-effort only: these are genuine CUDA
-# extension builds (need nvcc matching torch's CUDA major version, ~10-20
-# min combined) and the worker already degrades gracefully to the naive
-# path if they're missing/fail to build, so a failure here must never abort
-# the rest of bootstrap.sh.
-echo "[+] Building Audio8's fused Mamba CUDA kernels (mamba-ssm, causal-conv1d) - this speeds up synthesis significantly and takes ~10-20 min; safe to skip on failure, Audio8 still works without it..."
-(
-    set -e
-    # torch's cpp_extension build only requires nvcc's MAJOR version to match
-    # torch.version.cuda (a minor mismatch is just a warning) - installing
-    # `nvidia-cuda-nvcc` into this same venv guarantees that match without
-    # touching the system CUDA toolkit (which may be a different, older
-    # major version - see this script's comment above the FFmpeg/NVENC pin
-    # for the same kind of driver/toolkit-version trap).
-    "$BIN_DIR/uv" pip install --python "$AUDIO8_VENV_DIR" nvidia-cuda-nvcc
-    NVCC_CUDA_HOME="$("$AUDIO8_VENV_DIR/bin/python" -c "import nvidia.cuda_nvcc as m, pathlib; print(pathlib.Path(m.__file__).parent)" 2>/dev/null || true)"
-    if [ -z "$NVCC_CUDA_HOME" ]; then
-        # Fallback: locate it by the actual nvcc binary pip just installed,
-        # since the importable package name has moved between releases.
-        NVCC_BIN="$(find "$AUDIO8_VENV_DIR/lib" -maxdepth 7 -type f -path "*/nvidia/*/bin/nvcc" 2>/dev/null | head -n 1)"
-        [ -n "$NVCC_BIN" ] && NVCC_CUDA_HOME="$(dirname "$(dirname "$NVCC_BIN")")"
+use_system_ffmpeg() {
+    command -v ffmpeg >/dev/null 2>&1 || return 1
+    cp "$(command -v ffmpeg)" "$FFMPEG_BIN" 2>/dev/null || return 1
+    if command -v ffprobe >/dev/null 2>&1; then
+        cp "$(command -v ffprobe)" "$FFPROBE_BIN" 2>/dev/null || return 1
     fi
-    [ -n "$NVCC_CUDA_HOME" ] && [ -x "$NVCC_CUDA_HOME/bin/nvcc" ] || { echo "[-] Could not locate a usable nvcc after installing nvidia-cuda-nvcc - skipping fused kernels."; exit 1; }
+    chmod +x "$FFMPEG_BIN" "$FFPROBE_BIN" 2>/dev/null
+    say "Using the system ffmpeg already on PATH."
+    return 0
+}
 
-    export CUDA_HOME="$NVCC_CUDA_HOME"
-    export PATH="$CUDA_HOME/bin:$PATH"
-    # Target this machine's actual GPU compute capability (falls back to a
-    # broad common-GPU list if nvidia-smi isn't available) so nvcc doesn't
-    # waste the ~10-20 min build compiling kernels for architectures that
-    # will never run here.
-    export TORCH_CUDA_ARCH_LIST="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -n 1 | tr -d ' ' || true)"
-    [ -z "$TORCH_CUDA_ARCH_LIST" ] && TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6;8.9;9.0"
-    export MAX_JOBS=4
+download_static_ffmpeg() {
+    local asset="ffmpeg-${FFMPEG_BUILD}-${REMANGA_FFMPEG_ASSET}-gpl.${REMANGA_FFMPEG_ARCHIVE}"
+    local url="https://github.com/BtbN/FFmpeg-Builds/releases/download/$FFMPEG_TAG/$asset"
+    local tmp="$CACHE_DIR/ffmpeg-download"
 
-    "$BIN_DIR/uv" pip install --python "$AUDIO8_VENV_DIR" causal-conv1d --no-build-isolation
-    "$BIN_DIR/uv" pip install --python "$AUDIO8_VENV_DIR" mamba-ssm --no-build-isolation
-) && echo "[+] Fused Mamba CUDA kernels installed - Audio8 will use the fast path." \
-  || echo "[-] Skipping fused Mamba CUDA kernels (build failed) - Audio8 will still work, just on its slower fallback path."
+    rm -rf "$tmp" && mkdir -p "$tmp" || return 1
+    say "Downloading static FFmpeg for ${REMANGA_OS}/${REMANGA_ARCH}..."
+    curl -fL --retry 3 -A "Mozilla/5.0" "$url" -o "$tmp/archive" 2>/dev/null || return 1
 
-echo "[+] Creating isolated MAGI v3 environment ($MAGI_VENV_DIR)..."
-"$BIN_DIR/uv" venv "$MAGI_VENV_DIR" --python 3.11 --allow-existing
-# einops/matplotlib: undeclared imports MAGI v3's remote modeling code needs
-# beyond what its own requirements list - remanga/webui/magi_assist.py will
-# auto-install anything still missing on first load, but listing the ones
-# already known here saves that extra round-trip.
-"$BIN_DIR/uv" pip install --python "$MAGI_VENV_DIR" torch "transformers<4.52.0" timm shapely pytorch-metric-learning huggingface-hub pillow numpy einops matplotlib
+    if [ "$REMANGA_FFMPEG_ARCHIVE" = "zip" ]; then
+        command -v unzip >/dev/null 2>&1 || return 1
+        unzip -q "$tmp/archive" -d "$tmp" || return 1
+    else
+        tar -xf "$tmp/archive" -C "$tmp" || return 1
+    fi
 
-# DeepSeek-OCR-2 (https://huggingface.co/deepseek-ai/DeepSeek-OCR-2) - powers
-# the Narration Writer's "OCR this panel" button (remanga/ocr/engine.py,
-# remanga/ocr/scripts/deepseek_ocr_worker.py) the same way IndexTTS-2.5/
-# Audio8 power TTS synthesis: its own isolated venv, a persistent worker
-# subprocess loaded once per session, GPU preferred (falls back to CPU) -
-# see deepseek_ocr_worker.py's own device selection. `setup-models` still
-# fetches/verifies the weights unconditionally here too, so they're already
-# in checkpoints/ before the button is ever clicked.
-echo "[+] Creating isolated DeepSeek-OCR-2 environment ($DEEPSEEK_OCR_VENV_DIR)..."
-"$BIN_DIR/uv" venv "$DEEPSEEK_OCR_VENV_DIR" --python 3.11 --allow-existing
-"$BIN_DIR/uv" pip install --python "$DEEPSEEK_OCR_VENV_DIR" torch transformers accelerate pillow huggingface-hub modelscope einops addict easydict
+    local src_ffmpeg src_ffprobe
+    src_ffmpeg="$(find "$tmp" -type f -name "ffmpeg$FF_EXT" | head -n 1)"
+    src_ffprobe="$(find "$tmp" -type f -name "ffprobe$FF_EXT" | head -n 1)"
+    [ -n "$src_ffmpeg" ] && [ -n "$src_ffprobe" ] || return 1
 
-# 4. Initialize config.json from config.example.json if missing
+    cp "$src_ffmpeg" "$FFMPEG_BIN" && cp "$src_ffprobe" "$FFPROBE_BIN" || return 1
+    chmod +x "$FFMPEG_BIN" "$FFPROBE_BIN" 2>/dev/null
+    rm -rf "$tmp"
+    say "Static FFmpeg installed into $BIN_DIR"
+    return 0
+}
+
+if [ ! -x "$FFMPEG_BIN" ] || [ ! -x "$FFPROBE_BIN" ]; then
+    if [ "$REMANGA_FFMPEG_KIND" = "btbn" ]; then
+        download_static_ffmpeg || use_system_ffmpeg || warn "could not obtain ffmpeg"
+    else
+        # macOS and any architecture BtbN doesn't publish: the system one is
+        # the normal way to have ffmpeg there, not a fallback.
+        use_system_ffmpeg || warn "no ffmpeg found - install one (macOS: 'brew install ffmpeg') and re-run"
+    fi
+fi
+[ -x "$FFMPEG_BIN" ] || die "ffmpeg is required and could not be installed automatically"
+
+# ---------------------------------------------------------------------------
+# 4. Virtual environments
+# ---------------------------------------------------------------------------
+# One lightweight main env plus one per heavy ML dependency, tucked under
+# .tools/. Their requirements genuinely conflict - MAGI v3 needs
+# transformers<4.52, Audio8 needs >=4.57, and nothing guarantees any two of
+# them would ever agree on one resolution - so five environments buys
+# permanent isolation instead of a pin that has to be re-verified by hand
+# every time one tool's install could clobber another's. Nothing "activates"
+# them: the main env invokes `.tools/venv-<tool>/bin/python` as a subprocess
+# (see remanga/paths/tools.py).
+make_venv() {
+    "$UV" venv "$1" --python 3.11 --allow-existing >/dev/null 2>&1 || return 1
+    return 0
+}
+
+say "Creating main environment ($VENV_DIR)..."
+make_venv "$VENV_DIR" || die "could not create the main virtual environment"
+"$UV" pip install --python "$VENV_DIR" -e . || die "could not install remanga into the main environment"
+
+say "Creating IndexTTS-2.5 environment [$REMANGA_TORCH_BACKEND wheels]..."
+if make_venv "$INDEXTTS_VENV_DIR"; then
+    # --torch-backend on BOTH installs: the second one re-resolves torch as a
+    # dependency of index-tts, and without the flag it would happily pull the
+    # plain-PyPI build straight over the machine-matched one just installed.
+    try_step "IndexTTS torch install" \
+        "$UV" pip install --python "$INDEXTTS_VENV_DIR" "${TORCH_ARGS[@]}" \
+        torch torchaudio transformers accelerate huggingface-hub modelscope
+    try_step "IndexTTS package install" \
+        "$UV" pip install --python "$INDEXTTS_VENV_DIR" "${TORCH_ARGS[@]}" \
+        "git+https://github.com/index-tts/index-tts.git"
+
+    # index-tts's own pyproject declares a `pytorch-cuda` index pinned to
+    # cu128 via [tool.uv.sources], and that pin WINS over --torch-backend:
+    # installing it resolves torch to 2.8.0+cu128 even when we asked for
+    # cpu or rocm. Verified by dry-run - `--torch-backend cpu` alone gives
+    # 2.8.0+cpu, but the same flag alongside the git package gives
+    # 2.8.0+cu128. Left alone that would put CUDA wheels on CPU-only and
+    # AMD machines, which is exactly the portability bug this file exists
+    # to fix, so the 2.8 line is re-pinned here from the index this machine
+    # actually wants. Every supported backend carries 2.8 (see
+    # hardware.py), so this resolves everywhere; it's a no-op when the
+    # detected backend already is cu128.
+    try_step "IndexTTS torch re-pin for this machine" \
+        "$UV" pip install --python "$INDEXTTS_VENV_DIR" "${TORCH_ARGS[@]}" \
+        "torch==2.8.*" "torchaudio==2.8.*"
+else
+    warn "could not create the IndexTTS environment"
+fi
+
+say "Creating Audio8 TTS environment [$REMANGA_TORCH_BACKEND wheels]..."
+if make_venv "$AUDIO8_VENV_DIR"; then
+    try_step "Audio8 install" \
+        "$UV" pip install --python "$AUDIO8_VENV_DIR" "${TORCH_ARGS[@]}" \
+        "torch>=2.5.0" "torchaudio>=2.5.0" "transformers>=4.57.0,<5" "soundfile>=0.12" \
+        "safetensors>=0.4" accelerate huggingface-hub
+else
+    warn "could not create the Audio8 environment"
+fi
+
+# Audio8 is Falcon-H1-based (a Mamba/state-space hybrid), and its speed
+# depends on the fused mamba-ssm/causal-conv1d CUDA kernels; without them
+# transformers silently falls back to an unfused token-by-token recurrence
+# that measured ~2-3x slower per panel. These are real CUDA extension builds
+# (~10-20 min, need nvcc matching torch's CUDA major version), so this is
+# strictly best-effort - and it is skipped entirely unless there is actually
+# an NVIDIA GPU to build them for, which is the difference between a 20
+# minute wasted build and none at all on a CPU or Apple machine.
+if [ "$REMANGA_ACCEL" = "cuda" ] && [ -d "$AUDIO8_VENV_DIR" ]; then
+    say "Building Audio8's fused Mamba CUDA kernels (~10-20 min; optional, safe to fail)..."
+    (
+        set -e
+        # nvcc from pip rather than the system CUDA toolkit: torch's build only
+        # needs nvcc's MAJOR version to match torch.version.cuda, and the
+        # system toolkit is frequently a different major version.
+        "$UV" pip install --python "$AUDIO8_VENV_DIR" nvidia-cuda-nvcc
+        NVCC_BIN="$(find "$AUDIO8_VENV_DIR" -type f -path "*/nvidia/*/bin/nvcc" 2>/dev/null | head -n 1)"
+        [ -n "$NVCC_BIN" ] || { echo "no nvcc found after install"; exit 1; }
+        CUDA_HOME="$(dirname "$(dirname "$NVCC_BIN")")"
+        export CUDA_HOME PATH="$CUDA_HOME/bin:$PATH" MAX_JOBS=4
+        # Build only for the compute capability actually present, so nvcc
+        # doesn't spend the whole 20 minutes on architectures this machine
+        # will never run.
+        arch_list="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -n 1 | tr -d ' ')"
+        export TORCH_CUDA_ARCH_LIST="${arch_list:-7.5;8.0;8.6;8.9;9.0}"
+        "$UV" pip install --python "$AUDIO8_VENV_DIR" causal-conv1d --no-build-isolation
+        "$UV" pip install --python "$AUDIO8_VENV_DIR" mamba-ssm --no-build-isolation
+    ) && say "Fused Mamba CUDA kernels installed - Audio8 will use the fast path." \
+      || warn "fused Mamba kernels not built - Audio8 still works, just on its slower fallback path."
+else
+    say "Skipping Audio8's CUDA kernels (torch backend is '$REMANGA_TORCH_BACKEND', not CUDA) - Audio8 will use its portable fallback path."
+fi
+
+say "Creating MAGI v3 environment [$REMANGA_TORCH_BACKEND wheels]..."
+if make_venv "$MAGI_VENV_DIR"; then
+    # einops/matplotlib: undeclared imports MAGI v3's remote modeling code
+    # needs beyond its own requirements. magi_assist.py auto-installs anything
+    # still missing on first load; listing the known ones saves a round-trip.
+    try_step "MAGI v3 install" \
+        "$UV" pip install --python "$MAGI_VENV_DIR" "${TORCH_ARGS[@]}" \
+        torch "transformers<4.52.0" timm shapely pytorch-metric-learning huggingface-hub \
+        pillow numpy einops matplotlib
+else
+    warn "could not create the MAGI v3 environment"
+fi
+
+say "Creating DeepSeek-OCR-2 environment [$REMANGA_TORCH_BACKEND wheels]..."
+if make_venv "$DEEPSEEK_OCR_VENV_DIR"; then
+    try_step "DeepSeek-OCR-2 install" \
+        "$UV" pip install --python "$DEEPSEEK_OCR_VENV_DIR" "${TORCH_ARGS[@]}" \
+        torch transformers accelerate pillow huggingface-hub modelscope einops addict easydict
+else
+    warn "could not create the DeepSeek-OCR-2 environment"
+fi
+
+# ---------------------------------------------------------------------------
+# 5. Config + weights
+# ---------------------------------------------------------------------------
 if [ ! -f "config.json" ]; then
-    cp config.example.json config.json
+    cp config.example.json config.json && say "Created config.json from config.example.json"
 fi
 
-# 5. Verify and download model weights (IndexTTS-2.5 via ModelScope/HF, MAGI v3
-# via HF) - each downloaded and verified using its own isolated environment.
-"$VENV_DIR/bin/python3" -m remanga.cli setup-models
+# video.gpu_codec defaults to "auto" and is resolved per machine at render
+# time (see remanga/config/system.py and video/render.py), so nothing about
+# the encoder needs writing into config.json here.
 
+say "Verifying and downloading model weights..."
+try_step "model weight download" "$VENV_DIR/bin/python3" -m remanga.cli setup-models
+
+# ---------------------------------------------------------------------------
+echo
 echo "=========================================================="
-echo "✓ remanga hermetic environment initialized successfully!"
-echo "  To start the guided production wizard, run: ./pipeline.sh"
-echo "  To use the step-by-step CLI, run: ./run.sh --help"
+if [ ${#WARNINGS[@]} -eq 0 ]; then
+    echo "✓ remanga environment initialized successfully."
+else
+    echo "✓ remanga environment initialized, with ${#WARNINGS[@]} warning(s):"
+    for w in "${WARNINGS[@]}"; do echo "    - $w"; done
+fi
+echo
+echo "  Machine:  $REMANGA_SUMMARY"
+echo "  Encoder:  $REMANGA_VIDEO_ENCODER"
+echo
+echo "  Guided wizard : ./pipeline.sh"
+echo "  Step-by-step  : ./run.sh --help"
+echo "  Re-check hw   : ./run.sh hardware"
 echo "=========================================================="

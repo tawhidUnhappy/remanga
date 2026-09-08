@@ -63,14 +63,41 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
 
 ## System Requirements
 
+`bootstrap.sh` detects the machine it runs on and installs what fits it, so
+there is no single required configuration. A GPU makes synthesis and
+rendering dramatically faster; nothing here *requires* one.
+
 | Component | Minimum | Recommended |
 |---|---|---|
-| **Operating System** | Linux (Ubuntu 20.04+, Debian 11+, Arch, WSL2 on Windows) | Ubuntu 22.04 LTS or WSL2 |
-| **GPU** | 6 GB VRAM (NVIDIA Pascal or newer) | 8 GB+ VRAM (RTX 3060/4060 or better) |
-| **CUDA Driver** | NVIDIA Driver >= 525.60.13 | NVIDIA Driver >= 535+ (CUDA 12.x) |
-| **CPU** | 4 Cores x86_64 | 8+ Cores x86_64 |
-| **RAM** | 8 GB RAM | 16 GB+ RAM |
-| **Disk Space** | 20 GB free disk space (three isolated venvs + models + workspace) | 35 GB+ SSD |
+| **Operating System** | Linux, macOS, or Windows (native via Git Bash, or WSL2) | Linux or WSL2 |
+| **Architecture** | x86_64 or arm64 (Apple Silicon, ARM laptops, ARM servers) | x86_64 |
+| **GPU** | none — CPU-only works, just slowly | 8 GB+ VRAM (RTX 3060/4060 or better) |
+| **CPU** | 4 cores | 8+ cores |
+| **RAM** | 8 GB | 16 GB+ |
+| **Disk Space** | 20 GB free (five isolated venvs + models + workspace) | 35 GB+ SSD |
+
+**What gets installed for which machine**, decided by `remanga/hardware.py`
+and reported by `./run.sh hardware`:
+
+| Machine | PyTorch wheels | Video encoder |
+|---|---|---|
+| NVIDIA, driver 580+ | `cu129` | `h264_nvenc` |
+| NVIDIA, driver 525+ (528+ on Windows) | `cu128` | `h264_nvenc` |
+| NVIDIA, driver older than that | `cpu` + a warning | `h264_nvenc` (probed, falls back) |
+| AMD with ROCm (Linux) | `rocm6.4` | `h264_vaapi` |
+| Apple Silicon | default PyPI (Metal/MPS) | `h264_videotoolbox` |
+| Anything else | `cpu` | `libx264` |
+
+Why the CUDA index isn't simply "the newest your driver supports":
+IndexTTS-2.5 pins `torch==2.8.*`, and PyTorch's `cu130` index starts at 2.9
+while `cu118` stops at 2.7 — neither has it. The table above picks the
+newest index that the driver can run *and* that still carries 2.8.
+
+Override the choice at any time:
+```bash
+REMANGA_TORCH_BACKEND=cpu bash bootstrap.sh      # skip the ~2.5 GB CUDA download
+REMANGA_TORCH_BACKEND=cu126 bash bootstrap.sh    # pin a different index
+```
 
 ---
 
@@ -79,12 +106,17 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
 Follow these steps to set up `remanga` from scratch on a new machine.
 
 ### Step 1: Install System Prerequisites
-On Ubuntu / Debian / WSL2:
+Ubuntu / Debian / WSL2:
 ```bash
-sudo apt update && sudo apt install -y git curl wget tar bzip2 libgl1 libglib2.0-0
+sudo apt update && sudo apt install -y git curl wget tar bzip2 unzip libgl1 libglib2.0-0
 ```
-
-*Note on Windows:* Run inside **WSL2 (Windows Subsystem for Linux)** with NVIDIA CUDA drivers installed on the Windows host.
+macOS (ffmpeg is not bundled for macOS — there is no static build to fetch):
+```bash
+brew install git curl ffmpeg
+```
+Windows: either **WSL2** (recommended, with NVIDIA drivers on the Windows
+host) or native **Git Bash**, where `bootstrap.sh` fetches the `win64` /
+`winarm64` ffmpeg build and `uv.exe` for you.
 
 ### Step 2: Clone the Repository
 ```bash
@@ -99,15 +131,23 @@ bash bootstrap.sh
 ```
 
 **What `bootstrap.sh` does automatically:**
-1. Downloads and provisions static `bin/uv`, `bin/ffmpeg`, and `bin/ffprobe` — `ffmpeg` is pinned to a specific tested build rather than always the newest one, so its NVENC GPU encoder keeps working across a wide range of NVIDIA driver versions instead of silently requiring whatever driver was newest the day it was compiled (see [Troubleshooting #3](#troubleshooting--faq)).
-2. Provisions **three** isolated Python 3.11 virtual environments instead of one:
+0. **Detects this machine** — OS, CPU architecture, and whether there's an
+   NVIDIA, AMD or Apple GPU — and picks the matching PyTorch wheel index,
+   ffmpeg build and video encoder from it. Everything below follows from
+   that one answer, so the same script provisions a CUDA box, an Apple
+   laptop and a CPU-only server without being edited. Re-check what it
+   decided at any time with `./run.sh hardware`. It never aborts on an
+   optional step: anything skipped is listed as a warning in its summary.
+1. Downloads and provisions static `bin/uv`, `bin/ffmpeg`, and `bin/ffprobe` for this platform (macOS uses the system ffmpeg) — `ffmpeg` is pinned to a specific tested build rather than always the newest one, so its NVENC GPU encoder keeps working across a wide range of NVIDIA driver versions instead of silently requiring whatever driver was newest the day it was compiled (see [Troubleshooting #3](#troubleshooting--faq)).
+2. Provisions **five** isolated Python 3.11 virtual environments instead of one, each installed from the wheel index this machine needs:
    - `.venv/` — remanga's own lightweight core (Pillow, Pydantic, requests, rich, pydub, Flask). No ML libraries at all.
    - `.tools/venv-indextts/` — PyTorch + IndexTTS-2.5's own pinned dependencies.
    - `.tools/venv-magi/` — PyTorch + MAGI v3's own pinned dependencies (including a `transformers` capped below its DaViT-breaking `4.52`).
 
    IndexTTS and MAGI each pin their own, sometimes mutually incompatible, versions of shared libraries like `transformers` — separate environments mean neither can ever silently break the other. The main env only ever talks to them as subprocesses (see `remanga/venvs.py`); the storage trade-off buys permanent isolation instead of a pin that has to be babysat.
-3. Turbo-downloads official `IndexTeam/IndexTTS-2.5` weights into `checkpoints/indextts_2.5` and `ragavsachdeva/magiv3` weights into `checkpoints/magiv3` (skipped automatically if no GPU is present).
-4. Initializes default `config.json`.
+3. Builds Audio8's fused Mamba CUDA kernels **only when there's an NVIDIA GPU to build them for** — a ~20 minute compile that is pure waste on any other machine, and is skipped there rather than attempted and failed.
+4. Turbo-downloads official `IndexTeam/IndexTTS-2.5` weights into `checkpoints/indextts_2.5` and `ragavsachdeva/magiv3` weights into `checkpoints/magiv3`.
+5. Initializes default `config.json`.
 
 ---
 
@@ -235,7 +275,7 @@ Just need to swap the reference voice WAV, BGM file, or the audio8 engine's tran
 {
   "system": {
     "prefer_gpu": true,
-    "gpu_codec": "h264_nvenc",
+    "gpu_codec": "auto",
     "fallback_codec": "libx264",
     "threads": 4
   },

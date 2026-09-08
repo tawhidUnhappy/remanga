@@ -1,7 +1,7 @@
 {
   "system": {
     "prefer_gpu": true,
-    "gpu_codec": "h264_nvenc",
+    "gpu_codec": "auto",
     "fallback_codec": "libx264",
     "threads": 4,
     "log_level": "INFO",
