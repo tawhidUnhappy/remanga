@@ -107,6 +107,42 @@ def _run_infer(model, call_kwargs: dict) -> None:
     model.infer(**call_kwargs)
 
 
+def _harden_qwen_emotion(model) -> bool:
+    """Makes IndexTTS-2.5's emotion classifier survive its own model's output.
+
+    QwenEmotion.inference json.loads() whatever the 0.6B model emitted and
+    feeds the values straight to clamp_score, which does
+    `min(self.max_score, value)`. The scores are normally JSON numbers, but
+    the model intermittently quotes them - `{"愤怒": "0.9"}` - and on that
+    line the whole run dies with `'<' not supported between instances of
+    'str' and 'float'`. normalize_content doesn't catch it either: it only
+    rewrites values that name an emotion, so "0.9" passes through untouched.
+
+    It is text-dependent, so it strikes partway through a chapter (a real
+    run died on panel 57 of 75) after everything before it has already been
+    synthesized. Coercing here keeps the emotion for that panel instead of
+    losing it, and the caller's fallback below covers whatever this doesn't.
+
+    Patched on the instance rather than in indextts itself because
+    `.tools/venv-indextts` is disposable - bootstrap.sh recreates it, and an
+    edit there would silently vanish on the next reinstall."""
+    qwen = getattr(model, "qwen_emo", None)
+    if qwen is None or not hasattr(qwen, "clamp_score"):
+        return False
+
+    original_clamp = qwen.clamp_score
+
+    def clamp_score(value):
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return 0.0  # unparseable score: treat as "this emotion absent"
+        return original_clamp(value)
+
+    qwen.clamp_score = clamp_score
+    return True
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cfg_path", required=True)
@@ -143,6 +179,8 @@ def main() -> None:
     # Better to quietly fall back to the reference clip's emotion than to
     # fail a whole chapter over an optional refinement.
     qwen_emo_ready = getattr(model, "qwen_emo", None) is not None
+    if qwen_emo_ready:
+        _harden_qwen_emotion(model)
 
     for line in sys.stdin:
         line = line.strip()
@@ -189,13 +227,30 @@ def main() -> None:
             if req.get("duration_factor") is not None and "duration_factor" in infer_params:
                 call_kwargs["duration_factor"] = req["duration_factor"]
 
+            emo_fallback = False
             with contextlib.redirect_stdout(io.StringIO()):
-                _run_infer(model, call_kwargs)
+                try:
+                    _run_infer(model, call_kwargs)
+                except Exception:
+                    # Text-derived emotion is a refinement, not the point of
+                    # the call: if the classifier or the emotion blend fails
+                    # on this particular line, speak the line anyway with
+                    # emotion cloned from the reference clip (IndexTTS-2.5's
+                    # own behaviour) rather than failing the panel and taking
+                    # the rest of the chapter down with it. Only retried when
+                    # emotion was actually in play - otherwise there is
+                    # nothing to back off from and the error is the real one.
+                    if "use_emo_text" not in call_kwargs:
+                        raise
+                    call_kwargs.pop("use_emo_text")
+                    call_kwargs.pop("emo_alpha", None)
+                    _run_infer(model, call_kwargs)
+                    emo_fallback = True
 
             if not Path(req["output_path"]).exists():
                 raise RuntimeError("infer() returned without writing an output file")
 
-            send({"ok": True})
+            send({"ok": True, "emo_fallback": emo_fallback} if emo_fallback else {"ok": True})
         except Exception as e:
             send({"ok": False, "error": str(e)})
 

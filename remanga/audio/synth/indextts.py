@@ -66,29 +66,29 @@ class IndexTTSSynthesizer(BaseWorkerSynthesizer):
         return self.tts_config.synth_timeout_seconds
 
     def _build_request(self, text: str, spk_prompt_path: str, output_wav: Path) -> dict[str, Any]:
-        """Asks the worker to derive this panel's emotion from `text` itself
-        (use_emo_text) rather than let IndexTTS-2.5 fall back to cloning it
-        off the reference clip.
+        """Builds one panel's synthesis request.
 
-        That fallback is what happens when nothing is sent, and it is not
-        the "infers emotion from the wording and punctuation" behaviour it
-        reads like: with no emo_vector and no emo_audio_prompt,
-        infer_generator sets `emo_audio_prompt = spk_audio_prompt` and pins
-        `emo_alpha = 1.0`, so every panel in the chapter is spoken with the
-        emotional contour of the reference clip's first 15 seconds - the
-        same flat note whether the text is a battle cry or a whisper, and
-        exactly the opposite of what prompts/narration.md Rule 3 writes for.
-        Sending use_emo_text instead runs the text through the bundled
-        QwenEmotion classifier and blends its emotion vector into the GPT
-        emotion latent, so the delivery tracks what the panel actually says.
+        Emotion is the interesting part. By default nothing emotion-related
+        is sent, and IndexTTS-2.5 then reads every panel with the emotional
+        contour of spk_audio_prompt (infer_generator sets `emo_audio_prompt =
+        spk_audio_prompt` and pins `emo_alpha = 1.0`) - one even register for
+        the whole chapter, which is what a recap narrator should sound like
+        as long as the reference clip is a calm, steady read.
 
-        Still no explicit emo_vector: that would force one fixed emotion
-        onto every panel, which is the same flatness by another route.
-        Temperature/top_p (IndexTTSConfig) stay at IndexTTS-2.5's own
-        recommended defaults - they control sampling variety within
-        whichever emotion the classifier lands on, and emo_alpha
-        (text_emotion_strength) controls how far that emotion is allowed to
-        pull the delivery away from the narrator's own voice."""
+        Note that this is NOT the "infers emotion from the wording and
+        punctuation" behaviour it is often described as, here and upstream;
+        the text has no say in it at all. When tts.indextts.use_text_emotion
+        is on, `use_emo_text` makes the worker classify each panel's text and
+        blend that emotion in instead, scaled by `emo_alpha`
+        (text_emotion_strength) so it colours the read rather than steering
+        it. Expressive, but for continuous narration usually too much - see
+        IndexTTSConfig for the measurements.
+
+        Never an explicit emo_vector either way: that would force one fixed
+        emotion onto every panel, which is neither of the two useful
+        behaviours. Temperature/top_p stay at IndexTTS-2.5's own recommended
+        defaults - they control how natural a single reading sounds within
+        whichever emotion is in play."""
         request: dict[str, Any] = {
             "cmd": "synthesize",
             "spk_audio_prompt": spk_prompt_path,

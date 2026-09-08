@@ -191,9 +191,10 @@ class TTSEngine:
             # narration.json entries only ever carry `panel_id` and `text` now
             # (see prompts/narration.md) - there's no per-panel emotion or
             # pause field in that schema. Emotion isn't set here at all: the
-            # engine derives it from each panel's own `text` (see
-            # IndexTTSSynthesizer._build_request and tts.indextts
-            # .use_text_emotion) rather than from a tag written per panel.
+            # engine takes it from the reference voice, or from each panel's
+            # own `text` where that's enabled (see
+            # IndexTTSSynthesizer._build_request and
+            # tts.indextts.use_text_emotion), never from a per-panel tag.
             # Pausing uses the one configured gap
             # (AudioConfig.pause_between_panels_ms) for every panel instead of
             # a per-panel override.

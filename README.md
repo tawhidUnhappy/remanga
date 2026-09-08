@@ -21,7 +21,7 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
   - [Panel Marker Web UI](#panel-marker-web-ui)
   - [Temporal Horizon Prompting (Zero Spoilers)](#temporal-horizon-prompting-zero-spoilers)
   - [YouTube Upload Text](#youtube-upload-text-promptsyoutubemd)
-- [Natural, Expressive Narration](#natural-expressive-narration)
+- [Narration Voice & Delivery](#narration-voice--delivery)
 - [Reliability: Crashes, Interrupts & Resuming](#reliability-crashes-interrupts--resuming)
 - [CLI Command Reference](#cli-command-reference)
 - [Workspace Directory Structure](#workspace-directory-structure)
@@ -41,9 +41,9 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
 - **One Flat Vision Output Checklist - What to Generate, What to Zip:**
   - Individual panel crops (`panels/`) are always produced. Everything else is an independent yes/no switch: `sheets` (contact sheets, 2x2 labeled composites merged at **full original resolution** - never downscaled), `sheets_zip`, `pdf`, `pdf_splite`, `pdf_zip`, `pdf_zip_splite`, `panels_zip`, `panels_zip_splites` - check any combination, losslessly re-encoded smaller than the raw files either way.
   - Configurable as a plain checklist, interactively (`./run.sh setup-config`, or a prompt in the main wizard each run) and persistent in `config.json` - see [Vision Outputs](#vision-outputs-what-to-generate-what-to-zip).
-- **Natural, Expressive Vocal Synthesis (IndexTTS-2.5):**
-  - Per-panel emotion classified from each panel's own narration text (`tts.indextts.use_text_emotion`) and blended into the delivery, so a shouted line is shouted and a quiet one stays quiet — instead of every panel inheriting one fixed emotional register from the reference clip.
-  - That emotion is applied at a tuned strength (`text_emotion_strength`, default `0.7`) rather than full force, which keeps the expression without letting an intense panel drift off the narrator's own voice — see [Natural, Expressive Narration](#natural-expressive-narration).
+- **Consistent, Natural Vocal Synthesis (IndexTTS-2.5):**
+  - One even narrator register for the whole recap — the delivery is cloned from the reference clip and stays consistent panel to panel, instead of lurching between emotional registers while it describes what happens.
+  - Optional per-panel emotion classified from each panel's own text (`tts.indextts.use_text_emotion`, **off by default**) for work that wants an expressive read — see [Narration Voice & Delivery](#narration-voice--delivery).
   - Temperature/top-p left at IndexTTS-2.5's own recommended defaults (`0.8`/`0.8`) for natural-sounding prosody.
   - Zero-shot speaker cloning from any clean 10–15s reference voice WAV.
 - **Strict Temporal Horizon Prompting (Anti-Spoiler & Anti-Hallucination):**
@@ -314,7 +314,7 @@ Just need to swap the reference voice WAV, BGM file, or the audio8 engine's tran
       "use_bf16": true,
       "temperature": 0.8,
       "top_p": 0.8,
-      "use_text_emotion": true,
+      "use_text_emotion": false,
       "text_emotion_strength": 0.7,
       "sample_rate": 22050
     },
@@ -404,7 +404,7 @@ LLM output and hand-written text carry things a TTS engine turns into noise. Thi
 
 | Removed (makes artifacts) | Kept (carries delivery) |
 | --- | --- |
-| Emoji, arrows, box drawing — anything outside a speakable whitelist | **`?` and `!`** — read by the emotion classifier, and by the engine's own phrasing |
+| Emoji, arrows, box drawing — anything outside a speakable whitelist | **`?` and `!`** — the engine's own phrasing cues, and the emotion classifier's when it's on |
 | Leftover markdown (`**bold**` gets voiced as "asterisk asterisk") | **`...`** — a pause the engine actually performs |
 | URLs, email addresses, and citations like `(see https://…)` | Commas, periods, apostrophes, quotes — the phrasing |
 | SHOUTED words — many front-ends spell all-caps out letter by letter | Single capitals (`A rank`, `S-class`) — those really are letters |
@@ -659,7 +659,7 @@ remanga can drive more than one text-to-speech engine, each in its own isolated 
 
 | Engine (`tts.engine`) | Cloning input | Notes |
 |---|---|---|
-| `indextts-2.5` (default) | Reference voice WAV only | Zero-shot - per-panel emotion classified from `narration.json`'s text (see below) |
+| `indextts-2.5` (default) | Reference voice WAV only | Zero-shot - delivery cloned from the reference clip, with optional per-panel emotion from the text (see below) |
 | `audio8-tts-0.1b` | Reference voice WAV **+ a text transcript of it** | [Audio8/Audio8-TTS-Preview-0.1b](https://huggingface.co/Audio8/Audio8-TTS-Preview-0.1b) - a ~170M-parameter Falcon-H1-based cloning model with its own 44.1kHz codec decoder |
 
 Switch from the wizard's `tts` row — **2. TTS engine**, a numbered list you answer with one keystroke, right next to **1. Run tts** (see [How the menus work](#how-the-menus-work)). `./run.sh setup-config` (the "TTS engine" row) and editing `tts.engine` in `config.json` directly both still work, and `tts --engine` overrides the engine for a single run without changing the setting. `bootstrap.sh` already provisions both engines' isolated venvs (`.tools/venv-indextts`, `.tools/venv-audio8`) regardless of which one is active, so switching never requires re-running it — only that engine's own model weights get downloaded, and only the first time it's actually used (`checkpoints/audio8_tts_0.1b/`, ~1.7GB).
@@ -706,33 +706,36 @@ Everything downstream — `remanga tts`, resuming, `full-recap`, `remix` — wor
 
 ---
 
-## Natural, Expressive Narration
+## Narration Voice & Delivery
 
-The narration audio is meant to sound like an actual person reading the script, not a flat robotic monotone — so the pipeline classifies each panel's emotion from that panel's own text and speaks it that way, instead of letting every panel inherit one fixed emotional register:
+A recap narrator should sound like one person telling the story evenly from start to finish — not like someone reacting to it. So the delivery is cloned from the reference clip and held constant for every panel, and the per-panel emotion feature is **opt-in**, not the default:
 
-1. **Emotion From The Text (`use_text_emotion`, on by default):** `audio/synth/` asks IndexTTS-2.5 to run each panel's `text` through the QwenEmotion classifier bundled with the checkpoint (`checkpoints/indextts_2.5/qwen0.6bemo4-merge/`, downloaded with the weights), and the 8-way emotion vector it returns is blended into the model's emotion latent. A furious panel is spoken furious, a quiet one stays quiet.
+1. **Consistent Delivery (default):** `audio/synth/` sends nothing emotion-related, and IndexTTS-2.5 takes the emotional contour of `spk_audio_prompt` and reads every panel with it (`emo_audio_prompt = spk_audio_prompt` at `emo_alpha = 1.0`). With a calm, steady reference clip that is exactly right: one even register, first panel to last.
 
-   **This is not IndexTTS-2.5's default, and the default is not neutral.** With nothing sent, `infer_generator` falls back to `emo_audio_prompt = spk_audio_prompt` at `emo_alpha = 1.0` — it clones the emotional contour of *the reference clip's first 15 seconds* onto every line in the chapter. That reads as one flat note regardless of what the text says, and measurably flatter than the reference clip itself. Set `tts.indextts.use_text_emotion: false` to go back to it (it saves ~1.2GB of VRAM).
+   Worth knowing, because it is widely described the other way round (this README included, until recently): **IndexTTS-2.5 does not read emotion off your text by default.** Punctuation shapes phrasing and pacing, but the emotional register comes wholly from the reference clip. If narration sounds flat, the reference clip is the thing to fix — not the text.
 
-2. **Applied At A Tuned Strength (`text_emotion_strength`, default `0.7`):** how far the classified emotion is allowed to pull the delivery, passed as IndexTTS-2.5's `emo_alpha`. Whatever weight the emotion vector doesn't claim stays with the narrator's own voice, so this is the dial between "expressive" and "still the same narrator". Measured on one shouted line (`angry` 0.85 from the classifier):
+2. **Optional Per-Panel Emotion (`use_text_emotion`, default `false`):** turns on the QwenEmotion classifier bundled with the checkpoint (`checkpoints/indextts_2.5/qwen0.6bemo4-merge/`, downloaded with the weights). Each panel's text is classified and that emotion blended into the delivery, so a shouted line is shouted and a quiet one stays quiet.
 
-   | Setting | mean f0 | pitch sd |
+   Genuinely expressive — and for continuous narration, usually too much. Measured on this repo's narrator at the default strength, consecutive panels swing across a ~66Hz range:
+
+   | classified emotion | mean f0 | pitch sd |
    |---|---|---|
-   | emotion off | 145 Hz | 21 |
-   | *reference clip itself* | *159 Hz* | *28* |
-   | strength `0.5` | 167 Hz | 36 |
-   | strength `0.7` (default) | 179 Hz | 35 |
-   | strength `1.0` | 216 Hz | 49 |
+   | afraid `0.9` | 200.8 Hz | 33.7 |
+   | angry `0.85` | 191.2 Hz | 40.4 |
+   | *reference clip* | *156.8 Hz* | *27.5* |
+   | calm `1.0` | 134.6 Hz | 18.3 |
+   | sad `0.95` | 134.2 Hz | 33.9 |
 
-   `1.0` is IndexTTS-2.5's own default and too much for narration: ~57Hz above the reference, far enough that an intense panel stops sounding like the same narrator reacting strongly and starts sounding like somebody else shouting. `0.7` keeps nearly all the expressive range while holding pitch close to the narrator's own. It matters for ordinary panels too — most narration classifies as `calm`, and at `1.0` a calm vector claims the whole blend and reads *flatter* than leaving emotion off entirely.
+   A narrator describing what happens doesn't change register that far that often, and back to back it reads as distracting rather than expressive. Useful for dialogue-driven or single-character work; costs ~1.2GB of VRAM and a few tens of milliseconds per panel.
 
-3. **Punctuate For It:** `prompts/narration.md` (Rule 3) has the LLM write real punctuation — `!`, `?`, `...` — wherever the panel genuinely is exclamatory, interrogative, or hesitant, and plain measured prose everywhere else. That punctuation feeds both the classifier and the engine's own phrasing; there's no separate emotion field in `narration.json` — each entry is just `panel_id` + `text`.
-4. **Natural Autoregressive Sampling:** `temperature`/`top_p` are left at IndexTTS-2.5's own recommended defaults (`0.8`/`0.8`, not artificially lowered) — this governs how natural a single reading *sounds* (pitch/pacing variation) within whichever emotion the classifier landed on. Lowering these trades that naturalness away for a flatter, more robotic-sounding delivery; raising them adds more variation, at some risk of instability on longer lines.
-5. **Reference Voice Sample Criteria:**
+3. **Emotion Strength (`text_emotion_strength`, default `0.7`):** how far the classified emotion may pull the delivery, when enabled — IndexTTS-2.5's `emo_alpha`. Whatever the emotion vector doesn't claim stays with the narrator's own voice, so this is the dial between "expressive" and "still the same narrator". `1.0` (IndexTTS-2.5's own default) puts a shouted line ~57Hz above the reference, far enough that it stops sounding like the same person; `0.3`–`0.5` colours the read without steering it.
+4. **Punctuate Anyway:** `prompts/narration.md` (Rule 3) has the LLM write real punctuation — `!`, `?`, `...` — wherever the panel genuinely is exclamatory, interrogative, or hesitant. That drives phrasing and pacing whether or not emotion classification is on (and feeds the classifier when it is). There's no emotion field in `narration.json` — each entry is just `panel_id` + `text`.
+5. **Natural Autoregressive Sampling:** `temperature`/`top_p` are left at IndexTTS-2.5's own recommended defaults (`0.8`/`0.8`, not artificially lowered) — this governs how natural a single reading *sounds* (pitch/pacing variation). Lowering these trades that away for a flatter, more robotic delivery; raising them adds variation, at some risk of instability on longer lines.
+6. **Reference Voice Sample Criteria** — this is the single biggest lever on how the narration sounds, since by default the delivery is cloned from it wholesale:
    - **Length:** 10–15 seconds. **IndexTTS-2.5 hard-truncates the reference to its first 15 seconds** (`_load_and_cut_audio`) and ignores everything after, so pointing this at a long recording clones whatever happens to sit at the start of the file — including a cut landing mid-word. Cut the clip deliberately; don't hand it an audiobook.
    - **Format:** Clean mono WAV. A lossy source (MP3) clones its compression artifacts along with the voice.
    - **Quality:** Studio clean (zero background noise, room reverb, or vocal fry).
-   - **Delivery:** Calm, steady reading, starting and ending on a natural pause — this is the base voice being cloned, not the narration's final emotional range, which comes from the text itself (points 1–2 above).
+   - **Delivery:** Calm, steady reading, starting and ending on a natural pause. Cut it at a pause rather than at the first syllable — starting exactly on a word attack leaves a 10–16dB transient that is audible as a "loud, weird" start and gets cloned along with the voice.
 
 ---
 
@@ -875,7 +878,7 @@ remanga/
 - IndexTTS-2.5 runs comfortably on GPUs with 6GB+ VRAM in BF16 mode.
 
 ### 2. A specific narration line sounds unstable, or too dramatic
-Each panel's emotion is classified from its own `text` now (see [Natural, Expressive Narration](#natural-expressive-narration)), so an over-the-top or unstable-sounding line usually traces back to what's actually written for that panel, not a synthesis bug — and if intense panels consistently overshoot, lower `tts.indextts.text_emotion_strength`:
+Delivery is cloned from the reference clip and is the same register for every panel (see [Narration Voice & Delivery](#narration-voice--delivery)), so an over-the-top or unstable-sounding line usually traces back to the reference clip or to what's written for that panel, not a synthesis bug — and if you enabled `use_text_emotion` and intense panels overshoot, lower `tts.indextts.text_emotion_strength`:
 - Check whether that panel's `narration.json` text over-punctuates — a line stacking multiple `!`/`?`/`...` reads as more dramatic than intended. `prompts/narration.md` Rule 3 asks the LLM to reserve emphatic punctuation for panels that genuinely call for it; if it slipped through anyway, trim the line's punctuation back to plain prose and re-run.
 - Inspect the active engine's reference speaker WAV (`tts.<engine>.spk_audio_prompt` — each engine has its own). A cleaner, steadier reference sample (see the criteria above) makes every inferred emotion sound more natural, not just calm ones.
 - If a specific line still sounds unstable even with clean text and a clean reference, `tts.indextts.temperature`/`top_p` default to IndexTTS-2.5's own recommended `0.8`/`0.8` for natural-sounding delivery — nudging them down (e.g. `0.6`) trades some of that naturalness for more stability, as a last resort rather than a first fix.

@@ -75,36 +75,44 @@ class IndexTTSConfig(BaseModel):
     # WHICH emotion is being sampled within is use_text_emotion's job below.
     temperature: float = 0.8
     top_p: float = 0.8
-    # Whether each panel's emotion is derived from its own narration TEXT
-    # rather than cloned wholesale from spk_audio_prompt.
+    # Whether each panel's emotion is derived from its own narration TEXT.
     #
-    # IndexTTS-2.5 ships this off, and that default is not the no-op it
-    # looks like: with it off, infer() sets `emo_audio_prompt =
-    # spk_audio_prompt` and forces `emo_alpha = 1.0`
-    # (indextts/infer_v2_5.py), so EVERY line is read with the emotional
-    # contour of the reference clip's first 15 seconds regardless of what
-    # the text says - one flat note for a whole chapter that is anything
-    # but. Turning it on routes each panel's text through the QwenEmotion
-    # classifier bundled with the checkpoint (model_dir's
-    # qwen0.6bemo4-merge/, downloaded with the weights), and the 8-way
-    # emotion vector it returns is blended into the GPT emotion latent -
-    # so a furious panel is spoken furious and a quiet one stays quiet,
-    # which is what prompts/narration.md Rule 3 assumed all along.
+    # OFF by default, and deliberately so for narration. With it off,
+    # IndexTTS-2.5 takes the emotional contour of spk_audio_prompt and reads
+    # every panel with it (`emo_audio_prompt = spk_audio_prompt` at
+    # `emo_alpha = 1.0` in infer_v2_5.py) - which, given a calm and steady
+    # reference clip, is exactly what a recap narrator should sound like: one
+    # even voice carrying the story, consistent from the first panel to the
+    # last.
     #
-    # Costs ~1.2GB of VRAM for the classifier, held for the whole run, plus
-    # a few tens of milliseconds per panel. Set false to get the old
-    # emotion-from-the-reference-clip behaviour back on a card that can't
-    # spare it; audio/synth/indextts.py then sends nothing extra and the
-    # worker never loads the classifier at all.
-    use_text_emotion: bool = True
-    # How strongly that text-derived emotion is applied, 0.0-1.0. Passed as
+    # Turning it on runs each panel's text through the QwenEmotion classifier
+    # bundled with the checkpoint (model_dir's qwen0.6bemo4-merge/) and
+    # blends the emotion it returns into the GPT emotion latent, so delivery
+    # tracks what each panel says. That is genuinely expressive, and for
+    # continuous narration it is usually too much: measured on this repo's
+    # narrator, consecutive panels swing from 134Hz ("calm") to 200Hz
+    # ("afraid"), and a reader who is merely describing what happens does not
+    # change register that far that often. It reads as the narrator reacting
+    # to the story rather than telling it. Worth having for dialogue-driven
+    # or single-character work; not the default here.
+    #
+    # Costs ~1.2GB of VRAM for the classifier, held for the whole run, plus a
+    # few tens of milliseconds per panel. When off, audio/synth/indextts.py
+    # sends nothing extra and the worker never loads the classifier at all.
+    #
+    # NOTE: this is not the knob for "the narration sounds flat". Flatness
+    # is almost always the reference clip - see spk_audio_prompt, and keep in
+    # mind IndexTTS-2.5 truncates it to its first 15 seconds.
+    use_text_emotion: bool = False
+    # How strongly that text-derived emotion is applied when use_text_emotion
+    # is on, 0.0-1.0; ignored entirely when it is off. Passed as
     # IndexTTS-2.5's `emo_alpha`, which scales the classifier's emotion
     # vector before it is blended into the GPT emotion latent; whatever
-    # weight the vector does not claim stays with the emotion latent
-    # derived from spk_audio_prompt, i.e. with the narrator's own voice.
+    # weight the vector does not claim stays with the emotion latent derived
+    # from spk_audio_prompt, i.e. with the narrator's own voice.
     #
-    # Not 1.0, which is IndexTTS-2.5's own default and measurably too much
-    # for narration. Measured on this repo's narrator clip, one shouted
+    # Not 1.0, which is IndexTTS-2.5's own default and too much even for the
+    # expressive case. Measured on this repo's narrator clip, one shouted
     # line ("angry" 0.85 from the classifier):
     #
     #   emotion off      mean f0 145Hz, sd 21   (clip itself: 159Hz, sd 28)
@@ -112,19 +120,12 @@ class IndexTTSConfig(BaseModel):
     #   strength 0.7     mean f0 179Hz, sd 35
     #   strength 1.0     mean f0 216Hz, sd 49
     #
-    # Emotion off is flatter than the reference clip is - that is the bug
-    # this setting exists to fix. But at 1.0 the pitch runs ~57Hz above the
-    # reference, far enough that an intense panel stops sounding like the
-    # same narrator having a strong reaction and starts sounding like
-    # somebody else shouting - the "cloning went weird" complaint arriving
-    # by a different road. 0.7 keeps nearly all the expressive range (sd 35
-    # vs 21) while holding pitch close to the narrator's own.
-    #
-    # It also protects ordinary panels: most narration classifies as
-    # "calm", and at 1.0 a calm vector claims the entire blend and reads
-    # FLATTER (sd 16) than leaving emotion off at all. Below 1.0 the
-    # narrator's own latent keeps a share, so neutral lines keep their
-    # natural movement. Ignored entirely when use_text_emotion is false.
+    # At 1.0 the pitch runs ~57Hz above the reference, far enough that an
+    # intense panel stops sounding like the same narrator having a strong
+    # reaction and starts sounding like somebody else shouting. 0.7 keeps
+    # nearly all the expressive range while holding pitch closer to the
+    # narrator's own; drop toward 0.3-0.5 for emotion that colours the read
+    # without steering it.
     text_emotion_strength: float = Field(default=0.7, ge=0.0, le=1.0)
     sample_rate: int = 22050
     # Gain applied to THIS engine's synthesized narration clips, in decibels

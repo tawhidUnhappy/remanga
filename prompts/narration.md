@@ -560,10 +560,10 @@ both must equal the number of panel images actually supplied (Rule 6) — recoun
 you output, not after.
 
 **Each entry in `narration` has exactly two keys: `panel_id` and `text` — nothing else.**
-Do not add `emotion`, `pause_after_ms`, or any other key: the pipeline classifies each
-panel's emotion from `text` itself - its wording and punctuation (Rule 3) - and applies its
-own fixed pause automatically (Rule 4), so there is nothing for either field to
-control anymore. An entry with any extra key, or missing either of the two required ones,
+Do not add `emotion`, `pause_after_ms`, or any other key: the narrator's delivery is set
+once by the reference voice rather than per panel (punctuation still carries phrasing and
+pacing - Rule 3), and the pipeline applies its own fixed pause automatically (Rule 4), so
+there is nothing for either field to control anymore. An entry with any extra key, or missing either of the two required ones,
 is malformed output.
 
 ### Block 2: `memory.json`
