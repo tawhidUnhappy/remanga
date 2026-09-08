@@ -178,16 +178,16 @@ Every screen is an arrow-key menu — **↑/↓** to move, **Enter** to pick, **
 
 Short, fixed lists are **numbered** instead, so picking one is a single keystroke rather than an arrow and an Enter. Type the number to pick it, `0` to back out (the same convention the non-tty fallback prompts have always used); the arrow keys still work.
 
-Five commands have a menu of their own — `tts`, `mix`, `render`, `full-recap` and `remix` — because the engine, the voice clip, the music and the resolution are things you notice at the moment you go to run them, not while walking through `setup-config`. Row 1 runs the command; the rest are the settings it reads, each stating its current value and opening the same screen the settings menu opens:
+Six commands have a menu of their own — `tts`, `mix`, `render`, `crop`, `full-recap` and `remix` — because the voice, the pacing, the levels, the music and the resolution are things you notice at the moment you go to run them, not while walking through `setup-config`. Row 1 runs the command; the rest are the settings it reads, each stating its current value and opening the same screen the settings menu opens:
 
 ```
 ? tts
   Generate vocal audio from narration.json · or change what it runs with
 ❯ 1. Run tts  Generate vocal audio from narration.json
-  2. TTS engine  Kokoro-82M
-  3. Reference voice  global/voice/narrator.wav
-  4. Reference transcript  In a world where you don't just die once, a frightened bo...  (651 chars)
-  5. Narration language  English (EN)
+  2. TTS engine  Kokoro-82M · Heart (female)
+  3. Narrator voice  Heart (female) (af_heart, grade A)
+  4. Narration language  English (EN)
+  5. Narration pacing  1x speed · 350ms between panels
      Back
      Exit remanga  quit from here
   uses the configured voice and engine unless you pick otherwise
@@ -201,12 +201,13 @@ Five commands have a menu of their own — `tts`, `mix`, `render`, `full-recap` 
   2. Video resolution  1080p Full HD (1920x1080)
   3. Canvas background  Bokeh canvas blur
   4. Hardware acceleration  h264_nvenc preferred
+  5. Panel framing  4% padding (adaptive) · 2px border
      Back
   renders at the resolution, background and encoder set below
-  type 1-4 · ↑↓ move · enter select · 0 or esc back · ctrl+q exit
+  type 1-5 · ↑↓ move · enter select · 0 or esc back · ctrl+q exit
 ```
 
-Rows that don't apply aren't shown: **Reference transcript** appears only under an engine that needs one. The rows are pointers, not copies — each runs the very same function `setup-config` runs, so the two can never describe a setting differently. Commands with no settings behind them (`download`, `crop`, `mark`, …) still run straight away. On the CLI nothing changed: `remanga tts` synthesizes a chapter, and every setting keeps its own screen under `setup-config`.
+The rows are pointers, not copies — each runs the very same function `setup-config` runs, so the two can never describe a setting differently. Commands with no settings behind them (`download`, `crop`, `mark`, …) still run straight away. On the CLI nothing changed: `remanga tts` synthesizes a chapter, and every setting keeps its own screen under `setup-config`.
 
 Picking a category opens its commands, and running one lands you back in the same list — chaining `mark` → `crop` → `write` is picking three rows in a row. The menu is generated from the command registry, so every command `remanga --help` lists is here too, described the same way.
 
@@ -218,7 +219,7 @@ Picking a category opens its commands, and running one lands you back in the sam
 | Which manga/URL? | `project.json`'s saved source — asked once, on the first download |
 | Which way does it read? | MangaDex's `originalLanguage` (`ja` → right-to-left, `ko`/`zh` → left-to-right) |
 | Which engine / voice / music this run? | Not asked at all — what's configured is stated and used. All three are set once and kept, so `--engine`/`--voice`/`--bgm` cover the rare one-off and the settings screens cover a permanent change |
-| Which reference voice / music file? | When you *do* change one: the audio files already in `global/voice/` or `global/bgm/` — each picker searches only its own folder — or type a path for one elsewhere. The voice row edits the **active engine's own** voice and says which engine that is |
+| Which voice / music file? | The voice is a **pick from a list** — Kokoro's own named voices, shown with the grade Kokoro published for each, no file involved. Music is a file picker over `global/bgm/`, or type a path for one elsewhere |
 | What to keep when wiping? | A checklist of exactly what that chapter has on disk right now — and what you picked last time, remembered per project |
 | What to package for the LLM? | A checklist of every format, opened on what this project builds — your pick is remembered for the next chapter |
 | Which pipeline steps? | An ordered checklist of the real step registry — the number shown is the run order, and it opens on the steps you ran last time |
@@ -255,19 +256,44 @@ Every row shows what that setting is **right now**, so the screen doubles as a p
 ```
 ? Settings
   changes save immediately
-❯ TTS engine                              Kokoro-82M
-  Assets (voice, BGM, transcript)         voice: ok, bgm: ok, transcript: set
+❯ TTS engine                              Kokoro-82M · Heart (female)
+  Narrator voice                          Heart (female) (af_heart, grade A)
+  Assets (BGM)                            bgm: ok
   Narration language                      English (EN)
+  Narration pacing                        1x speed · 350ms between panels
+  Audio levels                            voice +0.0dB · music -26.0dB · normalized
+  Panel detection                         MAGI, gutter-snap, trim, dedupe
+  Panel framing                           4% padding (adaptive) · 2px border
   Vision outputs (what to generate/zip)   sheets, panels_zip (split at 50MB)
   Video resolution                        1080p Full HD (1920x1080)
   Canvas background                       Bokeh canvas blur
-  Hardware acceleration                   h264_nvenc preferred
+  Hardware acceleration                   auto preferred
   Walk through every section              first-time setup, in order
   Show full summary                       everything config.json holds
   Done
 ```
 
 Just need to swap the BGM file? `./run.sh paths` opens that same Assets screen on its own — showing whether it currently resolves to a real file, with a picker listing the audio files already in `global/bgm/` so you rarely have to type a path at all. It lives under `global/` by default — one shared, gitignored location for assets that aren't tied to any single manga project. (The narrator's voice isn't here: it's a name from Kokoro's own catalogue, so it has its own **Narrator voice** picker row.)
+
+### Tuning how it sounds and looks
+
+Four screens cover the settings you find by watching a chapter back and adjusting — the ones that used to be reachable only by hand-editing `config.json`:
+
+| Screen | Controls | Where it also appears |
+|---|---|---|
+| **Narration pacing** | narration speed, and the silence held after each panel | under `tts` |
+| **Audio levels** | narration gain, music gain, loudness normalization on/off | under `mix` |
+| **Panel detection** | MAGI auto-detection, gutter-snap, whitespace trim, duplicate dropping | under `crop` |
+| **Panel framing** | padding around each panel, adaptive padding, bokeh brightness, border width | under `render` |
+
+They're grouped by the question you're actually asking, not by which config block the answer lives in — "the narration is too fast" shouldn't require knowing that speed is a `tts` setting while the gap between panels is an `audio` one.
+
+Two things worth knowing before you turn these:
+
+- **Raising the narration mostly turns the music *down*.** With loudness normalization on (the default), the finished master is pulled to a fixed target afterwards, so boosting the voice pushes the BGM under it rather than making the file louder. Turn off **Audio levels → normalize** if you want the boost to survive into the absolute output level.
+- **Changing the narration gain does not force a re-synthesis.** `audio_timing.json` records the gain already baked into the clips on disk, and the next `tts` run applies only the difference to clips it would otherwise reuse.
+
+Every **Panel detection** pass is normally right and occasionally wrong on an unusual layout — a splash page, a double-page spread, art that bleeds to the edge. Being able to switch one off without editing JSON is the difference between diagnosing a bad crop in a minute and giving up on the chapter.
 
 ### Key Configurable Parameters (`config.json`):
 
@@ -469,9 +495,8 @@ want to look back at what was flagged and fixed.
 ./run.sh tts --project "my_manga" --chapter "1"
 ./run.sh tts --project "my_manga" --chapter "1" --voice am_fenrir
 ```
-Uses the configured engine and reference voice unless you say otherwise:
-- **`--voice`** — synthesize this run in a different Kokoro voice without touching `config.json`. The wizard doesn't ask — it states which voice is configured and uses it, since that's not a per-chapter decision. Change it permanently in `setup-config` → **Narrator voice**.
-- **`--voice`** — a different reference WAV for this run only.
+Uses the configured engine and voice unless you say otherwise:
+- **`--voice`** — synthesize this run in a different Kokoro voice (a name, e.g. `am_fenrir`) without touching `config.json`. The wizard doesn't ask — it states which voice is configured and uses it, since that's not a per-chapter decision. Change it permanently in `setup-config` → **Narrator voice**.
 - **`--force`** — re-synthesize every panel instead of resuming.
 
 ### 6. Mix Master Audio Track
