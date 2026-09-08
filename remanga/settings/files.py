@@ -4,10 +4,10 @@ that keeps those screens from asking questions they can answer themselves -
 finding the asset files that are already on disk.
 
 Discovery matters more than it looks. Every path remanga asks a user for
-(reference voice WAV, background music, transcript) is nearly always
+(background music, and any file a project points at) is nearly always
 already sitting in global/voice/ or global/bgm/, put there by bootstrap or
 by the user five minutes earlier. Listing what's actually there turns
-"type the absolute path to your reference voice" into picking a row, and
+"type the absolute path to your background music" into picking a row, and
 leaves typing a path as the escape hatch for the file that lives elsewhere."""
 
 from __future__ import annotations

@@ -50,8 +50,14 @@ try_step() {
 
 echo "=== Initializing self-contained remanga environment ==="
 
+# global/bgm, not assets/: shared assets live under global/ (paths/roots.py's
+# GLOBAL_DIR), and that is the only place the settings screens look. This used
+# to create assets/voices and assets/bgm, which nothing has read for a long
+# time - a new user who dropped their music into the folder bootstrap had just
+# made for them would have found remanga unable to see it. There is no voice
+# folder any more either: Kokoro's voices are named, not supplied.
 mkdir -p "$BIN_DIR" "$CACHE_DIR/uv" "$CACHE_DIR/huggingface" "$CACHE_DIR/torch" \
-         "$TOOLS_DIR" assets/voices assets/bgm projects || die "could not create working directories"
+         "$TOOLS_DIR" global/bgm projects || die "could not create working directories"
 
 # Every cache stays inside the repo, so provisioning never writes to (or is
 # poisoned by) a shared machine-wide cache.

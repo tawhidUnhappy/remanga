@@ -101,7 +101,7 @@ def ask_path(
 ) -> Any:
     """Picks a file: discovered candidates first, typing second.
 
-    Every path remanga asks for (reference voice, BGM, transcript) normally
+    Every path remanga asks for (BGM, and any file a project points at) normally
     already exists somewhere predictable - global/voice/, global/bgm/, next
     to whatever is configured now. Listing those as a menu turns the usual
     case into one keypress, and keeps typing a path available for the file

@@ -185,9 +185,10 @@ CHAPTER_COMMANDS: list[Command] = [
                 choice_detail={spec.name: spec.summary for spec in TTS_ENGINE_SPECS},
             ),
             Param("voice", ["--voice", "-v"], required=False, default=None,
-                  help="Override the reference speaker WAV for this run (the configured one is "
-                       "used otherwise - change it permanently with `remanga paths`)",
-                  prompt="Reference voice"),
+                  help="Override the narrator voice for this run, by name (e.g. af_heart, "
+                       "am_fenrir - see `remanga setup-config`; the configured one is used "
+                       "otherwise)",
+                  prompt="Narrator voice"),
             force_param("Force re-synthesis of all panels"),
         ],
         category="Chapter Production",

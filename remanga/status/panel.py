@@ -22,12 +22,14 @@ def render_status_panel(project: str, chapter: str) -> str:
     # This project's settings, not the machine's - the panel says what a
     # render of THIS chapter would use.
     config = RemangaConfig.load().for_project(project)
-    active_voice = config.tts.active_voice
-    voice_path = Path(active_voice).expanduser() if active_voice else None
+    # A NAME from the engine's own catalogue, not a path on disk. This used
+    # to stat() it as a file, which meant a perfectly configured voice was
+    # reported as "Not set / Missing" on every single run - the engines that
+    # took a reference WAV are gone, and the check went stale with them.
+    voice = config.tts.kokoro.spec if config.tts.active_voice else None
     voice_status = (
-        f"[green]Configured ({display_path(voice_path)})[/]"
-        if (voice_path and voice_path.exists())
-        else f"[yellow]Not set / Missing ({display_path(voice_path) if voice_path else 'n/a'})[/]"
+        f"[green]{voice.label} ({voice.name}, grade {voice.grade})[/]"
+        if voice else "[yellow]Not set[/]"
     )
 
     bgm_path = Path(config.audio.bgm_path).expanduser() if config.audio.bgm_path else None
@@ -70,7 +72,7 @@ def render_status_panel(project: str, chapter: str) -> str:
 [bold]Workspace Directory:[/] {display_path(st['chap_dir'])}
 [bold]Video Resolution:[/] {res_str}
 [bold]Vision outputs:[/] {package_str}
-[bold]Reference Voice Audio:[/] {voice_status}
+[bold]Narrator Voice:[/] {voice_status}
 [bold]Background Music:[/] {bgm_status}
 
    1. Pages Downloaded    : {counted(st['pages_count'], 'pages')}
