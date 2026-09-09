@@ -8,6 +8,7 @@ from pydub import AudioSegment
 from remanga import settings
 from remanga.audio.ducking import carve_speech_band, duck_under_speech, merge_spans
 from remanga.audio.resample import load_audio
+from remanga.audio.voice import enhance_voice
 from remanga.config import AudioConfig, RemangaConfig
 from remanga.console import console, escape as _esc
 from remanga.ffmpeg_io import run_ffmpeg
@@ -119,6 +120,28 @@ class AudioProcessor:
             pause_ms = p.get("pause_after_ms", 0)
             if pause_ms > 0:
                 combined_voice += AudioSegment.silent(duration=pause_ms, frame_rate=self.config.sample_rate)
+
+        # Voice chain BEFORE the music meets it, and before the stereo
+        # fan-out: every stage is level-dependent, so processing the
+        # narration alone is the only point where it can be shaped without
+        # the bed's energy confusing the compressor.
+        if self.config.voice_enhance:
+            combined_voice = enhance_voice(
+                combined_voice,
+                highpass_hz=self.config.voice_highpass_hz,
+                warmth_db=self.config.voice_warmth_db,
+                presence_db=self.config.voice_presence_db,
+                compress=self.config.voice_compress,
+                compress_threshold_db=self.config.voice_compress_threshold_db,
+                compress_ratio=self.config.voice_compress_ratio,
+            )
+            console.print(
+                f"[dim]Voice chain: high-pass {self.config.voice_highpass_hz}Hz, "
+                f"warmth {self.config.voice_warmth_db:+.1f}dB, "
+                f"presence {self.config.voice_presence_db:+.1f}dB"
+                + (f", compressed {self.config.voice_compress_ratio:g}:1"
+                   if self.config.voice_compress else "") + ".[/]"
+            )
 
         # Convert to 2-channel stereo for master output
         master_audio = combined_voice.set_channels(2).set_frame_rate(self.config.sample_rate)

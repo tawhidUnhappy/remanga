@@ -66,4 +66,39 @@ class AudioConfig(BaseModel):
     # having, and stops the music competing for the consonants. Set to 0 to
     # duck by level alone.
     duck_carve_db: float = -7.0
+
+    # ---- narration voice chain (see audio/voice.py) ----
+    # Thickens and fronts the narration itself, rather than getting the music
+    # out of its way - the two solve different halves of "the voice doesn't
+    # stand out", and a thin voice with the bed pulled down is still thin.
+    # Off by default: it changes the character of the narration, which is not
+    # something to do to an existing project without being asked.
+    voice_enhance: bool = False
+    # Everything below is ignored unless voice_enhance is on.
+    #
+    # Rumble and plosive thump live under here and carry no speech. Removed
+    # first so the compressor is not spending its gain reduction reacting to
+    # energy nobody can hear.
+    voice_highpass_hz: int = 85
+    # Lift around 110-320Hz - the body of a voice, and what "thick" means.
+    # Modest on purpose: this is the band that turns muddy fastest.
+    voice_warmth_db: float = 2.5
+    # Lift around 2.2-5.5kHz - consonant definition, and what makes a voice
+    # read as close rather than distant. Deliberately the same range
+    # duck_carve_db clears out of the music, so the two meet: the bed steps
+    # out of exactly the range the voice steps into.
+    #
+    # This band SATURATES: measured, asking for more than about +4dB here
+    # delivers roughly +3.8dB and no more, because the band-passed copy that
+    # produces the lift partially cancels itself at higher gains. Dialling in
+    # +8 and hearing no further change is the tool's limit, not a broken
+    # setting - if a voice needs more presence than this, it wants a
+    # different reference recording, not a bigger number.
+    voice_presence_db: float = 3.0
+    # Evens out loud and quiet lines so the narrator sits at a constant
+    # distance instead of drifting. Applied after the EQ, so it responds to
+    # the voice as finally shaped.
+    voice_compress: bool = True
+    voice_compress_threshold_db: float = -18.0
+    voice_compress_ratio: float = 3.0
     enable_loudnorm: bool = True

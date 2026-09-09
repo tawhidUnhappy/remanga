@@ -25,6 +25,7 @@ from rich.progress import BarColumn, Progress, TextColumn
 
 from remanga import settings
 from remanga.audio.ducking import carve_speech_band, duck_under_speech, merge_spans
+from remanga.audio.voice import enhance_voice
 from remanga.config import RemangaConfig
 from remanga.console import console, escape as _esc
 from remanga.ffmpeg_io import run_ffmpeg
@@ -97,6 +98,22 @@ def assemble_combined_audio(
 
                 frame_timeline.append((frames_dir / f"frame_{p['panel_id']}.png", p["total_slot_sec"]))
                 progress.update(task, advance=1)
+
+    if audio_config.voice_enhance:
+        combined_voice = enhance_voice(
+            combined_voice,
+            highpass_hz=audio_config.voice_highpass_hz,
+            warmth_db=audio_config.voice_warmth_db,
+            presence_db=audio_config.voice_presence_db,
+            compress=audio_config.voice_compress,
+            compress_threshold_db=audio_config.voice_compress_threshold_db,
+            compress_ratio=audio_config.voice_compress_ratio,
+        )
+        console.print(
+            f"[dim]Voice chain applied across the full manga: high-pass "
+            f"{audio_config.voice_highpass_hz}Hz, warmth {audio_config.voice_warmth_db:+.1f}dB, "
+            f"presence {audio_config.voice_presence_db:+.1f}dB.[/]"
+        )
 
     master_audio = combined_voice.set_channels(2).set_frame_rate(audio_config.sample_rate)
 
