@@ -10,16 +10,26 @@ from remanga.config import RemangaConfig
 from remanga.console import console
 from remanga.full_recap import FullRecapCompiler
 from remanga.remix import remix_project
+from remanga.reset import DEFAULT_REBUILD_MODE, REBUILD_MODE_BY_NAME
 from remanga.status import render_status_panel
 from remanga.verify import verify_project
 
 
 def full_recap(params: dict[str, Any], config: RemangaConfig) -> None:
+    # One ordered choice in, three booleans out. The modes are strictly
+    # increasing in destructiveness (see reset.REBUILD_MODES), so they cannot
+    # be combined into a contradiction the way the three separate flags they
+    # replaced could - "force but also regenerate-all", "effects and all at
+    # once" - each of which someone had to resolve in their head before
+    # answering.
+    mode = REBUILD_MODE_BY_NAME.get(
+        str(params.get("rebuild") or DEFAULT_REBUILD_MODE), REBUILD_MODE_BY_NAME[DEFAULT_REBUILD_MODE],
+    )
     FullRecapCompiler(config).compile_full_manga(
-        params["project"], force=bool(params.get("force")),
+        params["project"], force=mode.force,
         chapters=split_chapters(params.get("chapters")),
-        regenerate_all=bool(params.get("regenerate_all")),
-        regenerate_effects=bool(params.get("regenerate_effects")),
+        regenerate_all=mode.wipe == "project",
+        regenerate_effects=mode.wipe == "derived",
     )
 
 

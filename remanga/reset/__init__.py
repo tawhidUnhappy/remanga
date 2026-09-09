@@ -41,10 +41,14 @@ from remanga.reset.entries import (
     wipeable_entries,
 )
 from remanga.reset.modes import (
+    DEFAULT_REBUILD_MODE,
     KEEP_ON_MARKS_ONLY_RESTART,
     KEEP_ON_RESTART,
     KEEP_ON_SOFT_RESTART,
     PROJECT_KEEP,
+    REBUILD_MODE_BY_NAME,
+    REBUILD_MODE_NAMES,
+    REBUILD_MODES,
     RESTART_MODE_BY_NAME,
     RESTART_MODE_NAMES,
     RESTART_MODES,
@@ -53,10 +57,14 @@ from remanga.reset.modes import (
 )
 
 __all__ = [
+    "DEFAULT_REBUILD_MODE",
     "KEEP_ON_MARKS_ONLY_RESTART",
     "KEEP_ON_RESTART",
     "KEEP_ON_SOFT_RESTART",
     "PROJECT_KEEP",
+    "REBUILD_MODES",
+    "REBUILD_MODE_BY_NAME",
+    "REBUILD_MODE_NAMES",
     "RESTART_MODES",
     "RESTART_MODE_BY_NAME",
     "RESTART_MODE_NAMES",

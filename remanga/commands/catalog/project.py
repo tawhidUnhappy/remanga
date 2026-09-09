@@ -8,12 +8,16 @@ from remanga.commands.handlers import (
 )
 from remanga.commands.help_text import (
     DEFAULT_KEEP_TEXT,
-    PROJECT_KEEP_FILES,
     RESTART_MODE_HELP,
 )
 from remanga.commands.setup_rows import BGM_SETUP, VIDEO_SETUP
 from remanga.commands.spec import Command, Param, chapter_param, force_param, project_param
-from remanga.reset import RESTART_MODES
+from remanga.reset import (
+    DEFAULT_REBUILD_MODE,
+    REBUILD_MODE_NAMES,
+    REBUILD_MODES,
+    RESTART_MODES,
+)
 
 PROJECT_COMMANDS: list[Command] = [
     Command(
@@ -27,32 +31,23 @@ PROJECT_COMMANDS: list[Command] = [
                   help="Comma-separated chapter numbers to include, in any order (default: every "
                        "chapter found, in order)",
                   prompt="Chapters to include"),
-            force_param("Force a full recompile even if already compiled"),
-            Param("regenerate_effects", ["--regenerate-effects"], type="bool", default=False,
-                  help="Deletes only what was made FROM the narration - audio_modified/ (the "
-                       "processed clips and mixed masters) and video/ - then rebuilds them. The "
-                       "raw synthesized speech in audio/ is KEPT, so nothing is re-narrated: this "
-                       "is the fast way to hear a change to the voice chain, ducking, music, "
-                       "levels, resolution or framing. Everything about to be deleted is listed "
-                       "before it happens. Implies --force. Use --regenerate-all instead when the "
-                       "narration itself needs redoing (a voice change, or edited narration.json).",
-                  prompt="Rebuild audio effects and video, keeping the synthesized narration? "
-                         "(fast - no re-narration)"),
-            Param("regenerate_all", ["--regenerate-all"], type="bool", default=False,
-                  help="DELETES every generated file in the WHOLE PROJECT first - audio/, video/, "
-                       "panels_zip/ and every other generated folder under it, including the "
-                       "full-recap join's own working files, the previous joined MP4, and the "
-                       "artifacts of chapters not included in this run - then rebuilds from "
-                       "scratch: pages re-verified/re-fetched, panels re-cropped, voice "
-                       "re-synthesized, re-mixed, re-rendered and re-joined. This re-runs TTS "
-                       "over every panel, which is the slow part - prefer --regenerate-effects "
-                       "when only the sound or look is changing. Only the chapters/ "
-                       "source tree (pages, crops.json, narration.json) and the project's own "
-                       f"{PROJECT_KEEP_FILES} survive - nothing else can rebuild those. "
-                       "Everything about to be deleted is listed before it happens. Implies "
-                       "--force.",
-                  prompt="Delete every generated file in this project and rebuild from scratch? "
-                         "(keeps only chapters/ and the project's own json files)"),
+            Param(
+                "rebuild", ["--rebuild"], type="choice", default=DEFAULT_REBUILD_MODE,
+                choices=list(REBUILD_MODE_NAMES),
+                prompt="How much to rebuild",
+                help="How much of this project to rebuild. Replaces the old --force / "
+                     "--regenerate-effects / --regenerate-all trio, which were three yes/no "
+                     "flags a person had to combine correctly to express one decision. "
+                     + " ".join(
+                         f"'{m.name}': deletes {m.deletes}, keeps {m.keeps} ({m.cost})."
+                         for m in REBUILD_MODES
+                     ),
+                choice_help={m.name: f"deletes {m.deletes}" for m in REBUILD_MODES},
+                choice_detail={
+                    m.name: f"Deletes {m.deletes}. Keeps {m.keeps}. {m.cost[:1].upper()}{m.cost[1:]}."
+                    for m in REBUILD_MODES
+                },
+            ),
         ],
         category="Project-wide",
         detail="one BGM pass and one render for the whole manga - both configured below",

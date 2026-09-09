@@ -117,3 +117,56 @@ def keep_set(mode: str) -> set:
         raise ValueError(
             f"Unknown restart mode {mode!r} - expected one of {tuple(_KEEP_SETS)}"
         ) from None
+
+
+@dataclass(frozen=True)
+class RebuildMode:
+    """One selectable answer to "how much of this should be rebuilt?".
+
+    Replaces three separate yes/no prompts (--force, --regenerate-effects,
+    --regenerate-all) that a person had to combine correctly in their head
+    to get what they wanted. They are not independent - each is strictly
+    more destructive than the last - so a single ordered choice is both
+    honest about that and impossible to answer incoherently.
+
+    `deletes` and `keeps` are written as concrete file paths rather than as
+    categories, because "regenerate everything" does not tell anyone whether
+    an hour of synthesized speech is about to go."""
+
+    name: str
+    label: str
+    deletes: str
+    keeps: str
+    cost: str
+    # What the handler actually does with it.
+    force: bool
+    wipe: str = ""  # "" | "derived" | "project"
+
+
+REBUILD_MODES: tuple[RebuildMode, ...] = (
+    RebuildMode(
+        "missing", "Only what's missing",
+        deletes="nothing",
+        keeps="everything already built",
+        cost="fastest - picks up where the last run stopped",
+        force=False,
+    ),
+    RebuildMode(
+        "outputs", "Sound and video",
+        deletes="audio_modified/ and video/",
+        keeps="audio/ - the synthesized narration",
+        cost="minutes - no re-narration",
+        force=True, wipe="derived",
+    ),
+    RebuildMode(
+        "everything", "Everything, from scratch",
+        deletes="audio/, audio_modified/ and video/ - every generated file",
+        keeps="chapters/ (pages, crops.json, narration.json) and the project's json files",
+        cost="slowest - re-runs text-to-speech on every panel",
+        force=True, wipe="project",
+    ),
+)
+
+REBUILD_MODE_NAMES = tuple(mode.name for mode in REBUILD_MODES)
+REBUILD_MODE_BY_NAME = {mode.name: mode for mode in REBUILD_MODES}
+DEFAULT_REBUILD_MODE = REBUILD_MODES[0].name

@@ -66,7 +66,7 @@ join, not every chapter's per-chapter render - see remix.py's rejoin.
 Nothing here needed adding - it already behaves the way "don't blow away
 what's already built" implies.
 
-`--regenerate-all` was added on top for the actual "start over from
+`--rebuild everything` was added on top for the actual "start over from
 scratch" case: unlike plain `--force` (which only ever re-renders/re-joins,
 never re-synthesizes or re-mixes), this forces TTS + mix + render + join
 for every included chapter, ignoring all of their own staleness caching.
@@ -342,7 +342,7 @@ processing turns it into is a cache (seconds).
   most, since the join covers every chapter at once (499 panels here).
 - Wipes: `wipe_project` (everything) vs `wipe_derived_audio_and_video`
   (`DERIVED_KINDS = audio_modified, video` - keeps the narration). Exposed as
-  `full-recap --regenerate-effects` against `--regenerate-all`.
+  `full-recap --rebuild outputs` against `--rebuild everything`.
 
 ## Where the knobs live (`settings/sections.py` + `commands/setup_rows.py`)
 

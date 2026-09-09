@@ -554,8 +554,17 @@ Two commands - both reachable from `remanga interactive`'s project-picker menu (
 ```
 It runs each chapter's remaining TTS/mix/render steps (skipping whatever's already cached) and **keeps every chapter's own MP4** — under `video/chapter_<num>/` — then builds the joined video separately: one continuous narration track, ONE background-music loop under the whole thing (a single fade-in at the very start, a single fade-out at the very end — never restarted per chapter), and ONE loudness-normalization pass, so there's no audible BGM restart or loudness jump at a chapter boundary the way naively concatenating N independently-mixed chapter videos would produce. The result lands at `video/<project>_full_recap.mp4`.
 
-Add `--regenerate-all` (the wizard asks it as *"Delete every generated file in this project and rebuild from scratch?"*) to start genuinely clean. It is the one destructive option here: **before any chapter is touched, every generated folder in the whole project is deleted** — `audio/`, `video/`, `panels_zip/`, `sheets/`, anything else that's accumulated there — and only these survive:
+`--rebuild` (the wizard asks it as *"How much to rebuild"*) decides how much is thrown away first. One ordered choice rather than a set of yes/no flags to combine, because the three options are strictly increasing in destructiveness and combining them was how people ended up re-synthesizing a project by accident:
 
+| `--rebuild` | Deletes | Keeps | Cost |
+|---|---|---|---|
+| `missing` *(default)* | nothing | everything already built | fastest — picks up where the last run stopped |
+| `outputs` | `audio_modified/`, `video/` | **`audio/` — the synthesized narration** | minutes, no re-narration |
+| `everything` | `audio/`, `audio_modified/`, `video/` — every generated file | `chapters/` and the project's json files | slowest — re-runs TTS on every panel |
+
+`outputs` is the one to reach for while tuning how a recap sounds or looks: voice chain, ducking, music, levels, resolution, framing. It rebuilds from narration you already have.
+
+`everything` is for when the narration itself is wrong — a voice change, a different engine, or an edited `narration.json`. Before any chapter is touched, every generated folder in the whole project is deleted, and only these survive:
 ```
 projects/<manga>/
 ├── chapters/       # pages/, crops.json, narration.json — downloaded or hand-authored
@@ -563,8 +572,7 @@ projects/<manga>/
 ├── memory.json     # the LLM's story continuity
 └── manifest.json   # production bookkeeping + the cached MangaDex chapter list
 ```
-
-Then every chapter is rebuilt from that: pages re-verified (anything missing re-fetched), panels re-cropped, voice re-synthesized, re-mixed, re-rendered, re-joined. `--regenerate-all` implies `--force`, and everything it is about to delete is listed before it happens.
+Then every chapter is rebuilt from that: pages re-verified (anything missing re-fetched), panels re-cropped, voice re-synthesized, re-mixed, re-rendered, re-joined. Everything about to be deleted is listed first, with its size, so "this is about to take an hour" is visible before it does.
 
 Wiping the **whole project** up front, rather than each chapter as the compile reaches it, is the point. A per-chapter wipe can only delete folders named after a chapter in the run, so it always leaves the join's own `video/_work/` (a master WAV that can run to hundreds of MB, plus a concat list pointing at frames that are about to be deleted), the previous joined MP4, the artifacts of any chapter you excluded with `--chapters`, and any folder from an output format you've since turned off. Those are exactly the stale files you ran a regenerate to be rid of — so note that this **does** clear chapters outside `--chapters` too; it means the whole project, not the selection.
 

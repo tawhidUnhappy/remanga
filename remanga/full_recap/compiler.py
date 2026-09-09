@@ -53,6 +53,27 @@ class FullRecapCompiler:
         self._compositor = FrameCompositor(self.config.video)
         self._renderer = VideoRenderer(self.config.system, self.config.video)
 
+    @staticmethod
+    def _describe_size(path: Path) -> str:
+        """"how big is this" for a delete listing, as a human reads it.
+
+        A path on its own does not tell anyone whether they are about to lose
+        four megabytes or an hour of synthesis. Walks the tree because these
+        are directories; errors are swallowed rather than raised because a
+        file vanishing mid-walk must not turn a listing into a crash."""
+        try:
+            if path.is_file():
+                total = path.stat().st_size
+            else:
+                total = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
+        except OSError:
+            return ""
+        for unit in ("B", "KB", "MB", "GB"):
+            if total < 1024 or unit == "GB":
+                return f"{total:.0f}{unit}" if unit == "B" else f"{total:.1f}{unit}"
+            total /= 1024
+        return ""
+
     def _wipe_generated(self, project_name: str) -> None:
         """The regenerate-all delete: every generated artifact in the
         project, in one sweep, listed BEFORE it happens and counted after.
@@ -78,8 +99,13 @@ class FullRecapCompiler:
             f"file in '{project_name}':[/]"
         )
         for item in candidates:
-            console.print(f"  [dim]- {display_path(item)}[/]")
+            size = self._describe_size(item)
+            console.print(f"  [dim]- {display_path(item)}{f'  ({size})' if size else ''}[/]")
         console.print(f"[dim]Kept: {', '.join(PROJECT_KEEP)}.[/]")
+        console.print(
+            "[dim]This re-runs text-to-speech on every panel - the slow part. "
+            "Use 'Sound and video' instead when only the sound or look is changing.[/]"
+        )
 
         removed = wipe_project(project_name)
         console.print(f"[bold green]✓ Deleted {len(removed)} item(s) - rebuilding from source.[/]")
@@ -107,7 +133,8 @@ class FullRecapCompiler:
             f"[bold yellow]Rebuilding effects and video for '{project_name}' - deleting:[/]"
         )
         for item in candidates:
-            console.print(f"  [dim]- {display_path(item)}[/]")
+            size = self._describe_size(item)
+            console.print(f"  [dim]- {display_path(item)}{f'  ({size})' if size else ''}[/]")
         console.print("[dim]Kept: the synthesized narration in audio/ - nothing is re-narrated.[/]")
 
         removed = wipe_derived_audio_and_video(project_name)
