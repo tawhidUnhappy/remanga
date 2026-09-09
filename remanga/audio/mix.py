@@ -117,7 +117,21 @@ class AudioProcessor:
         modified_dir = get_modified_audio_dir(project_name, chapter_num)
         recipe = read_recipe(modified_dir)
         want_voice = voice_fingerprint(self.config)
-        clips_valid = not force and recipe.get("voice") == want_voice
+        # NOT gated on `force`. force means "rebuild the master even though
+        # its fingerprint says it is current" - it is about the master, and
+        # the clips have their own, stricter guarantee: a matching voice
+        # fingerprint means they were produced by exactly these settings from
+        # exactly this raw audio, which force does not make less true.
+        #
+        # Gating them together looked harmless and quietly destroyed the
+        # point of the split: remix.py mixes with force=True, so a
+        # background-music change - the single most common reason to re-mix -
+        # would re-run the voice chain over every panel to produce clips
+        # identical to the ones it just deleted. Measured before the fix: a
+        # warm mix took 288s against the cold mix's 288s, i.e. no reuse at
+        # all. Deleting audio_modified/ is how a caller asks for clips to be
+        # rebuilt (--regenerate-effects), not force.
+        clips_valid = recipe.get("voice") == want_voice
 
         if self.config.voice_enhance:
             console.print(
