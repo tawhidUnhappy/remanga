@@ -68,10 +68,37 @@ def _boost_band(audio: AudioSegment, low_hz: int, high_hz: int, boost_db: float)
     signal comes back up - which is audibly identical and actually happens."""
     if boost_db <= 0 or len(audio) == 0:
         return audio
-    lows = audio.low_pass_filter(low_hz) - boost_db
+    # Released as they are folded in - see the same note in
+    # ducking.carve_speech_band. Every one of these is a full copy of the
+    # track, and the full-manga narration is 56 minutes long.
+    out = audio.low_pass_filter(low_hz) - boost_db
     highs = audio.high_pass_filter(high_hz) - boost_db
+    out = out.overlay(highs)
+    del highs
     mids = audio.high_pass_filter(low_hz).low_pass_filter(high_hz)
-    return lows.overlay(highs).overlay(mids) + boost_db
+    out = out.overlay(mids)
+    del mids
+    return out + boost_db
+
+
+# Why this is applied PER PANEL CLIP rather than to the assembled track
+# (see audio/mix.py and full_recap/timeline.py):
+#
+# pydub's compress_dynamic_range builds a Python list holding one bytes
+# object per audio FRAME, then joins it. At 44.1kHz a 56-minute full-manga
+# narration is 147 million frames, and at ~41 bytes of per-object overhead
+# that list alone is about 6GB - before the join allocates the whole track
+# again alongside it. Measured: it invoked the kernel OOM killer at 13.5GB on
+# a 14GB machine.
+#
+# Per clip the same work happens in bounded pieces: a 5-second line is ~220k
+# frames, so peak memory is a few MB regardless of how long the chapter or
+# the whole manga is. Nothing about the RESULT suffers - the warmth and
+# presence stages are time-invariant filters, so per-clip is the same audio
+# either way, and compressing per line is arguably more correct than
+# compressing across the whole recap: makeup gain restores each clip to its
+# own original RMS, so a shouted line stays louder than a quiet one while
+# each is internally evened out.
 
 
 def enhance_voice(

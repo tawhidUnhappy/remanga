@@ -81,10 +81,18 @@ def carve_speech_band(music: AudioSegment, carve_db: float) -> AudioSegment:
     sounds like a mix."""
     if carve_db >= 0 or len(music) == 0:
         return music
-    lows = music.low_pass_filter(_SPEECH_BAND_LOW_HZ)
+    # Each intermediate is a full copy of the audio, so they are released as
+    # soon as they are folded in rather than all held to the end. On a
+    # chapter that is housekeeping; on a 56-minute full-manga bed it is the
+    # difference between three live copies and five.
+    out = music.low_pass_filter(_SPEECH_BAND_LOW_HZ)
     highs = music.high_pass_filter(_SPEECH_BAND_HIGH_HZ)
+    out = out.overlay(highs)
+    del highs
     mids = music.high_pass_filter(_SPEECH_BAND_LOW_HZ).low_pass_filter(_SPEECH_BAND_HIGH_HZ) + carve_db
-    return lows.overlay(highs).overlay(mids)
+    out = out.overlay(mids)
+    del mids
+    return out
 
 
 def duck_under_speech(

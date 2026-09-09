@@ -85,6 +85,16 @@ def assemble_combined_audio(
                 clip_file = audio_dir / p["audio_file"]
                 if clip_file.exists():
                     segment = AudioSegment.from_file(clip_file)
+                    if audio_config.voice_enhance:
+                        segment = enhance_voice(
+                            segment,
+                            highpass_hz=audio_config.voice_highpass_hz,
+                            warmth_db=audio_config.voice_warmth_db,
+                            presence_db=audio_config.voice_presence_db,
+                            compress=audio_config.voice_compress,
+                            compress_threshold_db=audio_config.voice_compress_threshold_db,
+                            compress_ratio=audio_config.voice_compress_ratio,
+                        )
                 else:
                     segment = AudioSegment.silent(duration=p["duration_ms"], frame_rate=audio_config.sample_rate)
                 span_start = len(combined_voice)
@@ -99,22 +109,6 @@ def assemble_combined_audio(
                 frame_timeline.append((frames_dir / f"frame_{p['panel_id']}.png", p["total_slot_sec"]))
                 progress.update(task, advance=1)
 
-    if audio_config.voice_enhance:
-        combined_voice = enhance_voice(
-            combined_voice,
-            highpass_hz=audio_config.voice_highpass_hz,
-            warmth_db=audio_config.voice_warmth_db,
-            presence_db=audio_config.voice_presence_db,
-            compress=audio_config.voice_compress,
-            compress_threshold_db=audio_config.voice_compress_threshold_db,
-            compress_ratio=audio_config.voice_compress_ratio,
-        )
-        console.print(
-            f"[dim]Voice chain applied across the full manga: high-pass "
-            f"{audio_config.voice_highpass_hz}Hz, warmth {audio_config.voice_warmth_db:+.1f}dB, "
-            f"presence {audio_config.voice_presence_db:+.1f}dB.[/]"
-        )
-
     master_audio = combined_voice.set_channels(2).set_frame_rate(audio_config.sample_rate)
 
     if valid_bgm and audio_config.bgm_enabled:
@@ -126,6 +120,18 @@ def assemble_combined_audio(
         bgm_track = bgm_track + audio_config.bgm_volume_db
 
         total_duration_ms = len(master_audio)
+        # Carve the SOURCE track, before it is looped out to the length of
+        # the narration. The carve is a time-invariant filter, so carving
+        # then looping is the same audio as looping then carving - but the
+        # source is a few minutes and the loop is the whole recap. Doing it
+        # the other way round is what put a 56-minute full-manga bed through
+        # a three-copy band reconstruction and invoked the OOM killer
+        # (measured: anon-rss 13.5GB on a 14GB machine).
+        #
+        # The level duck below CANNOT move here: it depends on where the
+        # speech falls, so it has to see the full timeline.
+        if audio_config.duck_music_under_narration:
+            bgm_track = carve_speech_band(bgm_track, audio_config.duck_carve_db)
         loop_count = (total_duration_ms // max(1, len(bgm_track))) + 1
         bgm_loop = (bgm_track * loop_count)[:total_duration_ms]
         # Exactly one fade-in and one fade-out for the WHOLE manga - not
@@ -133,7 +139,6 @@ def assemble_combined_audio(
         # chapter join.
         if audio_config.duck_music_under_narration and speech_spans:
             passages = merge_spans(speech_spans)
-            bgm_loop = carve_speech_band(bgm_loop, audio_config.duck_carve_db)
             bgm_loop = duck_under_speech(
                 bgm_loop, speech_spans,
                 depth_db=audio_config.duck_depth_db, fade_ms=audio_config.duck_fade_ms,

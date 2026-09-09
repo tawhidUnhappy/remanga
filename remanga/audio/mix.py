@@ -102,12 +102,30 @@ class AudioProcessor:
         # finished timeline, so the ducking pass below works from exact
         # boundaries instead of inferring them from the signal. Collected
         # here because this loop is the only place that knows them.
+        if self.config.voice_enhance:
+            console.print(
+                f"[dim]Voice chain per panel: high-pass {self.config.voice_highpass_hz}Hz, "
+                f"warmth {self.config.voice_warmth_db:+.1f}dB, "
+                f"presence {self.config.voice_presence_db:+.1f}dB"
+                + (f", compressed {self.config.voice_compress_ratio:g}:1"
+                   if self.config.voice_compress else "") + ".[/]"
+            )
         combined_voice = AudioSegment.empty()
         speech_spans: list[tuple[int, int]] = []
         for p in panels:
             clip_file = audio_dir / p["audio_file"]
             if clip_file.exists():
                 segment = AudioSegment.from_file(clip_file)
+                if self.config.voice_enhance:
+                    segment = enhance_voice(
+                        segment,
+                        highpass_hz=self.config.voice_highpass_hz,
+                        warmth_db=self.config.voice_warmth_db,
+                        presence_db=self.config.voice_presence_db,
+                        compress=self.config.voice_compress,
+                        compress_threshold_db=self.config.voice_compress_threshold_db,
+                        compress_ratio=self.config.voice_compress_ratio,
+                    )
             else:
                 segment = AudioSegment.silent(duration=p["duration_ms"], frame_rate=self.config.sample_rate)
 
@@ -120,28 +138,6 @@ class AudioProcessor:
             pause_ms = p.get("pause_after_ms", 0)
             if pause_ms > 0:
                 combined_voice += AudioSegment.silent(duration=pause_ms, frame_rate=self.config.sample_rate)
-
-        # Voice chain BEFORE the music meets it, and before the stereo
-        # fan-out: every stage is level-dependent, so processing the
-        # narration alone is the only point where it can be shaped without
-        # the bed's energy confusing the compressor.
-        if self.config.voice_enhance:
-            combined_voice = enhance_voice(
-                combined_voice,
-                highpass_hz=self.config.voice_highpass_hz,
-                warmth_db=self.config.voice_warmth_db,
-                presence_db=self.config.voice_presence_db,
-                compress=self.config.voice_compress,
-                compress_threshold_db=self.config.voice_compress_threshold_db,
-                compress_ratio=self.config.voice_compress_ratio,
-            )
-            console.print(
-                f"[dim]Voice chain: high-pass {self.config.voice_highpass_hz}Hz, "
-                f"warmth {self.config.voice_warmth_db:+.1f}dB, "
-                f"presence {self.config.voice_presence_db:+.1f}dB"
-                + (f", compressed {self.config.voice_compress_ratio:g}:1"
-                   if self.config.voice_compress else "") + ".[/]"
-            )
 
         # Convert to 2-channel stereo for master output
         master_audio = combined_voice.set_channels(2).set_frame_rate(self.config.sample_rate)
@@ -159,6 +155,18 @@ class AudioProcessor:
 
             # Loop BGM to match voice track length + tail
             total_duration_ms = len(master_audio)
+            # Carve the SOURCE track, before it is looped out to the length of
+            # the narration. The carve is a time-invariant filter, so carving
+            # then looping is the same audio as looping then carving - but the
+            # source is a few minutes and the loop is the whole recap. Doing it
+            # the other way round is what put a 56-minute full-manga bed through
+            # a three-copy band reconstruction and invoked the OOM killer
+            # (measured: anon-rss 13.5GB on a 14GB machine).
+            #
+            # The level duck below CANNOT move here: it depends on where the
+            # speech falls, so it has to see the full timeline.
+            if self.config.duck_music_under_narration:
+                bgm_track = carve_speech_band(bgm_track, self.config.duck_carve_db)
             loop_count = (total_duration_ms // max(1, len(bgm_track))) + 1
             bgm_loop = (bgm_track * loop_count)[:total_duration_ms]
 
@@ -167,7 +175,6 @@ class AudioProcessor:
             # the track rather than fighting a dip that lands on top of them.
             if self.config.duck_music_under_narration and speech_spans:
                 passages = merge_spans(speech_spans)
-                bgm_loop = carve_speech_band(bgm_loop, self.config.duck_carve_db)
                 bgm_loop = duck_under_speech(
                     bgm_loop, speech_spans,
                     depth_db=self.config.duck_depth_db, fade_ms=self.config.duck_fade_ms,
