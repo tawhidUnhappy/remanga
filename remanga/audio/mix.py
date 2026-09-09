@@ -6,6 +6,7 @@ from typing import Any
 from pydub import AudioSegment
 
 from remanga import settings
+from remanga.audio.ducking import carve_speech_band, duck_under_speech, merge_spans
 from remanga.audio.resample import load_audio
 from remanga.config import AudioConfig, RemangaConfig
 from remanga.console import console, escape as _esc
@@ -95,7 +96,13 @@ class AudioProcessor:
         console.print(f"[cyan]Assembling master audio stream for chapter {chapter_num}...[/]")
 
         # 1. Assemble narration track
+        #
+        # speech_spans records where each panel's audio actually sits on the
+        # finished timeline, so the ducking pass below works from exact
+        # boundaries instead of inferring them from the signal. Collected
+        # here because this loop is the only place that knows them.
         combined_voice = AudioSegment.empty()
+        speech_spans: list[tuple[int, int]] = []
         for p in panels:
             clip_file = audio_dir / p["audio_file"]
             if clip_file.exists():
@@ -103,7 +110,10 @@ class AudioProcessor:
             else:
                 segment = AudioSegment.silent(duration=p["duration_ms"], frame_rate=self.config.sample_rate)
 
+            span_start = len(combined_voice)
             combined_voice += segment
+            if clip_file.exists() and len(segment) > 0:
+                speech_spans.append((span_start, span_start + len(segment)))
 
             # Append inter-panel silence pause
             pause_ms = p.get("pause_after_ms", 0)
@@ -128,6 +138,21 @@ class AudioProcessor:
             total_duration_ms = len(master_audio)
             loop_count = (total_duration_ms // max(1, len(bgm_track))) + 1
             bgm_loop = (bgm_track * loop_count)[:total_duration_ms]
+
+            # Duck the music under each speech passage, if asked. Before the
+            # entry/exit fades, so those still shape the very start and end of
+            # the track rather than fighting a dip that lands on top of them.
+            if self.config.duck_music_under_narration and speech_spans:
+                passages = merge_spans(speech_spans)
+                bgm_loop = carve_speech_band(bgm_loop, self.config.duck_carve_db)
+                bgm_loop = duck_under_speech(
+                    bgm_loop, speech_spans,
+                    depth_db=self.config.duck_depth_db, fade_ms=self.config.duck_fade_ms,
+                )
+                console.print(
+                    f"[dim]Ducking music {self.config.duck_depth_db:+.1f}dB under "
+                    f"{len(passages)} speech passage(s).[/]"
+                )
 
             # Smooth BGM entry & exit fades
             bgm_loop = bgm_loop.fade_in(1500).fade_out(2000)

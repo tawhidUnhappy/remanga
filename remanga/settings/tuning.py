@@ -73,6 +73,27 @@ def configure_levels(config: RemangaConfig) -> None:
                    minimum=-60.0, maximum=20.0,
                    note="negative sits the music under the narration"):
         return
+    duck = confirm(
+        "Duck the music under the narration (instead of one fixed level)?",
+        default=config.audio.duck_music_under_narration,
+    )
+    if is_cancel(duck):
+        return
+    set_field(config, "audio.duck_music_under_narration", bool(duck))
+    if duck:
+        # Only asked when it is on: a depth and a ramp are meaningless
+        # settings to be shown by a feature that is switched off.
+        if not _number(config, "audio.duck_depth_db", "How far the music drops while speaking, in dB",
+                       minimum=-30.0, maximum=0.0,
+                       note="applied on top of the music gain above - with ducking on you can "
+                            "usually afford to RAISE that, since the music now gets out of the way"):
+            return
+        if not _number(config, "audio.duck_fade_ms", "Ramp either side of a spoken passage, in ms",
+                       minimum=0, maximum=2000, integer=True,
+                       note="the dip starts this far before the first word and recovers this long "
+                            "after the last"):
+            return
+
     normalize = confirm(
         "Normalize the finished master to a fixed loudness (EBU R128)?",
         default=config.audio.enable_loudnorm,
@@ -82,8 +103,10 @@ def configure_levels(config: RemangaConfig) -> None:
     set_field(config, "audio.enable_loudnorm", bool(normalize))
     console.print(
         f"[green]✓ Levels:[/] narration {config.tts.kokoro.volume_boost_db:+.1f}dB, "
-        f"music {config.audio.bgm_volume_db:+.1f}dB, "
-        f"loudness normalization {'on' if config.audio.enable_loudnorm else 'off'}"
+        f"music {config.audio.bgm_volume_db:+.1f}dB"
+        + (f" (ducking {config.audio.duck_depth_db:+.1f}dB under speech)"
+           if config.audio.duck_music_under_narration else "")
+        + f", loudness normalization {'on' if config.audio.enable_loudnorm else 'off'}"
     )
 
 

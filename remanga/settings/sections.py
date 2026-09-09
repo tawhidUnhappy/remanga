@@ -80,9 +80,11 @@ SECTIONS: tuple[Section, ...] = (
     Section(
         "levels", "Audio levels",
         lambda c: (f"voice {c.tts.kokoro.volume_boost_db:+.1f}dB · music {c.audio.bgm_volume_db:+.1f}dB"
-                   f" · {'normalized' if c.audio.enable_loudnorm else 'not normalized'}"),
+                   + (f" ducked {c.audio.duck_depth_db:+.1f}dB" if c.audio.duck_music_under_narration
+                      else " (fixed)")
+                   + f" · {'normalized' if c.audio.enable_loudnorm else 'not normalized'}"),
         tuning.configure_levels,
-        detail="voice-vs-music balance, and whether the master is loudness-normalized",
+        detail="voice-vs-music balance, ducking the music under speech, and loudness normalization",
     ),
     Section(
         "detection", "Panel detection",

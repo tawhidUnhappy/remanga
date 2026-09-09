@@ -24,6 +24,7 @@ from pydub import AudioSegment
 from rich.progress import BarColumn, Progress, TextColumn
 
 from remanga import settings
+from remanga.audio.ducking import carve_speech_band, duck_under_speech, merge_spans
 from remanga.config import RemangaConfig
 from remanga.console import console, escape as _esc
 from remanga.ffmpeg_io import run_ffmpeg
@@ -46,6 +47,11 @@ def assemble_combined_audio(
     valid_bgm = settings.ensure_valid_bgm(config, interactive=False)
 
     combined_voice = AudioSegment.empty()
+    # Where each panel's speech lands on the full-manga timeline - the same
+    # ground truth the per-chapter mix uses to duck the music (audio/mix.py,
+    # audio/ducking.py), collected here because this loop is the only place
+    # that knows it for the joined track.
+    speech_spans: list[tuple[int, int]] = []
     frame_timeline: list[tuple[Path, float]] = []
 
     # Load every chapter's panel timing up front so the progress bar below
@@ -80,7 +86,10 @@ def assemble_combined_audio(
                     segment = AudioSegment.from_file(clip_file)
                 else:
                     segment = AudioSegment.silent(duration=p["duration_ms"], frame_rate=audio_config.sample_rate)
+                span_start = len(combined_voice)
                 combined_voice += segment
+                if clip_file.exists() and len(segment) > 0:
+                    speech_spans.append((span_start, span_start + len(segment)))
 
                 pause_ms = p.get("pause_after_ms", 0)
                 if pause_ms > 0:
@@ -105,6 +114,18 @@ def assemble_combined_audio(
         # Exactly one fade-in and one fade-out for the WHOLE manga - not
         # per chapter - so the music never visibly/audibly restarts at a
         # chapter join.
+        if audio_config.duck_music_under_narration and speech_spans:
+            passages = merge_spans(speech_spans)
+            bgm_loop = carve_speech_band(bgm_loop, audio_config.duck_carve_db)
+            bgm_loop = duck_under_speech(
+                bgm_loop, speech_spans,
+                depth_db=audio_config.duck_depth_db, fade_ms=audio_config.duck_fade_ms,
+            )
+            console.print(
+                f"[dim]Ducking music {audio_config.duck_depth_db:+.1f}dB under "
+                f"{len(passages)} speech passage(s) across the full manga.[/]"
+            )
+
         bgm_loop = bgm_loop.fade_in(1500).fade_out(2000)
 
         master_audio = bgm_loop.overlay(master_audio)

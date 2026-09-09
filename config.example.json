@@ -119,7 +119,11 @@
     "bgm_enabled": false,
     "bgm_path": "",
     "bgm_volume_db": -22.0,
-    "enable_loudnorm": true
+    "enable_loudnorm": true,
+    "duck_music_under_narration": false,
+    "duck_depth_db": -9.0,
+    "duck_fade_ms": 220,
+    "duck_carve_db": -7.0
   },
   "video": {
     "width": 1920,

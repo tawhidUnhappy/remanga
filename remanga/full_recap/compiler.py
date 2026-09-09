@@ -240,7 +240,18 @@ class FullRecapCompiler:
 
         gpu_ffmpeg, note = self._renderer._resolve_gpu_ffmpeg()
         use_gpu = gpu_ffmpeg is not None
-        codec = self.config.system.gpu_codec if use_gpu else self.config.system.fallback_codec
+        # resolve_gpu_codec(), never the raw gpu_codec field: that field
+        # defaults to "auto", which is a marker meaning "ask hardware.py what
+        # this machine has", not an encoder name. Passing it straight to
+        # ffmpeg fails with "Unknown encoder 'auto'" - and fails HERE, at the
+        # very end, after every chapter has already been rendered. The
+        # per-chapter path (video/render.py) always resolved it; this one did
+        # not, so full-recap was broken for anyone who had never pinned an
+        # explicit encoder.
+        codec = (
+            self.config.system.resolve_gpu_codec() if use_gpu
+            else self.config.system.fallback_codec
+        )
         ffmpeg_bin = gpu_ffmpeg or "ffmpeg"
         console.print(
             f"[cyan]Rendering full-manga video using codec:[/] [bold]{codec}[/] "
