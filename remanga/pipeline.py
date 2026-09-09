@@ -45,13 +45,6 @@ class Step:
     description: str
     run: Callable[[str, str, RemangaConfig], None]
     needs: list[str] = field(default_factory=list)
-    # Whether this step is part of DEFAULT_STEPS - the order a project that
-    # has never chosen runs. False for a step that is offered but not
-    # assumed: it's in the registry, so it's checkable in the pipeline
-    # editor and runnable by name, but it isn't put in front of a project
-    # that never asked for it. See init-narration below for why that
-    # distinction has to exist at all.
-    default: bool = True
 
 
 def _run_download(project: str, chapter: str, config: RemangaConfig) -> None:
@@ -96,31 +89,25 @@ def _run_package(project: str, chapter: str, config: RemangaConfig) -> None:
 
 
 def _run_init_narration(project: str, chapter: str, config: RemangaConfig) -> None:
-    """Writes this chapter's narration.json as a full template - one entry
-    per cropped panel, in panel order, every text empty - so the script can
-    be filled in by hand (or handed to an LLM as the exact structure) rather
-    than started from a blank file that has to invent the panel list.
+    """Puts this chapter's narration.json on disk as a genuinely empty file -
+    zero bytes, not "{}", not "[]", nothing at all - so the script has a
+    place to be written into before anything tries to write it.
 
-    The same thing `narration-init` does, as a step, for a pipeline whose
-    narration is written rather than generated: crop, package, and here is
-    your skeleton.
+    Zero bytes is the placeholder state the rest of remanga already
+    understands. Every "has this chapter been narrated yet?" question is
+    answered by size (json_io.has_real_json_content), so an empty
+    narration.json is read as "not written yet" by the status panel, by
+    verify, and by the `narration` step - the file exists, the chapter is
+    still honestly unnarrated, and nothing downstream is fooled into
+    thinking there is a script here. That is what makes this safe as a
+    normal stage rather than a special one: it reserves the path and changes
+    no other step's mind about anything.
 
-    Off by default (Step.default), and this is the reason that flag exists.
-    A template is real JSON, and every "has this chapter been narrated yet?"
-    check in remanga answers that question by size (json_io
-    .has_real_json_content) - so a chapter carrying an empty skeleton reads
-    as narrated to the status panel, to verify, and to the `narration` step,
-    which would then skip its own LLM hand-off and leave the run with a
-    silent script. Choosing this step means choosing to write the narration
-    yourself, so it's checked in deliberately, usually in place of
-    `narration` rather than alongside it.
-
-    Never replaces a script that already has content: `create_narration_file`
-    refuses without force, and a written narration is the one artifact in a
-    chapter that can't be regenerated from anything else on disk. So a
-    chapter that already has one is left alone instead of the step failing
-    the run."""
-    from remanga.narration import TEMPLATE, create_narration_file, narration_path
+    A file with content in it is left exactly where it is - a written
+    narration can't be regenerated from anything else on disk, so an
+    already-written chapter is skipped in one line rather than the step
+    failing the run on create_narration_file's FileExistsError."""
+    from remanga.narration import BLANK, create_narration_file, narration_path
 
     if has_real_json_content(narration_path(project, chapter)):
         console.print(f"[dim]Narration — chapter {chapter} already has a narration.json; "
@@ -130,7 +117,7 @@ def _run_init_narration(project: str, chapter: str, config: RemangaConfig) -> No
     # does for the `narration-init` command - repeating the path here would
     # print it twice.
     console.print("\n[bold]Step — Creating narration.json[/]")
-    create_narration_file(project, chapter, mode=TEMPLATE)
+    create_narration_file(project, chapter, mode=BLANK)
 
 
 def _run_narration(project: str, chapter: str, config: RemangaConfig) -> None:
@@ -180,9 +167,9 @@ STEP_REGISTRY: list[Step] = [
     Step("package", "Package the panels into the chosen upload formats (sheets/zips/PDF)",
          _run_package, needs=["crop"]),
     Step("init-narration",
-         "Create narration.json from scratch - one empty entry per cropped panel, to fill in "
-         "yourself instead of generating it",
-         _run_init_narration, needs=["crop"], default=False),
+         "Create a completely empty narration.json - zero bytes, not even {} - for the script "
+         "to be written into",
+         _run_init_narration),
     Step("narration", "Write narration.json + memory.json via LLM copy/paste", _run_narration,
          needs=["package"]),
     Step("review", "Review narration via the Narration Reviewer web UI", _run_review, needs=["narration"]),
@@ -192,7 +179,7 @@ STEP_REGISTRY: list[Step] = [
 ]
 
 _STEP_BY_NAME = {step.name: step for step in STEP_REGISTRY}
-DEFAULT_STEPS: list[str] = [step.name for step in STEP_REGISTRY if step.default]
+DEFAULT_STEPS: list[str] = [step.name for step in STEP_REGISTRY]
 
 
 def run_pipeline(project: str, chapter: str, config: RemangaConfig, steps: list[str] | None = None) -> None:
