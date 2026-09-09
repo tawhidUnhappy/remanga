@@ -313,6 +313,37 @@ these raised anything - each looked fine and reported something false:
 `.exists()`/`Path(` on anything that used to be a path, `mkdir` of folders it
 owned, overlapping config field names, and any `expected_files` tuple.
 
+## audio/ is the artifact, audio_modified/ is the cache
+
+```
+projects/{manga}/audio/chapter_N/           raw TTS clips + audio_timing.json   <- EXPENSIVE, never auto-deleted
+projects/{manga}/audio_modified/chapter_N/  processed clips + master_audio.wav + .recipe.json
+```
+
+The standard build-pipeline split: a cache is what you keep when absence is
+harmless and regeneration is correct; an artifact is what must be handed on
+exactly. TTS output is the artifact (minutes of GPU per chapter); everything
+processing turns it into is a cache (seconds).
+
+- **Two fingerprints, not one** (`audio/recipe.py`). `voice` covers the
+  per-clip chain, `mix` covers BGM/ducking/loudnorm/gaps. Changing the music
+  must NOT re-run the voice chain over every panel, and a combined hash would
+  make every change cost as much as the most expensive one.
+- `voice_fingerprint` deliberately EXCLUDES the TTS engine's own
+  `volume_boost_db`: that gain is baked into the raw clip by `audio/tts.py`,
+  so it belongs to `audio/`'s identity, not to what processing does.
+- `mix_fingerprint` includes the BGM file's **size+mtime**, not just its
+  path. Swapping the contents of `global/bgm/track.wav` under the same name
+  is a real change; a path-only key happily serves a stale master. Not a
+  content hash - the file can be hundreds of MB and this runs every mix.
+- **The recipe is written LAST**, after the master exists, so an interrupted
+  run leaves a cache that reads as invalid rather than as complete.
+- `full_recap/timeline.py` reads the same cache - that is where it pays off
+  most, since the join covers every chapter at once (499 panels here).
+- Wipes: `wipe_project` (everything) vs `wipe_derived_audio_and_video`
+  (`DERIVED_KINDS = audio_modified, video` - keeps the narration). Exposed as
+  `full-recap --regenerate-effects` against `--regenerate-all`.
+
 ## Where the knobs live (`settings/sections.py` + `commands/setup_rows.py`)
 
 Two registries, both data-driven, and adding a setting means adding a row -

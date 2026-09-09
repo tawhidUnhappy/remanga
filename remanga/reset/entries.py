@@ -44,6 +44,35 @@ def project_wipe_candidates(project_name: str) -> list[Path]:
     return [entry for entry in sorted(project_dir.iterdir()) if entry.name not in PROJECT_KEEP]
 
 
+# Generated kinds that are DERIVED from other generated kinds rather than
+# from the source tree - cheap to rebuild, and the only things a
+# "re-render, keep the narration" reset needs to remove. audio/ is
+# deliberately absent: it holds the raw synthesized speech, which is the
+# expensive artifact this whole split exists to protect (see
+# paths.get_modified_audio_dir).
+DERIVED_KINDS = ("audio_modified", "video")
+
+
+def derived_wipe_candidates(project_name: str) -> list[Path]:
+    """Every derived-audio and video directory in the project, plus the
+    full-recap join's own output - what a "keep the narration, redo
+    everything made from it" reset deletes.
+
+    The full-recap directory is included for the same reason wipe_project
+    does not delegate to wipe_chapter: the joined master and its _work/ are
+    filed under no chapter, so a per-chapter sweep would leave a stale
+    full-manga video sitting next to freshly rebuilt chapters."""
+    project_dir = get_project_dir(project_name)
+    if not project_dir.exists():
+        return []
+    out: list[Path] = []
+    for kind in DERIVED_KINDS:
+        kind_dir = project_dir / kind
+        if kind_dir.exists():
+            out.extend(sorted(kind_dir.iterdir()))
+    return out
+
+
 def restart_candidates(project_name: str, chapter_num: str, *, mode: str = "hard") -> list[Path]:
     """Everything a restart of this `mode` would delete (before the
     narration.json re-emptying a marks_only restart also does - see

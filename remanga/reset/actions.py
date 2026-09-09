@@ -10,7 +10,12 @@ from pathlib import Path
 from remanga.console import console
 from remanga.json_io import write_json
 from remanga.paths import get_chapter_dir, get_manifest_path, read_manifest
-from remanga.reset.entries import project_wipe_candidates, restart_candidates, wipeable_entries
+from remanga.reset.entries import (
+    derived_wipe_candidates,
+    project_wipe_candidates,
+    restart_candidates,
+    wipeable_entries,
+)
 
 
 def _delete_all(entries: list[Path]) -> None:
@@ -116,6 +121,23 @@ def wipe_project(project_name: str) -> list[Path]:
     it (see full_recap.FullRecapCompiler._ensure_chapter_video) rather than
     paying for a whole project's worth of MangaDex checks up front."""
     candidates = project_wipe_candidates(project_name)
+    _delete_all(candidates)
+    return candidates
+
+
+def wipe_derived_audio_and_video(project_name: str) -> list[Path]:
+    """Deletes everything made FROM the narration, and nothing that made it.
+
+    The fast half of a regenerate. `audio/` - the raw synthesized speech,
+    minutes of GPU time per chapter - is kept, and audio_modified/ and
+    video/ go. That covers every setting a person actually iterates on:
+    voice warmth, ducking, music, levels, resolution, framing. Re-running
+    after this rebuilds in seconds what a full regenerate would spend a TTS
+    pass on.
+
+    Use wipe_project instead when the narration itself is wrong - a voice
+    change, a different engine, or edited narration.json."""
+    candidates = derived_wipe_candidates(project_name)
     _delete_all(candidates)
     return candidates
 

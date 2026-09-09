@@ -25,6 +25,7 @@ from rich.progress import BarColumn, Progress, TextColumn
 
 from remanga import settings
 from remanga.audio.ducking import carve_speech_band, duck_under_speech, merge_spans
+from remanga.audio.recipe import read_recipe, voice_fingerprint
 from remanga.audio.voice import enhance_voice
 from remanga.config import RemangaConfig
 from remanga.console import console, escape as _esc
@@ -34,6 +35,7 @@ from remanga.paths import (
     get_audio_dir,
     get_audio_timing_path,
     get_full_recap_master_audio_path,
+    get_modified_audio_dir,
     get_video_frames_dir,
 )
 
@@ -81,9 +83,20 @@ def assemble_combined_audio(
             audio_dir = get_audio_dir(project_name, chapter_num)
             frames_dir = get_video_frames_dir(project_name, chapter_num)
 
+            modified_dir = get_modified_audio_dir(project_name, chapter_num)
+            # Reuse the processed clips the per-chapter mix already wrote,
+            # when they were made by the voice settings in force now. The
+            # join covers every chapter at once, so re-running the chain here
+            # is the single most expensive avoidable thing in the pipeline -
+            # 499 panels of it on this project.
+            clips_valid = read_recipe(modified_dir).get("voice") == voice_fingerprint(audio_config)
+
             for p in panels:
                 clip_file = audio_dir / p["audio_file"]
-                if clip_file.exists():
+                cached_clip = modified_dir / p["audio_file"]
+                if clips_valid and cached_clip.exists():
+                    segment = AudioSegment.from_file(cached_clip)
+                elif clip_file.exists():
                     segment = AudioSegment.from_file(clip_file)
                     if audio_config.voice_enhance:
                         segment = enhance_voice(

@@ -58,6 +58,8 @@ from .projects import (
     get_full_recap_work_dir,
     get_generated_dir,
     get_master_audio_path,
+    get_modified_audio_dir,
+    get_modified_clip_path,
     get_pages_zip_path,
     get_panels_pdf_dir,
     get_panels_zip_dir,
@@ -111,6 +113,8 @@ __all__ = [
     "get_manifest_path",
     "get_master_audio_path",
     "get_memory_path",
+    "get_modified_audio_dir",
+    "get_modified_clip_path",
     "get_narration_review_history_dir",
     # review
     "get_narration_review_path",

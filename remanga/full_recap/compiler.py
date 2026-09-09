@@ -28,8 +28,10 @@ from remanga.humanize import fmt_duration
 from remanga.paths import get_chapter_dir, get_final_video_path, get_full_recap_concat_path, get_full_recap_video_path
 from remanga.reset import (
     PROJECT_KEEP,
+    derived_wipe_candidates,
     project_wipe_candidates,
     reverify_chapter_downloads,
+    wipe_derived_audio_and_video,
     wipe_project,
 )
 from remanga.settings.project_prefs import cropper_config_for
@@ -81,6 +83,37 @@ class FullRecapCompiler:
 
         removed = wipe_project(project_name)
         console.print(f"[bold green]✓ Deleted {len(removed)} item(s) - rebuilding from source.[/]")
+
+    def _wipe_derived(self, project_name: str) -> None:
+        """The regenerate-effects delete: everything made FROM the narration,
+        listed before it happens, with the narration itself untouched.
+
+        Same contract as _wipe_generated - print the candidates, then let the
+        action re-derive them - but a deliberately smaller set. `audio/` is
+        the expensive artifact (a TTS pass per panel); audio_modified/ and
+        video/ are derived from it and cost seconds. Keeping that distinction
+        on the delete side is what makes iterating on how a recap SOUNDS
+        affordable, rather than something that costs a full re-synthesis
+        every time a dB moves."""
+        candidates = derived_wipe_candidates(project_name)
+        if not candidates:
+            console.print(
+                f"[dim]No processed audio or video to delete for '{project_name}' - "
+                f"building them fresh.[/]"
+            )
+            return
+
+        console.print(
+            f"[bold yellow]Rebuilding effects and video for '{project_name}' - deleting:[/]"
+        )
+        for item in candidates:
+            console.print(f"  [dim]- {display_path(item)}[/]")
+        console.print("[dim]Kept: the synthesized narration in audio/ - nothing is re-narrated.[/]")
+
+        removed = wipe_derived_audio_and_video(project_name)
+        console.print(
+            f"[bold green]✓ Deleted {len(removed)} item(s) - rebuilding from the existing narration.[/]"
+        )
 
     def _ensure_chapter_video(
         self, project_name: str, chapter_num: str, force: bool, *,
@@ -143,6 +176,7 @@ class FullRecapCompiler:
     def compile_full_manga(
         self, project_name: str, force: bool = False, chapters: list[str] | None = None,
         force_chapters: bool | None = None, regenerate_all: bool = False,
+        regenerate_effects: bool = False,
     ) -> Path:
         """force controls both "recompile the join even if already compiled"
         and, by default, "force each chapter's own render too". Pass
@@ -182,6 +216,12 @@ class FullRecapCompiler:
         if regenerate_all:
             force = True
             force_chapters = True
+        elif regenerate_effects:
+            # Same force semantics, smaller blast radius. Ignored entirely
+            # when regenerate_all is also set: that already deletes a strict
+            # superset, so running both would just list the same files twice.
+            force = True
+            force_chapters = True
         if force_chapters is None:
             force_chapters = force
 
@@ -195,6 +235,8 @@ class FullRecapCompiler:
         # to write into.
         if regenerate_all:
             self._wipe_generated(project_name)
+        elif regenerate_effects:
+            self._wipe_derived(project_name)
 
         final_video = get_full_recap_video_path(project_name, chapter_list[0], chapter_list[-1])
 

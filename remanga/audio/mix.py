@@ -7,13 +7,19 @@ from pydub import AudioSegment
 
 from remanga import settings
 from remanga.audio.ducking import carve_speech_band, duck_under_speech, merge_spans
+from remanga.audio.recipe import mix_fingerprint, read_recipe, voice_fingerprint, write_recipe
 from remanga.audio.resample import load_audio
 from remanga.audio.voice import enhance_voice
 from remanga.config import AudioConfig, RemangaConfig
 from remanga.console import console, escape as _esc
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.json_io import read_json, read_json_or, write_json
-from remanga.paths import get_audio_dir, get_audio_timing_path, get_master_audio_path
+from remanga.paths import (
+    get_audio_dir,
+    get_audio_timing_path,
+    get_master_audio_path,
+    get_modified_audio_dir,
+)
 
 
 class AudioProcessor:
@@ -102,19 +108,34 @@ class AudioProcessor:
         # finished timeline, so the ducking pass below works from exact
         # boundaries instead of inferring them from the signal. Collected
         # here because this loop is the only place that knows them.
+        # Processed clips are a CACHE keyed on the voice chain's own settings
+        # (audio/recipe.py). Matching fingerprint means the clips in
+        # audio_modified/ were made by exactly these settings from exactly
+        # this raw audio, so they are reused; anything else means rebuild.
+        # This is what makes changing one dB of warmth cost seconds rather
+        # than a full re-synthesis - `audio/` is never touched here.
+        modified_dir = get_modified_audio_dir(project_name, chapter_num)
+        recipe = read_recipe(modified_dir)
+        want_voice = voice_fingerprint(self.config)
+        clips_valid = not force and recipe.get("voice") == want_voice
+
         if self.config.voice_enhance:
             console.print(
-                f"[dim]Voice chain per panel: high-pass {self.config.voice_highpass_hz}Hz, "
-                f"warmth {self.config.voice_warmth_db:+.1f}dB, "
-                f"presence {self.config.voice_presence_db:+.1f}dB"
-                + (f", compressed {self.config.voice_compress_ratio:g}:1"
-                   if self.config.voice_compress else "") + ".[/]"
+                "[dim]Voice chain: reusing processed clips (settings unchanged).[/]" if clips_valid
+                else (f"[dim]Voice chain per panel: high-pass {self.config.voice_highpass_hz}Hz, "
+                      f"warmth {self.config.voice_warmth_db:+.1f}dB, "
+                      f"presence {self.config.voice_presence_db:+.1f}dB"
+                      + (f", compressed {self.config.voice_compress_ratio:g}:1"
+                         if self.config.voice_compress else "") + ".[/]")
             )
         combined_voice = AudioSegment.empty()
         speech_spans: list[tuple[int, int]] = []
         for p in panels:
             clip_file = audio_dir / p["audio_file"]
-            if clip_file.exists():
+            cached_clip = modified_dir / p["audio_file"]
+            if clips_valid and cached_clip.exists():
+                segment = AudioSegment.from_file(cached_clip)
+            elif clip_file.exists():
                 segment = AudioSegment.from_file(clip_file)
                 if self.config.voice_enhance:
                     segment = enhance_voice(
@@ -126,6 +147,11 @@ class AudioProcessor:
                         compress_threshold_db=self.config.voice_compress_threshold_db,
                         compress_ratio=self.config.voice_compress_ratio,
                     )
+                # Written even when the chain is off, so audio_modified/ is
+                # always a complete, self-sufficient set - the full-recap
+                # join reads from here and should never have to work out
+                # which clips were processed and which were passed through.
+                segment.export(cached_clip, format="wav")
             else:
                 segment = AudioSegment.silent(duration=p["duration_ms"], frame_rate=self.config.sample_rate)
 
@@ -225,6 +251,12 @@ class AudioProcessor:
         # concurrent process during a long mix - cheap to just re-read it
         # fresh right before recording what actually went into this file.
         write_json(fingerprint_path, self._fingerprint(timing_path, self.config))
+
+        # Record what produced everything now sitting in audio_modified/, so
+        # the next run can tell at a glance whether to reuse it or rebuild -
+        # and so a partially-written cache from an interrupted run is never
+        # mistaken for a complete one, since the recipe is written last.
+        write_recipe(modified_dir, voice=want_voice, mix=mix_fingerprint(self.config))
 
         console.print(f"[bold green]✓ Master audio track generated successfully:[/] {_esc(str(master_final_path))}")
         return master_final_path

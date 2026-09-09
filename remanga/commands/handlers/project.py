@@ -19,6 +19,7 @@ def full_recap(params: dict[str, Any], config: RemangaConfig) -> None:
         params["project"], force=bool(params.get("force")),
         chapters=split_chapters(params.get("chapters")),
         regenerate_all=bool(params.get("regenerate_all")),
+        regenerate_effects=bool(params.get("regenerate_effects")),
     )
 
 

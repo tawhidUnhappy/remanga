@@ -48,7 +48,7 @@ def get_chapter_dir(project_name: str, chapter_num: str) -> Path:
 #      needing to know the shape of, the source folder next to them.
 GENERATED_KINDS = (
     "pages_zip", "sheets", "sheets_zip", "sheets_folders", "panels_zip",
-    "panels_pdf", "audio", "video",
+    "panels_pdf", "audio", "audio_modified", "video",
 )
 
 
@@ -103,12 +103,39 @@ def get_audio_timing_path(project_name: str, chapter_num: str, create: bool = Tr
     return get_audio_dir(project_name, chapter_num, create=create) / "audio_timing.json"
 
 
+def get_modified_audio_dir(project_name: str, chapter_num: str, create: bool = True) -> Path:
+    """This chapter's DERIVED audio - everything that can be rebuilt from
+    audio/ without going back to the TTS engine.
+
+    The split is the point. `audio/` holds the raw synthesized narration and
+    its timing: expensive to produce (minutes of GPU time per chapter) and
+    the source of truth for everything downstream. `audio_modified/` holds
+    what processing turns that into - the voice-chain-treated clips and the
+    finished master. Those are cheap to reproduce and change whenever a
+    setting changes, so they are a CACHE, not an artifact: losing them costs
+    seconds, and the pipeline is free to throw them away and rebuild
+    whenever their inputs no longer match (see audio/recipe.py).
+
+    Before this split the two lived together, which meant "regenerate the
+    audio" could only mean "re-synthesize everything" - changing a single
+    dB of narration gain cost a full TTS run over every panel in the
+    project."""
+    return get_generated_dir(project_name, "audio_modified", chapter_num, create=create)
+
+
+def get_modified_clip_path(project_name: str, chapter_num: str, audio_file: str,
+                           create: bool = True) -> Path:
+    """One panel's processed clip, alongside the raw one it was made from."""
+    return get_modified_audio_dir(project_name, chapter_num, create=create) / audio_file
+
+
 def get_master_audio_path(project_name: str, chapter_num: str, create: bool = True) -> Path:
-    """This chapter's own fully-mixed (narration + BGM + loudnorm) track -
-    kept, like get_final_video_path, so a later BGM/volume-only change can
-    rebuild just this file (audio/mix.py, cheap) instead of everything
+    """This chapter's own fully-mixed (narration + BGM + loudnorm) track.
+
+    Derived, so it lives under audio_modified/ - a BGM or volume change
+    rebuilds just this file (audio/mix.py, cheap) instead of anything
     upstream of it (TTS, frame compositing)."""
-    return get_audio_dir(project_name, chapter_num, create=create) / "master_audio.wav"
+    return get_modified_audio_dir(project_name, chapter_num, create=create) / "master_audio.wav"
 
 
 def get_video_dir(project_name: str, chapter_num: str, create: bool = True) -> Path:

@@ -30,9 +30,11 @@ from remanga.reset.actions import (
     restart_chapter,
     reverify_chapter_downloads,
     wipe_chapter,
+    wipe_derived_audio_and_video,
     wipe_project,
 )
 from remanga.reset.entries import (
+    derived_wipe_candidates,
     generated_dirs_for_chapter,
     project_wipe_candidates,
     restart_candidates,
@@ -59,6 +61,7 @@ __all__ = [
     "RESTART_MODE_BY_NAME",
     "RESTART_MODE_NAMES",
     "RestartMode",
+    "derived_wipe_candidates",
     "generated_dirs_for_chapter",
     "keep_set",
     "project_wipe_candidates",
@@ -66,6 +69,7 @@ __all__ = [
     "restart_chapter",
     "reverify_chapter_downloads",
     "wipe_chapter",
+    "wipe_derived_audio_and_video",
     "wipe_project",
     "wipeable_entries",
 ]
