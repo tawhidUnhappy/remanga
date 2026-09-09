@@ -8,6 +8,7 @@ from remanga.commands.handlers import (
 )
 from remanga.commands.help_text import (
     DEFAULT_KEEP_TEXT,
+    DEFAULT_STEP_NAMES,
     STEP_NAMES,
 )
 from remanga.commands.setup_rows import BGM_SETUP, CROP_SETUP, TTS_SETUP, VIDEO_SETUP
@@ -235,7 +236,7 @@ CHAPTER_COMMANDS: list[Command] = [
                   help="Comma-separated step names to run, in order (a one-off override - unlike "
                        "the wizard's checklist, it never saves). Default: this project's saved "
                        f"pipeline (project.json's \"pipeline\"), or the full default order if it "
-                       f"has never chosen one ({STEP_NAMES}).",
+                       f"has never chosen one ({DEFAULT_STEP_NAMES}).",
                   prompt="Steps to run, in order"),
         ],
         category="Chapter Production",

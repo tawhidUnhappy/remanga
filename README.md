@@ -230,26 +230,25 @@ Chapter production runs in order — download → mark panels → crop → packa
 **Setting up a pipeline and running one are two different moments.** Ticking the last box in the checklist doesn't start anything: it hands back to the pipeline's staging screen, which writes the plan out in order — position, step name, what that step does — and then asks. Running it is a row you choose on purpose, and so is changing the list and looking again. Both doors lead here: the main menu's **Pipeline** row (which asks for a chapter only once you actually pick Run), and `run`, which asks for the chapter first and then stages the same screen against it.
 
 ```
-Pipeline for 'MyProject' — 10 step(s), in this order
-   1. init-config  Create config.json from the defaults if this machine has none yet
-   2. download     Download chapter pages from MangaDex
-   3. mark         Mark panels via the Panel Marker web UI (writes crops.json)
-   4. crop         Crop panels out of the marked pages
-   5. package      Package the panels into the chosen upload formats (sheets/zips/PDF)
-   6. narration    Write narration.json + memory.json via LLM copy/paste
-   7. review       Review narration via the Narration Reviewer web UI
-   8. tts          Synthesize vocal audio via TTS
-   9. mix          Mix master audio track (narration + BGM + loudnorm)
-  10. render       Render the final recap video
+Pipeline for 'MyProject' — 9 step(s), in this order
+  1. download   Download chapter pages from MangaDex
+  2. mark       Mark panels via the Panel Marker web UI (writes crops.json)
+  3. crop       Crop panels out of the marked pages
+  4. package    Package the panels into the chosen upload formats (sheets/zips/PDF)
+  5. narration  Write narration.json + memory.json via LLM copy/paste
+  6. review     Review narration via the Narration Reviewer web UI
+  7. tts        Synthesize vocal audio via TTS
+  8. mix        Mix master audio track (narration + BGM + loudnorm)
+  9. render     Render the final recap video
 
 ? Pipeline — MyProject
   the steps above are saved for this project · nothing runs until you say Run
 ❯ 1. Run the pipeline  asks which chapter
-  2. Choose steps      init-config → download → mark → crop → package → narration → review → tts → mix → render
+  2. Choose steps      download → mark → crop → package → narration → review → tts → mix → render
      Back
 ```
 
-**`init-config` is the first stage**, not a button off to the side — it shows up in the plan like everything else the run will do, and it's checkable, reorderable and droppable in the same checklist. A fresh clone has no `config.json` at all (everything falls back to `config.example.json` until something writes one), so this writes it from the current defaults before the rest of the pipeline leans on it. It never overwrites an existing `config.json` — a step that runs ahead of every chapter is the last thing that should reset your settings — so on every run after the first it does nothing and says so in one dim line.
+**`init-narration` is a stage you can check in**, for a project whose script is written rather than generated: it creates `narration.json` as a full template — one entry per cropped panel, in panel order, every text empty — so you fill it in (by hand, in the Narration Writer, or by handing an LLM the exact structure) instead of starting from a blank file that has to invent the panel list. Same thing the `narration-init` command does, as a step of the pipeline. It sits right before `narration` in the checklist and is normally checked in *instead* of it: a template is real JSON, and every "has this chapter been narrated yet?" check in remanga answers by file size, so a chapter carrying an empty skeleton reads as narrated to the status panel, to `verify`, and to the `narration` step — which would skip its own LLM hand-off and leave the run with a silent script. That's why it isn't in the default order; check it in when it's your workflow. It never replaces a narration.json that already has content — that file is the one thing in a chapter that can't be regenerated from anything else on disk — so a chapter that already has one is left alone.
 
 If stdin isn't a terminal (a piped script, CI, an editor's output pane), every menu falls back to the plain numbered prompts remanga has always had, with `0` as back/quit at each level.
 
