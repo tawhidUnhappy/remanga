@@ -21,7 +21,22 @@ from remanga.paths import GLOBAL_DIR
 # broader than what any one engine accepts - ffmpeg decodes all of these on
 # the BGM side, and offering a file remanga can't use is a far smaller
 # problem than hiding one it can.
-AUDIO_EXTENSIONS = (".wav", ".mp3", ".flac", ".m4a", ".ogg", ".aac", ".opus")
+# What the BGM picker will offer. Every one of these was checked by decoding
+# a real file through the bundled ffmpeg with NO system ffmpeg on PATH, so
+# the list is what actually works rather than what looks reasonable.
+#
+# The container formats at the end are here on purpose: music downloaded
+# from the web routinely arrives as .webm or .mp4 with an audio-only stream,
+# and refusing those means telling someone their file is unsupported when
+# the decoder handles it perfectly.
+AUDIO_EXTENSIONS = (
+    # lossless / uncompressed
+    ".wav", ".flac", ".aiff", ".aif", ".wv",
+    # lossy
+    ".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".opus", ".wma", ".ac3",
+    # containers that commonly hold an audio-only stream
+    ".webm", ".mp4", ".mka",
+)
 TEXT_EXTENSIONS = (".txt", ".md")
 
 

@@ -370,6 +370,31 @@ processing turns it into is a cache (seconds).
   re-crop is how panel_ids stop matching narration.json - which
   verify/gate.py then refuses to render from.
 
+## BGM formats: the vendored ffmpeg must be ON PATH, and only run.sh did that
+
+pydub reads WAV itself and shells out for everything else, finding ffmpeg
+via `which`. The repo vendors ffmpeg/ffprobe in bin/ and run.sh prepends it -
+so `python -m remanga.cli`, an editor run button, or importing remanga from a
+script all fell through to the system's copy, and on a machine without one
+every non-WAV bed failed with `FileNotFoundError: 'ffprobe'`. Measured: mp3,
+m4a, ogg, opus, flac and aac all failed while WAV kept working, which reads
+as "my file is broken" rather than "a binary is missing".
+
+`remanga/bundled_bin.py` now prepends bin/ at package import, so it holds
+however remanga is started. Prepending PATH rather than setting pydub's
+`AudioSegment.converter` fixes pydub's decoder, pydub's separate ffprobe
+call, and remanga's own ffmpeg_io in one go.
+
+`AUDIO_EXTENSIONS` (settings/files.py) is 16 formats, each verified by
+decoding a real file with NO system ffmpeg present. It includes .webm and
+.mp4 on purpose: downloaded music routinely arrives in those with an
+audio-only stream.
+
+**`bgm_volume_db` is relative to the FILE's own loudness**, not absolute, so
+swapping tracks changes the balance. Target is 15-20dB below narration
+(under 15 masks speech on phone speakers). Kokoro narration measures about
+-26.3 dBFS RMS; compute a track's gain as `-26.3 - 18 - <track dBFS>`.
+
 ## Where the knobs live (`settings/sections.py` + `commands/setup_rows.py`)
 
 Two registries, both data-driven, and adding a setting means adding a row -
