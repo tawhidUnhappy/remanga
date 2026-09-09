@@ -195,24 +195,24 @@ class RemangaConfig(ConfigModel):
         save_project_metadata(self._project, {PROJECT_SETTINGS_KEY: overrides})
 
 
-def init_config_file(output_path: Path | str = CONFIG_PATH, *, overwrite: bool = False) -> Path | None:
+def init_config_file(output_path: Path | str = CONFIG_PATH) -> Path | None:
     """Materializes config.json on this machine. Returns the path it wrote,
-    or None if one already existed and `overwrite` wasn't asked for.
+    or None if one was already there.
 
     Until this runs, a fresh clone has no config.json at all - RemangaConfig
     .load() quietly falls back to config.example.json, so everything works
     but nothing a settings screen saves has a file of its own to land in
     until something happens to write one. This is that something, said out
     loud: the machine's configuration becomes a real file, seeded from
-    whatever load() resolves (an existing config.json, else the example,
-    else the defaults) and written out in full.
+    whatever load() resolves (the example, else the defaults) and written
+    out in full.
 
-    Written in full is the second use: a config.json from an older version is
-    missing every field added since, and re-writing it through the current
-    models fills those in at their defaults without touching a single answer
-    already in it - the same reason `overwrite` exists at all."""
+    Deliberately never overwrites, and takes no flag to make it: this runs
+    as the pipeline's first step (remanga/pipeline.py), ahead of every
+    chapter, and "rewrite this machine's settings" is not something that
+    should be one keypress away from a routine run."""
     target = Path(output_path)
-    if target.exists() and not overwrite:
+    if target.exists():
         return None
     # Unscoped on purpose: config.json is this computer, and a project's own
     # overrides must stay in its project.json rather than being baked into

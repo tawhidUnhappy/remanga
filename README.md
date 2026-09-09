@@ -230,26 +230,26 @@ Chapter production runs in order — download → mark panels → crop → packa
 **Setting up a pipeline and running one are two different moments.** Ticking the last box in the checklist doesn't start anything: it hands back to the pipeline's staging screen, which writes the plan out in order — position, step name, what that step does — and then asks. Running it is a row you choose on purpose, and so is changing the list and looking again. Both doors lead here: the main menu's **Pipeline** row (which asks for a chapter only once you actually pick Run), and `run`, which asks for the chapter first and then stages the same screen against it.
 
 ```
-Pipeline for 'MyProject' — 9 step(s), in this order
-  1. download   Download chapter pages from MangaDex
-  2. mark       Mark panels via the Panel Marker web UI (writes crops.json)
-  3. crop       Crop panels out of the marked pages
-  4. package    Package the panels into the chosen upload formats (sheets/zips/PDF)
-  5. narration  Write narration.json + memory.json via LLM copy/paste
-  6. review     Review narration via the Narration Reviewer web UI
-  7. tts        Synthesize vocal audio via TTS
-  8. mix        Mix master audio track (narration + BGM + loudnorm)
-  9. render     Render the final recap video
+Pipeline for 'MyProject' — 10 step(s), in this order
+   1. init-config  Create config.json from the defaults if this machine has none yet
+   2. download     Download chapter pages from MangaDex
+   3. mark         Mark panels via the Panel Marker web UI (writes crops.json)
+   4. crop         Crop panels out of the marked pages
+   5. package      Package the panels into the chosen upload formats (sheets/zips/PDF)
+   6. narration    Write narration.json + memory.json via LLM copy/paste
+   7. review       Review narration via the Narration Reviewer web UI
+   8. tts          Synthesize vocal audio via TTS
+   9. mix          Mix master audio track (narration + BGM + loudnorm)
+  10. render       Render the final recap video
 
 ? Pipeline — MyProject
   the steps above are saved for this project · nothing runs until you say Run
 ❯ 1. Run the pipeline  asks which chapter
-  2. Choose steps      download → mark → crop → package → narration → review → tts → mix → render
-  3. Init config.json  this machine's settings file
+  2. Choose steps      init-config → download → mark → crop → package → narration → review → tts → mix → render
      Back
 ```
 
-**`init-config`** is a step like any other, and the third row is the same thing on demand. A fresh clone has no `config.json` at all — everything falls back to `config.example.json` until something writes one — so this writes it, from the current defaults, before a pipeline starts leaning on it. On a machine that already has one the row becomes a refresh and asks first: rewriting through the current models keeps every answer already in the file and fills in the settings a newer version added. The step itself never overwrites an existing `config.json` (a step that runs before every chapter is the last thing that should reset your settings), and it's off by default — check it into a pipeline when you want it, e.g. on a machine you just set up.
+**`init-config` is the first stage**, not a button off to the side — it shows up in the plan like everything else the run will do, and it's checkable, reorderable and droppable in the same checklist. A fresh clone has no `config.json` at all (everything falls back to `config.example.json` until something writes one), so this writes it from the current defaults before the rest of the pipeline leans on it. It never overwrites an existing `config.json` — a step that runs ahead of every chapter is the last thing that should reset your settings — so on every run after the first it does nothing and says so in one dim line.
 
 If stdin isn't a terminal (a piped script, CI, an editor's output pane), every menu falls back to the plain numbered prompts remanga has always had, with `0` as back/quit at each level.
 

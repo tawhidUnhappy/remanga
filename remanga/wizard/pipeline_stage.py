@@ -18,24 +18,25 @@ rather than a walk back through two menus.
 
 Nothing here is a second source of truth: the steps are still
 `load_pipeline(project)` (project.json's "pipeline"), still saved by the one
-checklist in pipeline_edit.py, and the run itself is still
-`run_pipeline` - this screen only decides *when* that happens."""
+checklist in pipeline_edit.py, and the run itself is still `run_pipeline` -
+this screen only decides *when* that happens. That is also why initializing
+config.json isn't a row of its own: it's `init-config`, the first stage of
+the pipeline, so it shows up in the plan above like everything else the run
+will do rather than as an errand off to one side."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
 
-from remanga.config import RemangaConfig, init_config_file
-from remanga.console import console, display_path, escape as _esc, print_path
-from remanga.paths import CONFIG_PATH
-from remanga.tui import Choice, confirm, is_cancel, select
+from remanga.config import RemangaConfig
+from remanga.console import console, escape as _esc
+from remanga.tui import Choice, is_cancel, select
 from remanga.wizard.chapters import select_chapter
 from remanga.wizard.pipeline_edit import choose_pipeline_steps
 
 _RUN = "__run__"
 _EDIT = "__edit__"
-_INIT_CONFIG = "__init_config__"
 
 
 @dataclass
@@ -81,6 +82,11 @@ def print_staged_pipeline(project: str, steps: list[str], *, chapter: str | None
         highlight=False,
     )
     width = max((len(name) for name in steps), default=0)
+    # "10." is one character wider than "9.", so the positions are right-
+    # aligned to the widest of them - otherwise a tenth step shunts its own
+    # name a column right and the descriptions stop lining up at exactly the
+    # length where the list is long enough to need the help.
+    number_width = len(f"{len(steps)}.")
     for position, name in enumerate(steps, start=1):
         step = known.get(name)
         # An unknown name is a step this version no longer has (a project.json
@@ -90,36 +96,9 @@ def print_staged_pipeline(project: str, steps: list[str], *, chapter: str | None
         detail = step.description if step else "unknown step - it will be skipped"
         label = _esc(name).ljust(width)
         shown = label if step else f"[yellow]{label}[/]"
-        console.print(f"  [dim]{position}.[/] {shown}  [dim]{_esc(detail)}[/]", highlight=False)
+        number = f"{position}.".rjust(number_width)
+        console.print(f"  [dim]{number}[/] {shown}  [dim]{_esc(detail)}[/]", highlight=False)
     console.print()
-
-
-def init_config_json() -> None:
-    """The Init config.json row.
-
-    A fresh clone has no config.json - RemangaConfig.load() falls back to
-    config.example.json, so remanga runs fine but this machine has no file
-    of its own until something writes one. This writes it, on purpose,
-    before a pipeline starts leaning on it.
-
-    On a machine that already has one it becomes a refresh, which is why it
-    asks first: re-writing through the current models keeps every answer
-    already in the file and fills in the fields a newer version added, but
-    "rewrite my configuration" is not something to do to someone silently on
-    the way past."""
-    existed = CONFIG_PATH.exists()
-    if existed and not confirm(
-        "Rewrite config.json from the current defaults?",
-        default=False,
-        note=f"{display_path(CONFIG_PATH, wrap=False)} · keeps every answer already in it and fills "
-             "in any setting this version added",
-    ):
-        return
-    written = init_config_file(overwrite=True)
-    console.print(
-        f"[green]✓ config.json {'refreshed' if existed else 'created'}.[/]"
-    )
-    print_path(f"  {display_path(written, wrap=False)}")
 
 
 def stage_pipeline(project: str, config: RemangaConfig, *, chapter: str | None = None,
@@ -144,12 +123,6 @@ def stage_pipeline(project: str, config: RemangaConfig, *, chapter: str | None =
             Choice(label="Choose steps", value=_EDIT, hint=describe_pipeline(steps),
                    detail="the ordered checklist - what runs, and in what order. Saved for this "
                           "project as soon as you confirm it"),
-            Choice(label="Init config.json", value=_INIT_CONFIG,
-                   badge="" if CONFIG_PATH.exists() else "missing",
-                   hint=("this machine's settings file"
-                         if CONFIG_PATH.exists() else "this machine doesn't have one yet"),
-                   detail="creates config.json from the defaults, or refreshes an existing one "
-                          "with any setting a newer version added (it asks first)"),
         ]
         picked = select(
             title or f"Pipeline — {project}", rows, numbered=True, back_label="Back",
@@ -159,9 +132,6 @@ def stage_pipeline(project: str, config: RemangaConfig, *, chapter: str | None =
             return None
         if picked == _EDIT:
             choose_pipeline_steps(project, title=f"Steps for '{project}'")
-            continue
-        if picked == _INIT_CONFIG:
-            init_config_json()
             continue
 
         target = chapter or select_chapter(project, title="Chapter to run it on")
