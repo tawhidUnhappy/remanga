@@ -1,14 +1,11 @@
-// Loading the chapter, moving between pages, and the final "Save & Continue"
-// that writes crops.json server-side and closes the tab.
+// Moving between the pages of the chapter that's currently open. The chapter
+// level - loading one, switching to another, saving - is chapter-nav.js,
+// which imports this; keep the dependency pointing that way only.
 
-import { pageImg, pageNumEl, pageTotalEl, prevPageBtn, nextPageBtn, assistCard, assistBtn, assistStatus, saveOverlay, saveBtn } from "./dom.js";
+import { pageImg, pageNumEl, prevPageBtn, nextPageBtn } from "./dom.js";
 import { state, currentPage } from "./state.js";
-import { api } from "./api.js";
 import { flushSave } from "./marks.js";
 import { resetView } from "./zoom-pan.js";
-import { pollDetectStatus } from "./magi.js";
-import { loadShortcuts } from "./shortcuts.js";
-import { setMode } from "./keyboard.js";
 
 export async function loadPage(idx) {
   // On the very first call, pageIndex is already 0 (its initial value), so
@@ -36,51 +33,6 @@ export async function loadPage(idx) {
   state.pageLoaded = true;
 }
 
-export async function init() {
-  await loadShortcuts();
-  state.chapter = await api("/api/chapter");
-  state.magiEnabled = state.chapter.magi_enabled;
-  state.clickToSelect = state.chapter.click_to_select;
-  pageTotalEl.textContent = state.chapter.pages.length;
-  for (const p of state.chapter.pages) state.pageMarksCache[p.filename] = state.chapter.marks[p.filename] || [];
-
-  if (!state.magiEnabled) {
-    assistCard.classList.add("disabled");
-    assistBtn.disabled = true;
-    assistStatus.textContent = "Disabled in config.json";
-  }
-
-  // Start in Adjust mode instead of the usual Draw default whenever this
-  // chapter already has marks (crops.json was pre-loaded server-side - see
-  // marker_state.py:_load_existing_crops, used by a "remark" restart and by
-  // simply reopening the marker on an already-marked chapter). With
-  // click_to_select on, Draw mode freezes every mark except the one
-  // currently being drawn (so drawing over another one never nudges it -
-  // see drag-resize.js) - exactly wrong when there's nothing left to draw
-  // and the whole point of the session is adjusting what's already there. A
-  // genuinely fresh chapter has no marks yet, so it's unaffected and still
-  // starts in Draw.
-  const hasExistingMarks = Object.values(state.pageMarksCache).some(marks => marks.length > 0);
-  if (hasExistingMarks) setMode("adjust");
-
-  await loadPage(0);
-  pollDetectStatus();
-  setInterval(pollDetectStatus, 1200);
-}
-
-export async function saveAndContinue() {
-  await flushSave(true);
-  try {
-    await api("/api/finish", { method: "POST" });
-    saveOverlay.classList.add("visible");
-    setTimeout(() => { try { window.close(); } catch {} }, 400);
-  } catch (e) {
-    alert("Failed to save: " + e.message);
-  }
-}
-
 prevPageBtn.addEventListener("click", () => loadPage(state.pageIndex - 1));
 nextPageBtn.addEventListener("click", () => loadPage(state.pageIndex + 1));
-saveBtn.addEventListener("click", saveAndContinue);
-window.addEventListener("beforeunload", () => flushSave(true));
 window.addEventListener("resize", resetView);

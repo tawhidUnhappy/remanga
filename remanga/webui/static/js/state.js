@@ -5,7 +5,8 @@
 // mouse-event math only.
 
 export const state = {
-  chapter: null,            // { chapter, pages, magi_enabled }
+  chapter: null,            // the /api/chapter payload: { project, chapter, chapter_index,
+                            // chapter_total, chapters, has_next, pages, marks, touched, ... }
   pageMarksCache: {},       // filename -> [{id,x,y,w,h,src}] in NATURAL pixel space
   touchedPages: new Set(),
   pageIndex: 0,
@@ -16,7 +17,7 @@ export const state = {
   nextLocalId: 1,
   saveDebounce: null,
   magiEnabled: false,
-  clickToSelect: true,      // see MarkerConfig.click_to_select; set from /api/chapter in page-nav.js:init()
+  clickToSelect: true,      // see MarkerConfig.click_to_select; set from /api/chapter in chapter-nav.js
   pageLoaded: false,        // false until the very first loadPage() has completed
   spaceHeld: false,         // hand-tool (pan) key held down
   panning: null,            // { startX, startY, startPanX, startPanY } while dragging to pan

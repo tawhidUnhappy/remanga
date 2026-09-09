@@ -1,13 +1,16 @@
-"""In-memory session state for one panel-marking run: the loaded pages, each
+"""In-memory state for ONE chapter being marked: the loaded pages, each
 page's marks, which pages the user has touched, MAGI detection progress, and
 the final crops.json assembly. No Flask/HTTP here - see routes.py for the API
 that reads/writes this, and detection.py for what fills apply_detected() in
 from a background thread.
+
+One chapter, deliberately. A session spanning several of them is a list of
+these plus a cursor - see marker_session.py - so nothing in this file has to
+know whether it's the only chapter or the fourth of twenty.
 """
 
 from __future__ import annotations
 
-import threading
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +21,7 @@ from remanga.json_io import has_real_json_content, read_json
 
 
 class MarkerState:
-    """All in-memory state for one marking session. One chapter at a time."""
+    """All in-memory state for one chapter's marking."""
 
     def __init__(self, chapter_dir: Path, chapter_num: str):
         # Absolute: Flask's send_from_directory() resolves a relative directory
@@ -33,7 +36,11 @@ class MarkerState:
         self.detect_done = 0
         self.detect_total = 0
         self.detect_error: str | None = None
-        self.finished = threading.Event()
+        # Whether a detection pass has already been kicked off for this
+        # chapter. In a multi-chapter session a chapter can be opened, left
+        # and come back to; MAGI must run for it once, on arrival, not again
+        # every time the cursor lands here (see detection.start_once).
+        self.detect_started = False
         self._load_pages()
 
     def _load_pages(self) -> None:

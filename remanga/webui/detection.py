@@ -6,6 +6,8 @@ instead of blocking on the whole chapter.
 
 from __future__ import annotations
 
+import threading
+
 from remanga.config import MarkerConfig
 from remanga.console import console, escape as _esc
 from remanga.webui.marker_state import MarkerState
@@ -46,3 +48,18 @@ def run_detection(state: MarkerState, config: MarkerConfig) -> None:
         console.print(f"[bold red]MAGI v3 detection failed:[/] {_esc(str(e))}")
     finally:
         state.detect_running = False
+
+
+def start_once(state: MarkerState, config: MarkerConfig) -> None:
+    """Kicks off this chapter's detection pass on a background thread, unless
+    MAGI is off or this chapter has already had one.
+
+    The "already had one" half is what a multi-chapter session needs: the
+    cursor lands on a chapter every time the user navigates to it, and each
+    landing would otherwise spawn another worker - a full model load and a
+    second pass over pages whose marks the user has since been editing. An
+    explicit re-run is still always available (POST /api/detect)."""
+    if not config.magi_enabled or state.detect_started:
+        return
+    state.detect_started = True
+    threading.Thread(target=run_detection, args=(state, config), daemon=True).start()

@@ -730,6 +730,45 @@ keeps), reachable from the menu like everything else.
   (post-recrop/post-rewrite skew) - same check feeds the `verify` command
   too, one implementation for both.
 
+## Panel marker is a SESSION now (one tab, many chapters)
+
+`webui/marker_session.py:MarkerSession` owns the chapter list + cursor and one
+`MarkerState` per chapter (built lazily - never open every chapter's images up
+front). `launch_and_wait_all(project, [chapters], config)` is the entry point;
+`launch_and_wait(project, chapter, config)` is a one-item list, so `mark`, the
+pipeline's mark step and a "remark" restart are unchanged. `POST /api/finish`
+saves + advances (`{"end": true}` stops early); `POST /api/goto {"index": n}`
+jumps and saves the chapter being left. Frontend split: `page-nav.js` = pages,
+`chapter-nav.js` = chapters/save/init, one-way import (page-nav must never
+import chapter-nav). Command: `mark-all` (Project-wide).
+
+Footguns hit while building it, all still live:
+- **Page filenames repeat across chapters** (every chapter has a `page_001`).
+  `magi.js:pollDetectStatus` merges server marks by filename, so a poll that
+  was in flight during a chapter switch writes the OLD chapter's marks into
+  the new chapter's cache. `/api/detect/status` returns `chapter` for exactly
+  this; the poller drops any response that isn't the chapter on screen.
+- **`state.pageLoaded = false` before `loadPage(0)` on a chapter change**, or
+  loadPage's "flush the page we're leaving" posts the previous chapter's marks
+  into the new chapter's state.
+- **`session.goto(i, save=False)` from /api/finish** - it already saved; the
+  default `save=True` would write that crops.json twice and report it twice.
+- **MAGI must start once per chapter, on arrival** (`detection.start_once`,
+  guarded by `MarkerState.detect_started`) - every navigation back would
+  otherwise spawn another worker and reload the model.
+- CSS: `.chapter-nav`/`.ghost-btn` set `display:flex`, which beats the UA's
+  `[hidden]{display:none}` - each needs its own explicit `[hidden]` rule or
+  `el.hidden = true` does nothing.
+
+**No JS runtime in this sandbox.** `node` isn't installed and snap firefox
+`--headless --screenshot` just hangs (tried both `--screenshot PATH` and
+`=PATH`, 100s+). esprima-python parses only up to ES2017, so it false-fails on
+this repo's `?.` and `catch {}` - not a real signal. What IS checkable
+statically: every `import {x} from "./y.js"` resolves to a real export, and
+every `getElementById` in dom.js matches an id in index.html (a miss is a
+module-scope TypeError that kills the whole UI). Verify the backend by driving
+the Flask API over HTTP from a thread - that part is fully testable and was.
+
 ## ffmpeg output: `-progress`, never raw stats
 
 `ffmpeg_io.run_ffmpeg(show_progress=True)` injects `-hide_banner -nostats

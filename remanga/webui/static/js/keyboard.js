@@ -6,7 +6,8 @@
 import { stage, toolDrawBtn, toolAdjustBtn } from "./dom.js";
 import { state } from "./state.js";
 import { deleteMark, markFullPage } from "./marks.js";
-import { loadPage, saveAndContinue } from "./page-nav.js";
+import { loadPage } from "./page-nav.js";
+import { saveAndContinue } from "./chapter-nav.js";
 import { resetView } from "./zoom-pan.js";
 import { matchAction } from "./shortcuts.js";
 
@@ -20,7 +21,7 @@ toolDrawBtn.addEventListener("click", () => setMode("draw"));
 toolAdjustBtn.addEventListener("click", () => setMode("adjust"));
 
 const ACTION_HANDLERS = {
-  save: (e) => { e.preventDefault(); saveAndContinue(); },
+  save: (e) => { e.preventDefault(); saveAndContinue(false); },
   mark_full_page: (e) => { e.preventDefault(); markFullPage(); },
   tool_draw: () => setMode("draw"),
   tool_adjust: () => setMode("adjust"),

@@ -8,6 +8,7 @@ import "./zoom-pan.js";
 import "./shortcuts.js";
 import "./keyboard.js";
 import "./magi.js";
-import { init } from "./page-nav.js";
+import "./page-nav.js";
+import { init } from "./chapter-nav.js";
 
 init();

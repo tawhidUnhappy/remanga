@@ -424,6 +424,15 @@ Launches the **Panel Marker** web UI: MAGI v3 pre-fills every page's panel boxes
 ```
 *Creates:* `projects/my_manga/chapters/chapter_1/crops.json` — see [Panel Marker Web UI](#panel-marker-web-ui) below.
 
+**Every chapter in one tab** — `mark-all` (Project-wide in the wizard) hands the marker the whole project instead of one chapter:
+```bash
+./run.sh mark-all --project "my_manga"
+./run.sh mark-all --project "my_manga" --chapters 4,5,6
+```
+One server, one browser tab, one session. **Save & Next chapter** writes that chapter's `crops.json` and swaps the next chapter's pages into the page already open — no reload, so the zoom, the tool and the shortcuts survive it — and the **‹ Ch › arrows** in the top bar go back to a chapter already done, so checking chapter 3's marks after finishing chapter 9 costs a click rather than another run of the command. Leaving a chapter always writes its `crops.json` first, so nothing lives only in the server's memory. **Finish here** ends the session early and leaves the remaining chapters unmarked; it asks first, because the terminal is blocked on the session and closing the tab tells it nothing.
+
+Chapters with nothing downloaded are named and skipped before the browser opens. MAGI runs once per chapter, when you arrive at it — not again when you navigate back.
+
 ### 3. Crop Panels
 ```bash
 ./run.sh crop --project "my_manga" --chapter "1"
@@ -836,6 +845,7 @@ In short: if a chapter's TTS run gets interrupted or a worker locks up, just re-
 ./run.sh mix      -p <PROJECT> -c <CHAPTER> [-b <BGM_FILE>]
 ./run.sh render   -p <PROJECT> -c <CHAPTER> [-f]
 ./run.sh download-all -p <PROJECT> [-u <URL_OR_ID>] [-f] [--refetch]
+./run.sh mark-all -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>]
 ./run.sh narration-init-all -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-f]
 ./run.sh full-recap -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-f]
 ./run.sh remix    -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-b <BGM_FILE>] [--no-rejoin]

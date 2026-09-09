@@ -18,6 +18,13 @@
 <div class="topbar">
   <div class="brand"><span class="mark-icon"></span>Panel Marker</div>
 
+  <div class="chapter-nav" id="chapterNav" hidden>
+    <button id="prevChapter" title="Previous chapter in this session">‹</button>
+    <span>Ch <span class="count mono" id="chapterName">–</span>
+      <span class="chapter-pos mono" id="chapterPos">1/1</span></span>
+    <button id="nextChapter" title="Next chapter in this session">›</button>
+  </div>
+
   <div class="page-nav">
     <button id="prevPage" title="Previous page (←)">‹</button>
     <span>Page <span class="count mono" id="pageNum">–</span> / <span class="count mono" id="pageTotal">–</span></span>
@@ -42,7 +49,9 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M9 13h6"/></svg>
   </button>
 
-  <button class="save-btn" id="saveBtn">Save &amp; Continue <kbd id="saveKbd">Ctrl+S</kbd></button>
+  <button class="ghost-btn" id="finishBtn" hidden title="Save this chapter and end the session, skipping the rest">Finish here</button>
+
+  <button class="save-btn" id="saveBtn"><span id="saveLabel">Save &amp; Continue</span> <kbd id="saveKbd">Ctrl+S</kbd></button>
 </div>
 
 <div class="body-row">
@@ -88,8 +97,8 @@
 <div class="save-overlay" id="saveOverlay">
   <div class="card">
     <div class="icon">✓</div>
-    <h2>Saved</h2>
-    <p>crops.json is written and the pipeline will continue in your terminal.<br>You can close this tab now.</p>
+    <h2 id="saveOverlayTitle">Saved</h2>
+    <p id="saveOverlayText">crops.json is written and the pipeline will continue in your terminal.<br>You can close this tab now.</p>
   </div>
 </div>
 

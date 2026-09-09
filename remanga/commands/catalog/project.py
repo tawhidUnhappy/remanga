@@ -49,6 +49,23 @@ PROJECT_COMMANDS: list[Command] = [
         detail="the whole manga in one go - re-runnable, and only downloads what's actually missing",
     ),
     Command(
+        "mark-all",
+        "Mark panels for every chapter in the project in ONE browser tab - saving a chapter "
+        "writes its crops.json and swaps the next chapter into the same page, and the chapter "
+        "arrows go back to one already done, so a whole manga is marked and checked in a single "
+        "sitting instead of one launch per chapter",
+        project_handlers.mark_all,
+        [
+            project_param(),
+            Param("chapters", ["--chapters", "-c"], required=False, default=None,
+                  help="Comma-separated chapter numbers to mark, in order (default: every chapter "
+                       "this project has). Chapters with no downloaded pages are skipped.",
+                  prompt="Chapters to mark"),
+        ],
+        category="Project-wide",
+        detail="one tab, one server, one MAGI load per chapter - the whole manga in one session",
+    ),
+    Command(
         "narration-init-all",
         "Create a blank narration.json for every chapter in the project - zero bytes, not even "
         "'{}', so every chapter has a script file waiting to be filled in. Chapters that already "

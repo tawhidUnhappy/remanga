@@ -32,6 +32,13 @@ export async function pollDetectStatus() {
     assistStatus.textContent = `Done · ${status.total} page(s) processed`;
   }
 
+  // Page filenames repeat across chapters (every chapter has a page_001),
+  // so a status response that was in flight while the tab switched chapters
+  // would write the previous chapter's marks straight into this one's cache
+  // under matching names. The response says which chapter it describes;
+  // anything but the one on screen is dropped.
+  if (status.chapter !== state.chapter.chapter) return;
+
   let currentPageChanged = false;
   for (const [filename, serverMarks] of Object.entries(status.marks || {})) {
     if (state.touchedPages.has(filename)) continue;

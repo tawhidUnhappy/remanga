@@ -165,3 +165,33 @@ def narration_init_all(params: dict[str, Any], config: RemangaConfig) -> None:
         f"[dim](0 bytes each: {', '.join(targets)})[/]"
         + (f"\n[dim]{kept} chapter(s) already had one - left as they were.[/]" if kept else "")
     )
+
+
+def mark_all(params: dict[str, Any], config: RemangaConfig) -> None:
+    """Marks panels for every chapter in the project, in ONE browser tab.
+
+    The per-chapter `mark` command opens the marker, waits for one save, and
+    exits - so marking a whole manga was that ceremony twenty times over: a
+    new server, a new tab, a new MAGI load, and the terminal to come back to
+    in between. This hands the marker the whole list instead. Saving a
+    chapter writes its crops.json and swaps the next chapter's pages into the
+    page that's already open (see webui/marker_session.py), and the chapter
+    arrows go back to one already done - so checking chapter 3's marks after
+    doing chapter 9 costs a click, not another run.
+
+    Chapters with nothing downloaded are dropped by the session itself, with
+    a line naming them: a chapter that can't be marked shouldn't become a
+    blank screen in the middle of a long pass."""
+    from remanga.webui import launch_and_wait_all
+
+    project = params["project"]
+    chapters = split_chapters(params.get("chapters")) or discover_chapters(project)
+    if not chapters:
+        console.print(f"[yellow]Project '{project}' has no chapters yet - download some first.[/]")
+        return
+
+    saved = launch_and_wait_all(project, chapters, config.marker)
+    console.print(
+        f"[bold green]✓ Marking session finished[/] [dim]- crops.json written for "
+        f"{len(saved)} chapter(s).[/]"
+    )
