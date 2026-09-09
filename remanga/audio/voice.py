@@ -26,10 +26,9 @@ because the order is what makes it work:
      it responds to the voice as finally shaped - compressing first and
      boosting afterwards would just re-introduce the variation it removed.
 
-A band "boost" here is an overlay of a band-passed copy, since pydub has no
-shelving EQ, and the gain applied to that copy is calibrated against the
-actual audio rather than derived - see `_boost_band` for the measurement that
-made that necessary."""
+A band "boost" here is a RELATIVE one - the bands either side are pulled
+down and the whole signal brought back up - because adding a filtered copy
+does not survive contact with real speech. See `_boost_band`."""
 
 from __future__ import annotations
 
@@ -45,68 +44,34 @@ def _band_energy_db(audio: AudioSegment, low_hz: int, high_hz: int) -> float:
     return audio.high_pass_filter(low_hz).low_pass_filter(high_hz).dBFS
 
 
-def _boost_band(
-    audio: AudioSegment, low_hz: int, high_hz: int, boost_db: float, *, probe_ms: int = 15000,
-) -> AudioSegment:
+def _boost_band(audio: AudioSegment, low_hz: int, high_hz: int, boost_db: float) -> AudioSegment:
     """`audio` with the band between low_hz and high_hz lifted by boost_db.
 
-    Implemented by overlaying a band-passed copy, since pydub has no shelving
-    EQ. The copy has to be attenuated before it is added, and working out by
-    how much is where this gets interesting.
+    Done by REBUILDING the signal from three bands with the outer two pulled
+    down, then restoring the overall level - not by overlaying a boosted copy
+    of the band onto the original.
 
-    The algebra says solve 1 + x = 10^(boost/20) - overlaying an unattenuated
-    copy doubles the band, i.e. +6dB. That is what this did first, and
-    MEASURED IT DELIVERS UNDER HALF: asking +3.0dB produced +1.26dB in the
-    warmth band and +1.13dB in the presence band. The algebra assumes the
-    copy adds coherently, and it does not - pydub's filters are single-pole,
-    so the copy comes back phase-shifted and partially cancels, by an amount
-    that depends on the band and on the material.
+    That distinction was expensive to learn and is the whole reason this
+    function looks the way it does. Adding a filtered copy is the obvious
+    approach and it measures beautifully on white noise: calibrated, it
+    delivered +3.00dB for +3.0dB asked. On real narration the same code
+    delivered **+0.12dB**. Addition is phase-dependent, pydub's filters are
+    single-pole and shift phase across the passband, and speech - unlike
+    noise - has rapidly varying phase, so the copy cancels itself by an amount
+    that changes moment to moment. No calibration constant can fix a factor
+    that is not constant.
 
-    Rather than pick a fudge factor, the copy's gain is calibrated against
-    this actual audio: a short probe slice is boosted at trial gains until
-    the measured band delta matches what was asked. Bisection, on a slice
-    rather than the whole track, so the cost is a handful of filter passes
-    over ~15 seconds regardless of how long the chapter is. What the setting
-    promises is then what the mix delivers, which for a number a human is
-    supposed to tune by ear is the whole point."""
+    Attenuation has no such problem: scaling a band is deterministic whatever
+    its phase. The same reconstruction is what makes ducking.carve_speech_band
+    work, which measured exactly as asked on the same material. So a "boost"
+    here is really a relative one - everything else comes down, then the whole
+    signal comes back up - which is audibly identical and actually happens."""
     if boost_db <= 0 or len(audio) == 0:
         return audio
-
-    # A slice from the middle: the head of a narration track is often a beat
-    # of near-silence, and calibrating against that measures the room, not
-    # the voice.
-    if len(audio) > probe_ms:
-        start = (len(audio) - probe_ms) // 2
-        probe = audio[start:start + probe_ms]
-    else:
-        probe = audio
-    if probe.dBFS == float("-inf"):
-        return audio
-
-    baseline = _band_energy_db(probe, low_hz, high_hz)
-
-    def delivered(copy_gain_db: float) -> float:
-        band = probe.high_pass_filter(low_hz).low_pass_filter(high_hz) + copy_gain_db
-        return _band_energy_db(probe.overlay(band), low_hz, high_hz) - baseline
-
-    # Bracket: -60dB is inaudible, +12dB is far past doubling. Bisect to
-    # within a tenth of a dB, which is below what anyone can hear anyway.
-    low, high = -60.0, 12.0
-    if delivered(high) < boost_db:
-        copy_gain_db = high            # cannot reach it; get as close as possible
-    else:
-        for _ in range(24):
-            mid = (low + high) / 2
-            if delivered(mid) < boost_db:
-                low = mid
-            else:
-                high = mid
-            if high - low < 0.1:
-                break
-        copy_gain_db = (low + high) / 2
-
-    band = audio.high_pass_filter(low_hz).low_pass_filter(high_hz) + copy_gain_db
-    return audio.overlay(band)
+    lows = audio.low_pass_filter(low_hz) - boost_db
+    highs = audio.high_pass_filter(high_hz) - boost_db
+    mids = audio.high_pass_filter(low_hz).low_pass_filter(high_hz)
+    return lows.overlay(highs).overlay(mids) + boost_db
 
 
 def enhance_voice(
@@ -130,9 +95,32 @@ def enhance_voice(
     voice = _boost_band(voice, *PRESENCE_BAND_HZ, presence_db)
 
     if compress:
+        # Threshold RELATIVE to this track's own level, not an absolute dBFS
+        # figure. A fixed threshold depends on how loud the engine happened to
+        # synthesize: measured on real narration sitting at -26dBFS RMS, an
+        # absolute -18 threshold barely engaged at all (crest 23.01 -> 22.88dB),
+        # because almost nothing ever reached it. Anchoring to the RMS makes the
+        # setting mean the same thing whatever the voice or engine.
+        before_rms = voice.dBFS
+        if before_rms == float("-inf"):
+            return voice
         # attack/release left at pydub's defaults (5ms / 50ms): fast enough to
         # catch a consonant, slow enough not to chew the vowel behind it.
-        voice = compress_dynamic_range(
-            voice, threshold=compress_threshold_db, ratio=compress_ratio,
+        compressed = compress_dynamic_range(
+            voice, threshold=before_rms + compress_threshold_db, ratio=compress_ratio,
         )
+        # Makeup gain. Without it this stage is not compression, it is
+        # attenuation: measured, compressing alone took the track from
+        # -26.3 to -29.5dBFS RMS, i.e. it made the narration quieter, which is
+        # the opposite of what anyone turns compression on for. Restoring the
+        # original RMS is what converts reduced dynamic range into density -
+        # the peaks come down, then everything comes back up, so the quiet
+        # parts end up louder than they started.
+        if compressed.dBFS != float("-inf"):
+            makeup_db = before_rms - compressed.dBFS
+            # Never into clipping: pydub saturates rather than wrapping, and a
+            # clipped narration track is far worse than an uncompressed one.
+            headroom = -1.0 - (compressed.max_dBFS + makeup_db)
+            compressed = compressed + makeup_db + min(0.0, headroom)
+        voice = compressed
     return voice

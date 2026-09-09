@@ -110,6 +110,50 @@ def configure_levels(config: RemangaConfig) -> None:
     )
 
 
+def configure_voice_chain(config: RemangaConfig) -> None:
+    """Thickness and presence on the narration itself.
+
+    Separate from Audio levels because it answers a different question: levels
+    are about how the voice sits AGAINST the music, this is about what the
+    voice sounds like on its own. A thin voice with the bed pulled down is
+    still thin."""
+    on = confirm("Process the narration voice (thickness, presence, evenness)?",
+                 default=config.audio.voice_enhance)
+    if is_cancel(on):
+        return
+    set_field(config, "audio.voice_enhance", bool(on))
+    if not on:
+        console.print("[green]✓ Voice chain:[/] off - narration used exactly as synthesized")
+        return
+
+    if not _number(config, "audio.voice_warmth_db", "Warmth, in dB (body of the voice, 110-320Hz)",
+                   minimum=0.0, maximum=8.0,
+                   note="this is what 'thick' means; past about +4 it turns muddy"):
+        return
+    if not _number(config, "audio.voice_presence_db", "Presence, in dB (consonant clarity, 2.2-5.5kHz)",
+                   minimum=0.0, maximum=8.0,
+                   note="what makes a voice read as close rather than distant; this band "
+                        "saturates around +4dB however hard it is pushed"):
+        return
+    compress = confirm("Even out loud and quiet lines (compression)?",
+                       default=config.audio.voice_compress)
+    if is_cancel(compress):
+        return
+    set_field(config, "audio.voice_compress", bool(compress))
+    if compress and not _number(
+        config, "audio.voice_compress_ratio", "Compression ratio (3 = moderate, 6 = firm)",
+        minimum=1.0, maximum=20.0,
+        note="how hard the loudest lines are pulled back toward the quiet ones",
+    ):
+        return
+    console.print(
+        f"[green]✓ Voice chain:[/] warmth {config.audio.voice_warmth_db:+.1f}dB, "
+        f"presence {config.audio.voice_presence_db:+.1f}dB"
+        + (f", {config.audio.voice_compress_ratio:g}:1 compression"
+           if config.audio.voice_compress else ", no compression")
+    )
+
+
 def configure_panel_detection(config: RemangaConfig) -> None:
     """What happens to a page between downloading it and narrating it.
 

@@ -79,7 +79,13 @@ class AudioConfig(BaseModel):
     # Rumble and plosive thump live under here and carry no speech. Removed
     # first so the compressor is not spending its gain reduction reacting to
     # energy nobody can hear.
-    voice_highpass_hz: int = 85
+    # 65 rather than the 85 this started at, and the difference was measured:
+    # pydub's filters are single-pole (6dB/octave), so an 85Hz high-pass still
+    # attenuates 110-320Hz - which is exactly the warmth band. The two stages
+    # then fought, and a +2.5dB warmth lift landed as +0.02dB overall because
+    # the boost was only undoing the filter. Moving the corner down clears the
+    # warmth band while still removing rumble and plosive thump.
+    voice_highpass_hz: int = 65
     # Lift around 110-320Hz - the body of a voice, and what "thick" means.
     # Modest on purpose: this is the band that turns muddy fastest.
     voice_warmth_db: float = 2.5
@@ -99,6 +105,12 @@ class AudioConfig(BaseModel):
     # distance instead of drifting. Applied after the EQ, so it responds to
     # the voice as finally shaped.
     voice_compress: bool = True
-    voice_compress_threshold_db: float = -18.0
+    # Threshold RELATIVE to the narration's own RMS, not an absolute dBFS
+    # level: 0.0 means "start compressing at this track's average loudness",
+    # negative reaches further down into the quiet parts. Relative because an
+    # absolute figure depends on how loud the engine happened to synthesize -
+    # measured on narration sitting at -26dBFS, an absolute -18 threshold
+    # barely engaged (crest 23.01 -> 22.88dB) since almost nothing reached it.
+    voice_compress_threshold_db: float = -2.0
     voice_compress_ratio: float = 3.0
     enable_loudnorm: bool = True

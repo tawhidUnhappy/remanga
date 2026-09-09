@@ -125,11 +125,11 @@
     "duck_fade_ms": 220,
     "duck_carve_db": -7.0,
     "voice_enhance": false,
-    "voice_highpass_hz": 85,
+    "voice_highpass_hz": 65,
     "voice_warmth_db": 2.5,
     "voice_presence_db": 3.0,
     "voice_compress": true,
-    "voice_compress_threshold_db": -18.0,
+    "voice_compress_threshold_db": -2.0,
     "voice_compress_ratio": 3.0
   },
   "video": {

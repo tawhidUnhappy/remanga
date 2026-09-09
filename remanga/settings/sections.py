@@ -87,6 +87,14 @@ SECTIONS: tuple[Section, ...] = (
         detail="voice-vs-music balance, ducking the music under speech, and loudness normalization",
     ),
     Section(
+        "voicechain", "Narration voice",
+        lambda c: (f"warmth {c.audio.voice_warmth_db:+.1f}dB · presence {c.audio.voice_presence_db:+.1f}dB"
+                   + (f" · {c.audio.voice_compress_ratio:g}:1" if c.audio.voice_compress else "")
+                   if c.audio.voice_enhance else "unprocessed"),
+        tuning.configure_voice_chain,
+        detail="thickness and presence on the narration itself, before it meets the music",
+    ),
+    Section(
         "detection", "Panel detection",
         lambda c: ", ".join(n for n, on in (
             ("MAGI", c.marker.magi_enabled), ("gutter-snap", c.cropper.snap_to_gutters),
