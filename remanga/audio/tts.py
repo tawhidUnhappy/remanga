@@ -15,6 +15,7 @@ from remanga.console import console
 from remanga.json_io import read_json, read_json_or, write_json
 from remanga.paths import get_audio_dir, get_audio_timing_path, get_chapter_dir
 from remanga.settings.fields import set_field
+from remanga.verify import ensure_panels_match_narration
 
 
 class TTSEngine:
@@ -35,6 +36,11 @@ class TTSEngine:
         Synthesizes narration audio per panel with Kokoro-82M.
         Resumes automatically by checking existing panel WAV clips.
         """
+        # Refuse to produce output that would be silently degraded - see
+        # verify/gate.py. Here rather than in pipeline.py so full-recap,
+        # which does not go through the wizard's steps, is covered too.
+        ensure_panels_match_narration(project_name, chapter_num, stage="text-to-speech")
+
         # Scoped to the project: the validator below reads the voice out of this
         # config, and it has to be the one this manga uses.
         full_config = RemangaConfig.load().for_project(project_name)

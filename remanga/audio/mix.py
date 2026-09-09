@@ -20,6 +20,7 @@ from remanga.paths import (
     get_master_audio_path,
     get_modified_audio_dir,
 )
+from remanga.verify import ensure_panels_match_narration
 
 
 class AudioProcessor:
@@ -66,6 +67,11 @@ class AudioProcessor:
         changed) would silently re-mix and re-render every chapter it
         touches, every single time, for no reason.
         """
+        # Refuse to produce output that would be silently degraded - see
+        # verify/gate.py. Here rather than in pipeline.py so full-recap,
+        # which does not go through the wizard's steps, is covered too.
+        ensure_panels_match_narration(project_name, chapter_num, stage="the audio mix")
+
         # Scoped to the project: the validator below reads the BGM out of this
         # config, and it has to be the one this manga uses.
         full_config = RemangaConfig.load().for_project(project_name)

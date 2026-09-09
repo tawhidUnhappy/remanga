@@ -19,6 +19,7 @@ missing one can, and that's a fast existence check.
 
 from __future__ import annotations
 
+from remanga.verify.gate import PanelNarrationMismatch, ensure_panels_match_narration
 from remanga.verify.models import ChapterVerification, MediaCheck
 from remanga.verify.panels import check_panel_narration_mismatch, project_panel_narration_mismatches
 from remanga.verify.probe import probe_media
@@ -27,7 +28,9 @@ from remanga.verify.runner import verify_chapter, verify_project
 __all__ = [
     "ChapterVerification",
     "MediaCheck",
+    "PanelNarrationMismatch",
     "check_panel_narration_mismatch",
+    "ensure_panels_match_narration",
     "probe_media",
     "project_panel_narration_mismatches",
     "verify_chapter",

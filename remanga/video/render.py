@@ -17,6 +17,7 @@ from remanga.paths import (
     get_video_concat_path,
     get_video_frames_dir,
 )
+from remanga.verify import ensure_panels_match_narration
 from remanga.video.compose import FrameCompositor
 
 
@@ -116,6 +117,11 @@ class VideoRenderer:
         Composites frames, synchronizes with master audio,
         and renders final MP4 with GPU acceleration (or fallback CPU encoder).
         """
+        # Refuse to produce output that would be silently degraded - see
+        # verify/gate.py. Here rather than in pipeline.py so full-recap,
+        # which does not go through the wizard's steps, is covered too.
+        ensure_panels_match_narration(project_name, chapter_num, stage="video rendering")
+
         timing_path = get_audio_timing_path(project_name, chapter_num)
         master_audio = get_master_audio_path(project_name, chapter_num)
         frames_dir = get_video_frames_dir(project_name, chapter_num)
