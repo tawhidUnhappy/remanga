@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from remanga.paths import GENERATED_KINDS, get_chapter_dir, get_generated_dir, get_project_dir
-from remanga.reset.modes import PROJECT_KEEP, keep_set
+from remanga.reset.modes import KEEP_ON_SOURCES_REBUILD, PROJECT_KEEP, keep_set
 
 
 def generated_dirs_for_chapter(project_name: str, chapter_num: str) -> list[Path]:
@@ -70,6 +70,33 @@ def derived_wipe_candidates(project_name: str) -> list[Path]:
         kind_dir = project_dir / kind
         if kind_dir.exists():
             out.extend(sorted(kind_dir.iterdir()))
+    return out
+
+
+def sources_wipe_candidates(project_name: str) -> list[Path]:
+    """Everything a "down to the source files" rebuild deletes: the whole
+    project wipe, plus everything inside each chapter that is not one of the
+    three things remanga cannot produce for itself
+    (KEEP_ON_SOURCES_REBUILD).
+
+    The extra reach over project_wipe_candidates is panels/ - the crop
+    output. project_wipe_candidates keeps chapters/ whole, which is right
+    for "regenerate the video" and wrong for "rebuild from source": a stale
+    panels/ that survives a re-crop is exactly how panel_ids stop matching
+    narration.json, which the render guard then refuses to build from."""
+    project_dir = get_project_dir(project_name)
+    if not project_dir.exists():
+        return []
+    out = list(project_wipe_candidates(project_name))
+    chapters_dir = project_dir / "chapters"
+    if chapters_dir.is_dir():
+        for chapter_dir in sorted(chapters_dir.iterdir()):
+            if not chapter_dir.is_dir():
+                continue
+            out.extend(
+                entry for entry in sorted(chapter_dir.iterdir())
+                if entry.name not in KEEP_ON_SOURCES_REBUILD
+            )
     return out
 
 

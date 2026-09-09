@@ -30,6 +30,7 @@ def full_recap(params: dict[str, Any], config: RemangaConfig) -> None:
         chapters=split_chapters(params.get("chapters")),
         regenerate_all=mode.wipe == "project",
         regenerate_effects=mode.wipe == "derived",
+        regenerate_sources=mode.wipe == "sources",
     )
 
 

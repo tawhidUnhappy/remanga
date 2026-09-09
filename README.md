@@ -560,9 +560,12 @@ It runs each chapter's remaining TTS/mix/render steps (skipping whatever's alrea
 |---|---|---|---|
 | `missing` *(default)* | nothing | everything already built | fastest — picks up where the last run stopped |
 | `outputs` | `audio_modified/`, `video/` | **`audio/` — the synthesized narration** | minutes, no re-narration |
-| `everything` | `audio/`, `audio_modified/`, `video/` — every generated file | `chapters/` and the project's json files | slowest — re-runs TTS on every panel |
+| `everything` | `audio/`, `audio_modified/`, `video/` — every generated file | `chapters/` and the project's json files | slow — re-runs TTS on every panel |
+| `sources` | all of the above **plus each chapter's `panels/`** | only what remanga can't rebuild: `pages/` (re-verified), `crops.json`, `narration.json`, project json | slowest — re-crops, re-narrates the audio, re-renders, re-joins |
 
 `outputs` is the one to reach for while tuning how a recap sounds or looks: voice chain, ducking, music, levels, resolution, framing. It rebuilds from narration you already have.
+
+`sources` is the deepest: it keeps only the three things remanga cannot produce for itself — the downloaded `pages/`, the hand-placed `crops.json`, and the LLM-written `narration.json` — and rebuilds everything else, panels included. Pages are kept and **re-verified** rather than re-downloaded: anything that doesn't belong is removed, and only missing images are re-fetched.
 
 `everything` is for when the narration itself is wrong — a voice change, a different engine, or an edited `narration.json`. Before any chapter is touched, every generated folder in the whole project is deleted, and only these survive:
 ```

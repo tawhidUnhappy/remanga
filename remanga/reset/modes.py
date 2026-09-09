@@ -165,7 +165,27 @@ REBUILD_MODES: tuple[RebuildMode, ...] = (
         cost="slowest - re-runs text-to-speech on every panel",
         force=True, wipe="project",
     ),
+    RebuildMode(
+        "sources", "Down to the source files",
+        deletes="every generated file, AND the cropped panels/",
+        keeps="only what remanga cannot rebuild: pages (re-verified), crops.json, "
+              "narration.json, and the project's json files",
+        cost="slowest - re-crops, re-narrates the audio, re-renders and re-joins",
+        force=True, wipe="sources",
+    ),
 )
+
+# What a "down to the source files" rebuild keeps INSIDE chapters/. Exactly
+# the three things remanga cannot produce for itself:
+#   pages/          fetched from MangaDex (re-verified, not re-downloaded
+#                   wholesale - see reset.reverify_chapter_downloads)
+#   crops.json      panel boxes, hand-placed or hand-corrected in the Marker
+#   narration.json  written by an LLM against those panels, then reviewed
+# Everything else in there - panels/ above all - is a derivative of these
+# three and is rebuilt. panels/ is included in the delete precisely because
+# it is NOT source: it is the crop output, and keeping a stale one is how a
+# re-crop silently disagrees with narration.json's panel_ids.
+KEEP_ON_SOURCES_REBUILD = {"pages", "crops.json", "narration.json"}
 
 REBUILD_MODE_NAMES = tuple(mode.name for mode in REBUILD_MODES)
 REBUILD_MODE_BY_NAME = {mode.name: mode for mode in REBUILD_MODES}

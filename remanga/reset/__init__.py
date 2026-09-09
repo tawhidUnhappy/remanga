@@ -32,12 +32,14 @@ from remanga.reset.actions import (
     wipe_chapter,
     wipe_derived_audio_and_video,
     wipe_project,
+    wipe_to_sources,
 )
 from remanga.reset.entries import (
     derived_wipe_candidates,
     generated_dirs_for_chapter,
     project_wipe_candidates,
     restart_candidates,
+    sources_wipe_candidates,
     wipeable_entries,
 )
 from remanga.reset.modes import (
@@ -45,6 +47,7 @@ from remanga.reset.modes import (
     KEEP_ON_MARKS_ONLY_RESTART,
     KEEP_ON_RESTART,
     KEEP_ON_SOFT_RESTART,
+    KEEP_ON_SOURCES_REBUILD,
     PROJECT_KEEP,
     REBUILD_MODE_BY_NAME,
     REBUILD_MODE_NAMES,
@@ -61,6 +64,7 @@ __all__ = [
     "KEEP_ON_MARKS_ONLY_RESTART",
     "KEEP_ON_RESTART",
     "KEEP_ON_SOFT_RESTART",
+    "KEEP_ON_SOURCES_REBUILD",
     "PROJECT_KEEP",
     "REBUILD_MODES",
     "REBUILD_MODE_BY_NAME",
@@ -76,8 +80,10 @@ __all__ = [
     "restart_candidates",
     "restart_chapter",
     "reverify_chapter_downloads",
+    "sources_wipe_candidates",
     "wipe_chapter",
     "wipe_derived_audio_and_video",
     "wipe_project",
+    "wipe_to_sources",
     "wipeable_entries",
 ]

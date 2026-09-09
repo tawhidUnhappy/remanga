@@ -27,12 +27,15 @@ from remanga.full_recap.timeline import assemble_combined_audio
 from remanga.humanize import fmt_duration
 from remanga.paths import get_chapter_dir, get_final_video_path, get_full_recap_concat_path, get_full_recap_video_path
 from remanga.reset import (
+    KEEP_ON_SOURCES_REBUILD,
     PROJECT_KEEP,
     derived_wipe_candidates,
     project_wipe_candidates,
     reverify_chapter_downloads,
+    sources_wipe_candidates,
     wipe_derived_audio_and_video,
     wipe_project,
+    wipe_to_sources,
 )
 from remanga.settings.project_prefs import cropper_config_for
 from remanga.video.compose import FrameCompositor
@@ -142,6 +145,39 @@ class FullRecapCompiler:
             f"[bold green]✓ Deleted {len(removed)} item(s) - rebuilding from the existing narration.[/]"
         )
 
+    def _wipe_to_sources(self, project_name: str) -> None:
+        """The deepest delete: everything remanga can rebuild, listed first.
+
+        Same contract as the other two wipes. What makes this one different
+        is that it reaches INSIDE chapters/ - taking panels/ as well - so the
+        listing spells out what survives, because at this depth "keeps
+        chapters/" would be actively misleading."""
+        candidates = sources_wipe_candidates(project_name)
+        if not candidates:
+            console.print(
+                f"[dim]Nothing to delete for '{project_name}' - already down to its source files.[/]"
+            )
+            return
+
+        console.print(
+            f"[bold red]Rebuilding '{project_name}' from source - permanently deleting:[/]"
+        )
+        for item in candidates:
+            size = self._describe_size(item)
+            console.print(f"  [dim]- {display_path(item)}{f'  ({size})' if size else ''}[/]")
+        console.print(
+            f"[dim]Kept, because remanga cannot rebuild them: "
+            f"{', '.join(sorted(KEEP_ON_SOURCES_REBUILD))} in every chapter, "
+            f"plus {', '.join(sorted(n for n in PROJECT_KEEP if n.endswith('.json')))}.[/]"
+        )
+        console.print(
+            "[dim]Pages are kept and re-verified per chapter - anything that does not belong is "
+            "removed and only missing images are re-fetched.[/]"
+        )
+
+        removed = wipe_to_sources(project_name)
+        console.print(f"[bold green]✓ Deleted {len(removed)} item(s) - rebuilding from source.[/]")
+
     def _ensure_chapter_video(
         self, project_name: str, chapter_num: str, force: bool, *,
         force_tts: bool = False, force_mix: bool = False, regenerate_all: bool = False,
@@ -203,7 +239,7 @@ class FullRecapCompiler:
     def compile_full_manga(
         self, project_name: str, force: bool = False, chapters: list[str] | None = None,
         force_chapters: bool | None = None, regenerate_all: bool = False,
-        regenerate_effects: bool = False,
+        regenerate_effects: bool = False, regenerate_sources: bool = False,
     ) -> Path:
         """force controls both "recompile the join even if already compiled"
         and, by default, "force each chapter's own render too". Pass
@@ -240,7 +276,7 @@ class FullRecapCompiler:
         clip for a panel a re-crop removed, a frame at an older
         resolution). Implies force=True and force_chapters=True regardless
         of what was passed for them."""
-        if regenerate_all:
+        if regenerate_all or regenerate_sources:
             force = True
             force_chapters = True
         elif regenerate_effects:
@@ -260,7 +296,12 @@ class FullRecapCompiler:
         # creates the directories it hands out, so a wipe run after this
         # point would delete folders the run had already made and is about
         # to write into.
-        if regenerate_all:
+        # Both deep modes rebuild each chapter the same way; only the wipe
+        # above differs in how far it reached.
+        deep = regenerate_all or regenerate_sources
+        if regenerate_sources:
+            self._wipe_to_sources(project_name)
+        elif regenerate_all:
             self._wipe_generated(project_name)
         elif regenerate_effects:
             self._wipe_derived(project_name)
@@ -288,7 +329,11 @@ class FullRecapCompiler:
             console.print(f"[cyan]({i}/{len(chapter_list)}) Preparing chapter {chapter_num}...[/]")
             chapter_videos.append(self._ensure_chapter_video(
                 project_name, chapter_num, force=force_chapters,
-                force_tts=regenerate_all, force_mix=regenerate_all, regenerate_all=regenerate_all,
+                # A sources rebuild needs the same per-chapter treatment as
+                # regenerate_all - re-verify pages, then re-crop with
+                # force=True - because it deleted panels/ and they have to
+                # come back before anything downstream can run.
+                force_tts=deep, force_mix=deep, regenerate_all=deep,
             ))
 
         # Phase 2: the whole-manga join - a fresh continuous audio timeline

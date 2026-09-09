@@ -313,6 +313,22 @@ these raised anything - each looked fine and reported something false:
 `.exists()`/`Path(` on anything that used to be a path, `mkdir` of folders it
 owned, overlapping config field names, and any `expected_files` tuple.
 
+## The render guard: panels vs narration is ENFORCED, not warned about
+
+`verify/gate.py:ensure_panels_match_narration` raises at the top of
+`tts.generate_narration_audio`, `mix.mix_master_audio` and
+`render.render_video`. Both directions fail: a narrated panel_id with no
+image, and a cropped panel with no narration entry.
+
+- **In the engines, not in pipeline.py's step list** - full-recap does not go
+  through those steps, and it is the long unattended run where a bad chapter
+  costs most.
+- The check itself (`verify/panels.py`) is old and was only ever a wizard
+  NOTICE. A notice shown minutes before the step it matters to is walked
+  past, and the resulting video is silently defective.
+- Counts matching is NOT sufficient: 2 panels + 2 narration entries naming a
+  panel that isn't there is a real failure, and is covered.
+
 ## audio/ is the artifact, audio_modified/ is the cache
 
 ```
@@ -343,6 +359,15 @@ processing turns it into is a cache (seconds).
 - Wipes: `wipe_project` (everything) vs `wipe_derived_audio_and_video`
   (`DERIVED_KINDS = audio_modified, video` - keeps the narration). Exposed as
   `full-recap --rebuild outputs` against `--rebuild everything`.
+- **Four rebuild depths, strictly ordered** (`reset.REBUILD_MODES`):
+  `missing` (nothing) < `outputs` (audio_modified/ + video/) <
+  `everything` (+ audio/) < `sources` (+ each chapter's panels/, keeping only
+  pages/crops.json/narration.json). One ordered choice, not three booleans -
+  the old --force/--regenerate-effects/--regenerate-all trio could express
+  combinations that were redundant or contradictory.
+- **panels/ is NOT source.** It is crop output, and a stale one surviving a
+  re-crop is how panel_ids stop matching narration.json - which
+  verify/gate.py then refuses to render from.
 
 ## Where the knobs live (`settings/sections.py` + `commands/setup_rows.py`)
 

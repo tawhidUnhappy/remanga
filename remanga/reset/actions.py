@@ -14,6 +14,7 @@ from remanga.reset.entries import (
     derived_wipe_candidates,
     project_wipe_candidates,
     restart_candidates,
+    sources_wipe_candidates,
     wipeable_entries,
 )
 
@@ -138,6 +139,24 @@ def wipe_derived_audio_and_video(project_name: str) -> list[Path]:
     Use wipe_project instead when the narration itself is wrong - a voice
     change, a different engine, or edited narration.json."""
     candidates = derived_wipe_candidates(project_name)
+    _delete_all(candidates)
+    return candidates
+
+
+def wipe_to_sources(project_name: str) -> list[Path]:
+    """Deletes everything remanga can rebuild, keeping only what it cannot.
+
+    The deepest rebuild: every generated directory, plus each chapter's
+    panels/ and any other derivative sitting in its folder. What survives is
+    pages/, crops.json and narration.json - fetched, hand-marked and
+    LLM-written respectively, none of them reproducible from what is left.
+
+    Pages are NOT deleted and re-downloaded. They are kept and re-verified by
+    the caller (reverify_chapter_downloads), which removes anything that does
+    not belong and re-fetches only what is missing - a full re-download of
+    every page in a project is minutes of somebody else's bandwidth for a
+    result that is almost always byte-identical."""
+    candidates = sources_wipe_candidates(project_name)
     _delete_all(candidates)
     return candidates
 
