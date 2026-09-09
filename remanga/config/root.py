@@ -23,6 +23,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, PrivateAttr
 
+from remanga.config.base import ConfigModel
 from remanga.json_io import read_json, write_json
 from remanga.paths import (
     CONFIG_EXAMPLE_PATH,
@@ -113,7 +114,7 @@ def _apply(model: BaseModel, dotted: str, value: Any) -> None:
         setattr(target, attr, value)
 
 
-class RemangaConfig(BaseModel):
+class RemangaConfig(ConfigModel):
     system: SystemConfig = Field(default_factory=SystemConfig)
     downloader: DownloaderConfig = Field(default_factory=DownloaderConfig)
     cropper: CropperConfig = Field(default_factory=CropperConfig)

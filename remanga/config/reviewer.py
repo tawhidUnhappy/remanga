@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from remanga.config.base import ConfigModel
 
 
-class ReviewerConfig(BaseModel):
+class ReviewerConfig(ConfigModel):
     """The narration-review web UI: where narration_review.json comes from -
     a panel-by-panel pass over an LLM-written narration.json where the user
     flags lines that are wrong before they ever reach TTS. See remanga/webui/

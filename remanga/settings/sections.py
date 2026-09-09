@@ -20,7 +20,9 @@ from dataclasses import dataclass
 from remanga.config import RemangaConfig
 from remanga.settings import engine, tuning, video
 from remanga.settings.assets import ASSETS, asset_relevant, asset_status, run_asset_menu
+from remanga.settings.browser import run_all_settings
 from remanga.settings.presets import background_label, language_label, resolution_label
+from remanga.settings.schema import fields_by_section
 from remanga.settings.vision import configure_vision_outputs, package_summary
 
 
@@ -113,6 +115,13 @@ SECTIONS: tuple[Section, ...] = (
     Section(
         "background", "Canvas background",
         background_label, video.configure_background,
+    ),
+    Section(
+        "all", "All settings (advanced)",
+        lambda c: f"{sum(len(v) for v in fields_by_section(c).values())} fields, every one config.json holds",
+        run_all_settings,
+        detail="the complete list, derived from the config models - the screens above cover "
+               "the common ones better, this one covers everything",
     ),
     Section(
         "hardware", "Hardware acceleration",

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from remanga.config.base import ConfigModel
 
 
-class DownloaderConfig(BaseModel):
+class DownloaderConfig(ConfigModel):
     language: str = "en"
     image_quality: str = "data"  # 'data' (high quality) or 'data-saver'
     max_retries: int = 3

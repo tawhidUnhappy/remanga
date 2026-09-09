@@ -11,14 +11,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, model_validator
+from pydantic import model_validator
+
+from remanga.config.base import ConfigModel
 
 # OCR models this repo has driven before. A config.json still naming one of
 # these is reset to the current model's defaults rather than obeyed.
 RETIRED_REPO_IDS = {"lightonai/lightonocr-2-1b"}
 
 
-class OCRConfig(BaseModel):
+class OCRConfig(ConfigModel):
     hf_repo_id: str = "deepseek-ai/DeepSeek-OCR-2"
     model_dir: str = "checkpoints/deepseek_ocr_2"
     # The model's own prompt presets. "Free OCR." reads the text and nothing

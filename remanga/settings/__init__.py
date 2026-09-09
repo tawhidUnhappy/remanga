@@ -33,6 +33,7 @@ from remanga.settings.assets import (
     pick_voice,
     run_asset_menu,
 )
+from remanga.settings.browser import run_all_settings
 from remanga.settings.fields import get_field, set_field
 from remanga.settings.files import (
     AUDIO_EXTENSIONS,
@@ -40,6 +41,7 @@ from remanga.settings.files import (
     is_valid_file,
 )
 from remanga.settings.paths_ui import run_paths_manager
+from remanga.settings.schema import FieldSpec, all_fields, fields_by_section
 from remanga.settings.summary import settings_summary
 from remanga.settings.vision import configure_vision_outputs, package_summary
 from remanga.settings.wizard import run_setup_wizard
@@ -47,14 +49,18 @@ from remanga.settings.wizard import run_setup_wizard
 __all__ = [
     "ASSETS",
     "AUDIO_EXTENSIONS",
+    "FieldSpec",
+    "all_fields",
     "configure_vision_outputs",
     "discover_files",
     "ensure_valid_bgm",
     "ensure_valid_voice",
+    "fields_by_section",
     "get_field",
     "is_valid_file",
     "package_summary",
     "pick_voice",
+    "run_all_settings",
     "run_asset_menu",
     "run_paths_manager",
     "run_setup_wizard",

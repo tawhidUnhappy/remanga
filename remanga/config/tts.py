@@ -21,6 +21,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
+from remanga.config.base import ConfigModel
 from remanga.config.kokoro_voices import (
     DEFAULT_VOICE,
     KOKORO_VOICES,
@@ -51,7 +52,7 @@ __all__ = [
 ]
 
 
-class KokoroConfig(BaseModel):
+class KokoroConfig(ConfigModel):
     """Settings specific to the kokoro engine - hexgrad/Kokoro-82M on
     Hugging Face, an 82M-parameter StyleTTS 2 / iSTFTNet model with fixed
     built-in voices. Runs in its own isolated `.tools/venv-kokoro`.
@@ -114,7 +115,7 @@ RETIRED_TOP_LEVEL_FIELDS = (
 )
 
 
-class TTSConfig(BaseModel):
+class TTSConfig(ConfigModel):
     # Which engine actually synthesizes speech - one of TTS_ENGINES.
     engine: str = "kokoro"
     # Settings below this line are engine-independent.

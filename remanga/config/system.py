@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
-
+from remanga.config.base import ConfigModel
 from remanga.hardware import detect_cached
 
 
-class SystemConfig(BaseModel):
+class SystemConfig(ConfigModel):
     prefer_gpu: bool = True
 
     # "auto" asks remanga/hardware.py what this machine's hardware encoder

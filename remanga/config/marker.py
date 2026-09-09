@@ -3,10 +3,12 @@ see remanga/webui/."""
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from remanga.config.base import ConfigModel
 
 
-class ShortcutsConfig(BaseModel):
+class ShortcutsConfig(ConfigModel):
     """Panel-marker keyboard shortcuts, editable from the webui's own Shortcuts
     menu (Settings gear in the topbar -> saved via POST /api/shortcuts, which
     writes straight back into this section of config.json - see
@@ -37,7 +39,7 @@ class ShortcutsConfig(BaseModel):
     reset_view: list[str] = Field(default_factory=lambda: ["0"])
 
 
-class MarkerConfig(BaseModel):
+class MarkerConfig(ConfigModel):
     """The panel-marking web UI: where crops.json comes from now, in place of the
     old paste-from-an-LLM step. See remanga/webui/."""
     host: str = "127.0.0.1"

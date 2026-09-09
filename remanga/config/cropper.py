@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from remanga.config.base import ConfigModel
 
 
-class PackageConfig(BaseModel):
+class PackageConfig(ConfigModel):
     """The single 'what to make out of a chapter's marked panels' checklist -
     one flat list of independent yes/no switches, not a mode to pick or two
     separate sections to coordinate. Every format is losslessly re-encoded
@@ -159,7 +161,7 @@ class PackageConfig(BaseModel):
         return self.panels_zip or self.panels_zip_splites
 
 
-class CropperConfig(BaseModel):
+class CropperConfig(ConfigModel):
     margin_padding_pixels: int = 8
     auto_contrast_clean: bool = False
     save_format: str = "PNG"

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from remanga.config.base import ConfigModel
 
 
-class AudioConfig(BaseModel):
+class AudioConfig(ConfigModel):
     sample_rate: int = 44100
     edge_fade_ms: int = 35
     # The gap inserted between one panel's narration clip and the next in the

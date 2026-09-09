@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from remanga.config.base import ConfigModel
 
 
-class WriterConfig(BaseModel):
+class WriterConfig(ConfigModel):
     """The narration-writing web UI: where a user-authored narration.json comes
     from - the same panel-by-panel list as the Narration Reviewer, but each
     panel's field IS the narration text instead of a review note, for chapters

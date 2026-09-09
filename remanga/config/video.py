@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from remanga.config.base import ConfigModel
 
 
-class VideoConfig(BaseModel):
+class VideoConfig(ConfigModel):
     width: int = 1920
     height: int = 1080
     fps: int = 30
