@@ -63,7 +63,6 @@ TTS_SETUP: tuple[SetupAction, ...] = (
                    "a name from its own catalogue, not a clip to clone"),
     section_setup("language", "passed straight through to the engine"),
     section_setup("pacing", "how fast this chapter reads, and the gap held after each panel"),
-    section_setup("voicechain", "thickness and presence on the narration itself"),
 )
 
 BGM_SETUP: tuple[SetupAction, ...] = (

@@ -6,10 +6,8 @@ from typing import Any
 from pydub import AudioSegment
 
 from remanga import settings
-from remanga.audio.ducking import carve_speech_band, duck_under_speech, merge_spans
-from remanga.audio.recipe import mix_fingerprint, read_recipe, voice_fingerprint, write_recipe
+from remanga.audio.recipe import mix_fingerprint, write_recipe
 from remanga.audio.resample import load_audio
-from remanga.audio.voice import enhance_voice
 from remanga.config import AudioConfig, RemangaConfig
 from remanga.console import console, escape as _esc
 from remanga.ffmpeg_io import run_ffmpeg
@@ -105,80 +103,26 @@ class AudioProcessor:
             )
             return master_final_path
 
+        modified_dir = get_modified_audio_dir(project_name, chapter_num)
         panels = timing_info.get("panels", [])
         console.print(f"[cyan]Assembling master audio stream for chapter {chapter_num}...[/]")
 
         # 1. Assemble narration track
         #
-        # speech_spans records where each panel's audio actually sits on the
-        # finished timeline, so the ducking pass below works from exact
-        # boundaries instead of inferring them from the signal. Collected
-        # here because this loop is the only place that knows them.
-        # Processed clips are a CACHE keyed on the voice chain's own settings
-        # (audio/recipe.py). Matching fingerprint means the clips in
-        # audio_modified/ were made by exactly these settings from exactly
-        # this raw audio, so they are reused; anything else means rebuild.
-        # This is what makes changing one dB of warmth cost seconds rather
-        # than a full re-synthesis - `audio/` is never touched here.
-        modified_dir = get_modified_audio_dir(project_name, chapter_num)
-        recipe = read_recipe(modified_dir)
-        want_voice = voice_fingerprint(self.config)
-        # NOT gated on `force`. force means "rebuild the master even though
-        # its fingerprint says it is current" - it is about the master, and
-        # the clips have their own, stricter guarantee: a matching voice
-        # fingerprint means they were produced by exactly these settings from
-        # exactly this raw audio, which force does not make less true.
-        #
-        # Gating them together looked harmless and quietly destroyed the
-        # point of the split: remix.py mixes with force=True, so a
-        # background-music change - the single most common reason to re-mix -
-        # would re-run the voice chain over every panel to produce clips
-        # identical to the ones it just deleted. Measured before the fix: a
-        # warm mix took 288s against the cold mix's 288s, i.e. no reuse at
-        # all. Deleting audio_modified/ is how a caller asks for clips to be
-        # rebuilt (--regenerate-effects), not force.
-        clips_valid = recipe.get("voice") == want_voice
-
-        if self.config.voice_enhance:
-            console.print(
-                "[dim]Voice chain: reusing processed clips (settings unchanged).[/]" if clips_valid
-                else (f"[dim]Voice chain per panel: high-pass {self.config.voice_highpass_hz}Hz, "
-                      f"warmth {self.config.voice_warmth_db:+.1f}dB, "
-                      f"presence {self.config.voice_presence_db:+.1f}dB"
-                      + (f", compressed {self.config.voice_compress_ratio:g}:1"
-                         if self.config.voice_compress else "") + ".[/]")
-            )
+        # Narration is used exactly as synthesized. There is no per-clip
+        # processing stage any more (it lived in audio/voice.py and cost
+        # roughly a quarter of real time per chapter for a subtle result),
+        # so nothing is written back per clip either - audio_modified/ holds
+        # only the mixed master now.
         combined_voice = AudioSegment.empty()
-        speech_spans: list[tuple[int, int]] = []
         for p in panels:
             clip_file = audio_dir / p["audio_file"]
-            cached_clip = modified_dir / p["audio_file"]
-            if clips_valid and cached_clip.exists():
-                segment = AudioSegment.from_file(cached_clip)
-            elif clip_file.exists():
+            if clip_file.exists():
                 segment = AudioSegment.from_file(clip_file)
-                if self.config.voice_enhance:
-                    segment = enhance_voice(
-                        segment,
-                        highpass_hz=self.config.voice_highpass_hz,
-                        warmth_db=self.config.voice_warmth_db,
-                        presence_db=self.config.voice_presence_db,
-                        compress=self.config.voice_compress,
-                        compress_threshold_db=self.config.voice_compress_threshold_db,
-                        compress_ratio=self.config.voice_compress_ratio,
-                    )
-                # Written even when the chain is off, so audio_modified/ is
-                # always a complete, self-sufficient set - the full-recap
-                # join reads from here and should never have to work out
-                # which clips were processed and which were passed through.
-                segment.export(cached_clip, format="wav")
             else:
                 segment = AudioSegment.silent(duration=p["duration_ms"], frame_rate=self.config.sample_rate)
 
-            span_start = len(combined_voice)
             combined_voice += segment
-            if clip_file.exists() and len(segment) > 0:
-                speech_spans.append((span_start, span_start + len(segment)))
 
             # Append inter-panel silence pause
             pause_ms = p.get("pause_after_ms", 0)
@@ -201,34 +145,8 @@ class AudioProcessor:
 
             # Loop BGM to match voice track length + tail
             total_duration_ms = len(master_audio)
-            # Carve the SOURCE track, before it is looped out to the length of
-            # the narration. The carve is a time-invariant filter, so carving
-            # then looping is the same audio as looping then carving - but the
-            # source is a few minutes and the loop is the whole recap. Doing it
-            # the other way round is what put a 56-minute full-manga bed through
-            # a three-copy band reconstruction and invoked the OOM killer
-            # (measured: anon-rss 13.5GB on a 14GB machine).
-            #
-            # The level duck below CANNOT move here: it depends on where the
-            # speech falls, so it has to see the full timeline.
-            if self.config.duck_music_under_narration:
-                bgm_track = carve_speech_band(bgm_track, self.config.duck_carve_db)
             loop_count = (total_duration_ms // max(1, len(bgm_track))) + 1
             bgm_loop = (bgm_track * loop_count)[:total_duration_ms]
-
-            # Duck the music under each speech passage, if asked. Before the
-            # entry/exit fades, so those still shape the very start and end of
-            # the track rather than fighting a dip that lands on top of them.
-            if self.config.duck_music_under_narration and speech_spans:
-                passages = merge_spans(speech_spans)
-                bgm_loop = duck_under_speech(
-                    bgm_loop, speech_spans,
-                    depth_db=self.config.duck_depth_db, fade_ms=self.config.duck_fade_ms,
-                )
-                console.print(
-                    f"[dim]Ducking music {self.config.duck_depth_db:+.1f}dB under "
-                    f"{len(passages)} speech passage(s).[/]"
-                )
 
             # Smooth BGM entry & exit fades
             bgm_loop = bgm_loop.fade_in(1500).fade_out(2000)
@@ -276,7 +194,7 @@ class AudioProcessor:
         # the next run can tell at a glance whether to reuse it or rebuild -
         # and so a partially-written cache from an interrupted run is never
         # mistaken for a complete one, since the recipe is written last.
-        write_recipe(modified_dir, voice=want_voice, mix=mix_fingerprint(self.config))
+        write_recipe(modified_dir, mix=mix_fingerprint(self.config))
 
         console.print(f"[bold green]✓ Master audio track generated successfully:[/] {_esc(str(master_final_path))}")
         return master_final_path

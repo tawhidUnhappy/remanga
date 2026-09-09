@@ -24,9 +24,6 @@ from pydub import AudioSegment
 from rich.progress import BarColumn, Progress, TextColumn
 
 from remanga import settings
-from remanga.audio.ducking import carve_speech_band, duck_under_speech, merge_spans
-from remanga.audio.recipe import read_recipe, voice_fingerprint
-from remanga.audio.voice import enhance_voice
 from remanga.config import RemangaConfig
 from remanga.console import console, escape as _esc
 from remanga.ffmpeg_io import run_ffmpeg
@@ -35,7 +32,6 @@ from remanga.paths import (
     get_audio_dir,
     get_audio_timing_path,
     get_full_recap_master_audio_path,
-    get_modified_audio_dir,
     get_video_frames_dir,
 )
 
@@ -50,11 +46,6 @@ def assemble_combined_audio(
     valid_bgm = settings.ensure_valid_bgm(config, interactive=False)
 
     combined_voice = AudioSegment.empty()
-    # Where each panel's speech lands on the full-manga timeline - the same
-    # ground truth the per-chapter mix uses to duck the music (audio/mix.py,
-    # audio/ducking.py), collected here because this loop is the only place
-    # that knows it for the joined track.
-    speech_spans: list[tuple[int, int]] = []
     frame_timeline: list[tuple[Path, float]] = []
 
     # Load every chapter's panel timing up front so the progress bar below
@@ -83,37 +74,13 @@ def assemble_combined_audio(
             audio_dir = get_audio_dir(project_name, chapter_num)
             frames_dir = get_video_frames_dir(project_name, chapter_num)
 
-            modified_dir = get_modified_audio_dir(project_name, chapter_num)
-            # Reuse the processed clips the per-chapter mix already wrote,
-            # when they were made by the voice settings in force now. The
-            # join covers every chapter at once, so re-running the chain here
-            # is the single most expensive avoidable thing in the pipeline -
-            # 499 panels of it on this project.
-            clips_valid = read_recipe(modified_dir).get("voice") == voice_fingerprint(audio_config)
-
             for p in panels:
                 clip_file = audio_dir / p["audio_file"]
-                cached_clip = modified_dir / p["audio_file"]
-                if clips_valid and cached_clip.exists():
-                    segment = AudioSegment.from_file(cached_clip)
-                elif clip_file.exists():
+                if clip_file.exists():
                     segment = AudioSegment.from_file(clip_file)
-                    if audio_config.voice_enhance:
-                        segment = enhance_voice(
-                            segment,
-                            highpass_hz=audio_config.voice_highpass_hz,
-                            warmth_db=audio_config.voice_warmth_db,
-                            presence_db=audio_config.voice_presence_db,
-                            compress=audio_config.voice_compress,
-                            compress_threshold_db=audio_config.voice_compress_threshold_db,
-                            compress_ratio=audio_config.voice_compress_ratio,
-                        )
                 else:
                     segment = AudioSegment.silent(duration=p["duration_ms"], frame_rate=audio_config.sample_rate)
-                span_start = len(combined_voice)
                 combined_voice += segment
-                if clip_file.exists() and len(segment) > 0:
-                    speech_spans.append((span_start, span_start + len(segment)))
 
                 pause_ms = p.get("pause_after_ms", 0)
                 if pause_ms > 0:
@@ -133,34 +100,11 @@ def assemble_combined_audio(
         bgm_track = bgm_track + audio_config.bgm_volume_db
 
         total_duration_ms = len(master_audio)
-        # Carve the SOURCE track, before it is looped out to the length of
-        # the narration. The carve is a time-invariant filter, so carving
-        # then looping is the same audio as looping then carving - but the
-        # source is a few minutes and the loop is the whole recap. Doing it
-        # the other way round is what put a 56-minute full-manga bed through
-        # a three-copy band reconstruction and invoked the OOM killer
-        # (measured: anon-rss 13.5GB on a 14GB machine).
-        #
-        # The level duck below CANNOT move here: it depends on where the
-        # speech falls, so it has to see the full timeline.
-        if audio_config.duck_music_under_narration:
-            bgm_track = carve_speech_band(bgm_track, audio_config.duck_carve_db)
         loop_count = (total_duration_ms // max(1, len(bgm_track))) + 1
         bgm_loop = (bgm_track * loop_count)[:total_duration_ms]
         # Exactly one fade-in and one fade-out for the WHOLE manga - not
         # per chapter - so the music never visibly/audibly restarts at a
         # chapter join.
-        if audio_config.duck_music_under_narration and speech_spans:
-            passages = merge_spans(speech_spans)
-            bgm_loop = duck_under_speech(
-                bgm_loop, speech_spans,
-                depth_db=audio_config.duck_depth_db, fade_ms=audio_config.duck_fade_ms,
-            )
-            console.print(
-                f"[dim]Ducking music {audio_config.duck_depth_db:+.1f}dB under "
-                f"{len(passages)} speech passage(s) across the full manga.[/]"
-            )
-
         bgm_loop = bgm_loop.fade_in(1500).fade_out(2000)
 
         master_audio = bgm_loop.overlay(master_audio)

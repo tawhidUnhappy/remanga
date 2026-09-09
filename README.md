@@ -51,7 +51,7 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
   - Strict 0–1000 normalized integer bounding box coordinate system (`[ymin, xmin, ymax, xmax]`).
 - **Broadcast Audio Mastering:**
   - Per-panel 35ms micro edge-fading to eliminate digital clicks.
-  - Optional background music (BGM) looping with gain ducking.
+  - Optional background music (BGM) looping at a fixed gain, with one loudness-normalization pass over the finished master.
   - Broadcast EBU R128 loudness normalization (`-16 LUFS`).
 - **Multi-Resolution Video Compositor & GPU Renderer:**
   - Presets for **1080p Full HD**, **1440p 2K QHD**, **2160p 4K UHD**, and **720p HD**.
@@ -563,7 +563,7 @@ It runs each chapter's remaining TTS/mix/render steps (skipping whatever's alrea
 | `everything` | `audio/`, `audio_modified/`, `video/` — every generated file | `chapters/` and the project's json files | slow — re-runs TTS on every panel |
 | `sources` | all of the above **plus each chapter's `panels/`** | only what remanga can't rebuild: `pages/` (re-verified), `crops.json`, `narration.json`, project json | slowest — re-crops, re-narrates the audio, re-renders, re-joins |
 
-`outputs` is the one to reach for while tuning how a recap sounds or looks: voice chain, ducking, music, levels, resolution, framing. It rebuilds from narration you already have.
+`outputs` is the one to reach for while tuning how a recap sounds or looks: music, levels, resolution, framing. It rebuilds from narration you already have.
 
 `sources` is the deepest: it keeps only the three things remanga cannot produce for itself — the downloaded `pages/`, the hand-placed `crops.json`, and the LLM-written `narration.json` — and rebuilds everything else, panels included. Pages are kept and **re-verified** rather than re-downloaded: anything that doesn't belong is removed, and only missing images are re-fetched.
 

@@ -132,7 +132,7 @@ def wipe_derived_audio_and_video(project_name: str) -> list[Path]:
     The fast half of a regenerate. `audio/` - the raw synthesized speech,
     minutes of GPU time per chapter - is kept, and audio_modified/ and
     video/ go. That covers every setting a person actually iterates on:
-    voice warmth, ducking, music, levels, resolution, framing. Re-running
+    music, levels, resolution, framing. Re-running
     after this rebuilds in seconds what a full regenerate would spend a TTS
     pass on.
 

@@ -10,18 +10,11 @@ changed. Both halves matter here: the first stops a stale mix being shipped
 after a settings change, the second is what makes changing one dB of gain
 cost seconds instead of a full re-synthesis.
 
-Two fingerprints, not one, because the two stages have different inputs and
-wildly different costs:
-
-  voice - the per-clip chain (audio/voice.py). Changing any of it means
-          re-processing every panel, which is the slow part.
-  mix   - BGM, ducking, loudness, panel gaps. Changing any of it only means
-          re-assembling the master from clips that are already correct.
-
-So swapping the background music does not re-run the voice chain, and
-nudging the narration warmth does not force a re-download of anything. A
-single combined fingerprint would collapse that distinction and make every
-change cost the same as the most expensive one."""
+There is one fingerprint, covering what the mix does: BGM, loudness and
+panel gaps. There used to be a second for a per-clip voice chain; that stage
+was removed because it cost roughly a quarter of real time per chapter for a
+result too subtle to justify it, and the narration is now used exactly as
+synthesized."""
 
 from __future__ import annotations
 
@@ -34,21 +27,12 @@ from remanga.config import AudioConfig
 
 RECIPE_FILENAME = ".recipe.json"
 
-# Settings that change what a PROCESSED CLIP sounds like. Listed explicitly
-# rather than hashing the whole AudioConfig: most of it (bgm path, loudnorm,
-# panel gaps) has no bearing on a single clip, and hashing it wholesale would
-# throw away every processed clip in the project every time the music changed.
-_VOICE_KEYS = (
-    "voice_enhance", "voice_highpass_hz", "voice_warmth_db", "voice_presence_db",
-    "voice_compress", "voice_compress_threshold_db", "voice_compress_ratio",
-    "sample_rate",
-)
-
-# Settings that change the MASTER but not the clips it is assembled from.
+# Everything that changes the mixed master. Listed explicitly rather than
+# hashing the whole AudioConfig, so a field added later for something
+# unrelated cannot silently invalidate every master in the project.
 _MIX_KEYS = (
     "bgm_enabled", "bgm_path", "bgm_volume_db", "enable_loudnorm",
     "pause_between_panels_ms", "edge_fade_ms", "sample_rate",
-    "duck_music_under_narration", "duck_depth_db", "duck_fade_ms", "duck_carve_db",
 )
 
 
@@ -57,14 +41,6 @@ def _digest(payload: dict[str, Any]) -> str:
     changes nothing audible - cannot invalidate a whole project's cache."""
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
-
-
-def voice_fingerprint(audio_config: AudioConfig) -> str:
-    """Deliberately does NOT include the TTS engine's own volume_boost_db.
-    That gain is baked into the RAW clip by audio/tts.py as it is written, so
-    it is part of what `audio/` holds, not part of what processing does to
-    it - and audio_timing.json already tracks it for the resume path."""
-    return _digest({k: getattr(audio_config, k, None) for k in _VOICE_KEYS})
 
 
 def mix_fingerprint(audio_config: AudioConfig) -> str:
@@ -94,8 +70,8 @@ def read_recipe(directory: Path) -> dict[str, str]:
         return {}
 
 
-def write_recipe(directory: Path, *, voice: str, mix: str) -> None:
+def write_recipe(directory: Path, *, mix: str) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     (directory / RECIPE_FILENAME).write_text(
-        json.dumps({"voice": voice, "mix": mix}, indent=2) + "\n", encoding="utf-8",
+        json.dumps({"mix": mix}, indent=2) + "\n", encoding="utf-8",
     )

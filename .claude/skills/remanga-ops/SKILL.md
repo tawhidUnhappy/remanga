@@ -341,13 +341,14 @@ harmless and regeneration is correct; an artifact is what must be handed on
 exactly. TTS output is the artifact (minutes of GPU per chapter); everything
 processing turns it into is a cache (seconds).
 
-- **Two fingerprints, not one** (`audio/recipe.py`). `voice` covers the
-  per-clip chain, `mix` covers BGM/ducking/loudnorm/gaps. Changing the music
-  must NOT re-run the voice chain over every panel, and a combined hash would
-  make every change cost as much as the most expensive one.
-- `voice_fingerprint` deliberately EXCLUDES the TTS engine's own
-  `volume_boost_db`: that gain is baked into the raw clip by `audio/tts.py`,
-  so it belongs to `audio/`'s identity, not to what processing does.
+- **One fingerprint** (`audio/recipe.py`), covering BGM/loudnorm/gaps -
+  everything the mix does. There was briefly a second for a per-clip voice
+  chain (warmth/presence/compression + music ducking); that stage was
+  REMOVED on 2026-09-09 because it cost ~0.26 RTF per chapter for a result
+  too subtle to justify. Narration is now used exactly as synthesized. The
+  code is on the `audio-effects` branch if it is ever wanted back.
+- `audio_modified/` therefore holds only the mixed master now, not processed
+  clip copies - so it stays a cheap cache and does not duplicate `audio/`.
 - `mix_fingerprint` includes the BGM file's **size+mtime**, not just its
   path. Swapping the contents of `global/bgm/track.wav` under the same name
   is a real change; a path-only key happily serves a stale master. Not a
