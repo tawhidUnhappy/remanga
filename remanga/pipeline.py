@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from remanga.audio import AudioProcessor, TTSEngine
 from remanga.config import RemangaConfig
@@ -28,6 +29,7 @@ from remanga.json_io import has_real_json_content, read_json_or
 from remanga.packaging import package_chapter
 from remanga.paths import get_chapter_dir, get_pipeline_path
 from remanga.settings.project_prefs import cropper_config_for, remembered_pipeline
+from remanga.tui import is_interactive
 from remanga.video import VideoRenderer
 from remanga.webui import launch_and_wait as launch_panel_marker
 
@@ -88,6 +90,26 @@ def _run_package(project: str, chapter: str, config: RemangaConfig) -> None:
     package_chapter(config, project, chapter, required=False)
 
 
+def _replacing_narration_ok(path: Path, chapter: str) -> bool:
+    """Whether to blank a narration.json that already has a script in it.
+
+    Its own function so the question is asked in exactly one place, and so
+    the non-interactive answer is unmistakably no: a piped or scripted run
+    has nobody to ask, and "nobody answered" must never be read as consent
+    to delete the one file in a chapter that can't be rebuilt from anything
+    else on disk."""
+    from remanga.tui import confirm
+
+    if not is_interactive():
+        return False
+    return confirm(
+        f"Chapter {chapter} already has a narration.json - replace it with an empty file?",
+        default=False,
+        note=f"{display_path(path, wrap=False)} · the script in it can't be regenerated "
+             "from anything else on disk",
+    )
+
+
 def _run_init_narration(project: str, chapter: str, config: RemangaConfig) -> None:
     """Puts this chapter's narration.json on disk as a genuinely empty file -
     zero bytes, not "{}", not "[]", nothing at all - so the script has a
@@ -103,21 +125,54 @@ def _run_init_narration(project: str, chapter: str, config: RemangaConfig) -> No
     normal stage rather than a special one: it reserves the path and changes
     no other step's mind about anything.
 
-    A file with content in it is left exactly where it is - a written
-    narration can't be regenerated from anything else on disk, so an
-    already-written chapter is skipped in one line rather than the step
-    failing the run on create_narration_file's FileExistsError."""
+    A chapter that already has a script is never blanked on the way past.
+    That file is the one artifact in a chapter that can't be regenerated
+    from anything else on disk - not from the pages, not from the panels,
+    not from any setting - so replacing it is a question, asked with "keep
+    it" as the answer Enter gives, and only ever asked to a real terminal:
+    a piped or scripted run keeps the file and says so, because there is
+    nobody there to say no."""
     from remanga.narration import BLANK, create_narration_file, narration_path
 
-    if has_real_json_content(narration_path(project, chapter)):
-        console.print(f"[dim]Narration — chapter {chapter} already has a narration.json; "
-                      "leaving it as it is.[/]")
+    path = narration_path(project, chapter)
+    if has_real_json_content(path) and not _replacing_narration_ok(path, chapter):
+        console.print(f"[dim]Narration — kept chapter {chapter}'s existing narration.json.[/]")
         return
     # create_narration_file reports what it wrote and where, the same way it
     # does for the `narration-init` command - repeating the path here would
-    # print it twice.
+    # print it twice. force, because the only way past the guard above is a
+    # yes to replacing what's there.
     console.print("\n[bold]Step — Creating narration.json[/]")
-    create_narration_file(project, chapter, mode=BLANK)
+    create_narration_file(project, chapter, mode=BLANK, force=True)
+
+
+def _run_pause(project: str, chapter: str, config: RemangaConfig) -> None:
+    """A stage that does nothing but stop, until Enter.
+
+    Every other step in this registry runs something. This one is a
+    placeholder in the literal sense - it holds a place in the order for
+    work that isn't remanga's: filling in the narration.json that
+    `init-narration` just left empty, dropping a file into the chapter
+    folder, checking a panel crop by eye. Without it, "let the pipeline get
+    this far, then let me do a thing, then let it carry on" means running
+    two pipelines and remembering where the seam was.
+
+    So it prints the chapter folder (the thing you're most likely about to
+    open) and waits. Enter continues to the next stage; there's nothing to
+    answer and nothing to get wrong.
+
+    A non-interactive run doesn't wait: there is no one to press Enter, and
+    a piped `run` blocking forever on stdin - or dying on EOFError - would
+    turn a checkpoint into a hang."""
+    console.print(f"\n[bold]Step — Paused before the next stage[/] [dim](chapter {chapter})[/]")
+    print_path(f"  {display_path(get_chapter_dir(project, chapter), wrap=False)}")
+    if not is_interactive():
+        console.print("[dim]Not an interactive terminal - continuing without waiting.[/]")
+        return
+    # Deferred for the same reason narration/review are: remanga/wizard/
+    # imports run_pipeline from this module.
+    from remanga.wizard.handoff import pause
+    pause("Press Enter to continue")
 
 
 def _run_narration(project: str, chapter: str, config: RemangaConfig) -> None:
@@ -170,6 +225,8 @@ STEP_REGISTRY: list[Step] = [
          "Create a completely empty narration.json - zero bytes, not even {} - for the script "
          "to be written into",
          _run_init_narration),
+    Step("pause", "Wait for Enter before going on - room to fill something in by hand first",
+         _run_pause),
     Step("narration", "Write narration.json + memory.json via LLM copy/paste", _run_narration,
          needs=["package"]),
     Step("review", "Review narration via the Narration Reviewer web UI", _run_review, needs=["narration"]),

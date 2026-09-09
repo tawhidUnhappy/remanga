@@ -230,26 +230,29 @@ Chapter production runs in order — download → mark panels → crop → packa
 **Setting up a pipeline and running one are two different moments.** Ticking the last box in the checklist doesn't start anything: it hands back to the pipeline's staging screen, which writes the plan out in order — position, step name, what that step does — and then asks. Running it is a row you choose on purpose, and so is changing the list and looking again. Both doors lead here: the main menu's **Pipeline** row (which asks for a chapter only once you actually pick Run), and `run`, which asks for the chapter first and then stages the same screen against it.
 
 ```
-Pipeline for 'MyProject' — 10 step(s), in this order
+Pipeline for 'MyProject' — 11 step(s), in this order
    1. download        Download chapter pages from MangaDex
    2. mark            Mark panels via the Panel Marker web UI (writes crops.json)
    3. crop            Crop panels out of the marked pages
    4. package         Package the panels into the chosen upload formats (sheets/zips/PDF)
    5. init-narration  Create a completely empty narration.json - zero bytes, not even {} - for the script to be written into
-   6. narration       Write narration.json + memory.json via LLM copy/paste
-   7. review          Review narration via the Narration Reviewer web UI
-   8. tts             Synthesize vocal audio via TTS
-   9. mix             Mix master audio track (narration + BGM + loudnorm)
-  10. render          Render the final recap video
+   6. pause           Wait for Enter before going on - room to fill something in by hand first
+   7. narration       Write narration.json + memory.json via LLM copy/paste
+   8. review          Review narration via the Narration Reviewer web UI
+   9. tts             Synthesize vocal audio via TTS
+  10. mix             Mix master audio track (narration + BGM + loudnorm)
+  11. render          Render the final recap video
 
 ? Pipeline — MyProject
   the steps above are saved for this project · nothing runs until you say Run
 ❯ 1. Run the pipeline  asks which chapter
-  2. Choose steps      download → mark → crop → package → init-narration → narration → review → tts → mix → render
+  2. Choose steps      download → mark → crop → package → init-narration → pause → narration → …
      Back
 ```
 
-**`init-narration`** puts the chapter's `narration.json` on disk as a genuinely empty file — zero bytes, not `{}`, not `[]`, nothing at all — so the script has a place to be written into before anything tries to write it. Zero bytes is the placeholder state the rest of remanga already understands: every "has this chapter been narrated yet?" question is answered by file size, so an empty `narration.json` reads as *not written yet* to the status panel, to `verify` and to the `narration` step. The file exists, the chapter is still honestly unnarrated, and no later stage is fooled into thinking there's a script here — which is what makes it safe as an ordinary stage rather than something you have to opt into. A `narration.json` that already has content in it is left exactly where it is (that file is the one thing in a chapter that can't be regenerated from anything else on disk), so an already-written chapter is skipped in one line instead of failing the run.
+**`init-narration`** puts the chapter's `narration.json` on disk as a genuinely empty file — zero bytes, not `{}`, not `[]`, nothing at all — so the script has a place to be written into before anything tries to write it. Zero bytes is the placeholder state the rest of remanga already understands: every "has this chapter been narrated yet?" question is answered by file size, so an empty `narration.json` reads as *not written yet* to the status panel, to `verify` and to the `narration` step. The file exists, the chapter is still honestly unnarrated, and no later stage is fooled into thinking there's a script here. A chapter that already has a written script is never blanked on the way past: it asks, with **No** as the answer Enter gives, and a piped or scripted run keeps the file without asking — nobody is there to say no, and that file is the one thing in a chapter that can't be rebuilt from anything else on disk.
+
+**`pause`** is a stage that does nothing but stop. Every other step runs something; this one holds a place in the order for work that isn't remanga's — filling in the `narration.json` that `init-narration` just left empty, dropping a file into the chapter folder, checking a crop by eye. It prints the chapter folder and waits; Enter continues to the next stage. Without it, "let the pipeline get this far, then let me do a thing, then let it carry on" means running two pipelines and remembering where the seam was. A non-interactive run doesn't wait — there's no one to press Enter, and a piped `run` blocking on stdin would turn a checkpoint into a hang.
 
 If stdin isn't a terminal (a piped script, CI, an editor's output pane), every menu falls back to the plain numbered prompts remanga has always had, with `0` as back/quit at each level.
 
