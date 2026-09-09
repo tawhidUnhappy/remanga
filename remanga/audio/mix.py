@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from pathlib import Path
 from typing import Any
 
@@ -42,33 +41,6 @@ class AudioProcessor:
             "sample_rate": config.sample_rate,
             "enable_loudnorm": config.enable_loudnorm,
         }
-
-    def _bed_gain_db(self, speech_sq: float, speech_frames: int, bgm: AudioSegment) -> float:
-        """How much to move the music by, in dB.
-
-        With bgm_auto_level off this is just the configured number. With it
-        on, the bed is placed a fixed distance BELOW this chapter's measured
-        speech instead, which is the only way one setting survives changing
-        the track: bgm_volume_db is relative to a file's own mastering, so a
-        value tuned for one piece of music is wrong for the next.
-
-        Falls back to the fixed gain when there is no speech to measure - an
-        all-silent chapter has no narration to sit under, and dividing by it
-        would be worse than using the number someone already set."""
-        if not self.config.bgm_auto_level or speech_frames <= 0 or speech_sq <= 0:
-            return self.config.bgm_volume_db
-
-        speech_rms = math.sqrt(speech_sq / speech_frames)
-        if speech_rms <= 0 or bgm.rms <= 0:
-            return self.config.bgm_volume_db
-
-        speech_dbfs = 20 * math.log10(speech_rms / bgm.max_possible_amplitude)
-        gain = speech_dbfs - self.config.bgm_target_below_narration_db - bgm.dBFS
-        console.print(
-            f"[dim]Music auto-levelled: narration {speech_dbfs:.1f} dBFS, "
-            f"bed {gain:+.1f} dB to sit {self.config.bgm_target_below_narration_db:.0f} dB under it.[/]"
-        )
-        return gain
 
     def mix_master_audio(
         self,
@@ -143,21 +115,10 @@ class AudioProcessor:
         # so nothing is written back per clip either - audio_modified/ holds
         # only the mixed master now.
         combined_voice = AudioSegment.empty()
-        # Speech-only loudness, accumulated as the track is built rather than
-        # measured off it afterwards. Two reasons: the finished track includes
-        # the silence between panels, which drags its RMS well below what the
-        # narration actually sounds like, and holding a second copy of a
-        # 56-minute track to measure is how this file caused an OOM before.
-        # Summing squared RMS against frame counts is exact and costs nothing.
-        speech_sq = 0.0
-        speech_frames = 0
         for p in panels:
             clip_file = audio_dir / p["audio_file"]
             if clip_file.exists():
                 segment = AudioSegment.from_file(clip_file)
-                frames = int(segment.frame_count())
-                speech_sq += float(segment.rms) ** 2 * frames
-                speech_frames += frames
             else:
                 segment = AudioSegment.silent(duration=p["duration_ms"], frame_rate=self.config.sample_rate)
 
@@ -180,7 +141,7 @@ class AudioProcessor:
             # project - and pydub's resampler would fold imaging noise across
             # the whole music bed on the way down.
             bgm_track = load_audio(Path(self.config.bgm_path), self.config.sample_rate, channels=2)
-            bgm_track = bgm_track + self._bed_gain_db(speech_sq, speech_frames, bgm_track)
+            bgm_track = bgm_track + self.config.bgm_volume_db  # Adjust volume gain
 
             # Loop BGM to match voice track length + tail
             total_duration_ms = len(master_audio)

@@ -14,6 +14,7 @@ fast" should not have to know which of those it is."""
 
 from __future__ import annotations
 
+from remanga.audio.leveling import read_levels
 from remanga.config import RemangaConfig
 from remanga.console import console
 from remanga.settings.fields import set_field
@@ -56,6 +57,53 @@ def configure_pacing(config: RemangaConfig) -> None:
     )
 
 
+def _correct_music_level(config: RemangaConfig) -> None:
+    """Measures both sides and writes the gain that separates them properly.
+
+    Reports what it measured and what it changed, rather than just applying
+    it: the number it writes is one a person may well want to nudge
+    afterwards, and they can only do that if they know where it came from."""
+    audio = config.audio
+    # Captured before anything is written: `audio` is a live reference into
+    # the config, so reading it after set_field would report the NEW value as
+    # the old one - which is exactly the sort of quietly-wrong report this
+    # function exists to replace.
+    previous_gain_db = audio.bgm_volume_db
+    reading = read_levels(
+        audio.bgm_path, audio.sample_rate,
+        audio.bgm_target_below_narration_db, previous_gain_db,
+    )
+    if reading is None:
+        console.print(
+            f"[yellow]Can't measure - background music file not readable:[/] "
+            f"{audio.bgm_path or '(not set)'}"
+        )
+        return
+
+    source = (
+        f"{reading.clips_measured} synthesized clip(s)" if reading.clips_measured
+        else "the typical level for this engine (nothing synthesized yet)"
+    )
+    console.print(
+        f"[dim]Narration {reading.narration_dbfs:.1f} dBFS, from {source}.\n"
+        f"Music {reading.bgm_dbfs:.1f} dBFS at its own level; "
+        f"currently sitting {reading.current_separation_db:.1f} dB below the narration.[/]"
+    )
+    if reading.suggested_gain_db == previous_gain_db:
+        console.print(
+            f"[green]✓ Already correct:[/] {previous_gain_db:+.1f} dB gives the "
+            f"{audio.bgm_target_below_narration_db:.0f} dB separation you asked for."
+        )
+        return
+
+    set_field(config, "audio.bgm_volume_db", reading.suggested_gain_db)
+    console.print(
+        f"[bold green]✓ Music gain:[/] {reading.suggested_gain_db:+.1f} dB "
+        f"[dim](was {previous_gain_db:+.1f}) - puts the bed "
+        f"{audio.bgm_target_below_narration_db:.0f} dB under the narration.[/]"
+    )
+
+
 def configure_levels(config: RemangaConfig) -> None:
     """Voice-vs-music balance, and whether the master is normalized.
 
@@ -69,29 +117,18 @@ def configure_levels(config: RemangaConfig) -> None:
                    note="baked into each panel's WAV as it is written; changing it does not "
                         "force a re-synthesis"):
         return
-    auto = confirm(
-        "Set the music level automatically from the narration?",
-        default=config.audio.bgm_auto_level,
-    )
-    if is_cancel(auto):
-        return
-    set_field(config, "audio.bgm_auto_level", bool(auto))
-
-    if auto:
-        # One number that means the same thing for every track. A fixed gain
-        # does not: it is relative to the file's own mastering, so swapping
-        # music silently changes the balance.
-        if not _number(config, "audio.bgm_target_below_narration_db",
-                       "How far below the narration the music sits, in dB",
-                       minimum=6.0, maximum=40.0,
-                       note="broadcast practice is 15-20; under 15 the music starts masking "
-                            "consonants, worst on phone speakers"):
-            return
+    # An ACTION, not a mode: it measures, writes a plain number into
+    # bgm_volume_db, and leaves. Nothing recomputes behind anyone's back at
+    # mix time, and what ends up in config.json stays readable and editable.
+    if confirm("Measure your narration and music, and correct the music level?",
+               default=True):
+        _correct_music_level(config)
     elif not _number(config, "audio.bgm_volume_db", "Background music gain, in dB",
                      minimum=-60.0, maximum=20.0,
                      note="relative to the music file's own loudness - a value tuned for one "
                           "track will not suit a different one"):
         return
+
     normalize = confirm(
         "Normalize the finished master to a fixed loudness (EBU R128)?",
         default=config.audio.enable_loudnorm,
@@ -101,10 +138,8 @@ def configure_levels(config: RemangaConfig) -> None:
     set_field(config, "audio.enable_loudnorm", bool(normalize))
     console.print(
         f"[green]✓ Levels:[/] narration {config.tts.kokoro.volume_boost_db:+.1f}dB, "
-        + (f"music {config.audio.bgm_target_below_narration_db:.0f}dB under the narration, "
-           if config.audio.bgm_auto_level
-           else f"music {config.audio.bgm_volume_db:+.1f}dB fixed, ")
-        + f"loudness normalization {'on' if config.audio.enable_loudnorm else 'off'}"
+        f"music {config.audio.bgm_volume_db:+.1f}dB, "
+        f"loudness normalization {'on' if config.audio.enable_loudnorm else 'off'}"
     )
 
 

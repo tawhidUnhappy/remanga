@@ -391,18 +391,24 @@ decoding a real file with NO system ffmpeg present. It includes .webm and
 audio-only stream.
 
 **`bgm_volume_db` is relative to the FILE's own loudness**, not absolute, so
-a value tuned for one track is wrong for the next. `audio.bgm_auto_level`
-(default on) fixes that: the mix measures the chapter's own speech loudness
-and places the bed `bgm_target_below_narration_db` under it, so any track
-lands right. Verified - two beds mastered 1.3dB apart both come out at
-exactly 18.00dB separation, where a fixed gain leaves them 1.3dB apart.
+a value tuned for one track is wrong for the next. Fixed by an ACTION, not by
+runtime magic: Settings -> Audio levels offers "Measure your narration and
+music, and correct the music level?", which measures both
+(`audio/leveling.py`) and WRITES a plain number into config.json.
 
-Target 15-20dB below narration; under 15 masks consonants, worst on phone
-speakers. Speech loudness is accumulated as sum-of-squared-RMS against frame
-counts WHILE the track is assembled - not measured off the finished track,
-which includes inter-panel silence that drags RMS below what the narration
-actually sounds like, and would need a second copy of a 56-minute track to
-measure (how this file caused an OOM once already).
+Deliberately not computed at mix time. A level the mix works out on every run
+is invisible in the config, unquestionable, and un-nudgeable; a number
+somebody can read and adjust is what a settings file is for.
+
+- Narration is measured from up to 40 real synthesized clips in ANY project
+  (how loud the engine comes out is a property of voice+engine, not of one
+  manga), falling back to `TYPICAL_NARRATION_DBFS = -26.3` on a fresh
+  install. Measured live at -26.0 dBFS, so the constant is good.
+- Speech loudness is summed squared RMS weighted by frame count, taken from
+  the CLIPS - never off a finished master, which contains inter-panel silence
+  that drags RMS below what narration actually sounds like.
+- Target 15-20dB below narration; under 15 masks consonants, worst on phone
+  speakers.
 
 ## Where the knobs live (`settings/sections.py` + `commands/setup_rows.py`)
 

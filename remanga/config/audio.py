@@ -34,16 +34,14 @@ class AudioConfig(ConfigModel):
     # a value tuned for one track is wrong for the next one dropped in.
     # That is what bgm_auto_level exists to fix.
     bgm_volume_db: float = -22.0
-    # Set the music level from the narration instead of from a fixed number.
+    # The separation the "correct my levels" action aims for, in dB.
     #
-    # The mix measures this chapter's actual speech loudness and places the
-    # bed bgm_target_below_narration_db beneath it, so any track lands
-    # correctly however it was mastered. Broadcast practice is 15-20dB below
-    # dialogue; under 15 the music starts masking consonants, which is worst
-    # on phone speakers where most recaps are watched.
-    bgm_auto_level: bool = True
-    # How far below the narration the bed sits when bgm_auto_level is on.
-    # 18 is the middle of the professional band - far enough that speech
-    # stays legible, close enough that the music is still doing something.
+    # Not applied at mix time - nothing here runs automatically. It is the
+    # target the settings action uses when it MEASURES your narration and
+    # your music and writes a corrected bgm_volume_db above, so the value in
+    # config stays a plain number you can read and adjust.
+    #
+    # 18 is the middle of broadcast practice (15-20 below dialogue). Under
+    # 15 the music starts masking consonants, worst on phone speakers.
     bgm_target_below_narration_db: float = 18.0
     enable_loudnorm: bool = True

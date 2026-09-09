@@ -120,7 +120,6 @@
     "bgm_path": "",
     "bgm_volume_db": -22.0,
     "enable_loudnorm": true,
-    "bgm_auto_level": true,
     "bgm_target_below_narration_db": 18.0
   },
   "video": {
