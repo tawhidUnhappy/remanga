@@ -6,12 +6,18 @@ the order you want them to run - so an invalid step name or a typo'd order
 can't be expressed in the first place.
 
 Saving the step list is all this does - and it is the only thing that saves
-one: `run`'s "steps to run" checklist is this same function, so choosing the
-steps for a run and defining the project's pipeline are one act with one
-stored list behind them, in the one file a project keeps its answers in,
-rather than a file of its own plus a remembered last-run list that drift
-apart. A one-off subset that shouldn't stick is what
-`--steps` on the CLI is for.
+one. Both places that ask reach this same checklist through the staging
+screen (wizard/pipeline_stage.py): the main menu's Pipeline row, and `run`.
+So choosing the steps for a run and defining the project's pipeline are one
+act with one stored list behind them, in the one file a project keeps its
+answers in, rather than a file of its own plus a remembered last-run list
+that drift apart. A one-off subset that shouldn't stick is what `--steps` on
+the CLI is for.
+
+What this deliberately does NOT do is start anything. Ticking the last box
+used to be the keystroke that began a download; the staging screen the
+caller returns to is where a run is chosen, on purpose, after the list has
+been shown back.
 
 This used to also offer "adjust what the crop step generates?" on the way
 out, which had outlived itself twice over:
@@ -22,7 +28,6 @@ Three doors to one checklist, one of them naming the wrong step."""
 
 from __future__ import annotations
 
-from remanga.config import RemangaConfig
 from remanga.console import console
 from remanga.settings.project_prefs import remember_pipeline
 from remanga.tui import Choice, is_cancel, multiselect
@@ -34,10 +39,11 @@ def choose_pipeline_steps(project_name: str, *, title: str, note: str = "") -> l
     everything else that project remembers). Returns the chosen steps, or None
     if the user backed out.
 
-    One function for both places that ask: the main menu's Pipeline row, and
-    `run`, where picking the steps for this run *is* choosing the pipeline -
-    there's one list per project, not a saved one plus a remembered one that
-    can disagree about what "the pipeline" means.
+    One function for both places that ask - the main menu's Pipeline row and
+    `run`, which both reach it through the staging screen - because picking
+    the steps for this run *is* choosing the pipeline: there's one list per
+    project, not a saved one plus a remembered one that can disagree about
+    what "the pipeline" means.
 
     Deferred import of remanga.pipeline (it pulls in the audio/video/webui/
     downloader/cropper modules) keeps that cost paid only when this path is
@@ -69,8 +75,3 @@ def choose_pipeline_steps(project_name: str, *, title: str, note: str = "") -> l
         console.print(f"[green]✓ Pipeline saved:[/] {' → '.join(picked)}")
     return picked
 
-
-def edit_pipeline_steps(project_name: str, config: RemangaConfig) -> None:
-    """The main menu's Pipeline row. `config` is unused - kept so this stays
-    callable as (project, config) like every other wizard screen."""
-    choose_pipeline_steps(project_name, title=f"Pipeline for '{project_name}'")

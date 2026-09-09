@@ -162,7 +162,7 @@ The easiest way to produce a recap video is through the interactive terminal wiz
 
 ### How the menus work
 
-Every screen is an arrow-key menu — **↑/↓** to move, **Enter** to pick, **type to filter**, **Esc** to back out one level, **Ctrl+Q** (or the **Exit remanga** row every menu ends with) to quit outright from wherever you are, however deep. Checklists add **Space** to toggle (**Ctrl+A** all, **Ctrl+R** none), and confirmations take **y**/**n** as well as Enter. Whatever is currently configured is pre-highlighted, so Enter alone is always "leave it as it is". Nothing has to be typed from memory: the wizard lists what's actually there.
+Every screen is an arrow-key menu — **↑/↓** to move, **Enter** to pick, **type to filter**, **Esc** to back out one level, **Ctrl+Q** (or the **Exit remanga** row every menu ends with) to quit outright from wherever you are, however deep. Checklists add **Space** to toggle (**Ctrl+A** all, **Ctrl+R** none), and confirmations take **y**/**n** as well as Enter. Whatever is currently configured is pre-highlighted, so Enter alone is always "leave it as it is". Nothing has to be typed from memory: the wizard lists what's actually there. The few places you do type — a project name, a chapter number, a path — are full readline lines: ←/→ move the cursor, Home/End jump, Ctrl+A/Ctrl+E/Ctrl+W and friends work, and ↑/↓ walk that prompt's history.
 
 ```
 ? remanga — MyProject
@@ -222,10 +222,34 @@ Picking a category opens its commands, and running one lands you back in the sam
 | Which voice / music file? | The voice is a **pick from a list** — Kokoro's own named voices, shown with the grade Kokoro published for each, no file involved. Music is a file picker over `global/bgm/`, or type a path for one elsewhere |
 | What to keep when wiping? | A checklist of exactly what that chapter has on disk right now — and what you picked last time, remembered per project |
 | What to package for the LLM? | A checklist of every format, opened on what this project builds — your pick is remembered for the next chapter |
-| Which pipeline steps? | An ordered checklist of the real step registry — the number shown is the run order, and it opens on the steps you ran last time |
+| Which pipeline steps? | An ordered checklist of the real step registry — the number shown is the run order, and it opens on the steps you ran last time. Confirming it saves the pipeline and shows it back to you; it never starts a run by itself |
 | Which restart mode? | The four presets, each row saying what survives it |
 
 Chapter production runs in order — download → mark panels → crop → package → narration → review → TTS → mix → render — either step by step from the menu, or in one go with `run`, which follows the steps this project has chosen. Choosing them is the same ordered checklist the main menu's **Pipeline** row opens, and confirming it saves: pick "tts, mix, render" once because the render died, and every later run opens on exactly that, already ticked, in that order. There's one stored list per project (`project.json`'s `pipeline`), so `run`, the Pipeline row and the CLI can't disagree about what the pipeline is. `--steps` on the CLI stays a true one-off — it never saves.
+
+**Setting up a pipeline and running one are two different moments.** Ticking the last box in the checklist doesn't start anything: it hands back to the pipeline's staging screen, which writes the plan out in order — position, step name, what that step does — and then asks. Running it is a row you choose on purpose, and so is changing the list and looking again. Both doors lead here: the main menu's **Pipeline** row (which asks for a chapter only once you actually pick Run), and `run`, which asks for the chapter first and then stages the same screen against it.
+
+```
+Pipeline for 'MyProject' — 9 step(s), in this order
+  1. download   Download chapter pages from MangaDex
+  2. mark       Mark panels via the Panel Marker web UI (writes crops.json)
+  3. crop       Crop panels out of the marked pages
+  4. package    Package the panels into the chosen upload formats (sheets/zips/PDF)
+  5. narration  Write narration.json + memory.json via LLM copy/paste
+  6. review     Review narration via the Narration Reviewer web UI
+  7. tts        Synthesize vocal audio via TTS
+  8. mix        Mix master audio track (narration + BGM + loudnorm)
+  9. render     Render the final recap video
+
+? Pipeline — MyProject
+  the steps above are saved for this project · nothing runs until you say Run
+❯ 1. Run the pipeline  asks which chapter
+  2. Choose steps      download → mark → crop → package → narration → review → tts → mix → render
+  3. Init config.json  this machine's settings file
+     Back
+```
+
+**`init-config`** is a step like any other, and the third row is the same thing on demand. A fresh clone has no `config.json` at all — everything falls back to `config.example.json` until something writes one — so this writes it, from the current defaults, before a pipeline starts leaning on it. On a machine that already has one the row becomes a refresh and asks first: rewriting through the current models keeps every answer already in the file and fills in the settings a newer version added. The step itself never overwrites an existing `config.json` (a step that runs before every chapter is the last thing that should reset your settings), and it's off by default — check it into a pipeline when you want it, e.g. on a machine you just set up.
 
 If stdin isn't a terminal (a piped script, CI, an editor's output pane), every menu falls back to the plain numbered prompts remanga has always had, with `0` as back/quit at each level.
 

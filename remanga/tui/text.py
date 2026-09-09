@@ -3,7 +3,9 @@
 These stay on rich.prompt.Prompt rather than this package's own raw-key
 loop, deliberately. Typing a long path or a transcript sentence needs line
 editing, history and paste - all of which readline already provides and a
-hand-rolled character loop would have to reimplement badly.
+hand-rolled character loop would have to reimplement badly. Providing it is
+conditional on readline being imported, though, which is why this module
+imports it (see below) rather than assuming someone else did.
 
 What this module adds on top is the part Prompt has no opinion about:
 validation with a real retry loop, and - for paths - offering what's
@@ -12,6 +14,7 @@ file rather than typing its path from memory."""
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
@@ -23,6 +26,19 @@ from remanga.console import console, display_path
 from remanga.tui.choices import Choice
 from remanga.tui.result import CANCEL
 from remanga.tui.select import select
+
+# Imported for its side effect alone, and this is the module that has to do
+# it: `input()` - and therefore rich's Prompt, which calls it - only gets
+# line editing when readline has already been imported into the process.
+# Python does that automatically for an interactive REPL and never for a
+# script, so without this line the tty stays in plain canonical mode, where
+# Left/Right/Home don't move a cursor at all: they arrive as their literal
+# escape bytes and get typed into the answer ("^[[D" wedged into the middle
+# of a project name, with no way to fix a typo except backspacing over it).
+# With it, every free-text answer below gets arrow keys, Home/End, Ctrl+A/E,
+# word-wise motion, kill/yank and history for free.
+with contextlib.suppress(ImportError):  # a Windows box without pyreadline
+    import readline  # noqa: F401
 
 
 def ask_text(

@@ -9,7 +9,8 @@ get a purpose-built prompt instead of a blank text box:
     chapter/chapters - the chapters this project actually has, with status
     keep             - the files this chapter actually has right now
     formats          - the packaging formats, as a checklist
-    steps            - the project's pipeline, as an ordered checklist
+    steps            - the project's pipeline, staged: written out in order,
+                       editable as a checklist, run only when confirmed
     engine           - the TTS engines, each described, current pre-picked
     url              - not asked at all once project.json has a source
     engine/voice/bgm - not asked at all: what's configured is stated and
@@ -18,8 +19,8 @@ get a purpose-built prompt instead of a blank text box:
 `keep` and `formats` additionally open pre-checked with whatever this
 project chose last time (remembered in project.json - see
 settings/project_prefs.py), and `steps` opens on the project's pipeline and
-saves back to it (pipeline.json), so answering any of them once per project
-is enough.
+saves back to it (project.json's "pipeline"), so answering any of them once
+per project is enough.
 
 That last one is the rule the rest follow: if remanga can find the answer,
 it shouldn't be a question."""
@@ -175,23 +176,26 @@ def _prompt_formats(param: Param, project: str, config: RemangaConfig, values: d
 
 def _prompt_steps(param: Param, project: str, config: RemangaConfig, values: dict[str, Any]) -> Any:
     """Which steps this run executes - which is the same question as what
-    this project's pipeline is, so it's the same checklist the Pipeline row
-    opens, and confirming it saves projects/<name>/pipeline.json.
+    this project's pipeline is, so `run` doesn't ask it with a prompt of its
+    own: it opens the pipeline's staging screen (wizard/pipeline_stage.py),
+    the same one the main menu's Pipeline row opens, on the chapter already
+    chosen above.
 
-    That's what makes the answer stick: pick "tts, mix, render" once and every
-    later run opens on it, already ticked, in that order, because it is now
-    the pipeline. Returns None - "no override" - since the handler reads the
-    pipeline back and that's exactly what was just chosen. A subset that
-    should NOT stick is `--steps` on the CLI, which still never writes
-    anything."""
-    from remanga.wizard.pipeline_edit import choose_pipeline_steps
+    That screen is the stage between choosing and running. It writes the
+    pipeline out in order, offers the checklist for changing it, and starts
+    nothing until "Run the pipeline" is picked - so ticking a step list no
+    longer begins a download the instant the checklist closes.
 
-    picked = choose_pipeline_steps(
-        project, title=param.label,
-        note="the number is the run order · this becomes the project's pipeline, "
-             "so the next run opens on it",
-    )
-    return CANCEL if picked is None else None
+    The answer sticks, because the checklist behind that screen saves: pick
+    "tts, mix, render" once and every later run opens on it, already ticked,
+    in that order, because it is now the pipeline. Returns None - "no
+    override" - since the handler reads the pipeline back and that's exactly
+    what was just staged. A subset that should NOT stick is `--steps` on the
+    CLI, which still never writes anything."""
+    from remanga.wizard.pipeline_stage import stage_pipeline
+
+    request = stage_pipeline(project, config, chapter=values.get("chapter"))
+    return CANCEL if request is None else None
 
 
 def _not_asked(current_value, where: str):

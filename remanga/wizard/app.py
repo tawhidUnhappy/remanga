@@ -7,7 +7,9 @@ prompted for according to its own parameter specs. A command that declares
 settings of its own (`Command.setup`, currently `tts`) opens one more level:
 run it, or change the engine/voice/language it would run with. There are no fixed
 "modes": chaining work (mark, then crop, then write) is picking commands one
-after another, and the pipeline runner is itself just a command.
+after another, and the pipeline runner is itself just a command. The Pipeline
+row is that command's staging screen (see wizard/pipeline_stage.py): it
+assembles and shows the step list, and starts it only when asked.
 
 Everything here is escapable. Esc (or the Back row) backs out one level from
 anywhere, including out of a half-answered command, which then doesn't
@@ -23,7 +25,7 @@ from remanga.console import console
 from remanga.tui import Choice, is_cancel, select
 from remanga.wizard.checks import warn_panel_narration_mismatches
 from remanga.wizard.params import collect_params
-from remanga.wizard.pipeline_edit import edit_pipeline_steps
+from remanga.wizard.pipeline_stage import describe_pipeline, open_pipeline_stage
 from remanga.wizard.projects import select_or_create_project
 
 _PIPELINE = "__pipeline__"
@@ -49,7 +51,7 @@ def _command_rows(commands: list[Command]) -> list[Choice]:
 def _pipeline_hint(project: str) -> str:
     from remanga.pipeline import load_pipeline
 
-    return " → ".join(load_pipeline(project))
+    return describe_pipeline(load_pipeline(project))
 
 
 def run_command(cmd: Command, project: str, config: RemangaConfig) -> None:
@@ -127,7 +129,8 @@ def main_menu(project: str, config: RemangaConfig) -> Any:
         for category, cmds in groups.items()
     ]
     rows.append(Choice(label="Pipeline", hint=_pipeline_hint(project),
-                       detail="which steps `run` executes for this project, and in what order",
+                       detail="set up the steps this project runs and in what order, look at them, "
+                              "then run them - or initialize config.json",
                        value=_PIPELINE))
     rows.append(Choice(label="Switch project", hint=f"currently: {project}", value=_SWITCH_PROJECT))
 
@@ -165,7 +168,7 @@ def run_interactive_pipeline() -> None:
                 warn_panel_narration_mismatches(project)
             continue
         if action == _PIPELINE:
-            edit_pipeline_steps(project, config)
+            open_pipeline_stage(project, config)
             continue
         category, commands = action
         run_category_menu(category, commands, project, config)

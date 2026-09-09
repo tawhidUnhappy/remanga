@@ -20,13 +20,13 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from remanga.audio import AudioProcessor, TTSEngine
-from remanga.config import RemangaConfig
+from remanga.config import RemangaConfig, init_config_file
 from remanga.console import console, display_path, print_path
 from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
 from remanga.json_io import has_real_json_content, read_json_or
 from remanga.packaging import package_chapter
-from remanga.paths import get_chapter_dir, get_pipeline_path
+from remanga.paths import CONFIG_PATH, get_chapter_dir, get_pipeline_path
 from remanga.settings.project_prefs import cropper_config_for, remembered_pipeline
 from remanga.video import VideoRenderer
 from remanga.webui import launch_and_wait as launch_panel_marker
@@ -45,6 +45,35 @@ class Step:
     description: str
     run: Callable[[str, str, RemangaConfig], None]
     needs: list[str] = field(default_factory=list)
+    # Whether this step is part of DEFAULT_STEPS - the order a project that
+    # has never chosen runs. False for a step that is offered but not
+    # assumed (init-config): it's in the registry, so it's checkable in the
+    # pipeline editor and runnable by name, but adding it to the registry
+    # must not silently change what every existing project already runs.
+    default: bool = True
+
+
+def _run_init_config(project: str, chapter: str, config: RemangaConfig) -> None:
+    """Makes sure this machine has a config.json before anything reads one.
+
+    Off by default (see Step.default) because a machine normally gets its
+    config.json once, from the setup walkthrough, and re-running that per
+    chapter would be noise. It earns its place in a pipeline on a fresh
+    clone or a fresh machine, where "download, mark, crop..." otherwise
+    starts against config.example.json and the first setting anyone changes
+    is the thing that finally creates the file.
+
+    Never overwrites: an existing config.json is this machine's answers, and
+    a step that runs before every chapter is the last thing that should be
+    allowed to reset them. Refreshing one deliberately is the Pipeline
+    screen's own Init config.json row, which asks first."""
+    console.print("\n[bold]Step — Configuration file[/]")
+    written = init_config_file()
+    if written is None:
+        console.print(f"[dim]config.json already exists - left as it is.[/] {display_path(CONFIG_PATH)}")
+        return
+    console.print("[green]✓ config.json created from the defaults.[/]")
+    print_path(f"  {display_path(written, wrap=False)}")
 
 
 def _run_download(project: str, chapter: str, config: RemangaConfig) -> None:
@@ -129,6 +158,8 @@ def _run_render(project: str, chapter: str, config: RemangaConfig) -> None:
 # does) and DEFAULT_STEPS (today's exact hardcoded wizard order, used as the
 # fallback whenever a project has never chosen) come from this one list.
 STEP_REGISTRY: list[Step] = [
+    Step("init-config", "Create config.json from the defaults if this machine has none yet",
+         _run_init_config, default=False),
     Step("download", "Download chapter pages from MangaDex", _run_download),
     Step("mark", "Mark panels via the Panel Marker web UI (writes crops.json)", _run_mark, needs=["download"]),
     Step("crop", "Crop panels out of the marked pages", _run_crop, needs=["mark"]),
@@ -143,7 +174,7 @@ STEP_REGISTRY: list[Step] = [
 ]
 
 _STEP_BY_NAME = {step.name: step for step in STEP_REGISTRY}
-DEFAULT_STEPS: list[str] = [step.name for step in STEP_REGISTRY]
+DEFAULT_STEPS: list[str] = [step.name for step in STEP_REGISTRY if step.default]
 
 
 def run_pipeline(project: str, chapter: str, config: RemangaConfig, steps: list[str] | None = None) -> None:

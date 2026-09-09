@@ -16,7 +16,7 @@ from .downloader import DownloaderConfig
 from .marker import MarkerConfig, ShortcutsConfig
 from .ocr import OCRConfig
 from .reviewer import ReviewerConfig
-from .root import RemangaConfig
+from .root import RemangaConfig, init_config_file
 from .system import SystemConfig
 from .tts import TTS_ENGINES, KokoroConfig, TTSConfig
 from .video import VideoConfig
@@ -38,4 +38,5 @@ __all__ = [
     "TTSConfig",
     "VideoConfig",
     "WriterConfig",
+    "init_config_file",
 ]

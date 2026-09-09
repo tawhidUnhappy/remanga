@@ -9,7 +9,8 @@ piece is for:
     projects.py      - picking/creating a project, reading direction
     chapters.py      - picking one chapter, or several
     params.py        - prompting for a command's parameters
-    pipeline_edit.py - which steps run, and in what order
+    pipeline_edit.py - which steps run, and in what order (the checklist)
+    pipeline_stage.py- the staged pipeline: show it, then run it
     narration.py     - the narration-generation hand-off
     review.py        - the review-round loop
     uploads.py       - what this chapter has that can be uploaded
@@ -24,12 +25,13 @@ from __future__ import annotations
 
 from remanga.wizard.app import run_interactive_pipeline
 from remanga.wizard.narration import run_narration_step
-from remanga.wizard.pipeline_edit import edit_pipeline_steps
+from remanga.wizard.pipeline_stage import open_pipeline_stage, stage_pipeline
 from remanga.wizard.review import run_narration_review_loop
 
 __all__ = [
-    "edit_pipeline_steps",
+    "open_pipeline_stage",
     "run_interactive_pipeline",
     "run_narration_review_loop",
     "run_narration_step",
+    "stage_pipeline",
 ]
