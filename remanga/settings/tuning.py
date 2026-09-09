@@ -69,9 +69,28 @@ def configure_levels(config: RemangaConfig) -> None:
                    note="baked into each panel's WAV as it is written; changing it does not "
                         "force a re-synthesis"):
         return
-    if not _number(config, "audio.bgm_volume_db", "Background music gain, in dB",
-                   minimum=-60.0, maximum=20.0,
-                   note="negative sits the music under the narration"):
+    auto = confirm(
+        "Set the music level automatically from the narration?",
+        default=config.audio.bgm_auto_level,
+    )
+    if is_cancel(auto):
+        return
+    set_field(config, "audio.bgm_auto_level", bool(auto))
+
+    if auto:
+        # One number that means the same thing for every track. A fixed gain
+        # does not: it is relative to the file's own mastering, so swapping
+        # music silently changes the balance.
+        if not _number(config, "audio.bgm_target_below_narration_db",
+                       "How far below the narration the music sits, in dB",
+                       minimum=6.0, maximum=40.0,
+                       note="broadcast practice is 15-20; under 15 the music starts masking "
+                            "consonants, worst on phone speakers"):
+            return
+    elif not _number(config, "audio.bgm_volume_db", "Background music gain, in dB",
+                     minimum=-60.0, maximum=20.0,
+                     note="relative to the music file's own loudness - a value tuned for one "
+                          "track will not suit a different one"):
         return
     normalize = confirm(
         "Normalize the finished master to a fixed loudness (EBU R128)?",
@@ -82,8 +101,10 @@ def configure_levels(config: RemangaConfig) -> None:
     set_field(config, "audio.enable_loudnorm", bool(normalize))
     console.print(
         f"[green]✓ Levels:[/] narration {config.tts.kokoro.volume_boost_db:+.1f}dB, "
-        f"music {config.audio.bgm_volume_db:+.1f}dB, "
-        f"loudness normalization {'on' if config.audio.enable_loudnorm else 'off'}"
+        + (f"music {config.audio.bgm_target_below_narration_db:.0f}dB under the narration, "
+           if config.audio.bgm_auto_level
+           else f"music {config.audio.bgm_volume_db:+.1f}dB fixed, ")
+        + f"loudness normalization {'on' if config.audio.enable_loudnorm else 'off'}"
     )
 
 

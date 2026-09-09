@@ -391,9 +391,18 @@ decoding a real file with NO system ffmpeg present. It includes .webm and
 audio-only stream.
 
 **`bgm_volume_db` is relative to the FILE's own loudness**, not absolute, so
-swapping tracks changes the balance. Target is 15-20dB below narration
-(under 15 masks speech on phone speakers). Kokoro narration measures about
--26.3 dBFS RMS; compute a track's gain as `-26.3 - 18 - <track dBFS>`.
+a value tuned for one track is wrong for the next. `audio.bgm_auto_level`
+(default on) fixes that: the mix measures the chapter's own speech loudness
+and places the bed `bgm_target_below_narration_db` under it, so any track
+lands right. Verified - two beds mastered 1.3dB apart both come out at
+exactly 18.00dB separation, where a fixed gain leaves them 1.3dB apart.
+
+Target 15-20dB below narration; under 15 masks consonants, worst on phone
+speakers. Speech loudness is accumulated as sum-of-squared-RMS against frame
+counts WHILE the track is assembled - not measured off the finished track,
+which includes inter-panel silence that drags RMS below what the narration
+actually sounds like, and would need a second copy of a 56-minute track to
+measure (how this file caused an OOM once already).
 
 ## Where the knobs live (`settings/sections.py` + `commands/setup_rows.py`)
 

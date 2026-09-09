@@ -81,8 +81,10 @@ SECTIONS: tuple[Section, ...] = (
     ),
     Section(
         "levels", "Audio levels",
-        lambda c: (f"voice {c.tts.kokoro.volume_boost_db:+.1f}dB · music {c.audio.bgm_volume_db:+.1f}dB"
-                   f" · {'normalized' if c.audio.enable_loudnorm else 'not normalized'}"),
+        lambda c: (f"voice {c.tts.kokoro.volume_boost_db:+.1f}dB · "
+                   + (f"music {c.audio.bgm_target_below_narration_db:.0f}dB under narration (auto)"
+                      if c.audio.bgm_auto_level else f"music {c.audio.bgm_volume_db:+.1f}dB fixed")
+                   + f" · {'normalized' if c.audio.enable_loudnorm else 'not normalized'}"),
         tuning.configure_levels,
         detail="voice-vs-music balance, and whether the master is loudness-normalized",
     ),

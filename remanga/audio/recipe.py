@@ -32,6 +32,7 @@ RECIPE_FILENAME = ".recipe.json"
 # unrelated cannot silently invalidate every master in the project.
 _MIX_KEYS = (
     "bgm_enabled", "bgm_path", "bgm_volume_db", "enable_loudnorm",
+    "bgm_auto_level", "bgm_target_below_narration_db",
     "pause_between_panels_ms", "edge_fade_ms", "sample_rate",
 )
 
