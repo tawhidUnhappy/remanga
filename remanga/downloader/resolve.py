@@ -157,6 +157,61 @@ class MangaDexResolver:
 
         return chapters
 
+    # MangaDex timestamps: the moment a chapter became readable, else when
+    # it was published, else when the record was created. All three come
+    # back as the same ISO-8601 UTC format ("2024-05-01T12:00:00+00:00"),
+    # which is why they can be compared as plain strings - same layout,
+    # fixed-width fields, most significant first.
+    _PUBLISHED_KEYS = ("readableAt", "publishAt", "createdAt")
+
+    @classmethod
+    def _published_at(cls, chapter: dict[str, Any]) -> str:
+        attributes = chapter.get("attributes", {})
+        for key in cls._PUBLISHED_KEYS:
+            value = attributes.get(key)
+            if value:
+                return str(value)
+        return ""
+
+    @staticmethod
+    def _number_key(number: str) -> str:
+        """The chapter numbers that mean the same chapter, as one key: "07",
+        "7" and "7.0" collapse together - the same equivalence
+        _match_chapter_num applies when looking a chapter up, so grouping
+        here can't disagree with matching there."""
+        try:
+            return f"{float(number):g}"
+        except ValueError:
+            return number.lstrip("0") or number
+
+    @classmethod
+    def latest_versions(cls, chapters: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """One entry per chapter number - the most recently readable one.
+
+        A manga's feed routinely carries the same chapter number more than
+        once in the same language: two scanlation groups translated it, or
+        one of them re-uploaded a fixed version. Left alone that shows up as
+        a chapter listed twice in the picker, and as a download that takes
+        whichever copy the API happened to return first - which is not a
+        choice anyone made, and can differ between two runs of the same
+        command.
+
+        So the duplicates collapse here, newest kept. Chapter numbers are
+        compared the way _match_chapter_num compares them (leading zeros and
+        "7" vs "7.0" are the same chapter), and the input order is preserved
+        - the feed is already in reading order and this must not disturb
+        it."""
+        best: dict[str, dict[str, Any]] = {}
+        order: list[str] = []
+        for chapter in chapters:
+            key = cls._number_key(str(chapter.get("attributes", {}).get("chapter") or "").strip())
+            if key not in best:
+                best[key] = chapter
+                order.append(key)
+            elif cls._published_at(chapter) > cls._published_at(best[key]):
+                best[key] = chapter
+        return [best[key] for key in order]
+
     @staticmethod
     def _match_chapter_num(target: str, candidate: str) -> bool:
         """Robustly compare chapter numbers accounting for leading zeros and decimals."""
@@ -178,8 +233,9 @@ class MangaDexResolver:
         return False
 
     def find_chapter_id(self, manga_id: str, chapter_num: str) -> str:
-        """Locate specific chapter ID by chapter number."""
-        chapters = self.list_chapters(manga_id)
+        """Locate specific chapter ID by chapter number - the latest upload
+        of it, when the feed carries more than one (see latest_versions)."""
+        chapters = self.latest_versions(self.list_chapters(manga_id))
 
         for ch in chapters:
             curr_ch = str(ch.get("attributes", {}).get("chapter", ""))

@@ -356,7 +356,11 @@ class MangaDexDownloader:
         if cache_is_fresh:
             remote_chapters = cached["chapters"]
         else:
-            raw_chapters = self.resolver.list_chapters(manga_id)
+            # Deduplicated to one entry per chapter number, newest upload
+            # kept - the same choice find_chapter_id makes when it goes to
+            # fetch one, so what the picker lists and what a download
+            # actually pulls can't disagree.
+            raw_chapters = self.resolver.latest_versions(self.resolver.list_chapters(manga_id))
             remote_chapters = [
                 {
                     "chapter": str(ch.get("attributes", {}).get("chapter") or ""),

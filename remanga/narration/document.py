@@ -98,12 +98,18 @@ def narration_document(chapter_num: str, entries: Sequence[tuple[str, str]]) -> 
 
 def create_narration_file(
     project_name: str, chapter_num: str, mode: str = TEMPLATE, force: bool = False,
+    quiet: bool = False,
 ) -> Path:
     """Creates (or replaces) this chapter's narration.json. Returns its path.
 
     Refuses to overwrite a file that already holds real content unless
     `force` - losing a written narration script to a mistyped command is
-    exactly the kind of thing that isn't recoverable from anywhere else."""
+    exactly the kind of thing that isn't recoverable from anywhere else.
+
+    `quiet` drops the two-line report, for a caller doing this across a
+    whole project: sixty chapters is a hundred and twenty lines saying the
+    same thing, and the one line that matters ("60 chapters, here's what
+    happened") is the caller's to print."""
     if mode not in NARRATION_FILE_MODE_BY_NAME:
         raise ValueError(
             f"Unknown narration file mode {mode!r} - expected one of "
@@ -121,8 +127,9 @@ def create_narration_file(
 
     if mode == BLANK:
         path.write_text("", encoding="utf-8")
-        console.print("[bold green]✓ Empty narration.json created[/] [dim](0 bytes)[/]")
-        console.print(f"  {display_path(path)}")
+        if not quiet:
+            console.print("[bold green]✓ Empty narration.json created[/] [dim](0 bytes)[/]")
+            console.print(f"  {display_path(path)}")
         return path
 
     ids = panel_ids(project_name, chapter_num)
@@ -134,11 +141,12 @@ def create_narration_file(
         )
 
     write_json(path, narration_document(chapter_num, [(panel_id, "") for panel_id in ids]))
-    console.print(
-        f"[bold green]✓ narration.json template created[/] "
-        f"[dim]({len(ids)} panel(s), every text empty)[/]"
-    )
-    console.print(f"  {display_path(path)}")
+    if not quiet:
+        console.print(
+            f"[bold green]✓ narration.json template created[/] "
+            f"[dim]({len(ids)} panel(s), every text empty)[/]"
+        )
+        console.print(f"  {display_path(path)}")
     return path
 
 

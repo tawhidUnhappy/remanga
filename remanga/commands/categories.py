@@ -23,5 +23,5 @@ class Category:
 CATEGORIES: tuple[Category, ...] = (
     Category("Setup", "settings, shared assets, and model weights"),
     Category("Chapter Production", "one chapter, from download to rendered video"),
-    Category("Project-wide", "whole-project compile, status, verify, and cleanup"),
+    Category("Project-wide", "set the whole manga up, compile it, check it, clean it up"),
 )

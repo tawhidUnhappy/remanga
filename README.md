@@ -168,7 +168,7 @@ Every screen is an arrow-key menu — **↑/↓** to move, **Enter** to pick, **
 ? remanga — MyProject
 ❯ Setup                settings, shared assets, and model weights
   Chapter Production   one chapter, from download to rendered video
-  Project-wide         whole-project compile, status, verify, and cleanup
+  Project-wide         set the whole manga up, compile it, check it, clean it up
   Pipeline             download → mark → crop → narration → review → tts → mix → render
   Switch project       currently: MyProject
   Quit
@@ -409,6 +409,14 @@ Pass a title query, title URL, chapter URL, or UUID:
 ```
 *Creates:* `projects/my_manga/chapters/chapter_1/pages/` (plus `pages.zip` if `downloader.zip_pages_enabled` is enabled — off by default)
 
+**The whole manga in one go** — `download-all` (Project-wide in the wizard) takes every chapter MangaDex lists for this project, with no picker and no selection to make:
+```bash
+./run.sh download-all --project "my_manga"
+```
+It fetches the feed in the configured translation language (`downloader.language`, `en` by default) and, where a chapter number appears more than once — two scanlation groups, or one of them re-uploading a fix — takes **the newest upload of it**. Left alone that duplication shows up as the same chapter listed twice in the picker and a download that takes whichever copy the API happened to return first, which is not a choice anyone made and can differ between two runs of the same command; now the picker and the download agree, and both mean "the latest one".
+
+It prints how many chapters exist and how many you already have, then asks once before starting. Chapters already downloaded are *verified*, not re-fetched, so re-running it after a new chapter drops costs a check per chapter and downloads only what's actually missing. `--force` re-fetches every chapter clean instead.
+
 ### 2. Mark Panels
 Launches the **Panel Marker** web UI: MAGI v3 pre-fills every page's panel boxes on a GPU, you drag/adjust/delete to correct them, then Save & Continue writes `crops.json`.
 ```bash
@@ -440,6 +448,13 @@ Not using the LLM copy/paste flow for this chapter? `narration-init` creates the
 - **`blank`** — a genuinely empty file. Zero bytes: not `{}`, not `[]`, nothing. That's the placeholder state the rest of remanga reads as "not written yet", so it reserves the path without any stage mistaking it for real content.
 
 It won't overwrite a narration.json that already has content unless you pass `--force` (the wizard asks). A blank file isn't content, so going blank → template needs no flag.
+
+**Every chapter at once** — `narration-init-all` (Project-wide in the wizard) gives every chapter in the project the blank, zero-byte file, so a manga you're going to narrate yourself is set up in one command rather than one per chapter:
+```bash
+./run.sh narration-init-all --project "my_manga"
+./run.sh narration-init-all --project "my_manga" --chapters 12,13,14
+```
+Chapters that already hold a *written* narration are named and left alone; replacing them is one explicit answer covering all of them (`--force`, or the confirmation it asks a real terminal), never a prompt per chapter. Chapters that already have the blank file are simply not touched — so re-running it says what's there rather than reporting work it didn't do.
 
 ### 3d. Make the Narration Safe to Speak
 ```bash
@@ -820,6 +835,8 @@ In short: if a chapter's TTS run gets interrupted or a worker locks up, just re-
 ./run.sh tts      -p <PROJECT> -c <CHAPTER> [-e <ENGINE>] [-v <VOICE_WAV>] [-f]
 ./run.sh mix      -p <PROJECT> -c <CHAPTER> [-b <BGM_FILE>]
 ./run.sh render   -p <PROJECT> -c <CHAPTER> [-f]
+./run.sh download-all -p <PROJECT> [-u <URL_OR_ID>] [-f] [--refetch]
+./run.sh narration-init-all -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-f]
 ./run.sh full-recap -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-f]
 ./run.sh remix    -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-b <BGM_FILE>] [--no-rejoin]
 ./run.sh status   -p <PROJECT> -c <CHAPTER>

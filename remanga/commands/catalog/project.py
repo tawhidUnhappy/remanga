@@ -1,4 +1,5 @@
-"""The Project-wide category: whole-project compile, status, verify and cleanup."""
+"""The Project-wide category: whole-project setup (fetch every chapter, give
+every chapter a narration file), compile, status, verify and cleanup."""
 
 from __future__ import annotations
 
@@ -20,6 +21,58 @@ from remanga.reset import (
 )
 
 PROJECT_COMMANDS: list[Command] = [
+    Command(
+        "download-all",
+        "Download EVERY chapter MangaDex lists for this project's manga - no picker, no "
+        "selection: the whole manga in the configured translation language (English by "
+        "default), taking the newest upload of each chapter number when more than one exists. "
+        "Chapters already downloaded are verified rather than re-fetched",
+        project_handlers.download_all,
+        [
+            project_param(),
+            Param("url", ["--url", "-u"], required=False, default=None,
+                  help="Manga title or MangaDex URL/UUID (optional if saved in project.json)",
+                  prompt="Manga title or MangaDex URL"),
+            # Both deliberately unasked by the wizard: the handler prints how
+            # many chapters there are and how many are already here, then asks
+            # one question about the run as a whole. Two yes/no boxes in front
+            # of that would be answering before knowing the size of the job.
+            Param("force", ["--force", "-f"], type="bool", default=False, cli_only=True,
+                  help="Re-fetch every chapter clean - wipe each chapter's pages first and "
+                       "download again, even ones already complete",
+                  prompt="Re-fetch every chapter clean?"),
+            Param("refetch", ["--refetch"], type="bool", default=False, cli_only=True,
+                  help="Refetch the chapter list from MangaDex instead of the 24h cached listing",
+                  prompt="Refetch the chapter list from MangaDex?"),
+        ],
+        category="Project-wide",
+        detail="the whole manga in one go - re-runnable, and only downloads what's actually missing",
+    ),
+    Command(
+        "narration-init-all",
+        "Create a blank narration.json for every chapter in the project - zero bytes, not even "
+        "'{}', so every chapter has a script file waiting to be filled in. Chapters that already "
+        "have a narration.json with content in it are left alone unless you say otherwise",
+        project_handlers.narration_init_all,
+        [
+            project_param(),
+            Param("chapters", ["--chapters", "-c"], required=False, default=None,
+                  help="Comma-separated chapter numbers to give a blank narration.json (default: "
+                       "every chapter this project has)",
+                  prompt="Chapters to give a blank narration.json"),
+            # cli_only: the handler asks this itself, once, naming the
+            # chapters that actually have a script - which is a question
+            # worth answering. Asked up front by the wizard it would be
+            # "replace the written ones?" before anyone knows whether there
+            # are any, and then asked again by the handler when there are.
+            Param("force", ["--force", "-f"], type="bool", default=False, cli_only=True,
+                  help="Blank chapters that already have a written narration.json too",
+                  prompt="Blank chapters that already have a written narration.json too?"),
+        ],
+        category="Project-wide",
+        detail="the whole-project form of the pipeline's init-narration step - one answer covers "
+               "every chapter",
+    ),
     Command(
         "full-recap",
         "Compile every chapter of a project into ONE continuous recap video "
