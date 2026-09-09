@@ -85,14 +85,14 @@ def _correct_music_level(config: RemangaConfig) -> None:
         else "the typical level for this engine (nothing synthesized yet)"
     )
     console.print(
-        f"[dim]Narration {reading.narration_dbfs:.1f} dBFS, from {source}.\n"
-        f"Music {reading.bgm_dbfs:.1f} dBFS at its own level; "
-        f"currently sitting {reading.current_separation_db:.1f} dB below the narration.[/]"
+        f"[dim]Narration {reading.narration_lufs:.1f} LUFS, from {source}.\n"
+        f"Music {reading.bgm_lufs:.1f} LUFS at its own level; "
+        f"currently sitting {reading.current_separation_db:.1f} LU below the narration.[/]"
     )
     if reading.suggested_gain_db == previous_gain_db:
         console.print(
             f"[green]✓ Already correct:[/] {previous_gain_db:+.1f} dB gives the "
-            f"{audio.bgm_target_below_narration_db:.0f} dB separation you asked for."
+            f"{audio.bgm_target_below_narration_db:.0f} LU separation you asked for."
         )
         return
 
@@ -100,7 +100,7 @@ def _correct_music_level(config: RemangaConfig) -> None:
     console.print(
         f"[bold green]✓ Music gain:[/] {reading.suggested_gain_db:+.1f} dB "
         f"[dim](was {previous_gain_db:+.1f}) - puts the bed "
-        f"{audio.bgm_target_below_narration_db:.0f} dB under the narration.[/]"
+        f"{audio.bgm_target_below_narration_db:.0f} LU under the narration.[/]"
     )
 
 

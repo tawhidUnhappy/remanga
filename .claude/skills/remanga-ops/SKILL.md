@@ -400,23 +400,23 @@ Deliberately not computed at mix time. A level the mix works out on every run
 is invisible in the config, unquestionable, and un-nudgeable; a number
 somebody can read and adjust is what a settings file is for.
 
-- Narration is measured from ONE real synthesized clip in any project (how
-  loud the engine comes out is a property of voice+engine, not of one manga),
-  falling back to `TYPICAL_NARRATION_DBFS = -26.3` on a fresh install.
-  Measured live at -26.0 dBFS, so the constant is good. Reading 40 clips
-  instead of 1 moved the answer 0.02dB for 24ms - the engine reads at a
-  consistent level, so extra clips buy nothing.
-- The music's level comes from ffmpeg `volumedetect`, which STREAMS the file
-  - identical to a pydub full decode within 0.01dB, half the time, and none
-  of the audio held in RAM. Whole action: 116ms, 1.2MB peak.
-- A 30-second slice is faster still and was REJECTED: it agreed on this
-  track, but a 15-second slice was 1.69dB out, so the approach depends on the
-  track's own dynamics. Not worth that error against a 15-20dB target.
-- Speech loudness is summed squared RMS weighted by frame count, taken from
-  the CLIPS - never off a finished master, which contains inter-panel silence
-  that drags RMS below what narration actually sounds like.
-- Target 15-20dB below narration; under 15 masks consonants, worst on phone
-  speakers.
+- **Both sides are measured as ITU-R BS.1770 loudness (LUFS), not RMS**, via
+  ffmpeg `ebur128`. Not pedantry - they disagree by an amount that depends on
+  the material: this repo's bed reads -12.61 dBFS RMS but -9.90 LUFS, 2.7
+  units louder, because BS.1770 K-weights and gates while music is
+  spectrally dense where speech is not. Narration reads nearly the same
+  either way. An RMS-derived gain therefore leaves the music louder than
+  intended - measured, an "18 dB" RMS setting was really 15.9 LU.
+- It is also the unit the pipeline already speaks: the master is normalized
+  with EBU R128, so a balance set in LU survives that pass.
+- `ebur128` single-pass, not `loudnorm`'s two-pass JSON: same figure within
+  0.07 LU, 122ms against 3409ms.
+- Narration = MEDIAN of 5 clips. Six real clips measured within 0.34 LU of
+  each other, so a handful is at the noise floor of the question; median
+  rather than mean so one clip that is a single quiet word cannot drag it.
+  Falls back to `TYPICAL_NARRATION_LUFS = -25.7` on a fresh install.
+- Whole action costs ~250ms. It is a deliberate one-shot the user navigates
+  to, so correctness beats shaving milliseconds.
 
 ## Where the knobs live (`settings/sections.py` + `commands/setup_rows.py`)
 

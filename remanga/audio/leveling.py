@@ -12,67 +12,91 @@ once, on request, and hands back a figure to WRITE into config.json. The
 value stays a plain number somebody can look at, question and nudge, which is
 the property a settings file should have.
 
-Broadcast practice puts music 15-20dB below dialogue. Under 15 it starts
+Both sides are measured as ITU-R BS.1770 integrated loudness (LUFS) rather
+than as plain RMS, via ffmpeg's `ebur128`. That is not pedantry: the two
+disagree by an amount that depends on the material. Measured on this repo's
+bed, RMS reads -12.61 dBFS where loudness reads -9.90 LUFS - 2.7 units
+louder - because BS.1770 K-weights (roughly, how an ear weights frequency)
+and gates out near-silence, and music is spectrally dense where speech is
+not. Narration, by contrast, reads almost identically either way. So an
+RMS-derived gain systematically leaves the music louder than intended, and
+by a margin that changes with the track.
+
+It is also the measure the rest of the pipeline already speaks: the master
+is normalized with EBU R128 (audio/mix.py), so setting the balance in the
+same units means the number here survives that pass unchanged.
+
+Broadcast practice puts music 15-20 LU below dialogue. Under 15 it starts
 masking consonants, and that is worst on phone speakers, which is where most
 of this gets watched."""
 
 from __future__ import annotations
 
-import math
 import re
+import statistics
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from pydub import AudioSegment
-
-from remanga.audio.resample import load_audio
 from remanga.paths import get_projects_dir
 
-# Measured for Kokoro-82M narration, speech-only, across a real chapter.
-# Used when a project has not synthesized anything yet, so the action still
-# gives a usable answer on a fresh install instead of refusing to help.
-TYPICAL_NARRATION_DBFS = -26.3
+# Integrated loudness of Kokoro-82M narration, measured across a real
+# chapter. Used when a project has not synthesized anything yet, so the
+# action still answers on a fresh install instead of refusing to help.
+TYPICAL_NARRATION_LUFS = -25.7
 
-# One clip. Narration comes out of the engine at a consistent level - it is
-# the same voice reading at the same settings - so a second clip measures
-# almost exactly what the first did. Reading forty of them cost 24ms against
-# 0.9ms for one, to move the answer by a fraction of a dB.
-_MAX_CLIPS = 1
+# A few clips, not one and not all. The engine reads at a consistent level -
+# same voice, same settings - and measuring six real clips put them within
+# 0.34 LU of each other, so a handful is already at the noise floor of the
+# question. The median of them shrugs off a clip that happens to be a single
+# quiet word, which one clip on its own cannot do.
+_MAX_CLIPS = 5
 
 
 @dataclass(frozen=True)
 class LevelReading:
-    narration_dbfs: float
-    bgm_dbfs: float
+    narration_lufs: float
+    bgm_lufs: float
     suggested_gain_db: float
     clips_measured: int          # 0 means the typical figure was used
     current_separation_db: float
 
 
-def _speech_dbfs_from_clips(clips: list[Path]) -> tuple[float | None, int]:
-    """Speech-only loudness across `clips`, as summed squared RMS weighted by
-    frame count - the same figure the mix would see, without the inter-panel
-    silence that drags a finished track's RMS below what narration sounds
-    like."""
-    total_sq = 0.0
-    total_frames = 0
-    peak_amp = 0
-    for clip in clips:
-        try:
-            seg = AudioSegment.from_file(clip)
-        except Exception:
-            continue
-        frames = int(seg.frame_count())
-        if frames <= 0 or seg.rms <= 0:
-            continue
-        total_sq += float(seg.rms) ** 2 * frames
-        total_frames += frames
-        peak_amp = max(peak_amp, seg.max_possible_amplitude)
-    if total_frames <= 0 or peak_amp <= 0:
+def _integrated_lufs(path: Path) -> float | None:
+    """ITU-R BS.1770 integrated loudness for a file, or None if unmeasurable.
+
+    ffmpeg's `ebur128` in one streaming pass. `loudnorm`'s two-pass JSON
+    reports the same figure - measured, 0.07 LU apart on this repo's bed -
+    and took 3409ms against 122ms, so there is nothing to be bought by the
+    slower one. Neither holds the audio in memory."""
+    cmd = [
+        "ffmpeg", "-hide_banner", "-nostats", "-i", str(path),
+        "-af", "ebur128=framelog=quiet", "-f", "null", "-",
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    # The summary block at the end, not the per-frame log: the last "I:" line
+    # is the integrated figure over the whole file.
+    matches = re.findall(r"I:\s*(-?[\d.]+)\s*LUFS", result.stderr)
+    if not matches:
+        return None
+    value = float(matches[-1])
+    # A file of pure silence reports -inf; treat that as unmeasurable rather
+    # than propagating an infinity into a gain calculation.
+    return None if value < -70 else value
+
+
+def _narration_lufs(clips: list[Path]) -> tuple[float | None, int]:
+    """Median integrated loudness across `clips`.
+
+    Median, not mean: one clip that is a single quiet word would drag an
+    average, and narration clips are one line each so that is a real case."""
+    values = [v for v in (_integrated_lufs(c) for c in clips) if v is not None]
+    if not values:
         return None, 0
-    rms = math.sqrt(total_sq / total_frames)
-    return 20 * math.log10(rms / peak_amp), len(clips)
+    return statistics.median(values), len(values)
 
 
 def find_narration_clips(limit: int = _MAX_CLIPS) -> list[Path]:
@@ -93,37 +117,6 @@ def find_narration_clips(limit: int = _MAX_CLIPS) -> list[Path]:
     return clips
 
 
-def _bgm_dbfs(path: Path, sample_rate: int) -> float | None:
-    """The music file's own RMS, in dBFS, without decoding it into memory.
-
-    ffmpeg's volumedetect streams the file and prints its mean volume, which
-    is the same figure pydub would compute after loading the whole thing.
-    Measured on this repo's bed: identical to 0.01dB, in half the time, and
-    with none of the 155 seconds of audio ever held in RAM.
-
-    Measuring a 30-second slice instead is faster again and was rejected: it
-    agreed on this track but a 15-second slice was 1.69dB out, which shows
-    the approach depends on the track's own dynamics. A tenth of a second is
-    not worth an error that size against a 15-20dB target."""
-    cmd = [
-        "ffmpeg", "-hide_banner", "-nostats", "-i", str(path),
-        "-af", "volumedetect", "-f", "null", "-",
-    ]
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    match = re.search(r"mean_volume:\s*(-?[\d.]+) dB", result.stderr)
-    if match:
-        return float(match.group(1))
-    # Fall back to a real decode rather than give up - a format volumedetect
-    # cannot summarise is still a format the mix will happily play.
-    try:
-        return load_audio(path, sample_rate, channels=2).dBFS
-    except Exception:
-        return None
-
-
 def read_levels(bgm_path: str | Path, sample_rate: int, target_below_db: float,
                 current_gain_db: float) -> LevelReading | None:
     """Measure narration and music, and suggest the gain that separates them
@@ -131,17 +124,17 @@ def read_levels(bgm_path: str | Path, sample_rate: int, target_below_db: float,
     bgm_file = Path(str(bgm_path or "")).expanduser()
     if not bgm_file.is_file():
         return None
-    bgm_dbfs = _bgm_dbfs(bgm_file, sample_rate)
-    if bgm_dbfs is None or bgm_dbfs == float("-inf"):
+    bgm_lufs = _integrated_lufs(bgm_file)
+    if bgm_lufs is None:
         return None
 
-    measured, count = _speech_dbfs_from_clips(find_narration_clips())
-    narration = TYPICAL_NARRATION_DBFS if measured is None else measured
+    measured, count = _narration_lufs(find_narration_clips())
+    narration = TYPICAL_NARRATION_LUFS if measured is None else measured
 
     return LevelReading(
-        narration_dbfs=narration,
-        bgm_dbfs=bgm_dbfs,
-        suggested_gain_db=round(narration - target_below_db - bgm_dbfs, 1),
+        narration_lufs=narration,
+        bgm_lufs=bgm_lufs,
+        suggested_gain_db=round(narration - target_below_db - bgm_lufs, 1),
         clips_measured=0 if measured is None else count,
-        current_separation_db=narration - (bgm_dbfs + current_gain_db),
+        current_separation_db=narration - (bgm_lufs + current_gain_db),
     )

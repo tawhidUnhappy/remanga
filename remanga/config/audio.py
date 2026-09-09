@@ -34,7 +34,8 @@ class AudioConfig(ConfigModel):
     # a value tuned for one track is wrong for the next one dropped in.
     # That is what bgm_auto_level exists to fix.
     bgm_volume_db: float = -22.0
-    # The separation the "correct my levels" action aims for, in dB.
+    # The separation the "correct my levels" action aims for, in LU
+    # (ITU-R BS.1770 loudness units - the same scale EBU R128 uses).
     #
     # Not applied at mix time - nothing here runs automatically. It is the
     # target the settings action uses when it MEASURES your narration and
@@ -43,5 +44,10 @@ class AudioConfig(ConfigModel):
     #
     # 18 is the middle of broadcast practice (15-20 below dialogue). Under
     # 15 the music starts masking consonants, worst on phone speakers.
+    #
+    # Measured in LOUDNESS, not RMS, and the difference is real: this repo's
+    # bed reads -12.61 dBFS RMS but -9.90 LUFS, so an RMS-derived gain leaves
+    # the music ~2.7dB louder than intended - and by a margin that changes
+    # with the track's spectral content.
     bgm_target_below_narration_db: float = 18.0
     enable_loudnorm: bool = True
