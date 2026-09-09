@@ -400,10 +400,18 @@ Deliberately not computed at mix time. A level the mix works out on every run
 is invisible in the config, unquestionable, and un-nudgeable; a number
 somebody can read and adjust is what a settings file is for.
 
-- Narration is measured from up to 40 real synthesized clips in ANY project
-  (how loud the engine comes out is a property of voice+engine, not of one
-  manga), falling back to `TYPICAL_NARRATION_DBFS = -26.3` on a fresh
-  install. Measured live at -26.0 dBFS, so the constant is good.
+- Narration is measured from ONE real synthesized clip in any project (how
+  loud the engine comes out is a property of voice+engine, not of one manga),
+  falling back to `TYPICAL_NARRATION_DBFS = -26.3` on a fresh install.
+  Measured live at -26.0 dBFS, so the constant is good. Reading 40 clips
+  instead of 1 moved the answer 0.02dB for 24ms - the engine reads at a
+  consistent level, so extra clips buy nothing.
+- The music's level comes from ffmpeg `volumedetect`, which STREAMS the file
+  - identical to a pydub full decode within 0.01dB, half the time, and none
+  of the audio held in RAM. Whole action: 116ms, 1.2MB peak.
+- A 30-second slice is faster still and was REJECTED: it agreed on this
+  track, but a 15-second slice was 1.69dB out, so the approach depends on the
+  track's own dynamics. Not worth that error against a 15-20dB target.
 - Speech loudness is summed squared RMS weighted by frame count, taken from
   the CLIPS - never off a finished master, which contains inter-panel silence
   that drags RMS below what narration actually sounds like.
