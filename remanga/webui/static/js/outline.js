@@ -47,6 +47,7 @@ function chapterPages(entry) {
       index: page.index,
       filename: page.filename,
       panels: (state.pageMarksCache[page.filename] || []).length,
+      decided: state.touchedPages.has(page.filename),
     }));
   }
   return entry.pages;
@@ -59,10 +60,25 @@ function chevron(isOpen) {
   return el;
 }
 
-function countPill(text, muted) {
+// An empty page is two different things, and the difference is the whole
+// point of looking at this list on a half-finished chapter:
+//   0  (dashed)  nobody has been here - MAGI will still detect it
+//   —  (solid)   somebody looked and said there are no panels
+// A page with panels just shows how many.
+function pagePill(page) {
   const el = document.createElement("span");
-  el.className = "ol-pill mono" + (muted ? " muted" : "");
-  el.textContent = text;
+  if (page.panels) {
+    el.className = "ol-pill mono";
+    el.textContent = String(page.panels);
+  } else if (page.decided) {
+    el.className = "ol-pill mono none";
+    el.textContent = "—";
+    el.title = "No panels on this page - decided";
+  } else {
+    el.className = "ol-pill mono muted";
+    el.textContent = "0";
+    el.title = "Not marked yet";
+  }
   return el;
 }
 
@@ -77,7 +93,7 @@ function renderPanels(page, chapterIndex) {
   if (!page.panels) {
     const none = document.createElement("div");
     none.className = "ol-none";
-    none.textContent = "no panels marked";
+    none.textContent = page.decided ? "no panels here — decided" : "not marked yet";
     wrap.appendChild(none);
     return wrap;
   }
@@ -115,7 +131,7 @@ function renderPage(page, chapterIndex, isCurrentChapter) {
   label.className = "ol-page-label";
   label.textContent = page.filename;
   head.appendChild(label);
-  head.appendChild(countPill(String(page.panels), !page.panels));
+  head.appendChild(pagePill(page));
   // The chevron expands in place; the row itself navigates. Two jobs, two
   // targets, no modifier keys.
   head.addEventListener("click", (e) => {
@@ -148,10 +164,13 @@ function renderChapter(entry) {
   name.textContent = `Chapter ${entry.chapter}`;
   head.appendChild(name);
 
+  const waiting = pages.filter(p => !p.decided && !p.panels).length;
   const meta = document.createElement("span");
-  meta.className = "ol-meta mono";
-  meta.textContent = `${marked}/${pages.length} · ${panels}`;
-  meta.title = `${marked} of ${pages.length} page(s) marked · ${panels} panel(s)`;
+  meta.className = "ol-meta mono" + (waiting ? " waiting" : "");
+  meta.textContent = waiting ? `${marked}/${pages.length} · ${panels} · ${waiting}?`
+                             : `${marked}/${pages.length} · ${panels}`;
+  meta.title = `${marked} of ${pages.length} page(s) marked · ${panels} panel(s)`
+             + (waiting ? ` · ${waiting} page(s) nobody has looked at yet` : " · every page accounted for");
   head.appendChild(meta);
 
   head.addEventListener("click", (e) => {

@@ -26,7 +26,7 @@ from typing import Any
 from remanga.console import console, escape as _esc
 from remanga.json_io import has_real_json_content, read_json, write_json
 from remanga.paths import get_chapter_dir
-from remanga.webui.marker_state import MarkerState
+from remanga.webui.marker_state import DECIDED_KEY, MarkerState
 
 
 def has_pages(project_name: str, chapter_num: str) -> bool:
@@ -74,7 +74,7 @@ class MarkerSession:
         # pass spawns a worker subprocess that loads the model onto the GPU,
         # so two at once is not twice as fast, it is two processes fighting
         # over the same card.
-        self._jobs: list[tuple[str, list[str] | None]] = []
+        self._jobs: list[tuple[str, list[str] | None, bool]] = []
         self._jobs_lock = threading.Lock()
         self._worker: threading.Thread | None = None
         self._active: str | None = None
@@ -197,18 +197,21 @@ class MarkerSession:
             return
         self.queue_detection(config, [self.chapter_num])
 
-    def queue_detection(self, config, chapters: list[str], pages: list[str] | None = None) -> list[str]:
+    def queue_detection(self, config, chapters: list[str], pages: list[str] | None = None,
+                        force: bool = False) -> list[str]:
         """Adds work to the detection queue and makes sure the worker is
         running. Returns the chapters actually queued.
 
         A chapter whose pass already ran this session is skipped - `pages`
         aside, which is the "just this page" request and is always honoured,
-        because asking for one page explicitly is asking for it again."""
+        because asking for one page explicitly is asking for it again.
+        `force` travels with that request down to apply_detected, where it
+        lets a page recorded as having no panels be detected after all."""
         if self.read_only or not config.magi_enabled:
             return []
         queued: list[str] = []
         with self._jobs_lock:
-            pending = {chapter for chapter, _ in self._jobs}
+            pending = {chapter for chapter, _, _ in self._jobs}
             for chapter in chapters:
                 if chapter not in self.chapters:
                     continue
@@ -216,7 +219,7 @@ class MarkerSession:
                     if chapter in pending or self.state_for(chapter).detect_started:
                         continue
                     self.state_for(chapter).detect_started = True
-                self._jobs.append((chapter, pages))
+                self._jobs.append((chapter, pages, force))
                 queued.append(chapter)
         if queued:
             self._ensure_worker(config)
@@ -242,7 +245,7 @@ class MarkerSession:
             self.queue_all(config)
             return
         with self._jobs_lock:
-            for chapter, pages in self._jobs:
+            for chapter, pages, _ in self._jobs:
                 if pages is None:
                     self.state_for(chapter).detect_started = False
             self._jobs.clear()
@@ -268,11 +271,11 @@ class MarkerSession:
                 if not self._jobs:
                     self._active = None
                     return
-                chapter, pages = self._jobs.pop(0)
+                chapter, pages, force = self._jobs.pop(0)
                 self._active = chapter
             try:
                 state = self.state_for(chapter)
-                run_detection(state, config, only_pages=pages)
+                run_detection(state, config, only_pages=pages, force=force)
                 self.mark_dirty(chapter)
                 # The chapter on screen is saved when it's left, like any
                 # other; anything else is saved here so a background pass
@@ -301,7 +304,7 @@ class MarkerSession:
         """What the assist card reports: the chapter being detected right
         now, how far in it is, and what's still waiting."""
         with self._jobs_lock:
-            queued = [chapter for chapter, _ in self._jobs]
+            queued = [chapter for chapter, _, _ in self._jobs]
         active = self._active
         state = self._states.get(active) if active else None
         return {
@@ -326,10 +329,11 @@ class MarkerSession:
             return []
         return sorted(p.name for p in pages_dir.iterdir() if p.is_file())
 
-    def _saved_panel_counts(self, chapter_num: str) -> dict[str, int]:
-        """Panels per page as its crops.json has them - the only source for a
-        chapter this session hasn't opened yet. Empty for a chapter with no
-        crops.json, which reads correctly as "nothing marked here"."""
+    def _saved_page_facts(self, chapter_num: str) -> dict[str, tuple[int, bool]]:
+        """Per page of a chapter this session hasn't opened: how many panels
+        its crops.json records, and whether a person decided that. Empty for
+        a chapter with no crops.json, which reads correctly as "nothing here
+        and nobody has said otherwise"."""
         crops_path = get_chapter_dir(self.project, chapter_num) / "crops.json"
         if not has_real_json_content(crops_path):
             return {}
@@ -337,12 +341,20 @@ class MarkerSession:
             data = read_json(crops_path)
         except Exception:
             return {}
-        counts: dict[str, int] = {}
-        for page in data.get("pages", []):
+        entries = data.get("pages", [])
+        # Same legacy rule as MarkerState._load_existing_crops: a file that
+        # never says who decided anything is read the old way, where every
+        # entry counted as a decision.
+        records_decisions = any(DECIDED_KEY in entry for entry in entries)
+        facts: dict[str, tuple[int, bool]] = {}
+        for page in entries:
             filename = page.get("page_filename")
-            if filename:
-                counts[str(filename)] = len(page.get("panels") or [])
-        return counts
+            if not filename:
+                continue
+            panels = len(page.get("panels") or [])
+            decided = bool(page.get(DECIDED_KEY)) if records_decisions else True
+            facts[str(filename)] = (panels, decided)
+        return facts
 
     def outline(self) -> list[dict[str, Any]]:
         """Every chapter, every page, and how many panels each page has -
@@ -360,13 +372,21 @@ class MarkerSession:
             if state is not None:
                 pages = [
                     {"index": page["index"], "filename": page["filename"],
-                     "panels": len(state.marks.get(page["filename"], []))}
+                     "panels": len(state.marks.get(page["filename"], [])),
+                     # An empty page somebody excluded on purpose is a
+                     # finished page; an empty page nobody has reached is
+                     # work left. The sidebar draws them differently because
+                     # telling them apart is most of what checking a
+                     # half-done chapter consists of.
+                     "decided": page["filename"] in state.touched}
                     for page in state.pages
                 ]
             else:
-                counts = self._saved_panel_counts(chapter_num)
+                facts = self._saved_page_facts(chapter_num)
                 pages = [
-                    {"index": i, "filename": name, "panels": counts.get(name, 0)}
+                    {"index": i, "filename": name,
+                     "panels": facts.get(name, (0, False))[0],
+                     "decided": facts.get(name, (0, False))[1]}
                     for i, name in enumerate(self.page_names(chapter_num), start=1)
                 ]
             out.append({
@@ -376,6 +396,12 @@ class MarkerSession:
                 "pages": pages,
                 "panels": sum(page["panels"] for page in pages),
                 "marked_pages": sum(1 for page in pages if page["panels"]),
+                # Pages with nothing on them that nobody has decided about -
+                # the work actually left in this chapter. A page MAGI has
+                # filled in is not "waiting" even though no person has
+                # confirmed it; the sidebar counts the same thing.
+                "undecided_pages": sum(1 for page in pages
+                                       if not page["decided"] and not page["panels"]),
             })
         return out
 

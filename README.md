@@ -449,7 +449,9 @@ The range is the one that pays for itself: *"the power went out somewhere around
 
 Everything here is safe on a half-finished project, which is the point:
 
-- **A page you have edited is never overwritten.** The server refuses to apply a detection to a touched page, so the widest scope still only fills in what's actually missing. That holds for an explicit *This page* run too.
+- **A page you have edited is never overwritten.** The server refuses to apply a detection to a page with marks on it, so the widest scope still only fills in what's actually missing.
+- **An empty page and an empty page are not the same thing.** A page somebody looked at and excluded (a title page, an ad, credits) is a decision MAGI must not overturn; a page nobody has reached yet is exactly what MAGI is for. `crops.json` records which is which per page (`user_decided`), so a chapter written before its detection finished — you left it early, or the background worker saved it — doesn't come back with every undetected page frozen as "no panels here". The sidebar shows the difference: a page reads <code>3</code> panels, <code>—</code> (looked at, nothing to mark) or a dashed <code>0</code> (not marked yet), and each chapter's header counts the pages still waiting.
+- Running *This page* on a page recorded as having no panels **does** detect it — naming one page is asking for that page, and there is nothing on it to lose. A page with marks is still refused. That's also the way out for a chapter frozen by a `crops.json` written before this existed: such files keep the old, protective reading (every empty page counts as a decision), since they can't be asked what was meant.
 - **A chapter already detected this session isn't detected twice** — asking for "all chapters" when everything is done queues nothing and says so.
 - Detection is **one chapter at a time**, on a single worker. Each pass loads MAGI onto the GPU, so two at once is not twice as fast.
 - A chapter detected in the background is **written to disk as soon as its pass finishes** (with auto-save on), so a closed tab, an early Finish or another power cut costs nothing that was already computed.

@@ -19,6 +19,13 @@ from PIL import Image
 from remanga.cropper.geometry import calculate_pixel_bounds, pixel_bounds_to_box_1000
 from remanga.json_io import has_real_json_content, read_json
 
+# crops.json's per-page "a person has been here" flag. What distinguishes a
+# page somebody looked at and excluded from one nobody has reached yet - two
+# states that are otherwise both just an empty panel list. Its absence from
+# every page in a file is how a file written before this existed is
+# recognised; see MarkerState._load_existing_crops.
+DECIDED_KEY = "user_decided"
+
 
 class MarkerState:
     """All in-memory state for one chapter's marking."""
@@ -57,18 +64,34 @@ class MarkerState:
         restart (see remanga/reset/) deliberately kept it, or the marker is just
         being reopened on an already-marked chapter - load it as this
         session's starting marks instead of the blank slate MAGI would
-        otherwise fill in. Every page that has an entry in crops.json's `pages`
-        is immediately flagged touched - INCLUDING a page the user deliberately
-        marked as having zero panels (is_story_page: false / an empty `panels`
-        list, per build_crops_json below) - so MAGI's background detection (if
-        enabled) can never clobber marks, or a deliberate "no panels here"
-        decision, that were already there when the session opened. Without this,
-        an explicitly-excluded page looks indistinguishable from a page that was
-        simply never reached yet, and a "remark" restart's fresh MAGI pass would
-        silently re-populate it with an AI-guessed panel the next time the
-        marker opens - overriding a decision the user already made. A no-op
-        whenever crops.json is empty/missing, which is the normal case for a
-        fresh chapter - existing behavior is unchanged."""
+        otherwise fill in.
+
+        A page with panels is flagged touched, so a later MAGI pass can never
+        clobber marks that were already there when the session opened.
+
+        A page with NO panels is the hard case, and it is two different
+        situations wearing the same clothes:
+
+            "I looked at this page and it has no panels"  (a title page, an
+            ad, a credits page) - a decision, which MAGI must not overturn;
+
+            "nobody has been near this page yet" - not a decision at all,
+            and the one thing MAGI exists to do.
+
+        They used to be written identically (`is_story_page: false, panels:
+        []`) and read back as the first, which meant any chapter saved before
+        its detection pass finished - leaving a chapter early, or the
+        background worker writing one out - froze every undetected page as
+        "no panels here", permanently, with no way back short of deleting
+        crops.json by hand. So the decision is now recorded explicitly:
+        build_crops_json writes `user_decided: true` on the pages a person
+        actually touched, and only those come back as touched.
+
+        A file written before that field existed can't be asked, so it keeps
+        the old, protective reading (every empty page counts as decided) -
+        detected by the field being absent from every page, not guessed at
+        per page. That way an old chapter's deliberate exclusions survive,
+        and every chapter saved from now on says what it means."""
         crops_path = self.chapter_dir / "crops.json"
         if not has_real_json_content(crops_path):
             return
@@ -78,7 +101,13 @@ class MarkerState:
             return
 
         pages_by_filename = {p["filename"]: p for p in self.pages}
-        for page_entry in crop_data.get("pages", []):
+        entries = crop_data.get("pages", [])
+        # Whether this file is new enough to distinguish the two empty-page
+        # cases at all. Checked once for the file rather than per page: a
+        # page that simply wasn't decided has no field either way, so asking
+        # per page would read every legacy decision as "undecided".
+        records_decisions = any(DECIDED_KEY in entry for entry in entries)
+        for page_entry in entries:
             filename = page_entry.get("page_filename")
             page = pages_by_filename.get(filename)
             if not page:
@@ -86,11 +115,12 @@ class MarkerState:
 
             panels = page_entry.get("panels") or []
             if not panels:
-                # Explicitly marked as having no panels in a previous session -
-                # preserve that as touched (see the docstring above) rather
-                # than leaving it looking untouched.
                 self.marks[filename] = []
-                self.touched.add(filename)
+                # Touched only if a person actually decided this page had no
+                # panels - or if the file predates that distinction, in which
+                # case the old assumption is the safe one.
+                if page_entry.get(DECIDED_KEY) or not records_decisions:
+                    self.touched.add(filename)
                 continue
 
             marks = []
@@ -116,11 +146,18 @@ class MarkerState:
         self.marks[filename] = marks
         self.touched.add(filename)
 
-    def apply_detected(self, filename: str, boxes: list[list[float]]) -> None:
+    def apply_detected(self, filename: str, boxes: list[list[float]], force: bool = False) -> None:
         """Fills in MAGI's detected boxes for a page, unless the user already
         touched that page (never clobber a manual edit with a late-arriving
-        background detection)."""
-        if filename in self.touched:
+        background detection).
+
+        `force` is for the one request that names a single page: pressing Run
+        with the "This page" scope is asking for this page specifically, so a
+        previous "no panels here" - including one inherited from a file too
+        old to say who decided it - gives way. It still cannot cost anything:
+        a page that HAS marks is refused even when forced, because that is
+        the case where there is something to lose."""
+        if filename in self.touched and (self.marks.get(filename) or not force):
             return
         self.marks[filename] = [
             {"id": f"ai-{filename}-{i}", "x": b[0], "y": b[1], "w": b[2] - b[0], "h": b[3] - b[1], "src": "ai"}
@@ -128,16 +165,26 @@ class MarkerState:
         ]
 
     def build_crops_json(self) -> dict[str, Any]:
+        """This chapter's marks in the shape the cropper reads.
+
+        Every page carries `user_decided` when a person has actually touched
+        it, which is what tells an empty page that somebody looked at and
+        excluded apart from one nobody has reached yet - see
+        _load_existing_crops for why writing only the outcome was not
+        enough. The cropper ignores the field; it exists for the next
+        session of the marker."""
         pages_out = []
         for page in self.pages:
             filename = page["filename"]
             page_marks = self.marks.get(filename, [])
+            decided = filename in self.touched
             if not page_marks:
                 pages_out.append({
                     "page_index": page["index"],
                     "page_filename": filename,
                     "is_story_page": False,
                     "panels": [],
+                    DECIDED_KEY: decided,
                 })
                 continue
 
@@ -152,6 +199,7 @@ class MarkerState:
                 "page_filename": filename,
                 "is_story_page": True,
                 "panels": panels_out,
+                DECIDED_KEY: decided,
             })
 
         return {"chapter": str(self.chapter_num), "pages": pages_out}

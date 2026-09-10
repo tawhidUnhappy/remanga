@@ -71,6 +71,7 @@
 .ol-chapter.current .ol-chapter-name { color: var(--accent); }
 
 .ol-meta { font-size: 10px; color: var(--text-faint); flex: none; }
+.ol-meta.waiting { color: var(--ai); }
 
 /* One rotating chevron for both levels: the tree has exactly one expand
    gesture, so it should have exactly one glyph for it. */
@@ -107,7 +108,11 @@
   border-radius: 20px;
   padding: 1px 7px;
 }
+/* Dashed = nothing here yet. Solid, dimmed = looked at, nothing to mark.
+   Two states that used to look identical, which is what made a chapter
+   saved before its detection ran indistinguishable from a finished one. */
 .ol-pill.muted { color: var(--text-faint); background: transparent; border: 1px dashed var(--border); }
+.ol-pill.none { color: var(--text-faint); background: var(--surface-2); }
 
 /* --- panels ----------------------------------------------------------- */
 

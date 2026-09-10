@@ -780,6 +780,19 @@ Footguns hit while building it, all still live:
 - **MAGI must start once per chapter, on arrival** (`detection.start_once`,
   guarded by `MarkerState.detect_started`) - every navigation back would
   otherwise spawn another worker and reload the model.
+- **An empty page in crops.json used to mean two different things** and was
+  read back as the wrong one. `is_story_page: false, panels: []` was written
+  both for a page the user excluded on purpose and for a page nobody had
+  reached, and `_load_existing_crops` marked BOTH touched - so any chapter
+  saved before its detection pass finished (leave it early, or the background
+  worker writes it) froze every undetected page and MAGI would never look at
+  it again. Fixed by recording the decision, not the outcome:
+  `marker_state.DECIDED_KEY` (`user_decided`) per page, written from
+  `state.touched`. A file where NO page carries the key is legacy and keeps
+  the old protective reading (checked once per file - checking per page would
+  read every legacy decision as undecided). The escape hatch for those files
+  is the "This page" scope, which passes `force=True` down to
+  `apply_detected` and overrides an empty decision - never a page with marks.
 - A route that returns `{"queued": x, **detection_status()}` has TWO "queued"
   keys and the spread wins - the response silently reported the live queue
   instead of what the request added. Named `accepted` vs `queued` now; watch

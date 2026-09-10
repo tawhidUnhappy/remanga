@@ -127,7 +127,8 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
     def start_detect():
         """Queue a MAGI pass. `scope` says how much:
 
-            page     just the page named in `filename` (the one on screen)
+            page     just the page named in `filename` (the one on screen),
+                     even if it was previously recorded as having no panels
             chapter  the chapter on screen
             range    every chapter from `from` to `to`, inclusive
             all      every chapter in the session
@@ -148,7 +149,10 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
             filename = body.get("filename") or ""
             if not any(page["filename"] == filename for page in session.current.pages):
                 return jsonify({"ok": False, "error": f"No page {filename!r} in this chapter"}), 400
-            queued = session.queue_detection(config, [session.chapter_num], pages=[filename])
+            # force: naming one page is asking for that page. A previous
+            # "no panels here" gives way; a page with marks on it does not
+            # (see MarkerState.apply_detected).
+            queued = session.queue_detection(config, [session.chapter_num], pages=[filename], force=True)
         elif scope == "all":
             queued = session.queue_all(config)
         elif scope == "range":

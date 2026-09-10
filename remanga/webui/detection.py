@@ -17,13 +17,18 @@ from remanga.webui.marker_state import MarkerState
 
 
 def run_detection(state: MarkerState, config: MarkerConfig,
-                  only_pages: list[str] | None = None) -> None:
+                  only_pages: list[str] | None = None, force: bool = False) -> None:
     """Detects panels for this chapter, streaming progress into `state`.
 
     `only_pages` narrows it to specific page filenames - what the assist
     card's "This page" scope asks for. Left None it means every page of the
     chapter that the user hasn't already touched, which is what every other
     scope wants.
+
+    `force` carries that same single-page request down to apply_detected,
+    where it lets a page previously recorded as having no panels be detected
+    after all - see MarkerState.apply_detected for why that is safe and why
+    a page with marks on it is still refused.
     """
     from remanga.webui.magi_assist import detect_panels_for_pages
 
@@ -37,10 +42,18 @@ def run_detection(state: MarkerState, config: MarkerConfig,
     # Skip them here so the whole detection pass - worker spawn included -
     # is skipped entirely once nothing is actually pending.
     wanted = set(only_pages) if only_pages is not None else None
-    pending_pages = [
-        p for p in state.pages
-        if p["filename"] not in state.touched and (wanted is None or p["filename"] in wanted)
-    ]
+
+    def is_pending(page: dict) -> bool:
+        filename = page["filename"]
+        if wanted is not None and filename not in wanted:
+            return False
+        if filename not in state.touched:
+            return True
+        # Touched: only a forced request for a page with nothing on it gets
+        # through, which is exactly what apply_detected will accept.
+        return force and not state.marks.get(filename)
+
+    pending_pages = [p for p in state.pages if is_pending(p)]
 
     state.detect_running = True
     state.detect_done = 0
@@ -52,7 +65,7 @@ def run_detection(state: MarkerState, config: MarkerConfig,
         return
 
     def on_page_done(filename: str, boxes: list[list[float]]) -> None:
-        state.apply_detected(filename, boxes)
+        state.apply_detected(filename, boxes, force=force)
         state.detect_done += 1
 
     try:
