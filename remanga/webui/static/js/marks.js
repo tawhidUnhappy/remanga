@@ -29,6 +29,7 @@ export function markTouched() {
 
 export function markDirty() {
   state.pageMarksCache[currentFilename()] = state.marks;
+  state.editSeq[currentFilename()] = (state.editSeq[currentFilename()] || 0) + 1;
   markTouched();
   if (state.marks.length) state.decidedPages.delete(currentFilename());
   // The outline counts panels per page straight out of this cache for the
@@ -48,15 +49,51 @@ export async function flushSave(immediate) {
   const filename = state.chapter?.pages[state.pageIndex]?.filename;
   if (!filename) return;
   clearTimeout(state.saveDebounce);
+  const chapterAtSend = state.chapter.chapter;
+  const seqAtSend = state.editSeq[filename] || 0;
   try {
-    await api(`/api/marks/${encodeURIComponent(filename)}`, {
+    const res = await api(`/api/marks/${encodeURIComponent(filename)}?rev=${state.chapterRevision}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(state.pageMarksCache[filename] || []),
     });
+    // Every check below is about the tab having moved on while the request was
+    // out. Filenames repeat across chapters, so a reply about page_001 of the
+    // chapter just left must not land in this chapter's page_001.
+    if (state.chapter.chapter !== chapterAtSend) return;
+    if (typeof res.revision === "number") state.chapterRevision = res.revision;
+    adoptStoredOrder(filename, res.marks, seqAtSend);
   } catch (e) {
+    if (e.status === 409 && state.chapter.chapter === chapterAtSend) {
+      // The server rewrote this chapter (a reorder or relabel) after these
+      // marks were loaded. Writing them would put the old order and labels
+      // back, so take the server's version instead.
+      const { reloadChapterMarks } = await import("./chapter-nav.js");
+      await reloadChapterMarks();
+      return;
+    }
     if (immediate) console.error("Failed to save marks for", filename, e);
   }
+}
+
+// With auto-order on, the server stores a page in reading order and replies
+// with that order. Adopt it - keeping the tab's own mark objects, which a drag
+// in progress may be holding - but only if nothing was edited on this page
+// while the request was out; otherwise the older list would silently drop the
+// mark drawn in the meantime, and the next autosave will reorder it anyway.
+function adoptStoredOrder(filename, stored, seqAtSend) {
+  if (!Array.isArray(stored) || (state.editSeq[filename] || 0) !== seqAtSend) return;
+  const current = state.pageMarksCache[filename] || [];
+  const sameOrder = current.length === stored.length && current.every((m, i) => m.id === stored[i].id);
+  if (sameOrder) return;
+  const byId = new Map(current.map(m => [m.id, m]));
+  const reordered = stored.map(m => byId.get(m.id) || m);
+  state.pageMarksCache[filename] = reordered;
+  if (state.chapter.pages[state.pageIndex]?.filename === filename) {
+    state.marks = reordered;
+    render();
+  }
+  renderOutline();
 }
 
 export function deleteMark(id) {

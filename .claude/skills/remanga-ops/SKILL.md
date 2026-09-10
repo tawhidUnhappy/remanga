@@ -780,6 +780,41 @@ Footguns hit while building it, all still live:
 - **MAGI must start once per chapter, on arrival** (`detection.start_once`,
   guarded by `MarkerState.detect_started`) - every navigation back would
   otherwise spawn another worker and reload the model.
+- **`src` (AI vs manual) was never written to crops.json**, and
+  `_load_existing_crops` hardcoded `"src": "manual"` - so every AI mark came
+  back as MANUAL the first time its chapter was saved and reopened (with
+  background auto-save: every chapter). Each panel now carries `src`; legacy
+  files read manual, and `relabel` (IoU vs cached MAGI boxes, one-to-one,
+  `mark_ops.AI_MATCH_IOU = 0.9`) is the repair. MAGI's raw boxes are cached per
+  chapter in `magi_boxes.json` - `apply_detected` records them BEFORE its
+  touched check, because boxes for edited pages are exactly what relabel
+  compares against; `run_detection(record_only=True)` fills the cache without
+  applying anything.
+- **Reading order lives in ONE place: `webui/mark_ops.py:reading_order`**
+  (Reorder at every scope + the auto-order switch use it; there was no
+  existing sort anywhere - MAGI's worker passes boxes through unsorted). First
+  version grouped rows by "centre inside the band so far", which depends on
+  input order: tall-right + stacked-left came out L1,T,L2. Now recursive
+  XY-cut (clean horizontal gutter first, then vertical in reading direction),
+  plus `_merge_gridded`: splitting at EVERY vertical gutter at once turned a
+  tall panel beside a 2x2 grid into three columns and read the grid
+  column-wise; neighbouring columns that still share a horizontal gutter are
+  re-merged. Layout tests for all of these are worth re-running on any change.
+- **A server-side rewrite of marks gets undone by the tab's autosave** unless
+  guarded: the browser flushes its (old) copy on every page change. Each
+  MarkerState has `revision` (bumped by reorder/relabel); the browser sends
+  `?rev=` with `/api/marks` and gets 409 if stale, and the status poll reloads
+  the chapter (`chapter-nav.js:reloadChapterMarks`, keeps page/tool/zoom) when
+  the revision moves. Auto-order replies are adopted only if `editSeq` for that
+  page didn't change while the request was out, and only for the same chapter
+  (filenames repeat across chapters).
+- **The assist card's status read the CURRENT chapter's detect counters**, so
+  after a range run finished on other chapters it kept "Detecting ch 4 · 2/3
+  pages" forever (the open chapter had total 0, so no branch replaced the
+  text), and the bar reset per chapter. Status now reports the RUN:
+  `run_done/run_total` since the queue was last idle, `active_kind`, and
+  `last_run` for the idle message. Reproduced first by sampling the real
+  frontend under node every 300ms - do that for any "UI glitch" report.
 - **An empty page in crops.json used to mean two different things** and was
   read back as the wrong one. `is_story_page: false, panels: []` was written
   both for a page the user excluded on purpose and for a page nobody had

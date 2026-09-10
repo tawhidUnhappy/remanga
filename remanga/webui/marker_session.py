@@ -25,7 +25,7 @@ from typing import Any
 
 from remanga.console import console, escape as _esc
 from remanga.json_io import has_real_json_content, read_json, write_json
-from remanga.paths import get_chapter_dir
+from remanga.paths import get_chapter_dir, load_project_metadata
 from remanga.webui.marker_state import DECIDED_KEY, MarkerState
 
 
@@ -74,11 +74,27 @@ class MarkerSession:
         # pass spawns a worker subprocess that loads the model onto the GPU,
         # so two at once is not twice as fast, it is two processes fighting
         # over the same card.
-        self._jobs: list[tuple[str, list[str] | None, bool]] = []
+        # Each job is {"kind": "detect" | "reorder" | "relabel", "chapter",
+        # "pages" (None = every page), "force"}. Reorder and relabel share the
+        # queue with detection rather than running in the request: relabel may
+        # need MAGI, and all three rewrite marks, which must never happen to
+        # the same chapter from two threads at once.
+        self._jobs: list[dict[str, Any]] = []
         self._jobs_lock = threading.Lock()
         self._worker: threading.Thread | None = None
         self._active: str | None = None
+        self._active_kind: str | None = None
+        # Progress across everything queued since the queue was last idle, so
+        # the card can report the RUN ("3 of 7") instead of whichever chapter
+        # happens to be mid-pass - see detection_status.
+        self._run_total = 0
+        self._run_done = 0
+        self._run_kinds: set[str] = set()
+        self._run_chapters: set[str] = set()
+        self._last_run: dict[str, Any] | None = None
         self.auto_all = False
+        # Keep marks in reading order as they are saved (config.auto_order).
+        self.auto_order = False
         # Whether a chapter is written to disk on its own - when you leave
         # it, and when the detection worker finishes one. Off means only an
         # explicit Save writes anything, so `dirty` is what would be lost:
@@ -197,6 +213,24 @@ class MarkerSession:
             return
         self.queue_detection(config, [self.chapter_num])
 
+    @property
+    def reading_direction(self) -> str:
+        """How this manga is read - what "reading order" means for it."""
+        return load_project_metadata(self.project).get("reading_direction") or "right_to_left"
+
+    def _begin_run_if_idle(self) -> None:
+        """Starts a fresh run count when nothing is queued or running. Caller
+        holds _jobs_lock."""
+        if self._active is None and not self._jobs:
+            self._run_total = self._run_done = 0
+            self._run_kinds = set()
+            self._run_chapters = set()
+
+    def _note_queued(self, kind: str, chapter: str) -> None:
+        self._run_total += 1
+        self._run_kinds.add(kind)
+        self._run_chapters.add(chapter)
+
     def queue_detection(self, config, chapters: list[str], pages: list[str] | None = None,
                         force: bool = False) -> list[str]:
         """Adds work to the detection queue and makes sure the worker is
@@ -211,7 +245,8 @@ class MarkerSession:
             return []
         queued: list[str] = []
         with self._jobs_lock:
-            pending = {chapter for chapter, _, _ in self._jobs}
+            self._begin_run_if_idle()
+            pending = {job["chapter"] for job in self._jobs if job["kind"] == "detect"}
             for chapter in chapters:
                 if chapter not in self.chapters:
                     continue
@@ -219,7 +254,33 @@ class MarkerSession:
                     if chapter in pending or self.state_for(chapter).detect_started:
                         continue
                     self.state_for(chapter).detect_started = True
-                self._jobs.append((chapter, pages, force))
+                self._jobs.append({"kind": "detect", "chapter": chapter, "pages": pages, "force": force})
+                self._note_queued("detect", chapter)
+                queued.append(chapter)
+        if queued:
+            self._ensure_worker(config)
+        return queued
+
+    def queue_ops(self, kind: str, config, chapters: list[str], pages: list[str] | None = None) -> list[str]:
+        """Queues a reorder or relabel over `chapters` (optionally just
+        `pages` of them). Returns the chapters accepted.
+
+        Unlike detection these can be asked for again in the same session -
+        reordering after more marks were drawn is the normal case - so only a
+        whole-chapter job already waiting for the same chapter is collapsed."""
+        if self.read_only or kind not in ("reorder", "relabel"):
+            return []
+        queued: list[str] = []
+        with self._jobs_lock:
+            self._begin_run_if_idle()
+            waiting = {job["chapter"] for job in self._jobs if job["kind"] == kind and job["pages"] is None}
+            for chapter in chapters:
+                if chapter not in self.chapters:
+                    continue
+                if pages is None and chapter in waiting:
+                    continue
+                self._jobs.append({"kind": kind, "chapter": chapter, "pages": pages, "force": False})
+                self._note_queued(kind, chapter)
                 queued.append(chapter)
         if queued:
             self._ensure_worker(config)
@@ -245,10 +306,16 @@ class MarkerSession:
             self.queue_all(config)
             return
         with self._jobs_lock:
-            for chapter, pages, _ in self._jobs:
-                if pages is None:
-                    self.state_for(chapter).detect_started = False
-            self._jobs.clear()
+            # Only detection is cancelled: a reorder or relabel someone asked
+            # for is not part of "keep marking" and must not vanish with it.
+            kept = []
+            for job in self._jobs:
+                if job["kind"] != "detect":
+                    kept.append(job)
+                elif job["pages"] is None:
+                    self.state_for(job["chapter"]).detect_started = False
+            self._run_total -= len(self._jobs) - len(kept)
+            self._jobs = kept
 
     def _ensure_worker(self, config) -> None:
         if self._worker is not None and self._worker.is_alive():
@@ -270,21 +337,55 @@ class MarkerSession:
             with self._jobs_lock:
                 if not self._jobs:
                     self._active = None
+                    self._active_kind = None
+                    self._last_run = {
+                        "jobs": self._run_done,
+                        "kinds": sorted(self._run_kinds),
+                        "chapters": [c for c in self.chapters if c in self._run_chapters],
+                    }
                     return
-                chapter, pages, force = self._jobs.pop(0)
-                self._active = chapter
+                job = self._jobs.pop(0)
+                self._active = job["chapter"]
+                self._active_kind = job["kind"]
+            chapter = job["chapter"]
             try:
                 state = self.state_for(chapter)
-                run_detection(state, config, only_pages=pages, force=force)
-                self.mark_dirty(chapter)
-                # The chapter on screen is saved when it's left, like any
-                # other; anything else is saved here so a background pass
-                # nobody watched still lands on disk.
-                if chapter != self.chapter_num and self.auto_save:
-                    self.save_chapter(chapter)
+                # Counters belong to this job; stale numbers from an earlier
+                # pass on the same chapter are how "3/3 pages" showed up
+                # against a job that had not detected anything yet.
+                state.detect_done = state.detect_total = 0
+                changed = True
+                if job["kind"] == "detect":
+                    run_detection(state, config, only_pages=job["pages"], force=job["force"])
+                    state.save_ai_boxes()
+                elif job["kind"] == "reorder":
+                    changed = state.reorder_pages(job["pages"], self.reading_direction) > 0
+                elif job["kind"] == "relabel":
+                    missing = state.pages_missing_ai_boxes(job["pages"])
+                    if missing and config.magi_enabled:
+                        run_detection(state, config, only_pages=missing, record_only=True)
+                        state.save_ai_boxes()
+                    relabelled, unknown = state.relabel_pages(job["pages"])
+                    changed = relabelled > 0
+                    if unknown:
+                        console.print(
+                            f"[yellow]Relabel: chapter {_esc(chapter)} has {len(unknown)} page(s) MAGI "
+                            f"hasn't seen{'' if config.magi_enabled else ' (MAGI is off)'} - left as they were.[/]"
+                        )
+                if changed:
+                    self.mark_dirty(chapter)
+                    # The chapter on screen is saved when it's left, like any
+                    # other; anything else is saved here so a background job
+                    # nobody watched still lands on disk.
+                    if chapter != self.chapter_num and self.auto_save:
+                        self.save_chapter(chapter)
             except Exception as e:  # a failed chapter must not end the queue
-                console.print(f"[bold red]Detection failed for chapter {_esc(chapter)}:[/] {_esc(str(e))}")
+                console.print(f"[bold red]{job['kind'].title()} failed for chapter {_esc(chapter)}:[/] {_esc(str(e))}")
+            finally:
+                with self._jobs_lock:
+                    self._run_done += 1
         self._active = None
+        self._active_kind = None
 
     def set_auto_save(self, enabled: bool) -> None:
         """Turns automatic writing on or off. Turning it ON immediately
@@ -304,17 +405,30 @@ class MarkerSession:
         """What the assist card reports: the chapter being detected right
         now, how far in it is, and what's still waiting."""
         with self._jobs_lock:
-            queued = [chapter for chapter, _, _ in self._jobs]
-        active = self._active
+            queued = [job["chapter"] for job in self._jobs]
+            run_total, run_done, last_run = self._run_total, self._run_done, self._last_run
+            active, active_kind = self._active, self._active_kind
         state = self._states.get(active) if active else None
         return {
             "auto_all": self.auto_all,
             "auto_save": self.auto_save,
+            "auto_order": self.auto_order,
             "unsaved": self.unsaved_chapters(),
             "active": active,
+            "active_kind": active_kind,
             "active_done": state.detect_done if state else 0,
             "active_total": state.detect_total if state else 0,
             "queued": queued,
+            # The run as a whole: jobs finished / jobs queued since the queue
+            # was last idle. The card's bar is this, not the active chapter's
+            # own pages - a per-chapter bar resets on every chapter, which in
+            # a range run reads as a bar that can't make up its mind.
+            "run_done": run_done,
+            "run_total": run_total,
+            # What the last finished run did, for the idle message. Without it
+            # the card had nothing to say once the queue emptied, and kept
+            # whatever it said last - "Detecting ch 4 · 2/3 pages", forever.
+            "last_run": last_run,
         }
 
     def page_names(self, chapter_num: str) -> list[str]:

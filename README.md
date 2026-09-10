@@ -394,7 +394,7 @@ A few worth calling out specifically - `cropper.package` is the flat vision-outp
 - **`downloader.zip_pages_enabled`** (default `false`) — bundles the raw downloaded pages into `pages.zip`. Off by default because nothing downstream reads it; it's only useful if you want to hand a chapter's pages to an LLM by hand. Named for exactly what it zips (the downloaded *pages*) so it's never confused with `cropper.package` below, which zips something completely different.
 - **`cropper.package.sheets`** (default `true`) — generates `sheets/` contact sheet composites. `cropper.package.sheets_zip` (below) builds them automatically the moment it's checked, whether or not this is also on. Every sheet is merged from its panels' **full original resolution** — never downscaled — with only lossless re-encoding used to keep the file size down.
 - **`marker.click_to_select`** (default `true`) — see [Panel Marker Web UI](#panel-marker-web-ui) for what this protects against.
-- **`marker.auto_detect_scope`** (default `"chapter"`), **`marker.auto_detect_all`** (default `false`) and **`marker.auto_save`** (default `true`) — the assist card's own switches, written by the marker itself when you change them in the browser. See [Mark Panels](#2-mark-panels).
+- **`marker.auto_detect_scope`** (default `"chapter"`), **`marker.auto_detect_all`** (default `false`), **`marker.auto_save`** (default `true`) and **`marker.auto_order`** (default `false`) — the assist card's own switches, written by the marker itself when you change them in the browser. See [Mark Panels](#2-mark-panels).
 - **`tts.synth_timeout_seconds`** (default `180`) — see [Reliability](#reliability-crashes-interrupts--resuming).
 
 ---
@@ -434,9 +434,9 @@ One server, one browser tab, one session. **Save & Next chapter** writes that ch
 
 Chapters with nothing downloaded are named and skipped before the browser opens.
 
-**How much MAGI marks is yours to choose.** The assist card has a scope, and Run does exactly that much:
+**You choose which pages, and what to do with them.** The assist card has one scope and three buttons — **Detect** (MAGI finds the panels), **Reorder** (renumber them into reading order) and **Relabel** (re-check which marks are still MAGI's own). All three take the same scope:
 
-| Scope | What it detects |
+| Scope | What the button works on |
 |---|---|
 | **This page** | just the page on screen |
 | **This chapter** | the chapter on screen (what the button always used to mean) |
@@ -444,6 +444,14 @@ Chapters with nothing downloaded are named and skipped before the browser opens.
 | **All chapters** | every chapter in the session |
 
 The range is the one that pays for itself: *"the power went out somewhere around chapter 9"* is a from/to, and saying it any other way is either nine trips through the UI or redetecting a manga that was already three-quarters done. Reversed is fine — pick 9 then 4 and it means the same span.
+
+**Reorder** puts each page's panels into the order a reader meets them — the panel number *is* the narration order, because it becomes `panel_id`. It's a recursive XY-cut: split the page at a horizontal gutter that runs clean across every panel and read above before below; failing that, split at a vertical gutter and read the side your manga starts on first (right for right-to-left, from the project's reading direction); then do the same inside each part. So a tall panel beside a stack reads tall-then-stack or stack-then-tall depending only on which side it's on, and a grid beside a tall panel is read row by row. Gutters tolerate a few pixels of overhang, since hand-drawn marks and MAGI's boxes both bleed past borders. A genuinely irregular page (diagonal gutters, a panel breaking out across three others) gets a sensible order rather than a guaranteed one — that's what dragging in the panel list is for.
+
+**Relabel** fixes the AI/manual tags. Every MAGI box is kept in a per-chapter cache beside `crops.json` (`magi_boxes.json`), and relabel compares each mark with those boxes: still essentially MAGI's box (overlap ≥ 0.9 IoU, which sits above the rounding `box_1000` introduces and below any deliberate adjustment) → **AI**, otherwise **manual**. Matching is one-to-one, so two near-duplicate marks on one detected panel can't both claim it. MAGI only runs for pages it has never seen; everything else is instant. It changes labels only — never geometry, order, or what counts as edited.
+
+The labels also survive a save now. `crops.json` used not to record where a mark came from, so every chapter reopened with **every** mark tagged manual — and with background auto-save, that was every chapter. Each panel now carries `src`. Files written before that can't say, so they read as manual; running Relabel over them is exactly the fix.
+
+**`Auto-order new marks`** keeps each page in reading order as you draw and move marks, instead of numbering them in the order you happened to draw them. It uses the same ordering as Reorder, applied by the server on every save, so the numbers on screen are always the saved ones.
 
 **`Keep marking every chapter`** queues the whole session and works forward through it in the background while you mark the one in front of you, so arriving at chapter 6 finds it already detected instead of starting a wait. **`Auto-save chapters`** controls whether a chapter's `crops.json` is written without being asked for — when you leave it, and when the background detector finishes one. Both switches, and the scope, are **saved into `config.json`** (`marker.auto_detect_all`, `marker.auto_save`, `marker.auto_detect_scope`) and apply to the next session and the next project: they describe how you work, not anything about today's manga.
 

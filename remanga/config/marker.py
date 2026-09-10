@@ -90,6 +90,15 @@ class MarkerConfig(ConfigModel):
     # mean "and one day I lose an afternoon".
     auto_save: bool = True
 
+    # Keep each page's marks in reading order as they are drawn and moved,
+    # instead of numbering them in the order they happened to be drawn. The
+    # panel number IS the narration order (it becomes panel_id), so drawing a
+    # page's last panel first used to mean dragging it back into place in the
+    # list every single time. Off by default because it moves numbers under
+    # someone who didn't ask for that; on, it applies the same ordering the
+    # Reorder button does (remanga/webui/mark_ops.py:reading_order).
+    auto_order: bool = False
+
     # A mark's body/handles only become draggable once it's already selected
     # (a first click selects; a second, deliberate drag on the now-selected
     # mark actually moves/resizes it) - and while the Draw tool is active,

@@ -14,17 +14,18 @@
 import {
   saveOverlay, saveOverlayTitle, saveOverlayText, saveBtn, saveLabel, finishBtn,
   chapterNav, chapterName, chapterPos, prevChapterBtn, nextChapterBtn, pageTotalEl,
-  assistCard, assistBtn, assistStatus, assistProgressBar,
+  assistCard, assistStatus, assistProgressBar,
   toolbar, viewBadge, hintToast, sidebarFooter,
 } from "./dom.js";
-import { state } from "./state.js";
+import { state, currentFilename } from "./state.js";
 import { api } from "./api.js";
 import { flushSave } from "./marks.js";
 import { loadPage } from "./page-nav.js";
 import { pollDetectStatus, syncAssistCard } from "./magi.js";
 import { loadShortcuts } from "./shortcuts.js";
 import { setMode } from "./keyboard.js";
-import { refreshOutline } from "./outline.js";
+import { refreshOutline, renderOutline } from "./outline.js";
+import { render } from "./render.js";
 
 // Applies a chapter payload (/api/chapter, /api/goto, or /api/finish's
 // advance - all three return the same shape) to the running app.
@@ -42,6 +43,8 @@ export async function applyChapter(payload, startPage = 0) {
   state.pageMarksCache = {};
   state.touchedPages = new Set(payload.touched || []);
   state.decidedPages = new Set(payload.decided || []);
+  state.chapterRevision = payload.revision || 0;
+  state.editSeq = {};
   state.selectedId = null;
   state.pageLoaded = false;
   for (const p of payload.pages) state.pageMarksCache[p.filename] = payload.marks[p.filename] || [];
@@ -104,16 +107,32 @@ function resetAssistCard() {
   // stale "Done · 18 page(s) processed" from the chapter before it is a
   // statement about the wrong chapter.
   assistProgressBar.style.width = "0%";
-  if (!state.magiEnabled) {
-    assistCard.classList.add("disabled");
-    assistBtn.disabled = true;
-    assistStatus.textContent = "Disabled in config.json";
-    return;
-  }
+  // MAGI being off greys out Detect only (syncAssistCard). Reorder needs no
+  // model at all, and Relabel works from boxes MAGI already produced, so
+  // disabling the whole card with it would take both away for no reason.
   assistCard.classList.remove("disabled");
-  assistBtn.disabled = false;
-  assistStatus.textContent = "Idle";
+  assistStatus.textContent = state.magiEnabled ? "Idle" : "MAGI is off in config.json - Reorder still works";
   syncAssistCard();
+}
+
+// Takes the server's marks for the chapter on screen without leaving the page
+// you're on, the tool you're holding or the zoom you set - for when a reorder
+// or relabel rewrote them server-side. A full applyChapter would reset all of
+// those for what is, from the user's side, just the numbers and labels moving.
+export async function reloadChapterMarks() {
+  let payload;
+  try { payload = await api("/api/chapter"); } catch { return; }
+  if (!state.chapter || payload.chapter !== state.chapter.chapter) return;
+  state.chapter.marks = payload.marks;
+  state.chapterRevision = payload.revision || 0;
+  state.touchedPages = new Set(payload.touched || []);
+  state.decidedPages = new Set(payload.decided || []);
+  state.editSeq = {};
+  for (const p of payload.pages) state.pageMarksCache[p.filename] = payload.marks[p.filename] || [];
+  state.marks = state.pageMarksCache[currentFilename()];
+  if (state.selectedId !== null && !state.marks.some(m => m.id === state.selectedId)) state.selectedId = null;
+  render();
+  renderOutline();
 }
 
 export async function gotoChapter(index, startPage = 0) {
