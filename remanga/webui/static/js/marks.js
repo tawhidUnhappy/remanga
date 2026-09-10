@@ -30,6 +30,7 @@ export function markTouched() {
 export function markDirty() {
   state.pageMarksCache[currentFilename()] = state.marks;
   markTouched();
+  if (state.marks.length) state.decidedPages.delete(currentFilename());
   // The outline counts panels per page straight out of this cache for the
   // chapter on screen, so it re-renders here rather than polling: an edit
   // and the tree that reports it should never be a frame apart.
@@ -63,6 +64,11 @@ export function deleteMark(id) {
   state.marks = state.marks.filter(m => m.id !== id);
   state.pageMarksCache[currentFilename()] = state.marks;
   if (state.selectedId === id) state.selectedId = null;
+  // Deleting the last mark is the user saying this page has no panels. The
+  // server works the same thing out from the marks it receives (see
+  // MarkerState.set_marks); this is so the outline says so immediately
+  // rather than at the next chapter load.
+  if (!state.marks.length) state.decidedPages.add(currentFilename());
   markDirty();
   render();
 }

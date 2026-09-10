@@ -19,12 +19,20 @@ from PIL import Image
 from remanga.cropper.geometry import calculate_pixel_bounds, pixel_bounds_to_box_1000
 from remanga.json_io import has_real_json_content, read_json
 
-# crops.json's per-page "a person has been here" flag. What distinguishes a
-# page somebody looked at and excluded from one nobody has reached yet - two
-# states that are otherwise both just an empty panel list. Its absence from
-# every page in a file is how a file written before this existed is
-# recognised; see MarkerState._load_existing_crops.
+# crops.json's per-page "the user made this page empty on purpose" flag -
+# what distinguishes a page somebody looked at and excluded from one nobody
+# has marked yet, two states that are otherwise both just an empty panel
+# list. See MarkerState.set_marks for what earns it.
 DECIDED_KEY = "user_decided"
+
+# Top-level: this file records the flag above. A file without it is older
+# than the distinction and cannot be asked what its empty pages meant, so it
+# keeps the old, protective reading. A marker on the FILE rather than
+# inferring from whether any page happens to carry the flag: a chapter where
+# nobody excluded anything writes no flags at all, and would otherwise look
+# indistinguishable from a legacy file.
+FORMAT_KEY = "marks_format"
+MARKS_FORMAT = 2
 
 
 class MarkerState:
@@ -38,7 +46,13 @@ class MarkerState:
         self.pages_dir = self.chapter_dir / "pages"
         self.pages: list[dict[str, Any]] = []
         self.marks: dict[str, list[dict[str, Any]]] = {}
-        self.touched: set = set()  # filenames the user has edited - MAGI won't overwrite these
+        # Pages MAGI must not overwrite: anything with marks on it, plus any
+        # page the user deliberately emptied.
+        self.touched: set = set()
+        # Pages the user deliberately made empty - a decision, and the only
+        # thing written to crops.json as such. Strictly smaller than
+        # `touched`: see set_marks for why the two can't be the same set.
+        self.decided: set = set()
         self.detect_running = False
         self.detect_done = 0
         self.detect_total = 0
@@ -103,10 +117,8 @@ class MarkerState:
         pages_by_filename = {p["filename"]: p for p in self.pages}
         entries = crop_data.get("pages", [])
         # Whether this file is new enough to distinguish the two empty-page
-        # cases at all. Checked once for the file rather than per page: a
-        # page that simply wasn't decided has no field either way, so asking
-        # per page would read every legacy decision as "undecided".
-        records_decisions = any(DECIDED_KEY in entry for entry in entries)
+        # cases at all - see FORMAT_KEY.
+        records_decisions = crop_data.get(FORMAT_KEY, 0) >= MARKS_FORMAT
         for page_entry in entries:
             filename = page_entry.get("page_filename")
             page = pages_by_filename.get(filename)
@@ -121,6 +133,7 @@ class MarkerState:
                 # case the old assumption is the safe one.
                 if page_entry.get(DECIDED_KEY) or not records_decisions:
                     self.touched.add(filename)
+                    self.decided.add(filename)
                 continue
 
             marks = []
@@ -143,8 +156,30 @@ class MarkerState:
                 self.touched.add(filename)
 
     def set_marks(self, filename: str, marks: list[dict[str, Any]]) -> None:
+        """Stores a page's marks as the browser sent them, and works out
+        whether anything actually happened.
+
+        This is called on every autosave, and the browser autosaves the page
+        you are LEAVING - so paging through a chapter to look at it posts an
+        unchanged empty list for every page on the way. Treating that as an
+        edit is what made simply visiting a page count as "I decided this
+        page has no panels": the pages a person scrolled past came back
+        excluded, and MAGI never looked at them again.
+
+        So an empty list is only a decision when the page had something on it
+        a moment ago. Emptying a page is an act; arriving at one that was
+        already empty is not."""
+        previous = self.marks.get(filename) or []
         self.marks[filename] = marks
-        self.touched.add(filename)
+        if marks:
+            self.touched.add(filename)
+            # It isn't an empty page any more, so it isn't a decision about
+            # one either - drawing on a page you had cleared takes it back.
+            self.decided.discard(filename)
+        elif previous:
+            # Went from marked to empty: the user cleared it on purpose.
+            self.touched.add(filename)
+            self.decided.add(filename)
 
     def apply_detected(self, filename: str, boxes: list[list[float]], force: bool = False) -> None:
         """Fills in MAGI's detected boxes for a page, unless the user already
@@ -159,6 +194,11 @@ class MarkerState:
         the case where there is something to lose."""
         if filename in self.touched and (self.marks.get(filename) or not force):
             return
+        # A forced pass that fills a page the user had emptied ends that
+        # decision: the page has panels now, and leaving the flag set would
+        # have it written back to crops.json as "deliberately empty".
+        if boxes:
+            self.decided.discard(filename)
         self.marks[filename] = [
             {"id": f"ai-{filename}-{i}", "x": b[0], "y": b[1], "w": b[2] - b[0], "h": b[3] - b[1], "src": "ai"}
             for i, b in enumerate(boxes)
@@ -167,17 +207,17 @@ class MarkerState:
     def build_crops_json(self) -> dict[str, Any]:
         """This chapter's marks in the shape the cropper reads.
 
-        Every page carries `user_decided` when a person has actually touched
-        it, which is what tells an empty page that somebody looked at and
-        excluded apart from one nobody has reached yet - see
-        _load_existing_crops for why writing only the outcome was not
-        enough. The cropper ignores the field; it exists for the next
-        session of the marker."""
+        An empty page carries `user_decided` when a person emptied it on
+        purpose, which is what tells a page somebody excluded apart from one
+        nobody has marked yet - see set_marks for what counts as emptying
+        it, and _load_existing_crops for why writing only the outcome was
+        not enough. The cropper ignores both this and the format marker;
+        they exist for the next session of the marker."""
         pages_out = []
         for page in self.pages:
             filename = page["filename"]
             page_marks = self.marks.get(filename, [])
-            decided = filename in self.touched
+            decided = filename in self.decided
             if not page_marks:
                 pages_out.append({
                     "page_index": page["index"],
@@ -202,4 +242,4 @@ class MarkerState:
                 DECIDED_KEY: decided,
             })
 
-        return {"chapter": str(self.chapter_num), "pages": pages_out}
+        return {"chapter": str(self.chapter_num), FORMAT_KEY: MARKS_FORMAT, "pages": pages_out}

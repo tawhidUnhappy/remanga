@@ -59,6 +59,10 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
             # back to as untouched and letting a detection poll overwrite
             # its cache with what's on the server.
             "touched": sorted(state.touched),
+            # ...and, separately, the ones a person deliberately emptied.
+            # The sidebar draws those differently from a page that is merely
+            # still blank, so it needs the narrower set too.
+            "decided": sorted(state.decided),
             "magi_enabled": config.magi_enabled,
             "click_to_select": config.click_to_select,
             "detect_scope": config.auto_detect_scope,

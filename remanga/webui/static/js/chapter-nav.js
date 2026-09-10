@@ -41,6 +41,7 @@ export async function applyChapter(payload, startPage = 0) {
   state.clickToSelect = payload.click_to_select;
   state.pageMarksCache = {};
   state.touchedPages = new Set(payload.touched || []);
+  state.decidedPages = new Set(payload.decided || []);
   state.selectedId = null;
   state.pageLoaded = false;
   for (const p of payload.pages) state.pageMarksCache[p.filename] = payload.marks[p.filename] || [];

@@ -378,7 +378,7 @@ class MarkerSession:
                      # work left. The sidebar draws them differently because
                      # telling them apart is most of what checking a
                      # half-done chapter consists of.
-                     "decided": page["filename"] in state.touched}
+                     "decided": page["filename"] in state.decided}
                     for page in state.pages
                 ]
             else:

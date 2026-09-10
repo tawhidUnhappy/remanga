@@ -9,6 +9,11 @@ export const state = {
                             // chapter_total, chapters, has_next, pages, marks, touched, ... }
   pageMarksCache: {},       // filename -> [{id,x,y,w,h,src}] in NATURAL pixel space
   touchedPages: new Set(),
+  // Pages the user deliberately emptied - a decision, drawn differently in
+  // the outline from a page that simply hasn't been marked yet. Narrower
+  // than touchedPages on purpose: navigating past a page touches it (the
+  // autosave posts the page you leave) but decides nothing.
+  decidedPages: new Set(),
   pageIndex: 0,
   marks: [],                // current page's marks (same array objects as in cache)
   selectedId: null,

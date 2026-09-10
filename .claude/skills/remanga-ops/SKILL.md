@@ -787,12 +787,21 @@ Footguns hit while building it, all still live:
   saved before its detection pass finished (leave it early, or the background
   worker writes it) froze every undetected page and MAGI would never look at
   it again. Fixed by recording the decision, not the outcome:
-  `marker_state.DECIDED_KEY` (`user_decided`) per page, written from
-  `state.touched`. A file where NO page carries the key is legacy and keeps
-  the old protective reading (checked once per file - checking per page would
-  read every legacy decision as undecided). The escape hatch for those files
-  is the "This page" scope, which passes `force=True` down to
-  `apply_detected` and overrides an empty decision - never a page with marks.
+  `marker_state.DECIDED_KEY` (`user_decided`) per page + top-level
+  `marks_format: 2` on the file. The FORMAT marker, not "does any page carry
+  the flag" - a chapter where nobody excluded anything writes no flags and
+  would otherwise look legacy. A file without it keeps the old protective
+  reading. Escape hatch for those: the "This page" scope passes `force=True`
+  to `apply_detected`, which overrides an empty decision but never a page
+  with marks.
+- **`set_marks` is called on every autosave, and the browser autosaves the
+  page you are LEAVING** (`page-nav.js:loadPage` -> `flushSave`). So paging
+  through a chapter posts an unchanged `[]` for every page passed, and the
+  old `set_marks` (unconditional `touched.add`) turned merely visiting a page
+  into "the user says this page has no panels". `touched`/`decided` are now
+  two sets: marks present -> touched; empty AND previously non-empty ->
+  touched + decided; empty and already empty -> nothing happened. Never
+  collapse them back into one.
 - A route that returns `{"queued": x, **detection_status()}` has TWO "queued"
   keys and the spread wins - the response silently reported the live queue
   instead of what the request added. Named `accepted` vs `queued` now; watch

@@ -47,7 +47,7 @@ function chapterPages(entry) {
       index: page.index,
       filename: page.filename,
       panels: (state.pageMarksCache[page.filename] || []).length,
-      decided: state.touchedPages.has(page.filename),
+      decided: state.decidedPages.has(page.filename),
     }));
   }
   return entry.pages;
