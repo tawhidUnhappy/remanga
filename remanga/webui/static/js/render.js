@@ -23,12 +23,14 @@ export function render() {
     tag.textContent = "Panel " + (i + 1);
     el.appendChild(tag);
 
-    if (m.id === state.selectedId) {
+    if (m.id === state.selectedId && !state.readOnly) {
       ["nw", "n", "ne", "w", "e", "sw", "s", "se"].forEach(pos => {
         const h = document.createElement("div");
         h.className = "handle " + pos;
         el.appendChild(h);
       });
+    }
+    if (m.id === state.selectedId) {
       const dim = document.createElement("div");
       dim.className = "dim-readout";
       dim.textContent = Math.round(m.w) + " × " + Math.round(m.h) + " px";
@@ -38,7 +40,7 @@ export function render() {
     el.addEventListener("mousedown", (e) => onMarkMouseDown(e, m));
     el.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      deleteMark(m.id);
+      deleteMark(m.id);   // itself a no-op in a read-only session
     });
 
     stage.appendChild(el);
@@ -57,17 +59,21 @@ function updateStoryBadge() {
 function renderList() {
   panelCount.textContent = state.marks.length;
   if (!state.marks.length) {
-    panelList.innerHTML = `<div class="empty-list">No panels marked on this page yet.<br>Drag on the canvas to add one, or wait for MAGI v3.</div>`;
+    panelList.innerHTML = state.readOnly
+      ? `<div class="empty-list">No panels marked on this page.</div>`
+      : `<div class="empty-list">No panels marked on this page yet.<br>Drag on the canvas to add one, or wait for MAGI v3.</div>`;
     return;
   }
   panelList.innerHTML = "";
   state.marks.forEach((m, i) => {
     const row = document.createElement("div");
     row.className = "panel-row" + (m.id === state.selectedId ? " selected" : "") + (m.src === "ai" ? " is-ai" : "");
-    row.draggable = true;
+    // Reordering IS an edit - it's what sets narration order - so a viewer
+    // neither drags nor shows a grip to drag by.
+    row.draggable = !state.readOnly;
     row.dataset.index = i;
     row.innerHTML = `
-      <span class="grip">⠿</span>
+      ${state.readOnly ? "" : `<span class="grip">⠿</span>`}
       <span class="order-badge">${i + 1}</span>
       <span class="panel-row-main">
         <span class="panel-row-title">Panel ${i + 1}
@@ -75,7 +81,7 @@ function renderList() {
         </span>
         <span class="panel-row-sub">${Math.round(m.w)}×${Math.round(m.h)} px</span>
       </span>
-      <button class="row-del" title="Delete">✕</button>
+      ${state.readOnly ? "" : `<button class="row-del" title="Delete">✕</button>`}
     `;
     row.addEventListener("click", (e) => {
       if (e.target.closest(".row-del")) { deleteMark(m.id); return; }

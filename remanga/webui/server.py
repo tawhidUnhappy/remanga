@@ -32,7 +32,6 @@ from werkzeug.serving import make_server
 from remanga.config import MarkerConfig
 from remanga.console import console
 from remanga.paths import get_chapter_dir
-from remanga.webui.detection import start_once
 from remanga.webui.marker_session import MarkerSession
 from remanga.webui.routes import create_app
 
@@ -55,7 +54,8 @@ def launch_and_wait(project_name: str, chapter_num: str, config: MarkerConfig) -
     return get_chapter_dir(project_name, chapter_num) / "crops.json"
 
 
-def launch_and_wait_all(project_name: str, chapters: list[str], config: MarkerConfig) -> list[Path]:
+def launch_and_wait_all(project_name: str, chapters: list[str], config: MarkerConfig,
+                        read_only: bool = False) -> list[Path]:
     """Starts the marking web UI over `chapters`, opens ONE browser tab, and
     blocks until the session ends - either because the last chapter was
     saved, or because the user ended it early from the browser. Returns the
@@ -65,7 +65,7 @@ def launch_and_wait_all(project_name: str, chapters: list[str], config: MarkerCo
     rather than presented as empty pages to mark: they are named in the
     terminal, because "chapter 7 was skipped" is something to see once, not
     to discover twenty chapters later."""
-    session = MarkerSession(project_name, chapters)
+    session = MarkerSession(project_name, chapters, read_only=read_only)
     if session.skipped:
         console.print(
             f"[yellow]Skipping {len(session.skipped)} chapter(s) with no downloaded pages:[/] "
@@ -84,7 +84,10 @@ def launch_and_wait_all(project_name: str, chapters: list[str], config: MarkerCo
     url = f"http://{config.host}:{config.port}/"
     server_thread.start()
 
-    console.print(f"[bold cyan]Panel Marker running at:[/] {url}")
+    title = "Panel Viewer" if read_only else "Panel Marker"
+    console.print(f"[bold cyan]{title} running at:[/] {url}")
+    if read_only:
+        console.print("[dim]Read-only: nothing you do in this tab can change a crops.json.[/]")
     if len(session.chapters) > 1:
         console.print(
             f"[dim]{len(session.chapters)} chapter(s) in this session: "
@@ -95,10 +98,14 @@ def launch_and_wait_all(project_name: str, chapters: list[str], config: MarkerCo
     else:
         console.print("[dim]Open that URL in your browser to continue.[/]")
 
-    start_once(session.current, config)
+    session.start_detection(config)
 
-    waiting_for = ("mark panels and save (Ctrl/Cmd+S in the browser)" if len(session.chapters) == 1
-                   else "mark every chapter and finish in the browser")
+    if read_only:
+        waiting_for = "look through the marks and close the session in the browser"
+    elif len(session.chapters) == 1:
+        waiting_for = "mark panels and save (Ctrl/Cmd+S in the browser)"
+    else:
+        waiting_for = "mark every chapter and finish in the browser"
     console.print(f"[yellow]Waiting for you to {waiting_for}...[/]")
     session.finished.wait()
     server_thread.join(timeout=5)

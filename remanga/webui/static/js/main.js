@@ -9,6 +9,7 @@ import "./shortcuts.js";
 import "./keyboard.js";
 import "./magi.js";
 import "./page-nav.js";
+import "./sidebar.js";
 import { init } from "./chapter-nav.js";
 
 init();

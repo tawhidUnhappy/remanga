@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="/static/css/canvas.css">
 <link rel="stylesheet" href="/static/css/marks.css">
 <link rel="stylesheet" href="/static/css/sidebar.css">
+<link rel="stylesheet" href="/static/css/outline.css">
 <link rel="stylesheet" href="/static/css/overlays.css">
 <link rel="stylesheet" href="/static/css/shortcuts.css">
 </head>
@@ -32,10 +33,12 @@
     <span class="story-badge" id="storyBadge">no panels</span>
   </div>
 
-  <div class="toolbar">
+  <div class="toolbar" id="toolbar">
     <button class="tool-btn active" id="toolDraw">Draw <kbd>D</kbd></button>
     <button class="tool-btn" id="toolAdjust">Adjust <kbd>V</kbd></button>
   </div>
+
+  <span class="view-badge" id="viewBadge" hidden>Read-only</span>
 
   <div class="top-spacer"></div>
 
@@ -62,6 +65,12 @@
   </div>
 
   <div class="sidebar">
+    <div class="side-tabs" role="tablist">
+      <button class="side-tab active" id="tabPage" role="tab">This page</button>
+      <button class="side-tab" id="tabSession" role="tab">All chapters</button>
+    </div>
+
+    <div class="side-pane" id="panePage">
     <div class="assist-card" id="assistCard">
       <div class="head">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l1.8 5.6L19 9.4l-5.2 1.8L12 17l-1.8-5.8L5 9.4l5.2-1.8z"/></svg>
@@ -80,14 +89,27 @@
 
     <div class="panel-list" id="panelList"></div>
 
-    <div class="sidebar-footer">
+    <div class="sidebar-footer" id="sidebarFooter">
       Drag <b>⠿</b> to reorder — this sets narration order.<br>
       <b style="color:var(--ai)">✦ AI</b> = from MAGI v3 · <b style="color:var(--accent)">manual</b> = drawn or adjusted by you.
+    </div>
+    </div>
+
+    <div class="side-pane" id="paneSession" hidden>
+      <div class="outline-head">
+        <h3>Session outline</h3>
+        <span class="outline-summary mono" id="outlineSummary">–</span>
+      </div>
+      <div class="outline-tree" id="outlineTree"></div>
+      <div class="sidebar-footer">
+        Click a chapter or page to go there · the <b>›</b> chevron just expands it.<br>
+        <span class="mono">marked/pages · panels</span> per chapter.
+      </div>
     </div>
   </div>
 </div>
 
-<div class="hint-toast">
+<div class="hint-toast" id="hintToast">
   <span><b>Drag</b> to mark a panel</span>
   <span><b>Click</b> a mark to adjust it</span>
   <span><b>Right-click</b> a mark to delete it</span>

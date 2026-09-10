@@ -9,6 +9,15 @@ import { showGuides, clearGuides } from "./guides.js";
 
 export function onMarkMouseDown(e, m) {
   if (e.button === 2) return;
+  // Read-only: a mark can still be SELECTED (that's how the outline
+  // highlights one, and how you read its size), it just can't be moved or
+  // resized - so this returns after the selection, not before it.
+  if (state.readOnly) {
+    e.stopPropagation();
+    state.selectedId = m.id;
+    render();
+    return;
+  }
 
   // With click_to_select on (MarkerConfig.click_to_select, default on),
   // every OTHER mark's body/handles are frozen while the Draw tool is

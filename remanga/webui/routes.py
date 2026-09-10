@@ -18,7 +18,7 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from remanga.config import MarkerConfig, ShortcutsConfig
 from remanga.paths import MARKER_STATIC_DIR as STATIC_DIR
-from remanga.webui.detection import run_detection, start_once
+from remanga.webui.detection import run_detection
 from remanga.webui.marker_session import MarkerSession
 from remanga.webui.shortcuts_store import persist_shortcuts
 
@@ -60,9 +60,9 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
         left. This is what makes "check chapter 3 again" cost a click
         instead of a second run of the whole command."""
         index = (request.get_json(force=True) or {}).get("index")
-        if not isinstance(index, int) or not session.goto(index):
+        if not isinstance(index, int) or not session.goto(index, save=not session.read_only):
             return jsonify({"ok": False, "error": f"No chapter at index {index} in this session"}), 400
-        start_once(session.current, config)
+        session.start_detection(config)
         return jsonify({"ok": True, **chapter_payload()})
 
     @app.get("/api/pages/<path:filename>")
@@ -71,9 +71,21 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
 
     @app.post("/api/marks/<path:filename>")
     def post_marks(filename: str):
+        # The browser doesn't offer any way to edit in a read-only session,
+        # but "the UI doesn't show the button" is not the same guarantee as
+        # "the server won't do it" - and a session opened to double-check
+        # marks is exactly where the stronger one is the point.
+        if session.read_only:
+            return jsonify({"ok": False, "error": "This session is read-only"}), 403
         marks = request.get_json(force=True) or []
         session.current.set_marks(filename, marks)
         return jsonify({"ok": True})
+
+    @app.get("/api/outline")
+    def get_outline():
+        """The whole session as a tree: chapters, their pages, and how many
+        panels each page has. What the sidebar navigates."""
+        return jsonify({"chapters": session.outline()})
 
     @app.get("/api/shortcuts")
     def get_shortcuts():
@@ -94,6 +106,8 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
 
     @app.post("/api/detect")
     def start_detect():
+        if session.read_only:
+            return jsonify({"ok": False, "error": "This session is read-only"}), 403
         if not config.magi_enabled:
             return jsonify({"ok": False, "error": "MAGI v3 assist is disabled in config.json"}), 400
         state = session.current
@@ -125,12 +139,15 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
         because the terminal is blocked on this session and closing the tab
         is not a way to tell it anything."""
         end_now = bool((request.get_json(silent=True) or {}).get("end"))
+        # save_current() is itself a no-op in a read-only session; calling it
+        # unconditionally keeps the one save path rather than growing a
+        # second one that only some sessions take.
         session.save_current()
         if end_now or not session.has_next:
             session.finished.set()
             return jsonify({"ok": True, "done": True})
         session.goto(session.index + 1, save=False)
-        start_once(session.current, config)
+        session.start_detection(config)
         return jsonify({"ok": True, "done": False, **chapter_payload()})
 
     return app

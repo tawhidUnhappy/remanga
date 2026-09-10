@@ -433,6 +433,34 @@ One server, one browser tab, one session. **Save & Next chapter** writes that ch
 
 Chapters with nothing downloaded are named and skipped before the browser opens. MAGI runs once per chapter, when you arrive at it — not again when you navigate back.
 
+**The session outline** — the sidebar has two tabs: **This page** (the panel list for the page you're on) and **All chapters**, a collapsible tree of the whole session:
+
+```
+SESSION OUTLINE                    3 chapter(s) · 54 page(s) · 214 panel(s)
+› Chapter 1                                                        18/18 · 71
+▾ Chapter 2                                                        17/18 · 68
+  │ ▾ 04  002_004.jpg                                                      4
+  │     Panel 1   Panel 2   Panel 3   Panel 4
+  │ › 05  002_005.jpg                                                      3
+  │ › 06  002_006.jpg                                                      0
+› Chapter 3                                                        19/19 · 75
+```
+
+Every chapter, page and panel in the session, in one place. Click a chapter or a page to **go there**; click the **›** chevron to just expand it in place. Click a panel to jump to its page and select it. Each chapter shows `marked-pages/pages · panels`, and a page with nothing on it shows a dashed `0` — which is the fastest way to spot the page you skipped. Counts for the chapter you're on update live as you mark; the rest come from their `crops.json`.
+
+Nothing below an open chapter is built until it's open — collapsed chapters are one row each, so a hundred-chapter session stays a small page rather than a DOM the browser has to fight.
+
+### 2b. Check Every Chapter's Marks Without Touching Them
+
+`view-marks` (Project-wide) opens the same one-tab session with every edit taken away:
+```bash
+./run.sh view-marks --project "my_manga"
+```
+Same outline, same navigation, same pages — no Draw/Adjust tools, no resize handles, no delete, no reorder, and a **Read-only** badge where the tools would be. A mark can still be selected (that's how the outline highlights one, and how you read its size); it just can't be moved.
+
+Read-only is **enforced by the server**, not hidden in the browser: `POST /api/marks` and `POST /api/detect` answer `403`, no `crops.json` is written when a chapter is left or when the session ends, and MAGI never runs — detection fills in marks nobody saved, which is exactly what a verification pass must not invent. Opening it is meant to be the cheap way to be sure, so looking has to be provably free of consequences.
+
+
 ### 3. Crop Panels
 ```bash
 ./run.sh crop --project "my_manga" --chapter "1"
@@ -846,6 +874,7 @@ In short: if a chapter's TTS run gets interrupted or a worker locks up, just re-
 ./run.sh render   -p <PROJECT> -c <CHAPTER> [-f]
 ./run.sh download-all -p <PROJECT> [-u <URL_OR_ID>] [-f] [--refetch]
 ./run.sh mark-all -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>]
+./run.sh view-marks -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>]
 ./run.sh narration-init-all -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-f]
 ./run.sh full-recap -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-f]
 ./run.sh remix    -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-b <BGM_FILE>] [--no-rejoin]

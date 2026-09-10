@@ -17,6 +17,11 @@ canvasWrap.addEventListener("mousedown", (e) => {
   // - specifically so THIS handler gets the event instead and can start a
   // brand-new box, even one that starts on top of an existing (frozen) mark
   // (overlapping panels), without ever touching that mark's position.
+  // Nothing on this canvas draws in a read-only session (`view-marks`).
+  // Checked at the gesture's first event rather than at its end, so there
+  // is never a ghost box following the cursor for a mark that can't exist.
+  if (state.readOnly) return;
+
   const onExistingMark = e.target.closest(".mark");
   if (onExistingMark && !(state.clickToSelect && state.mode === "draw")) return;
   if (e.button !== 0 || state.spaceHeld) return;

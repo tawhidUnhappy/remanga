@@ -66,6 +66,23 @@ PROJECT_COMMANDS: list[Command] = [
         detail="one tab, one server, one MAGI load per chapter - the whole manga in one session",
     ),
     Command(
+        "view-marks",
+        "Look through every chapter's marked panels WITHOUT being able to change any of them - "
+        "the same one-tab session as mark-all, read-only: navigate the whole project from the "
+        "sidebar outline, chapter by chapter, page by page, panel by panel, and check the marks "
+        "are what you think they are. Nothing is saved, and MAGI never runs",
+        project_handlers.view_marks,
+        [
+            project_param(),
+            Param("chapters", ["--chapters", "-c"], required=False, default=None,
+                  help="Comma-separated chapter numbers to look through (default: every chapter "
+                       "this project has). Chapters with no downloaded pages are skipped.",
+                  prompt="Chapters to look through"),
+        ],
+        category="Project-wide",
+        detail="the double-check pass - read-only, enforced on the server, not just hidden",
+    ),
+    Command(
         "narration-init-all",
         "Create a blank narration.json for every chapter in the project - zero bytes, not even "
         "'{}', so every chapter has a script file waiting to be filled in. Chapters that already "

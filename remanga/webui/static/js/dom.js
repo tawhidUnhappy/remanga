@@ -42,6 +42,17 @@ export const chapterPos = document.getElementById("chapterPos");
 export const prevChapterBtn = document.getElementById("prevChapter");
 export const nextChapterBtn = document.getElementById("nextChapter");
 
+export const toolbar = document.getElementById("toolbar");
+export const viewBadge = document.getElementById("viewBadge");
+export const hintToast = document.getElementById("hintToast");
+export const sidebarFooter = document.getElementById("sidebarFooter");
+export const tabPageBtn = document.getElementById("tabPage");
+export const tabSessionBtn = document.getElementById("tabSession");
+export const panePage = document.getElementById("panePage");
+export const paneSession = document.getElementById("paneSession");
+export const outlineTree = document.getElementById("outlineTree");
+export const outlineSummary = document.getElementById("outlineSummary");
+
 export const shortcutsBtn = document.getElementById("shortcutsBtn");
 export const shortcutsOverlay = document.getElementById("shortcutsOverlay");
 export const shortcutsList = document.getElementById("shortcutsList");

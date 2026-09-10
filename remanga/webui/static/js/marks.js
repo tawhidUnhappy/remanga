@@ -6,6 +6,7 @@
 import { state, currentFilename } from "./state.js";
 import { api } from "./api.js";
 import { render } from "./render.js";
+import { renderOutline } from "./outline.js";
 
 // Flags the current page as user-touched, synchronously, with none of
 // markDirty()'s other side effects (caching, debounced autosave). Call this
@@ -29,11 +30,20 @@ export function markTouched() {
 export function markDirty() {
   state.pageMarksCache[currentFilename()] = state.marks;
   markTouched();
+  // The outline counts panels per page straight out of this cache for the
+  // chapter on screen, so it re-renders here rather than polling: an edit
+  // and the tree that reports it should never be a frame apart.
+  renderOutline();
   clearTimeout(state.saveDebounce);
   state.saveDebounce = setTimeout(() => flushSave(false), 400);
 }
 
 export async function flushSave(immediate) {
+  // A read-only session has nothing to flush, and the server would refuse it
+  // (403) anyway - every chapter change calls through here, so without this
+  // a viewer logs a failed write per navigation and asks the server to
+  // reject something it was never going to accept.
+  if (state.readOnly) return;
   const filename = state.chapter?.pages[state.pageIndex]?.filename;
   if (!filename) return;
   clearTimeout(state.saveDebounce);
@@ -49,6 +59,7 @@ export async function flushSave(immediate) {
 }
 
 export function deleteMark(id) {
+  if (state.readOnly) return;
   state.marks = state.marks.filter(m => m.id !== id);
   state.pageMarksCache[currentFilename()] = state.marks;
   if (state.selectedId === id) state.selectedId = null;
@@ -80,6 +91,7 @@ export function clampBoxToPage(x, y, w, h) {
 // panel (splash pages, single-panel spreads), so no per-panel drawing is
 // needed for those at all.
 export function markFullPage() {
+  if (state.readOnly) return;
   const page = state.chapter.pages[state.pageIndex];
   const full = { id: "local-" + (state.nextLocalId++), x: 0, y: 0, w: page.width, h: page.height, src: "manual" };
   state.marks = [full];

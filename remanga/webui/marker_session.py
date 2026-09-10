@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from remanga.console import console, escape as _esc
-from remanga.json_io import write_json
+from remanga.json_io import has_real_json_content, read_json, write_json
 from remanga.paths import get_chapter_dir
 from remanga.webui.marker_state import MarkerState
 
@@ -48,8 +48,13 @@ class MarkerSession:
     than on a MarkerState because a chapter finishing is no longer the same
     event as the session finishing."""
 
-    def __init__(self, project_name: str, chapters: list[str]):
+    def __init__(self, project_name: str, chapters: list[str], read_only: bool = False):
         self.project = project_name
+        # A session that can look but not touch (`view-marks`). Enforced on
+        # the server, not just hidden in the browser: a read-only session
+        # must not be one stray fetch away from rewriting a chapter's marks,
+        # and the point of opening one is to trust what it shows.
+        self.read_only = read_only
         self.chapters = [c for c in chapters if has_pages(project_name, c)]
         self.skipped = [c for c in chapters if c not in set(self.chapters)]
         if not self.chapters:
@@ -82,11 +87,13 @@ class MarkerSession:
     def has_next(self) -> bool:
         return self.index + 1 < len(self.chapters)
 
-    def save_current(self) -> Path:
+    def save_current(self) -> Path | None:
         """Writes the current chapter's crops.json and says so. Called on
         every chapter change, not only at the end: leaving a chapter is the
         moment its marks stop being visible, so it's the moment they have to
         be on disk rather than only in this process's memory."""
+        if self.read_only:
+            return None
         state = self.current
         crops = state.build_crops_json()
         crops_path = state.chapter_dir / "crops.json"
@@ -116,6 +123,85 @@ class MarkerSession:
             self.index = index
         return True
 
+    def start_detection(self, config) -> None:
+        """Kicks off MAGI's pass for the chapter now under the cursor.
+
+        Never in a read-only session, and this is the reason that rule lives
+        here rather than at each call site: detection WRITES - it fills
+        `marks` for every untouched page - so a viewer opened to check what
+        was actually saved would quietly fill up with AI guesses that are in
+        nobody's crops.json. A session that cannot save must also not
+        invent."""
+        if self.read_only:
+            return
+        from remanga.webui.detection import start_once
+        start_once(self.current, config)
+
+    def page_names(self, chapter_num: str) -> list[str]:
+        """This chapter's page filenames, in order, WITHOUT opening any of
+        them. MarkerState reads every image's real size (it has to - marks
+        are in image pixels); the outline only needs names and counts, and
+        paying an image decode per page for every chapter in a project just
+        to draw a sidebar is how a hundred-chapter session would take a
+        minute to open."""
+        pages_dir = get_chapter_dir(self.project, chapter_num) / "pages"
+        if not pages_dir.is_dir():
+            return []
+        return sorted(p.name for p in pages_dir.iterdir() if p.is_file())
+
+    def _saved_panel_counts(self, chapter_num: str) -> dict[str, int]:
+        """Panels per page as its crops.json has them - the only source for a
+        chapter this session hasn't opened yet. Empty for a chapter with no
+        crops.json, which reads correctly as "nothing marked here"."""
+        crops_path = get_chapter_dir(self.project, chapter_num) / "crops.json"
+        if not has_real_json_content(crops_path):
+            return {}
+        try:
+            data = read_json(crops_path)
+        except Exception:
+            return {}
+        counts: dict[str, int] = {}
+        for page in data.get("pages", []):
+            filename = page.get("page_filename")
+            if filename:
+                counts[str(filename)] = len(page.get("panels") or [])
+        return counts
+
+    def outline(self) -> list[dict[str, Any]]:
+        """Every chapter, every page, and how many panels each page has -
+        the whole session as one tree for the sidebar to draw.
+
+        Live for chapters already open in this session (their in-memory
+        marks, including edits not yet saved), and from crops.json for the
+        rest. That distinction is why each chapter says whether it's
+        `loaded`: a chapter read off disk is showing you the last saved
+        state, and a viewer built to double-check things should not blur
+        those two together."""
+        out: list[dict[str, Any]] = []
+        for index, chapter_num in enumerate(self.chapters):
+            state = self._states.get(chapter_num)
+            if state is not None:
+                pages = [
+                    {"index": page["index"], "filename": page["filename"],
+                     "panels": len(state.marks.get(page["filename"], []))}
+                    for page in state.pages
+                ]
+            else:
+                counts = self._saved_panel_counts(chapter_num)
+                pages = [
+                    {"index": i, "filename": name, "panels": counts.get(name, 0)}
+                    for i, name in enumerate(self.page_names(chapter_num), start=1)
+                ]
+            out.append({
+                "chapter": chapter_num,
+                "index": index,
+                "loaded": state is not None,
+                "pages": pages,
+                "panels": sum(page["panels"] for page in pages),
+                "marked_pages": sum(1 for page in pages if page["panels"]),
+            })
+        return out
+
     def describe(self) -> dict[str, Any]:
         """What the browser needs to know about the session itself - which
         chapter of how many, what the others are called, and whether there's
@@ -128,4 +214,5 @@ class MarkerSession:
             "chapter_total": len(self.chapters),
             "chapters": list(self.chapters),
             "has_next": self.has_next,
+            "read_only": self.read_only,
         }

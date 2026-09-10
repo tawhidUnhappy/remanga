@@ -195,3 +195,29 @@ def mark_all(params: dict[str, Any], config: RemangaConfig) -> None:
         f"[bold green]✓ Marking session finished[/] [dim]- crops.json written for "
         f"{len(saved)} chapter(s).[/]"
     )
+
+
+def view_marks(params: dict[str, Any], config: RemangaConfig) -> None:
+    """The same whole-project marker session, with every edit taken away.
+
+    `mark-all` is for doing the work; this is for the pass afterwards, when
+    what you want is to look at all of it and be sure - every chapter, every
+    page, every panel, navigable from the sidebar outline, with no way to
+    nudge a box by accident while checking it. Read-only is enforced by the
+    server (see MarkerSession.read_only), not just hidden in the browser: the
+    point of opening it is to trust that looking changed nothing.
+
+    Nothing is written, including on the way out - no crops.json is saved
+    when a chapter is left or when the session ends. MAGI never runs either;
+    detection fills in marks nobody saved, which is exactly the kind of thing
+    a verification pass must not invent."""
+    from remanga.webui import launch_and_wait_all
+
+    project = params["project"]
+    chapters = split_chapters(params.get("chapters")) or discover_chapters(project)
+    if not chapters:
+        console.print(f"[yellow]Project '{project}' has no chapters yet - nothing to look at.[/]")
+        return
+
+    launch_and_wait_all(project, chapters, config.marker, read_only=True)
+    console.print("[bold green]✓ Viewer closed[/] [dim]- nothing was changed.[/]")

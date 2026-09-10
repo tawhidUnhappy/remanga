@@ -742,6 +742,17 @@ jumps and saves the chapter being left. Frontend split: `page-nav.js` = pages,
 `chapter-nav.js` = chapters/save/init, one-way import (page-nav must never
 import chapter-nav). Command: `mark-all` (Project-wide).
 
+`view-marks` is the same session with `MarkerSession(read_only=True)`: the
+server 403s `/api/marks` and `/api/detect`, `save_current()` no-ops, and
+`start_detection()` returns early (MAGI WRITES marks - a viewer that runs it
+fills up with boxes nobody saved). The browser hides the editing chrome, and
+`flushSave()` returns early - without that, every chapter change in a viewer
+POSTs marks and logs a 403. Sidebar has two panes (`sidebar.js`): the page's
+panel list, and `outline.js`'s session tree (chapter > page > panel, lazily
+built - only expanded branches exist in the DOM). Outline counts come from
+live client state for the chapter on screen and from `crops.json` for the
+rest, which is why each chapter reports `loaded`.
+
 Footguns hit while building it, all still live:
 - **Page filenames repeat across chapters** (every chapter has a `page_001`).
   `magi.js:pollDetectStatus` merges server marks by filename, so a poll that
@@ -760,14 +771,38 @@ Footguns hit while building it, all still live:
   `[hidden]{display:none}` - each needs its own explicit `[hidden]` rule or
   `el.hidden = true` does nothing.
 
-**No JS runtime in this sandbox.** `node` isn't installed and snap firefox
-`--headless --screenshot` just hangs (tried both `--screenshot PATH` and
-`=PATH`, 100s+). esprima-python parses only up to ES2017, so it false-fails on
-this repo's `?.` and `catch {}` - not a real signal. What IS checkable
-statically: every `import {x} from "./y.js"` resolves to a real export, and
-every `getElementById` in dom.js matches an id in index.html (a miss is a
-module-scope TypeError that kills the whole UI). Verify the backend by driving
-the Flask API over HTTP from a thread - that part is fully testable and was.
+**How to actually TEST the web UIs from here** (worked out 2026-09-10;
+supersedes an earlier "there is no JS runtime" note):
+
+```bash
+uv venv /tmp/jscheck && uv pip install --python /tmp/jscheck/bin/python nodejs-wheel-binaries
+NODE=/tmp/jscheck/lib/python3.12/site-packages/nodejs_wheel/bin/node   # v24
+$NODE --check remanga/webui/static/js/*.js                            # ESM-aware
+```
+
+Better than a syntax check: **boot the real frontend under node against a real
+running Flask session.** Stub `document`/`window`/`navigator`/`CSS` with plain
+objects whose elements accept anything, point `globalThis.fetch` at the
+server's base URL, `await import("main.js")`, and every module's top-level
+code + `init()` + first render runs for real. Store handlers in
+`addEventListener` and you can dispatch clicks and drive the UI (this is how
+the outline tree's expand/navigate was verified). Gotchas: `navigator` is
+getter-only in node (`Object.defineProperty`), the fake `<img>` must fire
+`onload` when `.src` is set or `loadPage()` awaits forever, and node won't
+exit on its own (`setInterval` poll) - end with `process.exit(0)`.
+
+Dead ends: snap firefox `--headless --screenshot` hangs (both `PATH` and
+`=PATH` forms, 100s+). esprima-python parses only to ES2017 so it false-fails
+on this repo's `?.` and `catch {}` - not a real signal.
+
+Also cheap and worth keeping: every `import {x} from "./y.js"` must resolve to
+a real export, and every `getElementById` in dom.js must match an id in
+index.html (a miss is a module-scope TypeError that kills the whole UI).
+
+**`pkill -f <pattern>` kills the shell running the command** when the pattern
+appears in that command's own text - the tool call dies with exit 144 and the
+rest of the command never runs. Use a pattern that doesn't literally match
+itself: `pkill -f "serve2[.]py"`.
 
 ## ffmpeg output: `-progress`, never raw stats
 

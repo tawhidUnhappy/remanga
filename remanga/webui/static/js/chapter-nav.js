@@ -15,6 +15,7 @@ import {
   saveOverlay, saveOverlayTitle, saveOverlayText, saveBtn, saveLabel, finishBtn,
   chapterNav, chapterName, chapterPos, prevChapterBtn, nextChapterBtn, pageTotalEl,
   assistCard, assistBtn, assistStatus, assistProgressBar,
+  toolbar, viewBadge, hintToast, sidebarFooter,
 } from "./dom.js";
 import { state } from "./state.js";
 import { api } from "./api.js";
@@ -23,6 +24,7 @@ import { loadPage } from "./page-nav.js";
 import { pollDetectStatus } from "./magi.js";
 import { loadShortcuts } from "./shortcuts.js";
 import { setMode } from "./keyboard.js";
+import { refreshOutline } from "./outline.js";
 
 // Applies a chapter payload (/api/chapter, /api/goto, or /api/finish's
 // advance - all three return the same shape) to the running app.
@@ -32,8 +34,9 @@ import { setMode } from "./keyboard.js";
 // flush would post the previous chapter's marks to the new chapter's state,
 // under whatever filename happened to match. The page being left was already
 // flushed by whoever asked for the chapter change.
-export async function applyChapter(payload) {
+export async function applyChapter(payload, startPage = 0) {
   state.chapter = payload;
+  state.readOnly = !!payload.read_only;
   state.magiEnabled = payload.magi_enabled;
   state.clickToSelect = payload.click_to_select;
   state.pageMarksCache = {};
@@ -44,6 +47,7 @@ export async function applyChapter(payload) {
   pageTotalEl.textContent = payload.pages.length;
 
   updateChapterUi();
+  updateReadOnlyChrome();
   resetAssistCard();
 
   // Adjust rather than Draw whenever this chapter already has marks (loaded
@@ -53,7 +57,8 @@ export async function applyChapter(payload) {
   const hasMarks = Object.values(state.pageMarksCache).some(marks => marks.length > 0);
   setMode(hasMarks ? "adjust" : "draw");
 
-  await loadPage(0);
+  await loadPage(startPage);
+  refreshOutline();
 }
 
 function updateChapterUi() {
@@ -66,13 +71,34 @@ function updateChapterUi() {
   chapterPos.textContent = `${index + 1}/${total}`;
   prevChapterBtn.disabled = index === 0;
   nextChapterBtn.disabled = !hasNext;
+  if (state.readOnly) {
+    saveLabel.textContent = hasNext ? "Next chapter" : "Close viewer";
+    finishBtn.hidden = true;
+    return;
+  }
   saveLabel.textContent = total <= 1 ? "Save & Continue"
     : hasNext ? "Save & Next chapter" : "Save & Finish";
   // Only worth offering while there are chapters left to skip.
   finishBtn.hidden = !hasNext;
 }
 
+// A viewer keeps everything that helps you look and drops everything that
+// implies you can change something: no Draw/Adjust, no "drag to mark" hints,
+// no reorder footnote - and a badge saying so, because a UI that has quietly
+// stopped accepting edits is worse than one that says it won't.
+function updateReadOnlyChrome() {
+  toolbar.hidden = state.readOnly;
+  viewBadge.hidden = !state.readOnly;
+  hintToast.hidden = state.readOnly;
+  sidebarFooter.hidden = state.readOnly;
+}
+
 function resetAssistCard() {
+  // A read-only session never runs detection (it would write marks nobody
+  // saved - see MarkerSession.start_detection), so the card has nothing to
+  // report and no button worth showing.
+  assistCard.hidden = state.readOnly;
+  if (state.readOnly) return;
   // Per chapter, because the card reports one chapter's detection pass and a
   // stale "Done · 18 page(s) processed" from the chapter before it is a
   // statement about the wrong chapter.
@@ -88,7 +114,7 @@ function resetAssistCard() {
   assistStatus.textContent = "Idle";
 }
 
-export async function gotoChapter(index) {
+export async function gotoChapter(index, startPage = 0) {
   if (!state.chapter || index === state.chapter.chapter_index) return;
   if (index < 0 || index >= state.chapter.chapter_total) return;
   await flushSave(true);
@@ -98,7 +124,7 @@ export async function gotoChapter(index) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ index }),
     });
-    await applyChapter(payload);
+    await applyChapter(payload, startPage);
   } catch (e) {
     alert("Couldn't switch chapter: " + e.message);
   }
@@ -122,9 +148,15 @@ export async function saveAndContinue(end = false) {
     }
     const done = state.chapter.chapter_index + 1;
     const total = state.chapter.chapter_total;
-    saveOverlayTitle.textContent = total > 1 ? `Saved — ${done} of ${total} chapters` : "Saved";
-    saveOverlayText.innerHTML =
-      "crops.json is written and the pipeline will continue in your terminal.<br>You can close this tab now.";
+    if (state.readOnly) {
+      saveOverlayTitle.textContent = "Closed";
+      saveOverlayText.innerHTML =
+        "Nothing was changed - this was a read-only session.<br>You can close this tab now.";
+    } else {
+      saveOverlayTitle.textContent = total > 1 ? `Saved — ${done} of ${total} chapters` : "Saved";
+      saveOverlayText.innerHTML =
+        "crops.json is written and the pipeline will continue in your terminal.<br>You can close this tab now.";
+    }
     saveOverlay.classList.add("visible");
     setTimeout(() => { try { window.close(); } catch {} }, 400);
   } catch (e) {

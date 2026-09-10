@@ -31,7 +31,14 @@ const ACTION_HANDLERS = {
   reset_view: (e) => { e.preventDefault(); resetView(); },
 };
 
+// A read-only session keeps every navigation and view binding and drops the
+// three that would change something. Save is dropped too: in a viewer its
+// button means "close", and a reflex Ctrl+S should not end the session.
+const READ_ONLY_BLOCKED = new Set(["save", "mark_full_page", "delete_mark"]);
+
 document.addEventListener("keydown", (e) => {
   const action = matchAction(e);
-  if (action) ACTION_HANDLERS[action](e);
+  if (!action) return;
+  if (state.readOnly && READ_ONLY_BLOCKED.has(action)) return;
+  ACTION_HANDLERS[action](e);
 });

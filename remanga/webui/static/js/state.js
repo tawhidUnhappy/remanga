@@ -17,6 +17,8 @@ export const state = {
   nextLocalId: 1,
   saveDebounce: null,
   magiEnabled: false,
+  readOnly: false,          // a `view-marks` session: look, navigate, change nothing.
+                            // The server refuses writes too - this only shapes the UI
   clickToSelect: true,      // see MarkerConfig.click_to_select; set from /api/chapter in chapter-nav.js
   pageLoaded: false,        // false until the very first loadPage() has completed
   spaceHeld: false,         // hand-tool (pan) key held down
