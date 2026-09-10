@@ -12,10 +12,10 @@
    one decision, so they read as one control rather than two stacked ones. */
 .assist-card p b { color: var(--text); font-weight: 700; }
 
-/* One scope, three actions. The scope sits alone on its own line because it
-   is the question all three buttons answer; the buttons share a row because
-   they are alternatives, not steps. Detect keeps the accent - it is the one
-   that spends GPU time - and the other two are quieter. */
+/* One scope, two actions. The scope sits alone on its own line because it
+   is the question both buttons answer; the buttons share a row because they
+   are alternatives, not steps. Detect keeps the accent - it is the one that
+   spends GPU time - and Reorder is quieter. */
 .assist-scope { width: 100%; }
 .assist-actions { display: flex; gap: 6px; margin-top: 8px; }
 .assist-btn { flex: 1; min-width: 0; background: var(--ai); color: #06201d; border: 1px solid transparent; border-radius: 7px; font-weight: 700; font-size: 12px; padding: 8px 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px; }

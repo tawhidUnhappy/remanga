@@ -76,7 +76,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l1.8 5.6L19 9.4l-5.2 1.8L12 17l-1.8-5.8L5 9.4l5.2-1.8z"/></svg>
         MAGI v3 Assist
       </div>
-      <p>Pick which pages, then <b>Detect</b> panels, <b>Reorder</b> them into reading order, or <b>Relabel</b> which marks are still MAGI's own. Detect never touches a page you've edited.</p>
+      <p>Pick which pages, then <b>Detect</b> panels or <b>Reorder</b> them into reading order. Detect never touches a page you've edited.</p>
 
       <select class="assist-select assist-scope" id="scopeSelect" title="Which pages the buttons below work on">
         <option value="page">This page</option>
@@ -94,7 +94,6 @@
       <div class="assist-actions">
         <button class="assist-btn" id="assistBtn" title="Let MAGI mark the panels it finds - never on a page you've edited">Detect</button>
         <button class="assist-btn secondary" id="reorderBtn" title="Renumber the panels into reading order">Reorder</button>
-        <button class="assist-btn secondary" id="relabelBtn" title="Re-check which marks are still MAGI's own boxes and label them AI or manual">Relabel</button>
       </div>
 
       <label class="assist-switch">
@@ -107,7 +106,7 @@
       </label>
       <label class="assist-switch">
         <input type="checkbox" id="autoOrderToggle">
-        <span>Auto-order new marks</span>
+        <span>Auto-order panels</span>
       </label>
 
       <div class="assist-progress"><span id="assistProgressBar"></span></div>
@@ -122,7 +121,7 @@
     <div class="panel-list" id="panelList"></div>
 
     <div class="sidebar-footer" id="sidebarFooter">
-      Drag <b>⠿</b> to reorder — this sets narration order.<br>
+      <span id="orderHint">Drag <b>⠿</b> to reorder — this sets narration order.</span><br>
       <b style="color:var(--ai)">✦ AI</b> = from MAGI v3 · <b style="color:var(--accent)">manual</b> = drawn or adjusted by you.
     </div>
     </div>

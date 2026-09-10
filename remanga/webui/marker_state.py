@@ -11,14 +11,15 @@ know whether it's the only chapter or the fourth of twenty.
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Any
 
 from PIL import Image
 
 from remanga.cropper.geometry import calculate_pixel_bounds, pixel_bounds_to_box_1000
-from remanga.json_io import has_real_json_content, read_json, write_json
-from remanga.webui.mark_ops import order_changed, reading_order, relabel
+from remanga.json_io import has_real_json_content, read_json
+from remanga.webui.mark_ops import order_changed, reading_order
 
 # crops.json's per-page "the user made this page empty on purpose" flag -
 # what distinguishes a page somebody looked at and excluded from one nobody
@@ -34,13 +35,6 @@ DECIDED_KEY = "user_decided"
 # indistinguishable from a legacy file.
 FORMAT_KEY = "marks_format"
 MARKS_FORMAT = 2
-
-# What MAGI produced for each page, kept beside crops.json rather than in it.
-# Relabelling compares the marks against these, and re-running MAGI over a
-# whole manga just to ask "is this still the AI's box?" would cost a GPU pass
-# per chapter every time. A separate file on purpose: crops.json is what the
-# cropper reads, and this is a cache - deleting it loses nothing but time.
-AI_BOXES_FILE = "magi_boxes.json"
 
 
 class MarkerState:
@@ -68,20 +62,20 @@ class MarkerState:
         # Whether a detection pass has already been kicked off for this
         # chapter. In a multi-chapter session a chapter can be opened, left
         # and come back to; MAGI must run for it once, on arrival, not again
-        # every time the cursor lands here (see detection.start_once).
+        # every time the cursor lands here (see MarkerSession.queue_detection).
         self.detect_started = False
-        # MAGI's raw boxes per page (pixels), whether or not they were ever
-        # applied - see AI_BOXES_FILE. Loaded from the cache if there is one.
-        self.ai_boxes: dict[str, list[list[float]]] = {}
-        self._ai_boxes_dirty = False
-        # Bumped whenever the SERVER rewrites marks the browser is holding
-        # (reorder, relabel). The browser compares it on every status poll and
-        # reloads the chapter when it moves; without that, its own copy of the
-        # old order would be flushed straight back over the new one the next
-        # time it autosaved.
+        # Bumped whenever the SERVER rewrites marks the browser is holding (a
+        # reorder). The browser compares it on every status poll and reloads
+        # the chapter when it moves; without that, its own copy of the old
+        # order would be flushed straight back over the new one the next time
+        # it autosaved.
         self.revision = 0
+        # Held around every change to `marks`. Three threads can reach one
+        # chapter at once - a browser autosave, the detection worker, and a
+        # reorder - and a reorder that read a page just before a detection
+        # replaced it would write the old page back over MAGI's result.
+        self.lock = threading.RLock()
         self._load_pages()
-        self._load_ai_boxes()
 
     def _load_pages(self) -> None:
         existing_pages = sorted(p for p in self.pages_dir.iterdir() if p.is_file()) if self.pages_dir.exists() else []
@@ -174,8 +168,7 @@ class MarkerState:
                     # user's own the first time a chapter was saved and
                     # reopened (and with background auto-save, that was
                     # every chapter). A file from before `src` was written
-                    # can't say, so it reads as manual; `relabel` is what
-                    # sorts those out by comparing against MAGI's boxes.
+                    # can't say, so it reads as manual.
                     "src": panel.get("src") if panel.get("src") in ("ai", "manual") else "manual",
                 })
             if marks:
@@ -197,25 +190,27 @@ class MarkerState:
         So an empty list is only a decision when the page had something on it
         a moment ago. Emptying a page is an act; arriving at one that was
         already empty is not."""
-        previous = self.marks.get(filename) or []
-        if order_direction and len(marks) > 1:
-            # Auto-order: stored in reading order however the marks were
-            # drawn. Returned so the route can hand the browser the order it
-            # actually saved, and the panel numbers on screen stay the real ones.
-            marks = reading_order(marks, order_direction)
-        self.marks[filename] = marks
-        if marks:
-            self.touched.add(filename)
-            # It isn't an empty page any more, so it isn't a decision about
-            # one either - drawing on a page you had cleared takes it back.
-            self.decided.discard(filename)
-        elif previous:
-            # Went from marked to empty: the user cleared it on purpose.
-            self.touched.add(filename)
-            self.decided.add(filename)
-        return marks
+        with self.lock:
+            previous = self.marks.get(filename) or []
+            if order_direction and len(marks) > 1:
+                # Auto-order: stored in reading order however the marks were
+                # drawn. Returned so the route can hand the browser the order it
+                # actually saved, and the panel numbers on screen stay the real ones.
+                marks = reading_order(marks, order_direction)
+            self.marks[filename] = marks
+            if marks:
+                self.touched.add(filename)
+                # It isn't an empty page any more, so it isn't a decision about
+                # one either - drawing on a page you had cleared takes it back.
+                self.decided.discard(filename)
+            elif previous:
+                # Went from marked to empty: the user cleared it on purpose.
+                self.touched.add(filename)
+                self.decided.add(filename)
+            return marks
 
-    def apply_detected(self, filename: str, boxes: list[list[float]], force: bool = False) -> None:
+    def apply_detected(self, filename: str, boxes: list[list[float]], force: bool = False,
+                       order_direction: str | None = None) -> None:
         """Fills in MAGI's detected boxes for a page, unless the user already
         touched that page (never clobber a manual edit with a late-arriving
         background detection).
@@ -226,53 +221,25 @@ class MarkerState:
         old to say who decided it - gives way. It still cannot cost anything:
         a page that HAS marks is refused even when forced, because that is
         the case where there is something to lose."""
-        # Recorded before anything else, including for a page that will be
-        # refused below: what MAGI thinks of a page the user has edited is
-        # exactly what relabelling needs to compare that edit against.
-        self.record_ai_boxes(filename, boxes)
-        if filename in self.touched and (self.marks.get(filename) or not force):
-            return
-        # A forced pass that fills a page the user had emptied ends that
-        # decision: the page has panels now, and leaving the flag set would
-        # have it written back to crops.json as "deliberately empty".
-        if boxes:
-            self.decided.discard(filename)
-        self.marks[filename] = [
-            {"id": f"ai-{filename}-{i}", "x": b[0], "y": b[1], "w": b[2] - b[0], "h": b[3] - b[1], "src": "ai"}
-            for i, b in enumerate(boxes)
-        ]
-
-    # --- MAGI's own boxes, kept for relabelling ------------------------
-
-    def _load_ai_boxes(self) -> None:
-        path = self.chapter_dir / AI_BOXES_FILE
-        if not path.exists():
-            return
-        try:
-            data = read_json(path)
-        except Exception:
-            return
-        known = {page["filename"] for page in self.pages}
-        for filename, boxes in (data.get("pages") or {}).items():
-            if filename in known and isinstance(boxes, list):
-                self.ai_boxes[filename] = [[float(v) for v in box] for box in boxes if len(box) == 4]
-
-    def record_ai_boxes(self, filename: str, boxes: list[list[float]]) -> None:
-        self.ai_boxes[filename] = [[float(v) for v in box] for box in boxes]
-        self._ai_boxes_dirty = True
-
-    def save_ai_boxes(self) -> None:
-        """Writes the cache if a pass added to it. Not gated on auto-save:
-        these are MAGI's answers, not the user's marks, and losing them only
-        costs a GPU pass."""
-        if not self._ai_boxes_dirty:
-            return
-        write_json(self.chapter_dir / AI_BOXES_FILE, {"format": 1, "pages": self.ai_boxes})
-        self._ai_boxes_dirty = False
-
-    def pages_missing_ai_boxes(self, filenames: list[str] | None = None) -> list[str]:
-        """Pages relabelling can't judge yet: MAGI has never been run on them."""
-        return [f for f in self._selected(filenames) if f not in self.ai_boxes]
+        with self.lock:
+            if filename in self.touched and (self.marks.get(filename) or not force):
+                return
+            # A forced pass that fills a page the user had emptied ends that
+            # decision: the page has panels now, and leaving the flag set would
+            # have it written back to crops.json as "deliberately empty".
+            if boxes:
+                self.decided.discard(filename)
+            marks = [
+                {"id": f"ai-{filename}-{i}", "x": b[0], "y": b[1], "w": b[2] - b[0], "h": b[3] - b[1], "src": "ai"}
+                for i, b in enumerate(boxes)
+            ]
+            # The auto-order switch reaching detection: MAGI returns panels in
+            # whatever order it found them, and with auto-order on a freshly
+            # detected page has to arrive in reading order, or "every chapter
+            # stays in order" would only hold for pages somebody had touched.
+            if order_direction and len(marks) > 1:
+                marks = reading_order(marks, order_direction)
+            self.marks[filename] = marks
 
     # --- server-side rewrites of the marks -----------------------------
 
@@ -286,39 +253,18 @@ class MarkerState:
         A page that changed is flagged touched: its order is now a choice, and
         a detection pass still due for this chapter must not replace it with
         MAGI's."""
-        changed = 0
-        for filename in self._selected(filenames):
-            marks = self.marks.get(filename) or []
-            ordered = reading_order(marks, direction)
-            if order_changed(marks, ordered):
-                self.marks[filename] = ordered
-                self.touched.add(filename)
-                changed += 1
-        if changed:
-            self.revision += 1
-        return changed
-
-    def relabel_pages(self, filenames: list[str] | None) -> tuple[int, list[str]]:
-        """Re-derives every mark's `src` from MAGI's boxes for its page
-        (mark_ops.relabel). Returns (marks whose label changed, pages skipped
-        because MAGI has no boxes for them yet).
-
-        Geometry, order and touched are left alone - this only corrects what
-        a mark is called, which is the whole of what went wrong."""
-        changed = 0
-        unknown: list[str] = []
-        for filename in self._selected(filenames):
-            marks = self.marks.get(filename) or []
-            if not marks:
-                continue
-            boxes = self.ai_boxes.get(filename)
-            if boxes is None:
-                unknown.append(filename)
-                continue
-            changed += relabel(marks, boxes)
-        if changed:
-            self.revision += 1
-        return changed, unknown
+        with self.lock:
+            changed = 0
+            for filename in self._selected(filenames):
+                marks = self.marks.get(filename) or []
+                ordered = reading_order(marks, direction)
+                if order_changed(marks, ordered):
+                    self.marks[filename] = ordered
+                    self.touched.add(filename)
+                    changed += 1
+            if changed:
+                self.revision += 1
+            return changed
 
     def build_crops_json(self) -> dict[str, Any]:
         """This chapter's marks in the shape the cropper reads.

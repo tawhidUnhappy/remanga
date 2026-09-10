@@ -1,7 +1,7 @@
 // Everything that paints the current page's marks: the boxes on the canvas
 // stage and their mirror list in the sidebar.
 
-import { stage, panelList, panelCount, storyBadge } from "./dom.js";
+import { stage, panelList, panelCount, storyBadge, orderHint } from "./dom.js";
 import { state } from "./state.js";
 import { deleteMark, markDirty } from "./marks.js";
 import { onMarkMouseDown } from "./drag-resize.js";
@@ -58,6 +58,9 @@ function updateStoryBadge() {
 
 function renderList() {
   panelCount.textContent = state.marks.length;
+  orderHint.innerHTML = state.autoOrder
+    ? "Auto-order is on — panels stay in reading order. Turn it off to order them yourself."
+    : "Drag <b>⠿</b> to reorder — this sets narration order.";
   if (!state.marks.length) {
     panelList.innerHTML = state.readOnly
       ? `<div class="empty-list">No panels marked on this page.</div>`
@@ -70,10 +73,13 @@ function renderList() {
     row.className = "panel-row" + (m.id === state.selectedId ? " selected" : "") + (m.src === "ai" ? " is-ai" : "");
     // Reordering IS an edit - it's what sets narration order - so a viewer
     // neither drags nor shows a grip to drag by.
-    row.draggable = !state.readOnly;
+    // With auto-order on, a dragged order would be re-sorted on the very next
+    // save, so the handle isn't offered: the switch decides the order, and
+    // turning it off is how you get the handle back.
+    row.draggable = !state.readOnly && !state.autoOrder;
     row.dataset.index = i;
     row.innerHTML = `
-      ${state.readOnly ? "" : `<span class="grip">⠿</span>`}
+      ${state.readOnly || state.autoOrder ? "" : `<span class="grip">⠿</span>`}
       <span class="order-badge">${i + 1}</span>
       <span class="panel-row-main">
         <span class="panel-row-title">Panel ${i + 1}

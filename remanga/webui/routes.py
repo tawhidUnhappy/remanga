@@ -43,7 +43,7 @@ def _chapter_span(session: MarkerSession, first: Any, last: Any) -> list[str] | 
 def _scope_targets(session: MarkerSession, body: dict[str, Any]) -> tuple[list[str], list[str] | None] | str:
     """The chapters (and, for "page", the one page) a scoped request covers -
     or an error message. The same four scopes the Detect button takes, so
-    Reorder and Relabel mean exactly what Detect means by "this chapter" or
+    Reorder means exactly what Detect means by "this chapter" or
     "4 to 9"."""
     scope = str(body.get("scope") or "chapter")
     if scope == "page":
@@ -124,9 +124,9 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
             return jsonify({"ok": False, "error": "This session is read-only"}), 403
         state = session.current
         # The browser says which revision of this chapter its marks are from.
-        # A reorder or relabel the server ran since then means the browser's
-        # copy is out of date, and writing it would put the old order and
-        # labels straight back over the new ones - so it's refused, and the
+        # A reorder the server ran since then means the browser's
+        # copy is out of date, and writing it would put the old order
+        # straight back over the new one - so it's refused, and the
         # browser reloads the chapter instead.
         rev = request.args.get("rev")
         if rev is not None and rev.isdigit() and int(rev) != state.revision:
@@ -139,28 +139,19 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
         session.mark_dirty(session.chapter_num)
         return jsonify({"ok": True, "marks": stored, "revision": state.revision})
 
-    def queue_op(kind: str):
+    @app.post("/api/reorder")
+    def reorder_marks():
+        """Put marks into reading order over a page, a chapter, a range or
+        everything - immediately, not queued behind detection (see
+        MarkerSession.reorder). Same scopes as /api/detect."""
         if session.read_only:
             return jsonify({"ok": False, "error": "This session is read-only"}), 403
         target = _scope_targets(session, request.get_json(silent=True) or {})
         if isinstance(target, str):
             return jsonify({"ok": False, "error": target}), 400
         chapters, pages = target
-        accepted = session.queue_ops(kind, config, chapters, pages)
-        return jsonify({"ok": True, "accepted": accepted, **session.detection_status()})
-
-    @app.post("/api/reorder")
-    def reorder_marks():
-        """Put marks into reading order, over a page, a chapter, a range or
-        everything. Same scopes as /api/detect."""
-        return queue_op("reorder")
-
-    @app.post("/api/relabel")
-    def relabel_marks():
-        """Re-derive which marks are MAGI's own by comparing them with MAGI's
-        boxes (cached in magi_boxes.json; MAGI runs only for pages it has
-        never seen). Same scopes as /api/detect."""
-        return queue_op("relabel")
+        changed = session.reorder(chapters, pages)
+        return jsonify({"ok": True, "changed": changed, "revision": session.current.revision})
 
     @app.get("/api/outline")
     def get_outline():
@@ -265,7 +256,7 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
             config.auto_save = session.auto_save
             saved["auto_save"] = session.auto_save
         if "auto_order" in body:
-            session.auto_order = bool(body["auto_order"])
+            session.set_auto_order(bool(body["auto_order"]))
             config.auto_order = session.auto_order
             saved["auto_order"] = session.auto_order
         if "scope" in body:

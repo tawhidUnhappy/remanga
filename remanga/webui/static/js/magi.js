@@ -1,15 +1,13 @@
-// The assist card: choosing which pages, running Detect / Reorder / Relabel
-// on them, the saved switches, and reporting what the session's job queue is
-// doing.
+// The assist card: choosing which pages, running Detect / Reorder on them, the
+// saved switches, and reporting what the session's detection queue is doing.
 //
-// One scope control drives all three buttons, because "chapters 4 to 9" means
-// the same pages whether MAGI is finding panels in them, renumbering them into
-// reading order, or re-checking which marks are still its own. None of them
-// can undo anyone's drawing: Detect is refused on a page that has been edited
-// (MarkerState.apply_detected), Reorder only renumbers, Relabel only renames.
+// One scope control drives both buttons, because "chapters 4 to 9" means the
+// same pages whether MAGI is finding panels in them or they are being put into
+// reading order. Neither can undo anyone's drawing: Detect is refused on a page
+// that has been edited (MarkerState.apply_detected), and Reorder only renumbers.
 
 import {
-  assistBtn, reorderBtn, relabelBtn, assistProgressBar, assistStatus, scopeSelect,
+  assistBtn, reorderBtn, assistProgressBar, assistStatus, scopeSelect,
   assistRange, rangeFrom, rangeTo, autoAllToggle, autoSaveToggle, autoOrderToggle,
 } from "./dom.js";
 import { state, currentFilename } from "./state.js";
@@ -18,10 +16,6 @@ import { render } from "./render.js";
 import { refreshOutline } from "./outline.js";
 import { flushSave } from "./marks.js";
 
-const ACTION_BUTTONS = [assistBtn, reorderBtn, relabelBtn];
-const ENDPOINT = { detect: "/api/detect", reorder: "/api/reorder", relabel: "/api/relabel" };
-const VERB = { detect: "Detecting", reorder: "Reordering", relabel: "Relabelling" };
-const DONE = { detect: "detected", reorder: "reordered", relabel: "relabelled" };
 const MAGI_OFF = "MAGI is off in config.json - Reorder still works";
 
 function fillRangeSelects() {
@@ -54,7 +48,8 @@ export function syncAssistCard() {
   scopeSelect.value = state.chapter.detect_scope || "chapter";
   autoAllToggle.checked = !!state.chapter.auto_all;
   autoSaveToggle.checked = state.chapter.auto_save !== false;
-  autoOrderToggle.checked = !!state.chapter.auto_order;
+  state.autoOrder = !!state.chapter.auto_order;
+  autoOrderToggle.checked = state.autoOrder;
   assistBtn.disabled = !state.magiEnabled;
   fillRangeSelects();
   syncScopeUi();
@@ -83,46 +78,81 @@ function notice(text) {
   assistStatus.textContent = text;
 }
 
-export async function runOp(kind) {
+async function reloadMarks() {
+  const { reloadChapterMarks } = await import("./chapter-nav.js");
+  await reloadChapterMarks();
+}
+
+async function postJson(path, body) {
+  return api(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function runDetect() {
   const body = scopeBody();
-  ACTION_BUTTONS.forEach(button => { button.disabled = true; });
-  // Whatever is on screen reaches the server first. Reorder and Relabel work
-  // on the server's copy of the marks, and must not work on one that is
-  // missing the box drawn a second ago.
+  assistBtn.disabled = true;
+  // Whatever is on screen reaches the server first, so a page edited a second
+  // ago counts as edited when MAGI gets to it.
   await flushSave(true);
-  assistStatus.textContent = `${VERB[kind]} ${describeScope(body)}…`;
+  assistStatus.textContent = `Detecting ${describeScope(body)}…`;
   try {
-    const res = await api(ENDPOINT[kind], {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!res.accepted.length) {
-      notice(kind === "detect"
-        ? "Nothing to detect - already done this session"
-        : `Already queued - nothing new to ${kind}`);
-    }
+    const res = await postJson("/api/detect", body);
+    if (!res.accepted.length) notice("Nothing to detect - already done this session");
   } catch (e) {
     notice("Couldn't start: " + e.message);
   }
-  // Straight away, not at the next tick: the buttons are disabled and the
-  // text says "Reordering…" until the server says otherwise.
+  // Straight away, not at the next tick: the button stays disabled and the
+  // card says what's running until the server says otherwise.
   pollDetectStatus();
+}
+
+// Reorder is immediate (MarkerSession.reorder) - the new order is already in
+// place when the response arrives, so the tab takes it right then instead of
+// waiting for a poll, and it never queues behind a detection pass.
+export async function runReorder() {
+  const body = scopeBody();
+  reorderBtn.disabled = true;
+  await flushSave(true);
+  try {
+    const res = await postJson("/api/reorder", body);
+    const changed = res.changed || {};
+    const pages = Object.values(changed).reduce((n, count) => n + count, 0);
+    const chapters = Object.keys(changed).length;
+    await reloadMarks();
+    refreshOutline();
+    notice(pages
+      ? `Reordered ${pages} page(s)${chapters > 1 ? ` across ${chapters} chapters` : ""}`
+      : `${describeScope(body)[0].toUpperCase()}${describeScope(body).slice(1)} is already in reading order`);
+  } catch (e) {
+    notice("Couldn't reorder: " + e.message);
+  } finally {
+    reorderBtn.disabled = false;
+  }
 }
 
 async function saveSetting(values) {
   try {
-    const res = await api("/api/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values),
-    });
+    const res = await postJson("/api/settings", values);
     // The payload the tab is holding is what syncAssistCard reads on the next
     // chapter change, so it has to learn what was just saved too.
     if (state.chapter) Object.assign(state.chapter, {
       auto_all: res.auto_all, auto_save: res.auto_save, auto_order: res.auto_order,
       detect_scope: values.scope ?? state.chapter.detect_scope,
     });
+    if ("auto_order" in values) {
+      state.autoOrder = !!res.auto_order;
+      // Turning it on reorders the chapter on screen before the response comes
+      // back (and every other chapter behind it): take that order now, and let
+      // the panel list drop or bring back its drag handles.
+      await reloadMarks();
+      render();
+      notice(state.autoOrder
+        ? "Auto-order on - every chapter is kept in reading order"
+        : "Auto-order off - drag panels in the list to order them yourself");
+    }
   } catch (e) {
     notice("Couldn't save that setting: " + e.message);
   }
@@ -146,8 +176,6 @@ export async function pollDetectStatus() {
   const queued = status.queued || [];
   const busy = !!status.active || queued.length > 0;
   assistBtn.disabled = busy || !state.magiEnabled;
-  reorderBtn.disabled = busy;
-  relabelBtn.disabled = busy;
 
   // Everything below reads the RUN (run_done / run_total, last_run), never the
   // chapter on screen. Reading the current chapter's own counters is what left
@@ -157,7 +185,7 @@ export async function pollDetectStatus() {
     const within = status.active_total ? status.active_done / status.active_total : 0;
     const overall = status.run_total ? Math.min(1, (status.run_done + within) / status.run_total) : 0;
     assistProgressBar.style.width = Math.round(overall * 100) + "%";
-    let text = status.active ? `${VERB[status.active_kind] || "Working on"} ch ${status.active}` : "Starting…";
+    let text = status.active ? `Detecting ch ${status.active}` : "Starting…";
     if (status.active && status.active_total) text += ` · page ${status.active_done}/${status.active_total}`;
     if (status.run_total > 1) text += ` · ${Math.min(status.run_done + 1, status.run_total)} of ${status.run_total}`;
     assistStatus.textContent = text;
@@ -167,10 +195,9 @@ export async function pollDetectStatus() {
     assistStatus.textContent = "Error: " + status.error;
   } else if (status.last_run && status.last_run.jobs) {
     assistProgressBar.style.width = "100%";
-    const what = status.last_run.kinds.map(kind => DONE[kind] || kind).join(" + ");
     const chapters = status.last_run.chapters || [];
     assistStatus.textContent =
-      `Done · ${what} ${chapters.length === 1 ? "ch " + chapters[0] : chapters.length + " chapters"}`;
+      `Done · detected ${chapters.length === 1 ? "ch " + chapters[0] : chapters.length + " chapters"}`;
   } else {
     assistProgressBar.style.width = "0%";
     assistStatus.textContent = state.magiEnabled ? "Idle" : MAGI_OFF;
@@ -191,12 +218,11 @@ export async function pollDetectStatus() {
   // anything but the one on screen is dropped.
   if (status.chapter !== state.chapter.chapter) return;
 
-  // A reorder or relabel rewrote this chapter on the server. The tab's copy is
-  // now the old one, and would be autosaved straight back over the new order
-  // and labels - so take the server's instead.
+  // A reorder rewrote this chapter on the server (the background one that
+  // turning auto-order on starts, say). The tab's copy is now the old order,
+  // and would be autosaved straight back - so take the server's instead.
   if (typeof status.revision === "number" && status.revision !== state.chapterRevision) {
-    const { reloadChapterMarks } = await import("./chapter-nav.js");
-    await reloadChapterMarks();
+    await reloadMarks();
     return;
   }
 
@@ -212,9 +238,8 @@ export async function pollDetectStatus() {
   }
 }
 
-assistBtn.addEventListener("click", () => runOp("detect"));
-reorderBtn.addEventListener("click", () => runOp("reorder"));
-relabelBtn.addEventListener("click", () => runOp("relabel"));
+assistBtn.addEventListener("click", runDetect);
+reorderBtn.addEventListener("click", runReorder);
 scopeSelect.addEventListener("change", () => { syncScopeUi(); saveSetting({ scope: scopeSelect.value }); });
 autoAllToggle.addEventListener("change", () => saveSetting({ auto_all: autoAllToggle.checked }));
 autoSaveToggle.addEventListener("change", () => saveSetting({ auto_save: autoSaveToggle.checked }));

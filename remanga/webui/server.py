@@ -103,7 +103,9 @@ def launch_and_wait_all(project_name: str, chapters: list[str], config: MarkerCo
     # it on - the whole project queued for detection before anyone clicks
     # anything.
     session.auto_save = config.auto_save
-    session.auto_order = config.auto_order
+    # On: every chapter is put in reading order before the tab even opens
+    # (the rest in the background) - see MarkerSession.set_auto_order.
+    session.set_auto_order(config.auto_order)
     if config.auto_detect_all:
         session.set_auto_all(True, config)
     else:

@@ -18,7 +18,7 @@ from remanga.webui.marker_state import MarkerState
 
 def run_detection(state: MarkerState, config: MarkerConfig,
                   only_pages: list[str] | None = None, force: bool = False,
-                  record_only: bool = False) -> None:
+                  order_direction: str | None = None) -> None:
     """Detects panels for this chapter, streaming progress into `state`.
 
     `only_pages` narrows it to specific page filenames - what the assist
@@ -26,9 +26,8 @@ def run_detection(state: MarkerState, config: MarkerConfig,
     chapter that the user hasn't already touched, which is what every other
     scope wants.
 
-    `record_only` runs MAGI purely to learn its boxes (MarkerState.ai_boxes)
-    without applying any - what relabelling needs, on pages the user has
-    edited as much as on any other.
+    `order_direction` is the auto-order switch: set, every detected page is
+    stored in reading order (see MarkerState.apply_detected).
 
     `force` carries that same single-page request down to apply_detected,
     where it lets a page previously recorded as having no panels be detected
@@ -52,12 +51,6 @@ def run_detection(state: MarkerState, config: MarkerConfig,
         filename = page["filename"]
         if wanted is not None and filename not in wanted:
             return False
-        # record_only is relabelling asking what MAGI makes of a page, which
-        # it needs for EDITED pages too - those are the ones whose labels are
-        # in question. So touched doesn't matter here; only whether MAGI's
-        # answer is already cached.
-        if record_only:
-            return filename not in state.ai_boxes
         if filename not in state.touched:
             return True
         # Touched: only a forced request for a page with nothing on it gets
@@ -76,10 +69,7 @@ def run_detection(state: MarkerState, config: MarkerConfig,
         return
 
     def on_page_done(filename: str, boxes: list[list[float]]) -> None:
-        if record_only:
-            state.record_ai_boxes(filename, boxes)   # remember, never apply
-        else:
-            state.apply_detected(filename, boxes, force=force)
+        state.apply_detected(filename, boxes, force=force, order_direction=order_direction)
         state.detect_done += 1
 
     try:

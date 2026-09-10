@@ -781,28 +781,37 @@ Footguns hit while building it, all still live:
   guarded by `MarkerState.detect_started`) - every navigation back would
   otherwise spawn another worker and reload the model.
 - **`src` (AI vs manual) was never written to crops.json**, and
-  `_load_existing_crops` hardcoded `"src": "manual"` - so every AI mark came
-  back as MANUAL the first time its chapter was saved and reopened (with
-  background auto-save: every chapter). Each panel now carries `src`; legacy
-  files read manual, and `relabel` (IoU vs cached MAGI boxes, one-to-one,
-  `mark_ops.AI_MATCH_IOU = 0.9`) is the repair. MAGI's raw boxes are cached per
-  chapter in `magi_boxes.json` - `apply_detected` records them BEFORE its
-  touched check, because boxes for edited pages are exactly what relabel
-  compares against; `run_detection(record_only=True)` fills the cache without
-  applying anything.
-- **Reading order lives in ONE place: `webui/mark_ops.py:reading_order`**
-  (Reorder at every scope + the auto-order switch use it; there was no
-  existing sort anywhere - MAGI's worker passes boxes through unsorted). First
-  version grouped rows by "centre inside the band so far", which depends on
-  input order: tall-right + stacked-left came out L1,T,L2. Now recursive
-  XY-cut (clean horizontal gutter first, then vertical in reading direction),
-  plus `_merge_gridded`: splitting at EVERY vertical gutter at once turned a
-  tall panel beside a 2x2 grid into three columns and read the grid
-  column-wise; neighbouring columns that still share a horizontal gutter are
-  re-merged. Layout tests for all of these are worth re-running on any change.
+  `_load_existing_crops` hardcoded `"src": "manual"` - every AI mark came back
+  MANUAL on the first save+reopen. Each panel now carries `src`. A relabel
+  feature (IoU against cached MAGI boxes) was built and then REMOVED at the
+  user's request as too buggy; don't resurrect it without asking.
+- **crops.json `box_1000` is `[ymin, xmin, ymax, xmax]`** (cropper/geometry.py),
+  NOT `[x1, y1, x2, y2]`. A test fixture written the other way round produced
+  panels stacked top-to-bottom instead of side by side, and made a working
+  reorder look broken for a whole round of debugging.
+- **Reading order lives in ONE place: `webui/mark_ops.py:reading_order`** (the
+  Reorder button at every scope + auto-order use it; MAGI's worker returns
+  boxes unsorted and the cropper never sorts). Recursive XY-cut +
+  `_merge_gridded` (a grid beside a tall panel reads row-wise). Two findings
+  from REAL data, both invisible in synthetic tests:
+  - real neighbouring marks overlap 20-70px, so gutters use a RELATIVE
+    allowance (`OVERLAP_RATIO` = 1/4 of the smaller extent); a fixed 8px found
+    no gutters and fell back to a top-edge sort (89.7% agreement);
+  - in the no-gutter fallback, "same row" needs TOPS ALIGNED, not just
+    overlap - an inset slanting over a big panel's bottom was read first.
+  **The oracle:** a fully narrated project's crops.json order is order a human
+  verified. Load each chapter with `MarkerState` (read-only use) and compare
+  `reading_order(marks)` ids to the saved ids - currently 126/126 on
+  reincarnatedAsTheLeaderOfAVillainParty. Re-run it on any change to mark_ops.
+- **Reorder is synchronous, NOT queued** (`MarkerSession.reorder`, under each
+  `MarkerState.lock`): queued behind detection it could wait hours with Keep
+  marking on and looked like it did nothing. `set_auto_order(True)` reorders the
+  current chapter at once and every other chapter on a background thread
+  (saving changed ones); detection applies `reading_order` when auto-order is
+  on; the panel list hides drag handles while it's on.
 - **A server-side rewrite of marks gets undone by the tab's autosave** unless
   guarded: the browser flushes its (old) copy on every page change. Each
-  MarkerState has `revision` (bumped by reorder/relabel); the browser sends
+  MarkerState has `revision` (bumped by reorder); the browser sends
   `?rev=` with `/api/marks` and gets 409 if stale, and the status poll reloads
   the chapter (`chapter-nav.js:reloadChapterMarks`, keeps page/tool/zoom) when
   the revision moves. Auto-order replies are adopted only if `editSeq` for that
@@ -881,9 +890,11 @@ a real export, and every `getElementById` in dom.js must match an id in
 index.html (a miss is a module-scope TypeError that kills the whole UI).
 
 **`pkill -f <pattern>` kills the shell running the command** when the pattern
-appears in that command's own text - the tool call dies with exit 144 and the
-rest of the command never runs. Use a pattern that doesn't literally match
-itself: `pkill -f "serve2[.]py"`.
+matches that command's own text - the tool call dies with exit 144 and the rest
+of the command never runs. `pkill -f "serve2[.]py"` avoids matching the pattern
+itself, but NOT if the same command also mentions `serve2.py` literally (e.g.
+started it a few lines earlier) - that killed a cleanup step once. Safest: start
+the server with `... & SERVER=$!` and `kill $SERVER`.
 
 ## ffmpeg output: `-progress`, never raw stats
 

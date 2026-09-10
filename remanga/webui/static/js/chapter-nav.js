@@ -45,6 +45,7 @@ export async function applyChapter(payload, startPage = 0) {
   state.decidedPages = new Set(payload.decided || []);
   state.chapterRevision = payload.revision || 0;
   state.editSeq = {};
+  state.autoOrder = !!payload.auto_order;
   state.selectedId = null;
   state.pageLoaded = false;
   for (const p of payload.pages) state.pageMarksCache[p.filename] = payload.marks[p.filename] || [];
@@ -108,8 +109,7 @@ function resetAssistCard() {
   // statement about the wrong chapter.
   assistProgressBar.style.width = "0%";
   // MAGI being off greys out Detect only (syncAssistCard). Reorder needs no
-  // model at all, and Relabel works from boxes MAGI already produced, so
-  // disabling the whole card with it would take both away for no reason.
+  // model at all, so disabling the whole card with it would take that too.
   assistCard.classList.remove("disabled");
   assistStatus.textContent = state.magiEnabled ? "Idle" : "MAGI is off in config.json - Reorder still works";
   syncAssistCard();
@@ -117,8 +117,8 @@ function resetAssistCard() {
 
 // Takes the server's marks for the chapter on screen without leaving the page
 // you're on, the tool you're holding or the zoom you set - for when a reorder
-// or relabel rewrote them server-side. A full applyChapter would reset all of
-// those for what is, from the user's side, just the numbers and labels moving.
+// rewrote them server-side. A full applyChapter would reset all of those for
+// what is, from the user's side, just the panel numbers moving.
 export async function reloadChapterMarks() {
   let payload;
   try { payload = await api("/api/chapter"); } catch { return; }

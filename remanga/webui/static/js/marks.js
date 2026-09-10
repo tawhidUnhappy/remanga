@@ -65,9 +65,9 @@ export async function flushSave(immediate) {
     adoptStoredOrder(filename, res.marks, seqAtSend);
   } catch (e) {
     if (e.status === 409 && state.chapter.chapter === chapterAtSend) {
-      // The server rewrote this chapter (a reorder or relabel) after these
-      // marks were loaded. Writing them would put the old order and labels
-      // back, so take the server's version instead.
+      // The server rewrote this chapter (a reorder) after these marks were
+      // loaded. Writing them would put the old order back, so take the
+      // server's version instead.
       const { reloadChapterMarks } = await import("./chapter-nav.js");
       await reloadChapterMarks();
       return;
