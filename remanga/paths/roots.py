@@ -5,7 +5,7 @@ where cross-project shared assets (voice/BGM/TTS transcript/narration
 lessons) live. Every other module in remanga/paths/ builds on these instead
 of re-deriving `Path(__file__).resolve().parent...` or `Path("config.json")`
 on its own - that duplication (this exact literal used to be defined
-separately in remanga/config/root.py AND remanga/webui/shortcuts_store.py) is
+separately in remanga/config/root.py AND remanga/webui/settings_store.py) is
 exactly what this package exists to rule out.
 
 Swapping any of these later (e.g. config.json somewhere other than cwd, a

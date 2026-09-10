@@ -76,8 +76,33 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l1.8 5.6L19 9.4l-5.2 1.8L12 17l-1.8-5.8L5 9.4l5.2-1.8z"/></svg>
         MAGI v3 Assist
       </div>
-      <p>Auto-detects every panel in this chapter so you only need to adjust, not draw from scratch.</p>
-      <button class="assist-btn" id="assistBtn">Re-run on all pages</button>
+      <p>Auto-detects panels so you only need to adjust, not draw from scratch. It never touches a page you've edited.</p>
+
+      <div class="assist-run">
+        <select class="assist-select" id="scopeSelect" title="How much to detect">
+          <option value="page">This page</option>
+          <option value="chapter">This chapter</option>
+          <option value="range">Chapter range…</option>
+          <option value="all">All chapters</option>
+        </select>
+        <button class="assist-btn" id="assistBtn">Run</button>
+      </div>
+
+      <div class="assist-range" id="assistRange" hidden>
+        <select class="assist-select" id="rangeFrom" title="First chapter"></select>
+        <span class="assist-range-arrow">→</span>
+        <select class="assist-select" id="rangeTo" title="Last chapter"></select>
+      </div>
+
+      <label class="assist-switch">
+        <input type="checkbox" id="autoAllToggle">
+        <span>Keep marking every chapter</span>
+      </label>
+      <label class="assist-switch">
+        <input type="checkbox" id="autoSaveToggle">
+        <span>Auto-save chapters</span>
+      </label>
+
       <div class="assist-progress"><span id="assistProgressBar"></span></div>
       <div class="assist-status" id="assistStatus">Idle</div>
     </div>

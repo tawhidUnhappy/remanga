@@ -21,7 +21,7 @@ import { state } from "./state.js";
 import { api } from "./api.js";
 import { flushSave } from "./marks.js";
 import { loadPage } from "./page-nav.js";
-import { pollDetectStatus } from "./magi.js";
+import { pollDetectStatus, syncAssistCard } from "./magi.js";
 import { loadShortcuts } from "./shortcuts.js";
 import { setMode } from "./keyboard.js";
 import { refreshOutline } from "./outline.js";
@@ -112,6 +112,7 @@ function resetAssistCard() {
   assistCard.classList.remove("disabled");
   assistBtn.disabled = false;
   assistStatus.textContent = "Idle";
+  syncAssistCard();
 }
 
 export async function gotoChapter(index, startPage = 0) {
@@ -134,17 +135,28 @@ export async function gotoChapter(index, startPage = 0) {
 // advancing - the "I'm done, don't walk me through the rest" answer, which
 // has to exist because the terminal is blocked on this session and closing
 // the tab tells it nothing.
-export async function saveAndContinue(end = false) {
+export async function saveAndContinue(end = false, saveAll = false) {
   await flushSave(true);
   try {
     const res = await api("/api/finish", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ end }),
+      body: JSON.stringify({ end, save_all: saveAll }),
     });
     if (!res.done) {
       await applyChapter(res);
       return;
+    }
+    // With auto-save off, chapters edited or detected along the way are
+    // still only in the session. This is the last moment anyone can be
+    // asked, so they are - rather than the switch quietly costing an
+    // afternoon, or overriding it and making the switch a lie.
+    const unsaved = res.unsaved || [];
+    if (unsaved.length && !saveAll) {
+      const write = confirm(
+        `${unsaved.length} chapter(s) still have marks that were never saved: ` +
+        `${unsaved.join(", ")}.\n\nWrite their crops.json now?`);
+      if (write) { await saveAndContinue(true, true); return; }
     }
     const done = state.chapter.chapter_index + 1;
     const total = state.chapter.chapter_total;

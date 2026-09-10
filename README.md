@@ -394,6 +394,7 @@ A few worth calling out specifically - `cropper.package` is the flat vision-outp
 - **`downloader.zip_pages_enabled`** (default `false`) — bundles the raw downloaded pages into `pages.zip`. Off by default because nothing downstream reads it; it's only useful if you want to hand a chapter's pages to an LLM by hand. Named for exactly what it zips (the downloaded *pages*) so it's never confused with `cropper.package` below, which zips something completely different.
 - **`cropper.package.sheets`** (default `true`) — generates `sheets/` contact sheet composites. `cropper.package.sheets_zip` (below) builds them automatically the moment it's checked, whether or not this is also on. Every sheet is merged from its panels' **full original resolution** — never downscaled — with only lossless re-encoding used to keep the file size down.
 - **`marker.click_to_select`** (default `true`) — see [Panel Marker Web UI](#panel-marker-web-ui) for what this protects against.
+- **`marker.auto_detect_scope`** (default `"chapter"`), **`marker.auto_detect_all`** (default `false`) and **`marker.auto_save`** (default `true`) — the assist card's own switches, written by the marker itself when you change them in the browser. See [Mark Panels](#2-mark-panels).
 - **`tts.synth_timeout_seconds`** (default `180`) — see [Reliability](#reliability-crashes-interrupts--resuming).
 
 ---
@@ -431,7 +432,29 @@ Launches the **Panel Marker** web UI: MAGI v3 pre-fills every page's panel boxes
 ```
 One server, one browser tab, one session. **Save & Next chapter** writes that chapter's `crops.json` and swaps the next chapter's pages into the page already open — no reload, so the zoom, the tool and the shortcuts survive it — and the **‹ Ch › arrows** in the top bar go back to a chapter already done, so checking chapter 3's marks after finishing chapter 9 costs a click rather than another run of the command. Leaving a chapter always writes its `crops.json` first, so nothing lives only in the server's memory. **Finish here** ends the session early and leaves the remaining chapters unmarked; it asks first, because the terminal is blocked on the session and closing the tab tells it nothing.
 
-Chapters with nothing downloaded are named and skipped before the browser opens. MAGI runs once per chapter, when you arrive at it — not again when you navigate back.
+Chapters with nothing downloaded are named and skipped before the browser opens.
+
+**How much MAGI marks is yours to choose.** The assist card has a scope, and Run does exactly that much:
+
+| Scope | What it detects |
+|---|---|
+| **This page** | just the page on screen |
+| **This chapter** | the chapter on screen (what the button always used to mean) |
+| **Chapter range…** | every chapter from one to another, inclusive — a from/to pair of dropdowns, opening on *this chapter → the last one* |
+| **All chapters** | every chapter in the session |
+
+The range is the one that pays for itself: *"the power went out somewhere around chapter 9"* is a from/to, and saying it any other way is either nine trips through the UI or redetecting a manga that was already three-quarters done. Reversed is fine — pick 9 then 4 and it means the same span.
+
+**`Keep marking every chapter`** queues the whole session and works forward through it in the background while you mark the one in front of you, so arriving at chapter 6 finds it already detected instead of starting a wait. **`Auto-save chapters`** controls whether a chapter's `crops.json` is written without being asked for — when you leave it, and when the background detector finishes one. Both switches, and the scope, are **saved into `config.json`** (`marker.auto_detect_all`, `marker.auto_save`, `marker.auto_detect_scope`) and apply to the next session and the next project: they describe how you work, not anything about today's manga.
+
+Everything here is safe on a half-finished project, which is the point:
+
+- **A page you have edited is never overwritten.** The server refuses to apply a detection to a touched page, so the widest scope still only fills in what's actually missing. That holds for an explicit *This page* run too.
+- **A chapter already detected this session isn't detected twice** — asking for "all chapters" when everything is done queues nothing and says so.
+- Detection is **one chapter at a time**, on a single worker. Each pass loads MAGI onto the GPU, so two at once is not twice as fast.
+- A chapter detected in the background is **written to disk as soon as its pass finishes** (with auto-save on), so a closed tab, an early Finish or another power cut costs nothing that was already computed.
+
+With auto-save **off**, nothing reaches disk until you press Save. Marks still live in the session — leave a chapter and come back and they're there — and the assist card keeps a running count of unsaved chapters. Closing the session asks whether to write them, so "I decide when" never quietly turns into losing an afternoon.
 
 **The session outline** — the sidebar has two tabs: **This page** (the panel list for the page you're on) and **All chapters**, a collapsible tree of the whole session:
 
@@ -952,7 +975,7 @@ remanga/
 │   │   └── scripts/             # download_kokoro.py, download_deepseek_ocr.py
 │   ├── webui/                  # Panel Marker: server.py (entry point/lifecycle), routes.py (Flask app/API),
 │   │   │                       # marker_state.py (session state), detection.py + magi_assist.py (MAGI v3),
-│   │   │                       # shortcuts_store.py (Shortcuts menu persistence)
+│   │   │                       # settings_store.py (Shortcuts + assist persistence)
 │   │   ├── static/js/           # Frontend: render/drag-resize/draw/zoom-pan/shortcuts/magi/page-nav modules
 │   │   └── scripts/             # magi_worker.py, download_magi.py - run inside .tools/venv-magi
 │   ├── video/                  # compose.py (frame compositor) & render.py (GPU/CPU renderer)

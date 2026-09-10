@@ -1,19 +1,30 @@
-"""Runs MAGI v3 panel detection for a chapter on a background thread and
-streams progress into a MarkerState, so the browser (polling
-GET /api/detect/status - see routes.py) sees pages fill in one at a time
-instead of blocking on the whole chapter.
+"""Runs MAGI v3 panel detection for one chapter, streaming progress into its
+MarkerState so the browser (polling GET /api/detect/status - see routes.py)
+sees pages fill in one at a time instead of blocking on the whole chapter.
+
+This is the unit of work, not the scheduler: what gets detected, in what
+order, and on which thread is MarkerSession's detection queue
+(marker_session.py). Only one of these runs at a time - MAGI loads a model
+onto the GPU per pass, and two at once is how a machine with one GPU starts
+swapping instead of working.
 """
 
 from __future__ import annotations
-
-import threading
 
 from remanga.config import MarkerConfig
 from remanga.console import console, escape as _esc
 from remanga.webui.marker_state import MarkerState
 
 
-def run_detection(state: MarkerState, config: MarkerConfig) -> None:
+def run_detection(state: MarkerState, config: MarkerConfig,
+                  only_pages: list[str] | None = None) -> None:
+    """Detects panels for this chapter, streaming progress into `state`.
+
+    `only_pages` narrows it to specific page filenames - what the assist
+    card's "This page" scope asks for. Left None it means every page of the
+    chapter that the user hasn't already touched, which is what every other
+    scope wants.
+    """
     from remanga.webui.magi_assist import detect_panels_for_pages
 
     # Pages already touched - crops.json was pre-loaded server-side (a
@@ -25,7 +36,11 @@ def run_detection(state: MarkerState, config: MarkerConfig) -> None:
     # actual effect: "redetecting" a chapter that already has all its marks.
     # Skip them here so the whole detection pass - worker spawn included -
     # is skipped entirely once nothing is actually pending.
-    pending_pages = [p for p in state.pages if p["filename"] not in state.touched]
+    wanted = set(only_pages) if only_pages is not None else None
+    pending_pages = [
+        p for p in state.pages
+        if p["filename"] not in state.touched and (wanted is None or p["filename"] in wanted)
+    ]
 
     state.detect_running = True
     state.detect_done = 0
@@ -48,18 +63,3 @@ def run_detection(state: MarkerState, config: MarkerConfig) -> None:
         console.print(f"[bold red]MAGI v3 detection failed:[/] {_esc(str(e))}")
     finally:
         state.detect_running = False
-
-
-def start_once(state: MarkerState, config: MarkerConfig) -> None:
-    """Kicks off this chapter's detection pass on a background thread, unless
-    MAGI is off or this chapter has already had one.
-
-    The "already had one" half is what a multi-chapter session needs: the
-    cursor lands on a chapter every time the user navigates to it, and each
-    landing would otherwise spawn another worker - a full model load and a
-    second pass over pages whose marks the user has since been editing. An
-    explicit re-run is still always available (POST /api/detect)."""
-    if not config.magi_enabled or state.detect_started:
-        return
-    state.detect_started = True
-    threading.Thread(target=run_detection, args=(state, config), daemon=True).start()

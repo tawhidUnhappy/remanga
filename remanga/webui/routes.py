@@ -1,7 +1,8 @@
 """The panel marker's Flask app: every /api/* route and the static-file/index
 routes. Pure HTTP glue - the chapter list and cursor live in MarkerSession
 (marker_session.py), one chapter's marks in MarkerState (marker_state.py),
-detection runs via detection.py, shortcut persistence via shortcuts_store.py.
+detection is queued on the session (one worker, see marker_session.py) and
+run by detection.py, settings persistence via settings_store.py.
 See server.py:launch_and_wait for how this gets started and torn down.
 
 Every route reads `session.current`, never a captured state object: the
@@ -12,15 +13,31 @@ state it was created with would keep serving the chapter the tab opened on.
 
 from __future__ import annotations
 
-import threading
+from typing import Any
 
 from flask import Flask, jsonify, request, send_from_directory
 
 from remanga.config import MarkerConfig, ShortcutsConfig
 from remanga.paths import MARKER_STATIC_DIR as STATIC_DIR
-from remanga.webui.detection import run_detection
 from remanga.webui.marker_session import MarkerSession
-from remanga.webui.shortcuts_store import persist_shortcuts
+from remanga.webui.settings_store import persist_marker_settings, persist_shortcuts
+
+
+def _chapter_span(session: MarkerSession, first: Any, last: Any) -> list[str] | None:
+    """The chapters from `first` to `last` inclusive, by chapter NUMBER as a
+    person would say them ("4" to "9"), not by index.
+
+    Reversed is accepted and normalized: someone who picks 9 and then 4 has
+    said which chapters they mean just as clearly as someone who picked them
+    the other way round."""
+    chapters = session.chapters
+    try:
+        start, end = chapters.index(str(first)), chapters.index(str(last))
+    except ValueError:
+        return None
+    if start > end:
+        start, end = end, start
+    return chapters[start:end + 1]
 
 
 def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
@@ -44,6 +61,7 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
             "touched": sorted(state.touched),
             "magi_enabled": config.magi_enabled,
             "click_to_select": config.click_to_select,
+            "detect_scope": config.auto_detect_scope,
         }
 
     @app.get("/")
@@ -79,6 +97,7 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
             return jsonify({"ok": False, "error": "This session is read-only"}), 403
         marks = request.get_json(force=True) or []
         session.current.set_marks(filename, marks)
+        session.mark_dirty(session.chapter_num)
         return jsonify({"ok": True})
 
     @app.get("/api/outline")
@@ -106,16 +125,45 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
 
     @app.post("/api/detect")
     def start_detect():
+        """Queue a MAGI pass. `scope` says how much:
+
+            page     just the page named in `filename` (the one on screen)
+            chapter  the chapter on screen
+            range    every chapter from `from` to `to`, inclusive
+            all      every chapter in the session
+
+        Range is the one that earns its keep: "I got as far as chapter 9
+        before the power went out" is a from/to, and expressing it any other
+        way means either nine clicks or redetecting the whole manga.
+        """
         if session.read_only:
             return jsonify({"ok": False, "error": "This session is read-only"}), 403
         if not config.magi_enabled:
             return jsonify({"ok": False, "error": "MAGI v3 assist is disabled in config.json"}), 400
-        state = session.current
-        if state.detect_running:
-            return jsonify({"ok": False, "error": "Detection already running"}), 409
-        state.detect_started = True
-        threading.Thread(target=run_detection, args=(state, config), daemon=True).start()
-        return jsonify({"ok": True})
+
+        body = request.get_json(silent=True) or {}
+        scope = str(body.get("scope") or "chapter")
+
+        if scope == "page":
+            filename = body.get("filename") or ""
+            if not any(page["filename"] == filename for page in session.current.pages):
+                return jsonify({"ok": False, "error": f"No page {filename!r} in this chapter"}), 400
+            queued = session.queue_detection(config, [session.chapter_num], pages=[filename])
+        elif scope == "all":
+            queued = session.queue_all(config)
+        elif scope == "range":
+            span = _chapter_span(session, body.get("from"), body.get("to"))
+            if span is None:
+                return jsonify({"ok": False, "error": "That chapter range isn't in this session"}), 400
+            queued = session.queue_detection(config, span)
+        else:
+            queued = session.queue_detection(config, [session.chapter_num])
+
+        # "accepted" is what THIS request added; detection_status()'s "queued"
+        # is what is still waiting, which by the time this is serialized may
+        # already be less - the worker starts immediately. Two different
+        # questions, so two different names.
+        return jsonify({"ok": True, "accepted": queued, **session.detection_status()})
 
     @app.get("/api/detect/status")
     def detect_status():
@@ -127,25 +175,64 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
             "total": state.detect_total,
             "error": state.detect_error,
             "marks": state.marks,
+            **session.detection_status(),
         })
+
+    @app.post("/api/settings")
+    def post_settings():
+        """The assist card's switches. Applied to this session AND written
+        into config.json, because they describe how someone works rather
+        than anything about today's manga - see
+        settings_store.persist_marker_settings."""
+        if session.read_only:
+            return jsonify({"ok": False, "error": "This session is read-only"}), 403
+        body = request.get_json(silent=True) or {}
+        saved: dict[str, Any] = {}
+
+        if "auto_all" in body:
+            session.set_auto_all(bool(body["auto_all"]), config)
+            config.auto_detect_all = session.auto_all
+            saved["auto_detect_all"] = session.auto_all
+        if "auto_save" in body:
+            session.set_auto_save(bool(body["auto_save"]))
+            config.auto_save = session.auto_save
+            saved["auto_save"] = session.auto_save
+        if "scope" in body:
+            scope = str(body["scope"])
+            if scope not in ("page", "chapter", "range", "all"):
+                return jsonify({"ok": False, "error": f"Unknown scope {scope!r}"}), 400
+            config.auto_detect_scope = scope
+            saved["auto_detect_scope"] = scope
+
+        if saved:
+            persist_marker_settings(saved)
+        return jsonify({"ok": True, **session.detection_status()})
 
     @app.post("/api/finish")
     def finish():
         """Save this chapter and move on: to the next chapter if the session
         has one, otherwise to the end of the session.
 
-        `end` in the request body forces the second - the "I'm done, don't
-        walk me through the remaining fifteen" answer, which has to exist
-        because the terminal is blocked on this session and closing the tab
-        is not a way to tell it anything."""
-        end_now = bool((request.get_json(silent=True) or {}).get("end"))
-        # save_current() is itself a no-op in a read-only session; calling it
-        # unconditionally keeps the one save path rather than growing a
-        # second one that only some sessions take.
+        Saving here is explicit - the user pressed the button - so it happens
+        whether or not auto-save is on.
+
+        `end` forces the second - the "I'm done, don't walk me through the
+        remaining fifteen" answer, which has to exist because the terminal is
+        blocked on this session and closing the tab is not a way to tell it
+        anything. `save_all` writes every chapter still holding unsaved
+        marks, which is what the browser offers when auto-save has been off
+        and the session is about to close."""
+        body = request.get_json(silent=True) or {}
+        end_now = bool(body.get("end"))
+        if body.get("save_all"):
+            for chapter in session.unsaved_chapters():
+                session.save_chapter(chapter)
         session.save_current()
         if end_now or not session.has_next:
             session.finished.set()
-            return jsonify({"ok": True, "done": True})
+            return jsonify({"ok": True, "done": True, "unsaved": session.unsaved_chapters()})
+        # save=False: save_current() above already wrote this chapter, and
+        # goto's own save would write it a second time and report it twice.
         session.goto(session.index + 1, save=False)
         session.start_detection(config)
         return jsonify({"ok": True, "done": False, **chapter_payload()})

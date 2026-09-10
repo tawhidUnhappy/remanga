@@ -1,4 +1,5 @@
-/* Right sidebar: MAGI v3 assist card and the panel reading-order list. */
+/* Right sidebar: the MAGI v3 assist card (detection scope, the saved
+   auto-mark/auto-save switches, progress) and the panel reading-order list. */
 
 .sidebar { width: 288px; flex: none; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
 
@@ -7,9 +8,42 @@
 .assist-card .head { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 13px; color: var(--ai); margin-bottom: 5px; }
 .assist-card .head svg { width: 15px; height: 15px; }
 .assist-card p { margin: 0 0 10px; font-size: 11.5px; line-height: 1.5; color: var(--text-dim); }
-.assist-btn { width: 100%; background: var(--ai); color: #06201d; border: none; border-radius: 7px; font-weight: 700; font-size: 12.5px; padding: 8px 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px; }
+/* Scope + Run on one row: choosing how much to detect and starting it are
+   one decision, so they read as one control rather than two stacked ones. */
+.assist-run { display: flex; gap: 6px; align-items: center; }
+.assist-btn { flex: none; background: var(--ai); color: #06201d; border: none; border-radius: 7px; font-weight: 700; font-size: 12.5px; padding: 8px 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px; }
+
+.assist-select {
+  flex: 1; min-width: 0;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 7px 8px;
+  cursor: pointer;
+}
+.assist-select:focus { outline: none; border-color: var(--ai); }
+
+.assist-range { display: flex; align-items: center; gap: 6px; margin-top: 7px; }
+.assist-range[hidden] { display: none; }
+.assist-range-arrow { color: var(--text-faint); font-size: 12px; flex: none; }
+
+/* The two saved switches. Quiet by design - they are set once and then not
+   thought about, so they must not compete with the button above them. */
+.assist-switch {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 9px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+}
+.assist-switch input { accent-color: var(--ai); width: 13px; height: 13px; cursor: pointer; flex: none; }
+.assist-switch:hover { color: var(--text); }
 .assist-btn:disabled { opacity: 0.6; cursor: default; }
-.assist-progress { margin-top: 9px; height: 4px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.assist-progress { margin-top: 11px; height: 4px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
 .assist-progress span { display: block; height: 100%; width: 0%; background: var(--ai); transition: width 0.3s; }
 .assist-status { margin-top: 6px; font-size: 10.5px; color: var(--text-faint); font-family: "JetBrains Mono", monospace; }
 

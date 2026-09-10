@@ -753,6 +753,19 @@ built - only expanded branches exist in the DOM). Outline counts come from
 live client state for the chapter on screen and from `crops.json` for the
 rest, which is why each chapter reports `loaded`.
 
+MAGI detection is a QUEUE on the session, not a call per request
+(`MarkerSession._jobs` + one worker thread; `detection.run_detection` is just
+the unit of work). `POST /api/detect` takes `scope`: page / chapter / range
+(`from`+`to` as chapter NUMBERS, reversed accepted) / all. `POST /api/settings`
+writes `auto_detect_scope`, `auto_detect_all` (queue the whole session and keep
+going in the background) and `auto_save` into config.json via
+`settings_store.persist_marker_settings` - config.json's marker section is
+merged, never rewritten. A chapter detected in the background is saved as soon
+as its pass ends (auto_save on) so a closed tab costs nothing computed; with
+auto_save off the session tracks `dirty` and the browser offers to write them
+before closing. `state_for(chapter)` (never `current`) is what background work
+uses - the cursor moves while it runs.
+
 Footguns hit while building it, all still live:
 - **Page filenames repeat across chapters** (every chapter has a `page_001`).
   `magi.js:pollDetectStatus` merges server marks by filename, so a poll that
@@ -767,6 +780,17 @@ Footguns hit while building it, all still live:
 - **MAGI must start once per chapter, on arrival** (`detection.start_once`,
   guarded by `MarkerState.detect_started`) - every navigation back would
   otherwise spawn another worker and reload the model.
+- A route that returns `{"queued": x, **detection_status()}` has TWO "queued"
+  keys and the spread wins - the response silently reported the live queue
+  instead of what the request added. Named `accepted` vs `queued` now; watch
+  for the same collision whenever spreading a status dict over literal keys.
+- Testing `/api/settings` WRITES THE REAL config.json (that is its job).
+  Snapshot and restore the `marker` section around any such test, or the
+  user's file is left holding test values.
+- MAGI can be stubbed for tests: `remanga.webui.magi_assist.detect_panels_for_pages`
+  is imported inside `run_detection` at call time, so patching the module
+  attribute before starting the server is enough - the whole queue, every
+  scope and the background saving are testable with no GPU.
 - CSS: `.chapter-nav`/`.ghost-btn` set `display:flex`, which beats the UA's
   `[hidden]{display:none}` - each needs its own explicit `[hidden]` rule or
   `el.hidden = true` does nothing.

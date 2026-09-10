@@ -12,7 +12,7 @@ class ShortcutsConfig(ConfigModel):
     """Panel-marker keyboard shortcuts, editable from the webui's own Shortcuts
     menu (Settings gear in the topbar -> saved via POST /api/shortcuts, which
     writes straight back into this section of config.json - see
-    remanga/webui/shortcuts_store.py:persist_shortcuts). Each action maps to a list of
+    remanga/webui/settings_store.py:persist_shortcuts). Each action maps to a list of
     key combos so more than one chord can trigger it (e.g. Delete AND
     Backspace); the frontend renders/parses these itself.
 
@@ -54,6 +54,41 @@ class MarkerConfig(ConfigModel):
     magi_repo_id: str = "ragavsachdeva/magiv3"
     magi_model_dir: str = "checkpoints/magiv3"
     magi_panel_score_threshold: float = 0.5
+
+    # Both of the next two are saved from the browser (POST /api/settings ->
+    # settings_store.persist_marker_settings), so they survive into the next
+    # session and the next project.
+    #
+    # How much MAGI detects when the assist card's Run button is pressed:
+    # "page" (just the page on screen), "chapter" (the chapter on screen),
+    # "range" (a from/to span of chapters) or "all" (every chapter in the
+    # session). Saved so the dropdown opens on whatever was used last, which
+    # for most people is the same answer every time.
+    auto_detect_scope: str = "chapter"
+
+    # Keep detecting forward through the session on its own: every chapter
+    # gets queued, one at a time, in the background, while you mark the one
+    # in front of you. The reason this is a saved setting rather than a
+    # per-session click is that it describes a way of working - "I want the
+    # whole manga pre-detected, always" - and a switch you have to find again
+    # every session is a switch nobody uses.
+    #
+    # It never overwrites a page you have touched (MarkerState.apply_detected
+    # refuses), so leaving it on while working through a half-marked project
+    # fills in what's missing and leaves the rest alone.
+    auto_detect_all: bool = False
+
+    # Whether a chapter's crops.json is written without being asked for -
+    # when you leave the chapter, and when the background detector finishes
+    # one. On is the behavior the marker has always had.
+    #
+    # Off is for someone who wants every write to be their own doing: marks
+    # still live in the session (leave a chapter and come back and they are
+    # there), but nothing reaches disk until Save. The session remembers
+    # which chapters are unsaved and the browser offers to write them before
+    # the session closes - a switch that means "I decide when" must not also
+    # mean "and one day I lose an afternoon".
+    auto_save: bool = True
 
     # A mark's body/handles only become draggable once it's already selected
     # (a first click selects; a second, deliberate drag on the now-selected

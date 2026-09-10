@@ -16,7 +16,7 @@ command, the pipeline's mark step, a "remark" restart - are unchanged.
 This module is just the entry points and process lifecycle - see
 marker_session.py for the chapter list and cursor, marker_state.py for one
 chapter's in-memory state, detection.py for the background MAGI thread,
-routes.py for the Flask app/API, and shortcuts_store.py for how the Shortcuts
+routes.py for the Flask app/API, and settings_store.py for how the Shortcuts
 menu's edits get saved.
 """
 
@@ -98,7 +98,15 @@ def launch_and_wait_all(project_name: str, chapters: list[str], config: MarkerCo
     else:
         console.print("[dim]Open that URL in your browser to continue.[/]")
 
-    session.start_detection(config)
+    # The saved switches (config.json's marker section) are what this session
+    # opens with: auto-save as it was left, and - if the last session turned
+    # it on - the whole project queued for detection before anyone clicks
+    # anything.
+    session.auto_save = config.auto_save
+    if config.auto_detect_all:
+        session.set_auto_all(True, config)
+    else:
+        session.start_detection(config)
 
     if read_only:
         waiting_for = "look through the marks and close the session in the browser"
