@@ -619,7 +619,7 @@ It also fixes what reads *flat* rather than what glitches:
 - **Quoted speech gets a capital** — `pleads, 'please stop!'` reads to the model as the middle of a clause and gets that flat continuation prosody; `pleads, "Please stop!"` starts a fresh utterance, which is what it is.
 - **`Mr.` → `Mister`**, and **`A rank` → `A-rank`** — both are otherwise read as letters or as the article "a".
 
-It also reports what it deliberately **doesn't** touch — problems whose only honest fix is a rewrite: empty lines, lines over the 26-word ceiling, narration repeated on two panels, and the one that never announces itself in any single line — most sentences opening the same way:
+It also reports what it deliberately **doesn't** touch — problems whose only honest fix is a rewrite: empty lines, narration repeated on two panels, and the one that never announces itself in any single line — most sentences opening the same way:
 
 ```
 Worth a look - not changed, because only a rewrite fixes these:
@@ -649,7 +649,7 @@ shape as the Panel Marker) showing every panel's cropped image next to its narra
 ./run.sh review --project "my_manga" --chapter "1"
 ```
 Flag any panel that's wrong with a short note on what's wrong (an optional tag — wrong speaker,
-dropped content, spoiler, punctuation, word budget, continuity, other — helps but isn't required),
+dropped content, dialogue paraphrased or cut, spoiler, punctuation, cut short like a recap, continuity, other — helps but isn't required),
 then either **Approve** (nothing flagged — continue straight to voice synthesis) or **Submit**.
 Submitting writes `narration_review.json` and prints exactly what to upload to your LLM next:
 `prompts/narration_review.md`, the current `narration.json`, `narration_review.json`,
@@ -851,8 +851,8 @@ MAGI v3's weights download automatically the first time you run `bootstrap.sh` /
 The included prompt system in `prompts/` enforces strict narrative rules:
 1. **Zero Future Spoilers:** The LLM is forbidden from revealing plot twists, motives, or unrevealed identities.
 2. **Name Introduction Protocol:** Characters are referred to strictly by visible physical traits (*"a dark-haired student"*) until formally introduced by name in dialogue or captions.
-3. **Show-and-Synthesize:** Narrative commentary blends speech bubbles and actions into active present-tense storytelling.
-4. **Pacing Ceiling:** 10 to 20 words per panel (hard ceiling: 26 words) to ensure optimal retention and natural Kokoro speech pacing.
+3. **Full Dialogue, Word for Word:** every speech bubble, thought bubble and caption is quoted in full, in reading order, with its speaker named — never paraphrased, summarized, or cut down to one "key" line.
+4. **Full Explanation, No Word Limit:** each panel's scene is explained completely around its dialogue, so the video tells the chapter rather than recapping it. A panel's narration is as long as that takes, and the panel stays on screen for as long as its narration runs.
 
 ### YouTube Upload Text (`prompts/youtube.md`)
 

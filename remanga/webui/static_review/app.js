@@ -15,11 +15,11 @@ const TAGS = [
   ["wrong_detail", "Wrong/invented detail (doesn't match the art)"],
   ["wrong_speaker", "Wrong speaker attribution"],
   ["dropped_content", "Dropped dialogue/action"],
-  ["flattened_dialogue", "Paraphrased instead of quoting the actual line"],
+  ["flattened_dialogue", "Dialogue paraphrased or cut instead of quoted in full"],
   ["empty_text", "Left blank - should have real narration"],
   ["spoiler", "Spoiler / name used too early"],
   ["punctuation", "Punctuation overplayed or flat"],
-  ["word_budget", "Too long / too short"],
+  ["word_budget", "Cut short like a recap / padded"],
   ["continuity", "Contradicts memory.json continuity"],
   ["other", "Other"],
 ];

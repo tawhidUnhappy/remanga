@@ -745,12 +745,20 @@ keeps), reachable from the menu like everything else.
   with letters on BOTH sides - that one distinction is what makes it
   automatable; don't replace it with a positional guess. `advisories.py` is
   the deliberate other half: problems only a rewrite fixes (empty lines,
-  Rule 4's 26-word ceiling, narration duplicated across panels, and >35% of
+  narration duplicated across panels, and >35% of
   lines opening with an "-ing" participle - measured at 46% on a real chapter
   and audible as a drone). Those are REPORTED on every run, including the run
   where nothing needed changing, and never auto-rewritten. When a new
   narration problem turns up that has no mechanical answer, it belongs there
   plus a line in prompts/narration.md - not as a rule that guesses.
+- **Narration style = every line of dialogue verbatim + a full explanation of
+  each panel, NO word limit** (user's decision, 2026-09-11). The old recap
+  style (10-20 words, 26-word ceiling, quote only the "key" line, synthesize
+  the rest) produced chapters that skipped dialogue and was rejected. So there
+  is no length advisory and no word ceiling anywhere - don't add one back.
+  Long panels are safe: KPipeline's chunks are concatenated in
+  kokoro_worker.py, and a panel is held on screen for its own clip's length
+  (audio_timing.json), never sped up to fit.
 - `package` (Chapter Production): (re)builds sheets/zips/pdf from an
   already-cropped chapter's panels/, standalone from `crop` - previously
   only happened as a side effect of crop's resume-check top-up.

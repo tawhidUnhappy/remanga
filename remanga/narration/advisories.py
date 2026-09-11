@@ -6,9 +6,14 @@ fix is a human or an LLM rewriting the line, so the command reports them and
 stops there.
 
 Each check exists because it was found by hand in a real chapter and would
-otherwise have to be re-derived by hand next time. The thresholds are the
-project's own: the word ceiling is prompts/narration.md Rule 4's, not a
-number invented here."""
+otherwise have to be re-derived by hand next time.
+
+There is deliberately no length check. prompts/narration.md asks for every
+line of dialogue in full and a full explanation of each panel, with no word
+ceiling (its Rule 4), so a long line is what a dialogue-heavy panel should
+produce - and a panel is held on screen for as long as its own audio runs, so
+nothing gets rushed to fit. The old 26-word ceiling check went with the rule
+it enforced."""
 
 from __future__ import annotations
 
@@ -17,10 +22,6 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
-
-# prompts/narration.md Rule 4: "Never exceed 26 words on any single panel"
-# (~3.5-5.0s of audio at the 10-20 word target).
-WORD_CEILING = 26
 
 # Share of lines opening with an "-ing" participle ("Clutching his chest,
 # ...", "Flashing a smirk, ...") above which the script starts to sound like
@@ -49,7 +50,7 @@ def advise(entries: Sequence[dict[str, Any]]) -> list[Advisory]:
         return []
 
     found: list[Advisory] = []
-    for check in (_empty_lines, _over_word_ceiling, _duplicate_lines, _repeated_openers):
+    for check in (_empty_lines, _duplicate_lines, _repeated_openers):
         advisory = check(texts)
         if advisory is not None:
             found.append(advisory)
@@ -66,19 +67,6 @@ def _empty_lines(texts):
         "Rule 4 says an empty text is never valid - every panel gets a real line, "
         "however short. Write them in the Narration Writer, or regenerate the chapter.",
         empty[:6],
-    )
-
-
-def _over_word_ceiling(texts):
-    long_lines = [(pid, text) for pid, text in texts if len(text.split()) > WORD_CEILING]
-    if not long_lines:
-        return None
-    return Advisory(
-        "word_ceiling",
-        f"{len(long_lines)} line(s) exceed the {WORD_CEILING}-word ceiling",
-        "Rule 4's ceiling is about audio length - a longer line is read faster to fit its "
-        "panel, or overruns it. Split the thought or cut the scene-setting the art already shows.",
-        [f"{pid}: {len(text.split())} words - {text[:70]}..." for pid, text in long_lines[:4]],
     )
 
 

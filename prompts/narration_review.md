@@ -45,9 +45,14 @@ than guessing at a fix.
 `tag` is one of: `wrong_detail`, `wrong_speaker`, `dropped_content`, `flattened_dialogue`,
 `tts_unsafe_typography`, `quoted_sfx`, `content_shift`, `empty_text`, `spoiler`, `punctuation`,
 `word_budget`, `continuity`, `other`, or empty.
-`flattened_dialogue` means a panel's line was paraphrased into third-person summary when the
-character's actual words should have been quoted instead (Rule 5 of `prompts/narration.md`) —
-fix it by rewriting the line to work the real quote in, not by rephrasing the paraphrase.
+`flattened_dialogue` means a panel's dialogue was paraphrased, summarized, or cut down to one line
+instead of quoted in full, word for word (Rule 5 of `prompts/narration.md`) — fix it by quoting
+every bubble, thought and caption in that panel in full, not by rephrasing the paraphrase.
+`word_budget` means a line's length doesn't match what its panel holds: usually **cut short** -
+dialogue or explanation condensed into a recap-style summary (put the full words and the full
+explanation back) - or padded with things the panel doesn't show. There is no word ceiling (Rule
+4 of `prompts/narration.md`): a long line is never a problem by itself, and a fix never shortens
+a quote.
 `tts_unsafe_typography` means a `text` value still has manga lettering's stutter-hyphen or
 ellipsis typography in it ("w-what", "I...was") — **never valid** per Rule 5 of
 `prompts/narration.md`; fix it by normalizing that one line (keep the stammer/trailing-off as
@@ -86,11 +91,13 @@ state, and `issue`/`tag` as what's still believed wrong with it.
 
 ## Process
 1. **Fix only flagged panels.** For each entry in `flagged_panels`, re-examine that panel against
-   Rule 2 (objective visual grounding), Rule 3 (prosody/punctuation), Rule 4 (word budget), Rule 5
-   (show-and-synthesize), Rule 7 (complete dialogue/action coverage), and whichever Golden Rule the
-   `issue` text and `tag` point to in `prompts/narration.md`, and rewrite that panel's `text` to
-   actually fix the described problem. Do not rewrite a flagged panel's line more than the issue
-   calls for — fix the specific thing, don't rephrase what wasn't flagged as wrong.
+   Rule 2 (objective visual grounding), Rule 3 (prosody/punctuation), Rule 4 (length: as long as the
+   panel needs), Rule 5 (raw dialogue, word for word), Rule 7 (complete dialogue/action coverage),
+   and whichever Golden Rule the `issue` text and `tag` point to in `prompts/narration.md`, and
+   rewrite that panel's `text` to actually fix the described problem. Do not rewrite a flagged
+   panel's line more than the issue calls for — fix the specific thing, don't rephrase what wasn't
+   flagged as wrong. **No fix ever shortens, paraphrases, or drops a line of dialogue** - every
+   panel's bubbles stay quoted in full, per the Core Requirement of `prompts/narration.md`.
 2. **Leave every unflagged panel exactly as it was.** This is not a chance to re-polish the whole
    script — a panel not present in `flagged_panels` is left character-for-character unchanged.
 3. **Apply `general_note`, if present**, as a chapter-wide instruction (e.g. "punctuation is
