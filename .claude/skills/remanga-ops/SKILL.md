@@ -103,11 +103,13 @@ before writing (2 tries, then raise). Footguns fixed on the way:
 - `image_quality: "data-saver"` (as config.py documents) was a KeyError: the
   at-home JSON key is `dataSaver` but the URL path is `data-saver`
   (`_QUALITY` in mangadex.py maps both spellings).
-- Ranges compared floats against the end, so `1-5` DROPPED 5.1/5.2 (and `1-4`
-  dropped 4.1 on a split manga). One parser now,
-  `full_recap/discovery.py:expand_chapter_selection`: a whole-number end
-  covers its parts, a decimal end is exact, plain tokens come back spelled as
-  the listing spells them ("02" -> "2", else a stray `chapter_02/` folder),
+- Ranges: ONE parser, `full_recap/discovery.py:expand_chapter_selection`
+  (was two copies). **A decimal chapter (1.1, 2.1, 5.1) is a chapter of its
+  own, never a part of the whole-numbered one** - the user's explicit rule
+  (2026-09-11). So a range is plain numeric, both ends inclusive: `1-5` takes
+  1.1 and 4.5, NOT 5.1. A "whole-number end covers N.x" rule was shipped once
+  and rejected - don't reintroduce it. Plain tokens come back spelled as the
+  listing spells them ("02" -> "2", else a stray `chapter_02/` folder);
   `strict=True` refuses chapters not listed. `chapter_key` is the one "same
   chapter number" equivalence (feed dedupe, lookup, selection).
 `download-range` (Project-wide) = fresh listing -> ask range (cli_only, asked

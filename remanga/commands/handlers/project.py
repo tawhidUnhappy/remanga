@@ -126,8 +126,8 @@ def download_all(params: dict[str, Any], config: RemangaConfig) -> None:
 
 def download_range(params: dict[str, Any], config: RemangaConfig) -> None:
     """A run of chapters, downloaded - '1-5' is every chapter MangaDex lists
-    from 1 up to the end of 5, the parts in between included (2.1, 2.2, 5.1,
-    5.2), resolved by expand_chapter_selection.
+    numbered from 1 to 5, each decimal chapter a chapter of its own (1.1 and
+    4.5 are in it, 5.1 comes after it), resolved by expand_chapter_selection.
 
     The listing is always fetched fresh rather than read from the 24h cache:
     a range is a question about which chapters exist, and a chapter
@@ -168,8 +168,8 @@ def download_range(params: dict[str, Any], config: RemangaConfig) -> None:
 
         raw = ask_text(
             "Chapters to download", allow_empty=False, validate=check,
-            note="a range takes every chapter in it, parts included - 1-5 is 1, 2.1, 2.2 … 5.1, 5.2 · "
-                 "commas for more: 1-5,8,10-12",
+            note="a range takes every chapter numbered from its start to its end - 1-5 includes 1.1 "
+                 "and 4.5, not 5.1 · commas for more: 1-5,8,10-12",
         )
     chapters = expand_chapter_selection(raw, available, strict=True)
     if not chapters:

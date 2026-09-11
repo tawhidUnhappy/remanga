@@ -57,23 +57,24 @@ PROJECT_COMMANDS: list[Command] = [
     ),
     Command(
         "download-range",
-        "Download a range of chapters from MangaDex - '1-5' takes every chapter from 1 to the end "
-        "of 5, parts included (2.1, 2.2, 5.1, 5.2); commas combine ranges and single chapters. "
-        "Chapters already downloaded are re-verified page by page against MangaDex's checksums, "
-        "with anything in pages/ that isn't theirs removed",
+        "Download a range of chapters from MangaDex - '1-5' takes every chapter numbered from 1 "
+        "to 5, decimal chapters included as chapters of their own (1.1, 2.1, 4.5 - not 5.1, which "
+        "comes after 5); commas combine ranges and single chapters. Chapters already downloaded "
+        "are re-verified page by page against MangaDex's checksums, with anything in pages/ that "
+        "isn't theirs removed",
         project_handlers.download_range,
         [
             project_param(),
             url_param(),
             # cli_only, both: the handler asks for the range itself, after
             # showing which chapters MangaDex has - a range typed blind, before
-            # knowing whether the manga numbers 5 as "5" or "5.1, 5.2", is the
-            # question asked too early.
+            # seeing how this manga numbers its chapters (5, or 5.1 and 5.2),
+            # is the question asked too early.
             Param("range", ["--range", "-r"], required=False, default=None, cli_only=True,
                   help="Chapters to download: a range ('1-5'), single chapters, or both, comma-"
-                       "separated ('1-5,8,10-12'). A whole-number end includes that chapter's "
-                       "parts (1-5 takes 5.1 and 5.2); a decimal end is exact (1-4.1). Asked "
-                       "interactively when left out.",
+                       "separated ('1-5,8,10-12'). A range is every chapter numbered between its "
+                       "ends, inclusive; a decimal chapter is a chapter of its own, so 1-5 takes "
+                       "1.1 and 4.5 but not 5.1. Asked interactively when left out.",
                   prompt="Chapters to download"),
             Param("force", ["--force", "-f"], type="bool", default=False, cli_only=True,
                   help="Re-fetch every selected chapter clean - wipe its pages first and "

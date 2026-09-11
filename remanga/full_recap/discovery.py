@@ -7,7 +7,6 @@ stack."""
 
 from __future__ import annotations
 
-import math
 from collections.abc import Sequence
 
 from remanga.paths import get_project_dir
@@ -53,25 +52,17 @@ def discover_chapters(project_name: str) -> list[str]:
 
 
 def _range_bounds(token: str) -> tuple[float, float] | None:
-    """(low, high) for an 'N-M' token, high exclusive; None when the token
+    """(low, high), both inclusive, for an 'N-M' token; None when the token
     isn't a numeric range (a plain number, or a label with a dash in it).
-
-    A whole-number end covers every part of that chapter: '1-5' runs up to,
-    but not including, 6 - so 5.1 and 5.2 are in it. A manga split into
-    parts often has no chapter "5" at all, only 5.1 and 5.2, and a range
-    that silently stopped at 4.2 would drop the very chapter it names. A
-    decimal end is exact: '1-4.1' stops at 4.1. Either end may come first."""
+    Either end may come first."""
     low_text, dash, high_text = token.partition("-")
     if not dash:
         return None
     try:
-        ends = sorted([(float(low_text), low_text.strip()), (float(high_text), high_text.strip())])
+        low, high = sorted((float(low_text), float(high_text)))
     except ValueError:
         return None
-    (low, _), (high, high_as_typed) = ends
-    if high.is_integer() and "." not in high_as_typed:
-        return low, high + 1
-    return low, math.nextafter(high, math.inf)
+    return low, high
 
 
 def expand_chapter_selection(raw: str, available: Sequence[str], *, strict: bool = False) -> list[str]:
@@ -80,9 +71,11 @@ def expand_chapter_selection(raw: str, available: Sequence[str], *, strict: bool
 
     Ranges expand only against `available` - the chapters the caller can
     actually act on (a project's folders for a wipe, MangaDex's listing for
-    a download) - so '1-9999' can't manufacture chapters that don't exist,
-    and every chapter numbered inside the range is included, 2.1 and 12.5
-    as much as 3 (see _range_bounds for where a range ends).
+    a download) - so '1-9999' can't manufacture chapters that don't exist.
+    A range is every chapter whose number lies between its ends, inclusive.
+    A decimal chapter is a chapter of its own, placed by its number, never a
+    part of the whole-numbered one before it: '1-5' takes 1, 1.1, 2.1 and 5,
+    and not 5.1, which comes after 5.
 
     A plain number comes back spelled the way `available` spells it ("02"
     typed, "2" returned), so it names the same folder. One that isn't in
@@ -109,7 +102,7 @@ def expand_chapter_selection(raw: str, available: Sequence[str], *, strict: bool
                 value = float(chapter)
             except ValueError:
                 continue
-            if low <= value < high:
+            if low <= value <= high:
                 picked.setdefault(chapter_key(chapter), chapter)
     if strict and unknown:
         raise ValueError(

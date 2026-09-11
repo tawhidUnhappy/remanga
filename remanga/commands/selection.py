@@ -32,8 +32,8 @@ def parse_chapter_selection(raw: str, project_name: str) -> list[str]:
     '1,3,7-9' - against the chapters this project actually has, so '1-24'
     can't manufacture chapter numbers that were never downloaded. A plain
     token passes through even if it doesn't exist yet - a wipe naturally
-    no-ops on one that isn't there. See expand_chapter_selection for how a
-    range treats split chapters (5.1, 5.2)."""
+    no-ops on one that isn't there. Decimal chapters are chapters of their
+    own - see expand_chapter_selection."""
     return expand_chapter_selection(raw, discover_chapters(project_name))
 
 
