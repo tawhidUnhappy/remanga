@@ -738,6 +738,16 @@ keeps), reachable from the menu like everything else.
   matters: `charset` runs before `punctuation` so the gap a removed emoji
   leaves gets cleaned up rather than frozen in ("mage , meets"). Must stay
   idempotent - the command's second run has to report "already TTS-safe".
+  `stutters` runs 2nd, before `typographic` (which would turn an en-dash
+  stammer into a comma first): Kokoro's G2P reads a letter glued to a hyphen
+  or dots as the letter's NAME - "W-what" -> "double-u what", "N-no" -> "en
+  no", "y..yeah" -> "why.. yeah" (checked with `KPipeline(lang_code="a",
+  model=False)`, which phonemizes without loading weights - the cheap way to
+  settle any "how will Kokoro say this" question). It collapses to the whole
+  word only for a 1-letter or all-consonant 2-letter start with a longer word
+  after it, skipping i/a/o - so re-read, no-nonsense, X-ray, "I... I'm" stay.
+  Also measured: "..." inside a quote is NOT dead air on Kokoro (190-280ms,
+  the same as a comma); an old prompt rule banning it was wrong.
   `normalize.py` holds the safety rules; `delivery.py` holds the ones that
   change how a line is *performed* (single->double speech quotes, capitalized
   speech, Mr.->Mister, A rank->A-rank) and runs last, on already-clean text.

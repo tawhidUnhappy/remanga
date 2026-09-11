@@ -60,19 +60,21 @@ dialogue or explanation condensed into a recap-style summary (put the full words
 explanation back) - or padded with things the panel doesn't show. There is no word ceiling (Rule
 4 of `prompts/narration.md`): a long line is never a problem by itself, and a fix never shortens
 a quote.
-`tts_unsafe_typography` means a `text` value still has manga lettering's stutter-hyphen or
-ellipsis typography in it ("w-what", "I...was") — **never valid** per Rule 5 of
-`prompts/narration.md`; fix it by normalizing that one line (keep the stammer/trailing-off as
-a narration-frame verb, e.g. "he stammers", per that rule's examples) without touching
-anything else about the wording. If more than one or two panels this chapter got flagged with
-this tag, say so explicitly in the generalized lesson (Block 3 below) — it means the pattern
-needs reinforcing, not just this line fixing.
-`quoted_sfx` means a `text` value quotes wordless SFX/interjection lettering ("Hii!", "Gah!")
-as if it were spoken dialogue — **never valid** per Rule 5 of `prompts/narration.md`; a single
-narrator voicing that literally reads as a mispronounced word, not a scream. Fix it by
-rewriting the quote as a narrated reaction (fright, pain, a startled yelp) instead. A short
-real word shouted as an exclamation ("Stop!", "No!") is genuine dialogue, not this tag — only
-flag sounds that aren't actual words.
+`tts_unsafe_typography` means a stammer or hesitation is still spelled the way manga lettering
+draws it, so the voice mispronounces it: a letter or partial syllable before a hyphen or dots
+("w-what" is read "double-u what", "N-no" "en no", "y..yeah" "why... yeah"). Fix it per Rule 5's
+"Written for the voice" in `prompts/narration.md`: write the whole word - repeated with a comma
+or "..." to keep the stammer audible ("What, what are you doing?", "Yeah... yeah."), or once
+with the stammer carried by the telling - choosing the spelling that keeps the character's tone.
+A plain "..." pause is fine and is not this tag. If more than one or two panels this chapter got
+flagged with this tag, say so explicitly in the generalized lesson (Block 3 below) — it means
+the pattern needs reinforcing, not just this line fixing.
+`quoted_sfx` means a `text` value quotes sound lettering that isn't a word ("Hii!", "Tch",
+"Grr", "Kyaa!") as if it were spoken dialogue — **never valid** per Rule 5 of
+`prompts/narration.md`; the voice reads it as a nonsense syllable or spells it out, not as the
+sound. Fix it by narrating the reaction it conveys instead (a frightened yelp, clicking his
+tongue). Ordinary interjections ("Huh?", "Hmm...", "Ugh.") and short real words shouted as
+exclamations ("Stop!", "No!") are genuine dialogue, not this tag.
 `content_shift` means this panel's `panel_id` is correctly spelled, but the text describes a
 *different* panel's art — usually the one right before or after it — because an image got
 skipped or read out of order during scriptwriting (Rule 6 of `prompts/narration.md`), most

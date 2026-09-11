@@ -7,8 +7,10 @@ nothing, as a symbol name, or as a glitch depending on the engine), markdown
 the LLM left in (`**like this**`, which gets voiced as "asterisk asterisk"
 or swallows the word), URLs, stray brackets, zero-width and control
 characters, SHOUTED WORDS (many front-ends spell all-caps out letter by
-letter - "SHUT UP" becomes "ess aitch you tee"), streeeetched letters, and
-raw digits (each engine reads "3,000" in its own way, and none of them ask).
+letter - "SHUT UP" becomes "ess aitch you tee"), stammers lettered as a letter
+before a hyphen or dots (Kokoro reads "W-what" as "double-u what" and
+"y..yeah" as "why.. yeah"), streeeetched letters, and raw digits (each engine
+reads "3,000" in its own way, and none of them ask).
 
 KEPT - everything that carries delivery. `?`, `!` and `...` drive the
 engine's own phrasing and pacing - and the emotion classifier too, on a
@@ -79,6 +81,21 @@ _DECIMAL_RE = re.compile(r"(?<![\w.])(\d+)\.(\d+)(?![\w.])")
 _INTEGER_RE = re.compile(r"(?<![\w])\d[\d,]*(?![\w])")
 _SHOUT_RE = re.compile(r"\b[A-Z]{2,}(?:'[A-Z]+)?\b")
 _STRETCHED_RE = re.compile(r"(\w)\1{3,}", re.IGNORECASE)
+# A stammer as manga letters it: the start of a word, one or more times, each
+# followed by a hyphen/dash or a run of dots, then the word itself - "W-what",
+# "T-t-thank", "Wh-why", "y..yeah", "N… no". Case-insensitive, backreferences
+# included, so "W-What" and "w-WHAT" match too.
+_STUTTER_RE = re.compile(
+    r"\b(?P<part>[a-z]{1,2})"
+    r"(?:(?:[-‒-―−]|(?:\.{2,}|…)\s*)(?P=part))*"
+    r"(?:[-‒-―−]|(?:\.{2,}|…)\s*)"
+    r"(?P<word>(?P=part)[a-z']+)",
+    re.IGNORECASE,
+)
+# One-letter words: "I... I'm sorry" and "A... a what?" are a real word
+# repeated, which the engine says as words - a hesitation to keep, not a
+# letter to fix.
+_STUTTER_KEEP = {"i", "a", "o"}
 _EMPTY_BRACKETS_RE = re.compile(r"\(\s*\)")
 
 
@@ -99,6 +116,30 @@ def _unicode_form(text: str) -> str:
     text = unicodedata.normalize("NFKC", text)
     text = _ZERO_WIDTH_RE.sub("", text)
     return "".join(ch for ch in text if ch == "\n" or ch == "\t" or not unicodedata.category(ch).startswith("C"))
+
+
+def _stutters(text: str) -> str:
+    """"W-what" -> "What", "T-t-thank" -> "Thank", "y..yeah" -> "yeah".
+
+    Measured through Kokoro's own G2P: a letter glued to a hyphen or dots is
+    read as that letter's name - "double-u what", "en no", "ess sorry", "why..
+    yeah" - never as a stammer. The whole word is the only spelling that's
+    always said right. Collapsing to it once is the conservative fix: keeping
+    the stammer audible ("What, what...") is a choice about the character's
+    tone, which prompts/narration.md leaves to whoever writes the line.
+
+    Only a one-letter or all-consonant two-letter start ("wh", "th") counts,
+    and only when the word after it is longer - so "re-read", "no-nonsense",
+    "X-ray" and "I-I" are never touched. Runs before _typographic, so a stammer
+    written with an en dash is caught before that dash becomes a comma."""
+
+    def replace(match: re.Match) -> str:
+        part, word = match.group("part"), match.group("word")
+        if part.lower() in _STUTTER_KEEP or (len(part) == 2 and re.search(r"[aeiou]", part, re.I)):
+            return match.group()
+        return word[0].upper() + word[1:] if part[0].isupper() else word
+
+    return _STUTTER_RE.sub(replace, text)
 
 
 def _typographic(text: str) -> str:
@@ -238,6 +279,7 @@ def _sentence_end(text: str) -> str:
 # to reason about emoji or markdown - see remanga/narration/delivery.py.
 RULES: tuple[Rule, ...] = (
     Rule("unicode", "normalized unicode / removed invisible characters", _unicode_form),
+    Rule("stutters", "wrote lettered stammers as the whole word (W-what -> What)", _stutters),
     Rule("typographic", "converted smart quotes, dashes and ellipses", _typographic),
     Rule("markup", "removed leftover markdown", _markup),
     Rule("urls", "removed URLs and email addresses", _urls),

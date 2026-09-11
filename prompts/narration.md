@@ -57,7 +57,8 @@ separate caption that doesn't lead anywhere, a stat screen read out field by fie
 the words and loses the story. The viewer should feel like someone is telling them what
 happened. For every panel:
 - **Every piece of dialogue, word for word.** Every speech bubble, thought bubble and caption in
-  the panel goes into the narration in full, in reading order, exactly as written - not
+  the panel goes into the narration in full, in reading order, exactly as written (stammers and
+  sounds spelled so the voice says them right - Rule 5) - not
   shortened, not paraphrased, not turned into *"he explains that..."*, not reduced to its "key"
   line. If a character says four sentences, the narration quotes all four.
 - **A full explanation of the scene.** Around the dialogue, explain everything the panel shows
@@ -380,9 +381,9 @@ the way the panel actually sounds, not around it:
   - ✅ *Told:* "A status window flickers up in front of him: level twelve, and only one skill to
     his name - Steal."
 - **Keep the character's own wording.** Slang, repetition, rudeness, verbal tics, filler words
-  like "well" - all of it stays. Don't clean up, formalize, or tighten how anyone talks. The only
-  edits dialogue ever gets are the TTS-safety ones below, and those change typography, never
-  words.
+  like "well" - all of it stays. Don't clean up, formalize, or tighten how anyone talks. The one
+  change dialogue does get is how stammers, hesitations and sounds are *spelled for the voice*
+  (see "Written for the voice" below), so they sound right read aloud - never what anyone says.
 
 **The telling - a storyteller, not a transcript:** every word above goes in, but *how* it's woven
 in decides whether the viewer hears someone telling them a story or a script being read aloud.
@@ -411,45 +412,42 @@ in decides whether the viewer hears someone telling them a story or a script bei
 - ❌ *Clipped to one piece of a longer speech:* "Cain protests, 'why!?'"
 - ✅ *Every bubble, and the action says who:* "Cain flings his arms wide. 'Why!? It's been like
   this ever since I joined! I've taken part from the beginning!'"
-- **Preserve the raw dialogue as-is, but make it TTS-safe — this is a hard requirement, not a
-  style preference.** Quoting verbatim (the core rule above) means keeping the
-  character's actual words, tone, and phrasing intact - don't paraphrase or clean up how they
-  talk. The one exception is manga lettering's own stutter/trailing-off typography (hyphens,
-  ellipses), which is a visual/SFX convention, not something meant to be read character-for-
-  character - the narration.json text goes into Kokoro speech synthesis
-  (`remanga/audio/tts.py`), and neither engine does any text normalization of its own, so a
-  stray hyphen or ellipsis gets synthesized as a broken half-word or a dead-air pause instead
-  of a stammer.
-  - **A `text` value containing a hyphen splitting a repeated/partial syllable ("w-what",
-    "T-t-thank", "N-No") or two-or-more dots/an ellipsis character ("...", "…") anywhere
-    inside quoted dialogue is malformed output, full stop** - the same tier of error as a
-    wrong `panel_id` (Rule 6) or an empty `text` (Rule 4), not a nuance to weigh against
-    keeping the quote verbatim. There is no panel where leaving the raw typography in is the
-    right call.
-  - Strip only that lettering convention when quoting; everything else about the line -
-    wording, slang, sentence structure - stays exactly as spoken.
-  - The stammer/trailing-off *itself* is real content, don't just delete it silently - carry
-    it in the narration frame around the quote (*"he stammers"*, *"she trails off"*) instead
-    of in the quoted text's typography.
-  - ❌ *Malformed, unsafe for TTS:* "he stammers, *'w-what are you talking about?!'*"
-  - ✅ *Raw dialogue, TTS-safe:* "he stammers, *'what are you talking about?!'*"
-  - ❌ *Malformed, unsafe for TTS:* "she says, *'I...was scared.'*"
-  - ✅ *Raw dialogue, TTS-safe:* "she trails off, *'I was scared.'*"
-  - ❌ *Malformed, unsafe for TTS:* "'I... I don't know,' he admits."
-  - ✅ *Raw dialogue, TTS-safe:* "'I don't know,' he admits, trailing off."
-- **Wordless SFX/interjection lettering ("Hii!", "Gah!", "Aaah!", "Guh...") is not dialogue and
-  must never go in a quote.** This whole script is voiced by one narrator reading every
-  character's lines aloud - a real quoted line reads naturally in that voice ("he shouts,
-  'shut up already!'"), but a pure sound effect read out as if it were a spoken word ("the
-  blacksmith cries out, 'Hii!'") just sounds like the narrator saying a nonsense syllable, not
-  a scream. Describe what the sound conveys instead - fright, pain, a startled yelp - the same
-  way you'd narrate any other wordless reaction shown in the art (Rule 7 still requires the
-  SFX's substance survive, just as narration, not as a mimicked noise):
-  - ❌ *Reads as a mispronounced word, not a scream:* "the blacksmith cries out, 'Hii!'"
-  - ✅ *Narrated reaction, TTS-safe:* "the blacksmith lets out a frightened yelp."
-  - A short **real word** shouted as an exclamation ("Stop!", "No!", "Wait!") is still actual
-    dialogue, not SFX lettering - keep quoting those per the core rule above; this bullet is
-    only for sounds that aren't actually words in the language being narrated.
+**Written for the voice - fix how it's spelled, never what's said:** one narrator voice
+(Kokoro, `remanga/audio/tts.py`) reads every line exactly as it's spelled, and manga lettering
+spells stammers, hesitations and sounds for the eye, not the ear. Rewrite those so they *sound*
+right read aloud. This is the one change dialogue gets - its spelling for the voice, never its
+meaning - and it's required, not optional: left as lettering, these come out as spelled-out
+letters and nonsense syllables.
+- **Stammers: never a letter or a partial syllable before a hyphen or dots.** The voice reads
+  that letter out as a letter: *"W-what"* comes out "double-u what", *"N-no"* "en no",
+  *"S-sorry"* "ess sorry", *"Y..yeah"* "why... yeah". Always write the whole word. To keep the
+  stammer audible, repeat the whole word with a comma or "..."; or say it once and let the
+  telling carry the stammer.
+  - *"W-what are you doing?!"* → *"What, what are you doing?!"* - or *He stammers. "What are
+    you doing?!"*
+  - *"N-no!"* → *"No, no!"*   ·   *"T-t-thank you."* → *"Thank... thank you."*
+  - *"Y..yeah."* → *"Yeah..."* or *"Yeah... yeah."* - not *"Yeah, yeah"*, which sounds
+    dismissive rather than hesitant. Pick the spelling that keeps the character's tone.
+  - *"I-I don't know."* → *"I... I don't know."*
+- **Hesitation and trailing off: "..." is fine.** The voice reads it as a short, natural pause -
+  about the same length as a comma - so *"I... I don't know"* and *"Yeah..."* work as written.
+  Just never glue the dots between a letter and a word (*"y..yeah"*, above), and use one "..."
+  - a longer run of dots isn't a longer pause.
+- **Interjections spelled the ordinary way are dialogue - keep them.** *"Huh?"*, *"Hmm."*,
+  *"Eh?"*, *"Uh..."*, *"Um..."*, *"Ah!"*, *"Oh!"*, *"Ugh."*, *"Heh."*, *"Haha!"*, *"Whoa!"* are
+  all said as the sound they are. Use the ordinary spelling, not the lettering's stretched one:
+  *"Hmmmm"* → *"Hmm..."*, *"Uhhhh"* → *"Uh..."*, *"Heeey!"* → *"Hey!"*.
+- **Sounds that aren't words are told, not quoted.** Lettering the voice can't say as the sound
+  it stands for - *"Tch"* (read as a bare "ch"), *"Grr"* (read out letter by letter), *"Hii!"*,
+  *"Kyaa!"*, *"Aaah!"*, *"Gah!"*, *"Guh..."* - is narrated as the reaction it conveys, never put
+  in a quote. It still has to be in the script (Rule 7), as narration:
+  - ❌ *"The blacksmith cries out, 'Hii!'"* - a nonsense word, not a scream.
+  - ✅ *"The blacksmith lets out a frightened yelp."*
+  - ❌ *"'Tch.'"*   ·   ✅ *"Lloyd clicks his tongue."*
+  - A short real word shouted as an exclamation (*"Stop!"*, *"No!"*, *"Wait!"*) is dialogue, not
+    a sound effect - quote it.
+- Everything else about the line - its words, slang, sentence structure, tone - stays exactly as
+  the character said it.
 
 ### Rule 6: Strict Sequential Panel Coverage — Every Story Panel, No Exceptions
 - Every panel image you are given (`{chapter}_001_01` through the last panel in the manifest) has **already been through story-page filtering upstream** — non-story pages (credits, ads, blank pages, duplicate spread halves) were dropped before cropping ever happened. That means **every single panel you receive is, by definition, part of the story** — there is no such thing as a supplied panel that is "not story-relevant." Never reason your way into skipping one on those grounds.
@@ -506,17 +504,14 @@ panel-by-panel in isolation.
   re-opening a sample of images against their claimed entries (every one if the chapter is
   short enough), and if a shift is found, walk forward from that point re-checking every
   following entry, not just the one that was caught.
-- **Re-verify no `text` value contains stutter-hyphen or ellipsis typography** (Rule 5) — a
-  distinct, literal scan across every `text` string in the finished script for a hyphen
-  splitting a repeated/partial syllable ("w-what") or two-or-more dots/an ellipsis character
-  ("...", "…"), same as the `panel_id` string check above: this doesn't announce itself to a
-  read-through the way a plot gap does, so it has to be checked by literally scanning for the
-  pattern, not by ear. Fix any hit by normalizing the typography per Rule 5, never by leaving
-  it "just this once."
-- **Re-verify no quote is actually wordless SFX/interjection lettering** (Rule 5) — same kind
-  of literal scan: any quoted text that isn't a real word in the language being narrated
-  ("Hii!", "Gah!", "Guh...") gets rewritten as a narrated reaction instead, per that rule's
-  examples.
+- **Re-verify every stammer and sound is written for the voice** (Rule 5) — a distinct, literal
+  scan across every `text` string in the finished script, same as the `panel_id` string check
+  above: this doesn't announce itself to a read-through the way a plot gap does, so it has to
+  be checked by scanning for the pattern, not by ear. Look for a letter or partial syllable
+  followed by a hyphen or dots ("w-what", "N-no", "y..yeah", "T-t-thank") and rewrite it as the
+  whole word; and for quoted sound lettering that isn't a word ("Hii!", "Tch", "Grr", "Kyaa!")
+  and narrate it instead. A plain "..." pause and ordinary interjections ("Huh?", "Hmm...",
+  "Ugh.") are fine as they are.
 - **Re-verify accuracy:** every line still matches its panel's art (Rule 2) — no detail
   drifted or got paraphrased into something the panel doesn't actually show.
 - **Re-verify every quote is complete:** for each panel, compare every speech bubble, thought
@@ -643,8 +638,8 @@ Note what makes it work:
 - **The rhythm varies.** The silent panel `01_002_02` is two sentences, the second a short
   callback that lands the moment; `01_002_03` runs quote after quote with only a beat between.
 - Neither character is named until the girl introduces herself (Rule 1).
-- The trailing-off *"...Probably."* keeps every word but not the ellipsis typography - the pause
-  becomes *"A beat."* in the telling instead (Rule 5).
+- The trailing-off *"...Probably."* gets *"A beat."* in the telling before it. A plain "..." would
+  also be fine for the voice (Rule 5) - the beat just tells the moment better here.
 
 ---
 

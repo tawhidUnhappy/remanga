@@ -607,7 +607,8 @@ LLM output and hand-written text carry things a TTS engine turns into noise. Thi
 | Leftover markdown (`**bold**` gets voiced as "asterisk asterisk") | **`...`** — a pause the engine actually performs |
 | URLs, email addresses, and citations like `(see https://…)` | Commas, periods, apostrophes, quotes — the phrasing |
 | SHOUTED words — many front-ends spell all-caps out letter by letter | Single capitals (`A rank`, `S-class`) — those really are letters |
-| Streeeetched letters (capped at three) | Intra-word hyphens |
+| Streeeetched letters (capped at three) | Intra-word hyphens (`re-read`, `T-shirt`, `A-rank`) |
+| Stammers lettered as a letter before a hyphen or dots — `W-what` → `What`, `y..yeah` → `yeah` (Kokoro reads that letter's name: "double-u what", "why… yeah") | A real word repeated as a hesitation — `I... I'm sorry` |
 | Raw digits — `3,000` becomes `three thousand`, `2nd` becomes `second`, `50%` becomes `fifty percent` | |
 | Zero-width and control characters, smart quotes, em dashes | |
 

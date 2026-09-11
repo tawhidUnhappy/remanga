@@ -17,6 +17,8 @@ const TAGS = [
   ["dropped_content", "Dropped dialogue/action"],
   ["flattened_dialogue", "Dialogue paraphrased or cut instead of quoted in full"],
   ["transcript_style", "Reads like a transcript, not a story"],
+  ["tts_unsafe_typography", "Stammer spelled badly for the voice (w-what, y..yeah)"],
+  ["quoted_sfx", "Sound effect quoted as a word (Hii!, Tch, Grr)"],
   ["empty_text", "Left blank - should have real narration"],
   ["spoiler", "Spoiler / name used too early"],
   ["punctuation", "Punctuation overplayed or flat"],
