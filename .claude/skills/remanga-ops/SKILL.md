@@ -701,6 +701,9 @@ keeps), reachable from the menu like everything else.
 - `package` (Chapter Production): (re)builds sheets/zips/pdf from an
   already-cropped chapter's panels/, standalone from `crop` - previously
   only happened as a side effect of crop's resume-check top-up.
+  `package-all` (Project-wide) loops `package_chapter` over cropped chapters;
+  its formats are remembered in a `finally` once any chapter built, so a run
+  that stops part-way still remembers them.
 - Per-project choices (`settings/project_prefs.py`, stored in that project's
   `project.json`): `package_formats` and `wipe_keep`. Precedence everywhere
   is explicit answer > project memory > `config.json` - a project-scoped

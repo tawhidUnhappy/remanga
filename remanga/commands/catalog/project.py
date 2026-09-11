@@ -19,6 +19,7 @@ from remanga.reset import (
     REBUILD_MODES,
     RESTART_MODES,
 )
+from remanga.settings.vision import package_switch_names
 
 PROJECT_COMMANDS: list[Command] = [
     Command(
@@ -81,6 +82,33 @@ PROJECT_COMMANDS: list[Command] = [
         ],
         category="Project-wide",
         detail="the double-check pass - read-only, enforced on the server, not just hidden",
+    ),
+    Command(
+        "package-all",
+        "Build/rebuild sheets, sheets.zip, panels.zip, and/or panels.pdf for every cropped chapter "
+        "in the project at once - the same formats checklist as `package`, answered once for the "
+        "whole manga instead of once per chapter. Chapters that haven't been cropped yet are "
+        "skipped and named",
+        project_handlers.package_all,
+        [
+            project_param(),
+            Param("chapters", ["--chapters", "-c"], required=False, default=None,
+                  help="Comma-separated chapter numbers to package (default: every chapter this "
+                       "project has). Chapters with no cropped panels are skipped.",
+                  prompt="Chapters to package"),
+            Param(
+                "formats", ["--formats"], required=False, default=None,
+                prompt="What to build for every chapter",
+                help="Comma-separated package formats to build for every selected chapter - any "
+                     f"of: {', '.join(package_switch_names())}, or 'none'. The wizard offers this "
+                     "as a checklist. Whatever you pick is remembered for the project, exactly as "
+                     "`package` remembers it. Left unset: this project's remembered choice, or "
+                     "config.json's cropper.package switches if it has never chosen.",
+            ),
+        ],
+        category="Project-wide",
+        detail="the whole-project form of `package` - one formats answer covers every chapter, "
+               "and sticks for the project",
     ),
     Command(
         "narration-init-all",

@@ -542,6 +542,13 @@ Read-only is **enforced by the server**, not hidden in the browser: `POST /api/m
 
 Whatever you pass is **remembered for that project** (in its `project.json`), so the next chapter builds the same set without being asked. Leave `--formats` off to use that remembered choice, falling back to `config.json`'s `cropper.package` switches for a project that has never chosen. `--formats none` builds nothing. In the wizard this is a checklist rather than a flag, opened on what the project currently builds. Re-run it any time — after changing the size cap, or when you want a different format from an already-cropped chapter — it works straight from `panels/`, no re-crop.
 
+**Every chapter at once** — `package-all` (Project-wide in the wizard) packages every cropped chapter in the project with one answer, instead of running `package` chapter by chapter:
+```bash
+./run.sh package-all --project "my_manga"
+./run.sh package-all --project "my_manga" --chapters 3,4,5 --formats sheets_zip
+```
+It's the same packaging `package` does, with the same `--formats` checklist, remembered for the project the same way. Chapters that haven't been cropped yet are skipped and named at the end rather than treated as errors. A chapter that fails while building stops the run there, so a bulk run never looks finished when it isn't.
+
 ### 3c. Start `narration.json` Yourself (optional)
 Not using the LLM copy/paste flow for this chapter? `narration-init` creates the file for you, two ways:
 ```bash
@@ -944,6 +951,7 @@ In short: if a chapter's TTS run gets interrupted or a worker locks up, just re-
 ./run.sh download-all -p <PROJECT> [-u <URL_OR_ID>] [-f] [--refetch]
 ./run.sh mark-all -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>]
 ./run.sh view-marks -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>]
+./run.sh package-all -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [--formats <FORMAT1,FORMAT2,...>]
 ./run.sh narration-init-all -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-f]
 ./run.sh full-recap -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-f]
 ./run.sh remix    -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-b <BGM_FILE>] [--no-rejoin]
