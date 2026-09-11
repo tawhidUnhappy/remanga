@@ -44,12 +44,18 @@ given into one complete, panel-ordered sequence, generate:
 
 ---
 
-## The Core Requirement: All the Dialogue, Fully Explained - Never a Recap Summary
+## The Core Requirement: All the Dialogue, Told Like a Story - Never a Recap, Never a Transcript
 This script is **not a recap**. The failure this whole document is written against is narration
 that reads like one: a short line per panel that sums up what happened (*"Lloyd mocks Cain and
 hands him a tiny share"*), keeps one clipped quote at most, skips the rest of what the
 characters actually say, and explains the scene in half a clause. The viewer then hears *about*
-the chapter instead of hearing the chapter. Never write that. For every panel:
+the chapter instead of hearing the chapter. Never write that.
+
+It is **not a transcript** either. The opposite failure is a script that contains every word but
+reads like it's being recited: *"Lloyd says... Cain says... Lloyd says..."*, every panel a
+separate caption that doesn't lead anywhere, a stat screen read out field by field. That keeps
+the words and loses the story. The viewer should feel like someone is telling them what
+happened. For every panel:
 - **Every piece of dialogue, word for word.** Every speech bubble, thought bubble and caption in
   the panel goes into the narration in full, in reading order, exactly as written - not
   shortened, not paraphrased, not turned into *"he explains that..."*, not reduced to its "key"
@@ -58,6 +64,9 @@ the chapter instead of hearing the chapter. Never write that. For every panel:
   and everything a viewer needs in order to follow it: who is there, where they are, what they
   do, how they react, and how this moment follows from the one before. As much as it takes for
   someone who can't see the art to fully understand the moment - not a quick summary.
+- **Told like a story.** Weave the dialogue into the narration the way a good novel or audiobook
+  does: show who is speaking through what they do rather than hanging a "says" tag on every
+  line, carry each panel on from the one before it, and vary the rhythm (Rule 5).
 - **No length limit.** A panel's narration is as long as its dialogue and explanation need. A
   panel with a long speech gets a long entry. Never cut dialogue or explanation to keep a line
   short (Rule 4).
@@ -239,6 +248,11 @@ panel by panel and challenge every line:
 - Is the scene fully explained (Rule 4)? Would a viewer who can't see the art understand who
   is there, what happens and how it follows from the previous panel - or does the line just sum
   the moment up the way a recap would?
+- Does it sound like someone **telling** a story, or like a transcript being read (Rule 5)?
+  Look for "says" tags on back-to-back lines, a tag on a line whose speaker is already obvious,
+  an entry that doesn't follow on from the one before it, every panel built in the same shape,
+  and a status screen read field by field. Fix the telling - never by dropping or changing the
+  words of the dialogue.
 - Does the panel count and `panel_id` sequence actually match what was supplied (Rule 6)?
 - Read straight through as a viewer would hear it - is there any gap, jump, or missing beat
   that would leave someone feeling like they missed part of the story (Rule 9)?
@@ -297,9 +311,10 @@ the way the panel actually sounds, not around it:
   engine either reads them aloud literally (garbled) or drops them silently. Convey the same
   beat through ordinary punctuated prose instead (*"he gasps, stepping back"* rather than
   `[gasp]`; an exclamation rather than ALL CAPS).
-- **Delivery Tone:** Calm, measured, objective, third-person narrative commentary as the
-  baseline - punctuation shades that baseline toward how the panel actually reads, it doesn't
-  replace it with caricature.
+- **Delivery Tone:** Calm, measured, third-person storytelling as the baseline - a steady
+  storyteller's voice, grounded in what the chapter shows (Rule 2), neither a detached
+  commentator nor a performer. Punctuation shades that baseline toward how the panel actually
+  reads; it doesn't replace it with caricature.
 - **Vary how sentences open.** Every line individually can be well-written and the chapter
   still sound like a drone, because one sentence shape is repeated for twelve straight
   minutes. The shape this collapses into is the participial opener - *"Clutching his chest,
@@ -309,7 +324,9 @@ the way the panel actually sounds, not around it:
   start from the subject (*"Lloyd raises his tankard..."*), from the dialogue, from the
   action's result, or from a plain declarative - whatever the panel leads with. `remanga
   normalize-narration` reports this ratio per chapter, so it's checkable after the fact, but
-  it can only report it: no tool can rewrite a sentence's shape for you.
+  it can only report it: no tool can rewrite a sentence's shape for you. Dialogue tags are the
+  same trap in a different place - *"X says"* at the start of line after line drones exactly
+  the same way (Rule 5 covers how to avoid it).
 
 ### Rule 4: Length - As Long As the Panel Needs, Never Shorter
 - **There is no word budget and no word ceiling.** A panel's narration is exactly as long as it
@@ -332,11 +349,13 @@ the way the panel actually sounds, not around it:
   upload, it has something worth narrating. `"text": ""` is **not a valid output for any
   panel, ever**. A stare-down, a shock reveal, or a splash panel with no dialogue at all still
   gets a full description of what it shows: the expression, the pose, the reveal, the weight
-  of the silence, and what the moment means for the scene as it stands. If you're ever tempted
-  to write `""`, that's the signal to look harder at the panel and describe what it actually
-  shows.
+  of the silence, and what the moment means for the scene as it stands. Full doesn't mean long,
+  though - a silent beat often lands best as one or two strong sentences, not a paragraph. If
+  you're ever tempted to write `""`, that's the signal to look harder at the panel and describe
+  what it actually shows.
 
-### Rule 5: Raw Dialogue, Word for Word - Every Line, Every Panel
+### Rule 5: Every Word of Dialogue, Told Like a Story
+**The words - all of them:**
 - **Active Present Tense Only:** the narration around the dialogue is always active present
   tense (*"He slides open the locker..."*).
 - **Quote every line of dialogue in full, exactly as written.** Every speech bubble in the panel
@@ -345,29 +364,53 @@ the way the panel actually sounds, not around it:
   a summary (*"they argue about the money"*), not indirect speech (*"she asks whether he's
   coming"*), and not a quote trimmed down with the rest of it described. If a character speaks
   across three bubbles, all three are quoted; if three characters speak, each one is quoted.
-- **Say who speaks each line.** One narrator voices every character, so each quote gets a short
-  frame naming its speaker - by name once they've been introduced (Rule 1), by visible traits
-  before that: *Lloyd sneers, '...'*, *the ponytailed girl answers, '...'*. Vary the verb and
-  where the frame sits (before, between, or after the quote) so it doesn't drone (Rule 3), and
-  keep it short - the character's words are the content, the frame just says whose they are.
-- **Thought bubbles are quoted in full too**, framed as thoughts (*he thinks, '...'*).
+- **Thought bubbles are quoted in full too**, made clear they're thoughts rather than speech.
 - **Captions and narration boxes are read in full**, word for word, as the narrator's own words -
-  they're the manga's own narration, so they need no speaker frame.
-- **Written text the story shows the reader** - a letter, a notice, a sign that matters, a status
-  or system window - is read out in full as well, introduced by what it is (*the notice reads,
-  '...'*).
+  they're the manga's own narration, so they need no speaker at all.
+- **Written text meant to be read as words** - a letter, a note, a notice, a sign that matters, a
+  system message that addresses a character (*"You have acquired the skill Steal."*) - is read
+  out in full as well, introduced by what it is.
+- **Data on the page is told, not recited.** A status window, a stat block, a menu, a list of
+  numbers is not read out field by field - that is the single most robotic thing a narrator can
+  do. Say the part that matters to the story, in a natural sentence. If a later panel depends on
+  a particular value (the level that gets compared, the skill that gets used), make sure that
+  value is said.
+  - ❌ *Recited:* "A status window reads, 'Name: Cain. Level: twelve. HP: eighty. MP: forty.
+    Skill: Steal.'"
+  - ✅ *Told:* "A status window flickers up in front of him: level twelve, and only one skill to
+    his name - Steal."
 - **Keep the character's own wording.** Slang, repetition, rudeness, verbal tics, filler words
   like "well" - all of it stays. Don't clean up, formalize, or tighten how anyone talks. The only
   edits dialogue ever gets are the TTS-safety ones below, and those change typography, never
   words.
-- ❌ *Recap-style - the dialogue is gone:* "Lloyd mocks Cain and tosses him a pitiful share of
-  the reward."
-- ✅ *Every word, fully explained:* "Cain is still down on the floorboards, holding the cheek
-  Lloyd just struck, when Lloyd holds out his hand with a smirk and says, 'Here. This is your
-  reward for this quest.'"
+
+**The telling - a storyteller, not a transcript:** every word above goes in, but *how* it's woven
+in decides whether the viewer hears someone telling them a story or a script being read aloud.
+- **Make the speaker clear - usually without "says".** The viewer is looking at the panel while
+  its line plays, so who's talking is often already obvious. Show it through what the speaker
+  does instead of a speech verb (*Lloyd sets his tankard down. 'You're out, Cain.'*), leave the
+  tag off entirely when an action or the previous line already makes the speaker clear, and
+  never put "says" on two lines back to back. Use a tag when it's genuinely needed: several
+  characters in the panel, a voice from off-panel, a reply aimed at someone other than the last
+  speaker, or a thought that has to be told apart from speech. Before a name is established,
+  the action or tag uses visible traits (*the ponytailed girl*) - Rule 1.
+- **One continuous story, not a caption per panel.** Heard straight through, the entries should
+  flow like one telling. Each picks up from the one before it - the reaction to what was just
+  said, *but*, *before he can answer*, *a moment later*, a callback to something just
+  established - rather than starting over as a fresh, self-contained description. Only ever
+  connect back to what has already happened; never pull a later panel's content forward
+  (Rules 1 and 4).
+- **Vary the rhythm.** Mix longer sentences with short ones, and let a sharp line of dialogue
+  land on its own instead of burying it mid-sentence. A fast back-and-forth can run quote after
+  quote with only a beat between them; a big moment can be a single short sentence.
+- ❌ *Recap-style - the dialogue is gone:* "Lloyd mocks Cain and tells him to leave the party."
+- ❌ *Transcript-style - every word, no story:* "Lloyd says, 'You're out, Cain.' Cain says,
+  'What?' Lloyd says, 'You heard me. Leave your badge on the table.'"
+- ✅ *Every word, told:* "Lloyd doesn't even look up from his drink. 'You're out, Cain.' Cain
+  stares at him. 'What?' 'You heard me. Leave your badge on the table.'"
 - ❌ *Clipped to one piece of a longer speech:* "Cain protests, 'why!?'"
-- ✅ *Every bubble:* "Cain flings his arms out and shouts, 'Why!? It's been like this ever since I
-  joined! I've taken part from the beginning!'"
+- ✅ *Every bubble, and the action says who:* "Cain flings his arms wide. 'Why!? It's been like
+  this ever since I joined! I've taken part from the beginning!'"
 - **Preserve the raw dialogue as-is, but make it TTS-safe — this is a hard requirement, not a
   style preference.** Quoting verbatim (the core rule above) means keeping the
   character's actual words, tone, and phrasing intact - don't paraphrase or clean up how they
@@ -487,6 +530,11 @@ panel-by-panel in isolation.
   tell the whole chapter's story with no unexplained jumps, missing beats, or gaps a viewer
   would notice — the narration should never require already knowing the chapter to follow it,
   and should never sound like a summary of it.
+- **Re-verify it sounds told, not transcribed:** on that same straight-through read, listen for
+  the transcript patterns Rule 5 rules out - "says" on back-to-back lines, tags on lines whose
+  speaker is already obvious, entries that restart instead of carrying on from the one before,
+  a stat screen recited field by field, every panel built in the same shape. Rewrite the telling
+  around the dialogue; the dialogue's own words stay exactly as they are.
   If a viewer would come away feeling like they missed something, that's a failure of this
   pass, even if every individual panel entry looked fine on its own.
 - If this pass finds **any** issue, fix it and re-run the pass — do not output a script that
@@ -521,7 +569,7 @@ the same chapter — handle both together, not one instead of the other:
 
 ---
 
-## 3. Few-Shot Example (Full Dialogue, Fully Explained)
+## 3. Few-Shot Example (Every Word, Told Like a Story)
 
 * **Visual Panels:**
   * `[01_001_01]`: Wide shot of a school's shoe lockers in early morning light. Caption box:
@@ -549,6 +597,13 @@ Every line is accurate, and the viewer still never hears a single thing anyone s
 the thought, and all four spoken lines are summarized away, and each scene is explained in half a
 sentence.
 
+* **❌ Also wrong - transcript-style `01_002_03` (every word, no story):**
+  "A girl says, 'A love letter? On the first day?' The boy says, 'It's not a love letter!' He
+  says, 'Probably.' The girl says, 'I'm Hana, by the way. I sit behind you.'"
+
+  Nothing is missing, and it's still wrong: four "says" in a row, no sense of who does what, and
+  nothing tying it to the moment before. It sounds recited, not told.
+
 * **✅ Correct Output:**
 ```json
 [
@@ -558,33 +613,38 @@ sentence.
   },
   {
     "panel_id": "01_001_02",
-    "text": "A dark-haired boy trudges toward his locker, stifling a yawn. He thinks, 'Another year of nobody noticing me. Fine by me.'"
+    "text": "Into that quiet trudges a dark-haired boy, stifling a yawn on the way to his locker. 'Another year of nobody noticing me,' he thinks. 'Fine by me.'"
   },
   {
     "panel_id": "01_002_01",
-    "text": "When he pulls his locker open, a pink envelope is sitting right on top of his shoes. He blinks down at it and asks, 'What's this?'"
+    "text": "But when he pulls the locker open, a pink envelope is sitting right on top of his shoes. 'What's this?'"
   },
   {
     "panel_id": "01_002_02",
-    "text": "He goes completely still, staring at the envelope as a bead of sweat runs down his temple. The boy who just told himself nobody ever notices him has no idea who could have left it."
+    "text": "He goes completely still, staring at it as a bead of sweat slides down his temple. So much for nobody noticing him."
   },
   {
     "panel_id": "01_002_03",
-    "text": "A girl with a ponytail leans over his shoulder, grinning, and teases, 'A love letter? On the first day?' He snaps back, 'It's not a love letter!' then adds, much more quietly, 'Probably.' Still grinning, she says, 'I'm Hana, by the way. I sit behind you.'"
+    "text": "Then a girl with a ponytail leans over his shoulder, grinning. 'A love letter? On the first day?' He jerks away from her. 'It's not a love letter!' A beat. 'Probably.' Her grin only widens. 'I'm Hana, by the way. I sit behind you.'"
   }
 ]
 ```
-Note what changed:
+Note what makes it work:
 - **Every** piece of on-page text is in the script, word for word: the caption (`01_001_01`,
-  read as narration), the thought (`01_001_02`), and all three bubbles of `01_002_03` - not just
-  the girl's first line.
-- Each quote says who speaks it. Neither character is named until the girl introduces herself;
-  from that line on, "Hana" is established and can be used (Rule 1).
-- The silent panel `01_002_02` gets a full description, tying the moment back to the thought two
-  panels earlier - what's shown and what it means right now, nothing the art doesn't support.
-- `01_002_03` is the longest entry because it holds the most dialogue. That's correct (Rule 4).
+  read as narration), the thought (`01_001_02`), and all three bubbles of `01_002_03`.
+- **The speaker is clear without "says".** In `01_002_01` he's the only one there, so his line
+  needs no tag at all. In `01_002_03` each line follows something its speaker does - she leans
+  in, he jerks away, her grin widens - so there's never a doubt who's talking. The one tag in the
+  whole script is "he thinks", because that's the one place it's needed: it tells a thought
+  apart from speech.
+- **It flows as one story.** *"Into that quiet..."*, *"But when..."*, *"So much for..."*,
+  *"Then a girl..."* - each entry picks up from the one before, so heard straight through it's a
+  telling, not five separate captions.
+- **The rhythm varies.** The silent panel `01_002_02` is two sentences, the second a short
+  callback that lands the moment; `01_002_03` runs quote after quote with only a beat between.
+- Neither character is named until the girl introduces herself (Rule 1).
 - The trailing-off *"...Probably."* keeps every word but not the ellipsis typography - the pause
-  is carried by the narration frame ("much more quietly") instead (Rule 5).
+  becomes *"A beat."* in the telling instead (Rule 5).
 
 ---
 

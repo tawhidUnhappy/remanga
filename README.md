@@ -649,7 +649,7 @@ shape as the Panel Marker) showing every panel's cropped image next to its narra
 ./run.sh review --project "my_manga" --chapter "1"
 ```
 Flag any panel that's wrong with a short note on what's wrong (an optional tag — wrong speaker,
-dropped content, dialogue paraphrased or cut, spoiler, punctuation, cut short like a recap, continuity, other — helps but isn't required),
+dropped content, dialogue paraphrased or cut, reads like a transcript, spoiler, punctuation, cut short like a recap, continuity, other — helps but isn't required),
 then either **Approve** (nothing flagged — continue straight to voice synthesis) or **Submit**.
 Submitting writes `narration_review.json` and prints exactly what to upload to your LLM next:
 `prompts/narration_review.md`, the current `narration.json`, `narration_review.json`,
@@ -851,7 +851,7 @@ MAGI v3's weights download automatically the first time you run `bootstrap.sh` /
 The included prompt system in `prompts/` enforces strict narrative rules:
 1. **Zero Future Spoilers:** The LLM is forbidden from revealing plot twists, motives, or unrevealed identities.
 2. **Name Introduction Protocol:** Characters are referred to strictly by visible physical traits (*"a dark-haired student"*) until formally introduced by name in dialogue or captions.
-3. **Full Dialogue, Word for Word:** every speech bubble, thought bubble and caption is quoted in full, in reading order, with its speaker named — never paraphrased, summarized, or cut down to one "key" line.
+3. **Full Dialogue, Told Like a Story:** every speech bubble, thought bubble and caption is quoted in full, in reading order — never paraphrased, summarized, or cut down to one "key" line. But it's told, not recited: the speaker is shown through what they do rather than a "says" tag on every line, each panel carries on from the one before, and data like a status window is said naturally instead of read field by field.
 4. **Full Explanation, No Word Limit:** each panel's scene is explained completely around its dialogue, so the video tells the chapter rather than recapping it. A panel's narration is as long as that takes, and the panel stays on screen for as long as its narration runs.
 
 ### YouTube Upload Text (`prompts/youtube.md`)

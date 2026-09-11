@@ -16,6 +16,7 @@ const TAGS = [
   ["wrong_speaker", "Wrong speaker attribution"],
   ["dropped_content", "Dropped dialogue/action"],
   ["flattened_dialogue", "Dialogue paraphrased or cut instead of quoted in full"],
+  ["transcript_style", "Reads like a transcript, not a story"],
   ["empty_text", "Left blank - should have real narration"],
   ["spoiler", "Spoiler / name used too early"],
   ["punctuation", "Punctuation overplayed or flat"],

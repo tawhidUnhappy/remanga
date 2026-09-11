@@ -43,11 +43,18 @@ than guessing at a fix.
 }
 ```
 `tag` is one of: `wrong_detail`, `wrong_speaker`, `dropped_content`, `flattened_dialogue`,
-`tts_unsafe_typography`, `quoted_sfx`, `content_shift`, `empty_text`, `spoiler`, `punctuation`,
-`word_budget`, `continuity`, `other`, or empty.
+`transcript_style`, `tts_unsafe_typography`, `quoted_sfx`, `content_shift`, `empty_text`,
+`spoiler`, `punctuation`, `word_budget`, `continuity`, `other`, or empty.
 `flattened_dialogue` means a panel's dialogue was paraphrased, summarized, or cut down to one line
 instead of quoted in full, word for word (Rule 5 of `prompts/narration.md`) — fix it by quoting
-every bubble, thought and caption in that panel in full, not by rephrasing the paraphrase.
+every bubble, thought and caption in that panel in full, woven in the way Rule 5's "telling" part
+describes, not by rephrasing the paraphrase.
+`transcript_style` means the words are all there but the line reads like a transcript instead
+of a story: a "says" tag on every quote or on back-to-back lines, tags where the speaker is
+already obvious, an entry that restarts instead of carrying on from the one before, or data
+(a status window, a stat block) recited field by field (Rule 5, "The telling"). Fix the telling
+- action beats instead of tags, a connection to the previous panel, varied rhythm, data said
+naturally - and **never** change or drop a word of the dialogue itself.
 `word_budget` means a line's length doesn't match what its panel holds: usually **cut short** -
 dialogue or explanation condensed into a recap-style summary (put the full words and the full
 explanation back) - or padded with things the panel doesn't show. There is no word ceiling (Rule
@@ -92,12 +99,15 @@ state, and `issue`/`tag` as what's still believed wrong with it.
 ## Process
 1. **Fix only flagged panels.** For each entry in `flagged_panels`, re-examine that panel against
    Rule 2 (objective visual grounding), Rule 3 (prosody/punctuation), Rule 4 (length: as long as the
-   panel needs), Rule 5 (raw dialogue, word for word), Rule 7 (complete dialogue/action coverage),
+   panel needs), Rule 5 (every word of dialogue, told like a story), Rule 7 (complete
+   dialogue/action coverage),
    and whichever Golden Rule the `issue` text and `tag` point to in `prompts/narration.md`, and
    rewrite that panel's `text` to actually fix the described problem. Do not rewrite a flagged
    panel's line more than the issue calls for — fix the specific thing, don't rephrase what wasn't
    flagged as wrong. **No fix ever shortens, paraphrases, or drops a line of dialogue** - every
-   panel's bubbles stay quoted in full, per the Core Requirement of `prompts/narration.md`.
+   panel's bubbles stay quoted in full, per the Core Requirement of `prompts/narration.md`. And
+   a fix keeps the storytelling: a corrected or restored line is woven in with action beats and
+   a connection to the panel before it, not dropped in as a bare "X says" quote.
 2. **Leave every unflagged panel exactly as it was.** This is not a chance to re-polish the whole
    script — a panel not present in `flagged_panels` is left character-for-character unchanged.
 3. **Apply `general_note`, if present**, as a chapter-wide instruction (e.g. "punctuation is

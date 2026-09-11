@@ -756,6 +756,13 @@ keeps), reachable from the menu like everything else.
   style (10-20 words, 26-word ceiling, quote only the "key" line, synthesize
   the rest) produced chapters that skipped dialogue and was rejected. So there
   is no length advisory and no word ceiling anywhere - don't add one back.
+  Every word is kept but TOLD, not recited (user, same day): speaker shown by
+  action beats rather than a "says" tag on every quote (tags only when truly
+  ambiguous), each entry carries on from the previous panel, rhythm varies,
+  and data (status windows, stat blocks) is said naturally, not read field by
+  field. A literal "tag every quote" rule was shipped once and produced
+  transcript-style narration - Rule 5 now has "the words" and "the telling"
+  halves; reviewer tag `transcript_style` flags the failure.
   Long panels are safe: KPipeline's chunks are concatenated in
   kokoro_worker.py, and a panel is held on screen for its own clip's length
   (audio_timing.json), never sped up to fit.
