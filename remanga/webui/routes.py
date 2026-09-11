@@ -153,6 +153,33 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
         changed = session.reorder(chapters, pages)
         return jsonify({"ok": True, "changed": changed, "revision": session.current.revision})
 
+    @app.post("/api/recrop")
+    def recrop_chapters():
+        """Cut panels/ again from the marks, for a chapter, a range or every
+        chapter - queued on the crop worker (MarkerSession.queue_recrop).
+
+        Whole chapters only: the cropper works a chapter at a time and wipes
+        its panels/ first, so "just this page" isn't a thing it can do.
+
+        `dry_run` answers without doing anything - which chapters have marks
+        to crop, which have none, and which already have narration - so the
+        browser can say what's about to happen to narrated chapters before it
+        happens."""
+        if session.read_only:
+            return jsonify({"ok": False, "error": "This session is read-only"}), 403
+        body = request.get_json(silent=True) or {}
+        if str(body.get("scope") or "chapter") == "page":
+            return jsonify({"ok": False, "error": "Recrop works on whole chapters - pick This chapter or wider"}), 400
+        target = _scope_targets(session, body)
+        if isinstance(target, str):
+            return jsonify({"ok": False, "error": target}), 400
+        chapters, _ = target
+        plan = session.recrop_plan(chapters)
+        if body.get("dry_run"):
+            return jsonify({"ok": True, **plan})
+        accepted = session.queue_recrop(plan["chapters"])
+        return jsonify({"ok": True, **plan, "accepted": accepted, **session.detection_status()})
+
     @app.get("/api/outline")
     def get_outline():
         """The whole session as a tree: chapters, their pages, and how many

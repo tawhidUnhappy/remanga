@@ -394,7 +394,7 @@ A few worth calling out specifically - `cropper.package` is the flat vision-outp
 - **`downloader.zip_pages_enabled`** (default `false`) — bundles the raw downloaded pages into `pages.zip`. Off by default because nothing downstream reads it; it's only useful if you want to hand a chapter's pages to an LLM by hand. Named for exactly what it zips (the downloaded *pages*) so it's never confused with `cropper.package` below, which zips something completely different.
 - **`cropper.package.sheets`** (default `true`) — generates `sheets/` contact sheet composites. `cropper.package.sheets_zip` (below) builds them automatically the moment it's checked, whether or not this is also on. Every sheet is merged from its panels' **full original resolution** — never downscaled — with only lossless re-encoding used to keep the file size down.
 - **`marker.click_to_select`** (default `true`) — see [Panel Marker Web UI](#panel-marker-web-ui) for what this protects against.
-- **`marker.auto_detect_scope`** (default `"chapter"`), **`marker.auto_detect_all`** (default `false`), **`marker.auto_save`** (default `true`) and **`marker.auto_order`** (default `false`) — the assist card's own switches, written by the marker itself when you change them in the browser. See [Mark Panels](#2-mark-panels).
+- **`marker.auto_detect_scope`** (default `"chapter"`), **`marker.auto_detect_all`** (default `false`), **`marker.auto_save`** (default `true`) and **`marker.auto_order`** (default `false`) — the action bar's scope and Options switches, written by the marker itself when you change them in the browser. See [Mark Panels](#2-mark-panels).
 - **`tts.synth_timeout_seconds`** (default `180`) — see [Reliability](#reliability-crashes-interrupts--resuming).
 
 ---
@@ -434,20 +434,35 @@ One server, one browser tab, one session. **Save & Next chapter** writes that ch
 
 Chapters with nothing downloaded are named and skipped before the browser opens.
 
-**You choose which pages, and what to do with them.** The assist card has one scope and two buttons — **Detect** (MAGI finds the panels) and **Reorder** (renumber them into reading order). Both take the same scope:
+**You choose which pages, and what to do with them.** The top of the sidebar is the **action bar**, pinned above the *This page / All chapters* tabs so it stays on screen whichever one is open: one scope picker and three buttons —
 
-| Scope | What the button works on |
+```
+[ This chapter            ▾ ]
+[ ✦ Detect ] [ ⇅ Reorder ] [ ✂ Recrop ]
+━━━━━━━━━━━━━━━━  Done · detected 3 chapters
+› Options · keep marking · auto-order
+```
+
+**Detect** (MAGI finds the panels), **Reorder** (renumber them into reading order) and **Recrop** (cut fresh panel images from the marks). All three take the same scope:
+
+| Scope | What the buttons work on |
 |---|---|
-| **This page** | just the page on screen |
+| **This page** | just the page on screen (Detect and Reorder — Recrop is greyed out, see below) |
 | **This chapter** | the chapter on screen (what the button always used to mean) |
 | **Chapter range…** | every chapter from one to another, inclusive — a from/to pair of dropdowns, opening on *this chapter → the last one* |
 | **All chapters** | every chapter in the session |
+
+Each button's tooltip says what it does. The three switches fold away under **Options**, and the fold's summary line names the ones that are on, so auto-order quietly re-sorting pages is never hidden just because Options is closed.
 
 The range is the one that pays for itself: *"the power went out somewhere around chapter 9"* is a from/to, and saying it any other way is either nine trips through the UI or redetecting a manga that was already three-quarters done. Reversed is fine — pick 9 then 4 and it means the same span.
 
 **Reorder** puts each page's panels into the order a reader meets them — the panel number *is* the narration order, because it becomes `panel_id`. It runs immediately, not in the detection queue, so it never waits behind a long Keep-marking run. The ordering is a recursive XY-cut: split the page at a gutter running across every panel and read above before below; failing that, split at a vertical gutter and read the side your manga starts on first (right for right-to-left, from the project's reading direction); then do the same inside each part. A grid beside a tall panel is read row by row, and a tall panel beside a stack comes before or after it depending only on which side it's on.
 
 Real marks overlap their neighbours by 20–70px (MAGI's boxes take in borders and bleed), so a "gutter" allows an overlap of up to a quarter of the smaller panel, not a fixed few pixels. Where no gutter exists at all, panels count as one row only when their **tops line up** — an inset slanting across the bottom of a big panel overlaps it, but is read after it. Checked against a fully narrated project, where the saved order is order a person already verified: it agrees on **126 of 126** pages with two or more panels.
+
+**Recrop** is `./run.sh crop --force` from the browser: for each chapter in scope, the marks are written to `crops.json` if the session holds changes that aren't on disk yet (even with auto-save off — pressing Recrop is asking for panels cut from what's on screen), then `panels/` is cleared and every panel is cut again. A chapter with no unsaved changes is cropped from its `crops.json` as it stands and isn't rewritten. It works on whole chapters only, because the cropper does, and it has its own worker: it never waits behind a detection run, and chapters with no marks at all are left alone.
+
+Recropping a chapter that **already has narration** asks first. If its marks haven't changed since it was narrated, nothing changes — the same panels come out under the same names. But if a panel was moved, added, removed or reordered, its `narration.json` now names panels that don't exist, and TTS and render will stop on that chapter until the narration is updated. After the run each chapter is checked against its narration, and any mismatch stays in the bar in red (details in its tooltip) until the next Recrop, rather than surfacing an hour later when a render refuses to start.
 
 **`Auto-order panels`** decides who owns the order:
 
@@ -468,7 +483,7 @@ Everything here is safe on a half-finished project, which is the point:
 - Detection is **one chapter at a time**, on a single worker. Each pass loads MAGI onto the GPU, so two at once is not twice as fast.
 - A chapter detected in the background is **written to disk as soon as its pass finishes** (with auto-save on), so a closed tab, an early Finish or another power cut costs nothing that was already computed.
 
-With auto-save **off**, nothing reaches disk until you press Save. Marks still live in the session — leave a chapter and come back and they're there — and the assist card keeps a running count of unsaved chapters. Closing the session asks whether to write them, so "I decide when" never quietly turns into losing an afternoon.
+With auto-save **off**, nothing reaches disk until you press Save. Marks still live in the session — leave a chapter and come back and they're there — and the action bar keeps a running count of unsaved chapters. Closing the session asks whether to write them, so "I decide when" never quietly turns into losing an afternoon.
 
 **The session outline** — the sidebar has two tabs: **This page** (the panel list for the page you're on) and **All chapters**, a collapsible tree of the whole session:
 
@@ -756,7 +771,8 @@ Panel cropping is done by hand in a local browser tool instead of an LLM round-t
 - **Draw tool (`D`):** left-click and drag on a page to mark a panel (drag can start outside the page edge, Canva-style, and can start on top of an existing mark to draw an overlapping one without disturbing it — see click-to-select below).
 - **Select tool (`V`):** click a mark to select it, then drag its body to move it or a corner/edge handle to resize it. Dashed guide lines appear when an edge lines up with another panel's — a visual aid, not a hard snap.
 - **Delete:** right-click a mark.
-- **Reorder:** drag a panel's `⠿` grip in the right-hand panel list — that order becomes narration order.
+- **Reorder:** drag a panel's `⠿` grip in the right-hand panel list — that order becomes narration order (with auto-order off; see [Mark Panels](#2-mark-panels)).
+- **Action bar** (top of the right sidebar): **Detect**, **Reorder** and **Recrop** for this page, this chapter, a range or all chapters, plus the saved Options switches — see [Mark Panels](#2-mark-panels).
 - **Zoom & pan:** Ctrl/Cmd+scroll to zoom (anchored under the cursor), plain scroll or Alt+scroll to pan, spacebar+drag or middle-mouse-drag for the hand tool, `0` to reset the view.
 - **Finish:** `Ctrl+S` (`⌘S` on macOS) or the **Save & Continue** button writes `crops.json` and signals the CLI/wizard to move on to cropping.
 

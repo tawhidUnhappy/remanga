@@ -65,20 +65,8 @@
   </div>
 
   <div class="sidebar">
-    <div class="side-tabs" role="tablist">
-      <button class="side-tab active" id="tabPage" role="tab">This page</button>
-      <button class="side-tab" id="tabSession" role="tab">All chapters</button>
-    </div>
-
-    <div class="side-pane" id="panePage">
-    <div class="assist-card" id="assistCard">
-      <div class="head">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l1.8 5.6L19 9.4l-5.2 1.8L12 17l-1.8-5.8L5 9.4l5.2-1.8z"/></svg>
-        MAGI v3 Assist
-      </div>
-      <p>Pick which pages, then <b>Detect</b> panels or <b>Reorder</b> them into reading order. Detect never touches a page you've edited.</p>
-
-      <select class="assist-select assist-scope" id="scopeSelect" title="Which pages the buttons below work on">
+    <section class="actions" id="assistCard" aria-label="Actions">
+      <select class="assist-select" id="scopeSelect" title="Which pages the buttons below act on">
         <option value="page">This page</option>
         <option value="chapter">This chapter</option>
         <option value="range">Chapter range…</option>
@@ -91,28 +79,44 @@
         <select class="assist-select" id="rangeTo" title="Last chapter"></select>
       </div>
 
-      <div class="assist-actions">
-        <button class="assist-btn" id="assistBtn" title="Let MAGI mark the panels it finds - never on a page you've edited">Detect</button>
-        <button class="assist-btn secondary" id="reorderBtn" title="Renumber the panels into reading order">Reorder</button>
+      <div class="actions-buttons">
+        <button class="act-btn ai" id="assistBtn" title="Detect - MAGI marks the panels it finds. Never touches a page you've edited."><span class="act-ico">✦</span><span>Detect</span></button>
+        <button class="act-btn" id="reorderBtn" title="Reorder - renumber the panels into reading order."><span class="act-ico">⇅</span><span>Reorder</span></button>
+        <button class="act-btn" id="recropBtn" title="Recrop - save the marks and cut fresh panel images from them. Whole chapters only."><span class="act-ico">✂</span><span>Recrop</span></button>
       </div>
 
-      <label class="assist-switch">
-        <input type="checkbox" id="autoAllToggle">
-        <span>Keep marking every chapter</span>
-      </label>
-      <label class="assist-switch">
-        <input type="checkbox" id="autoSaveToggle">
-        <span>Auto-save chapters</span>
-      </label>
-      <label class="assist-switch">
-        <input type="checkbox" id="autoOrderToggle">
-        <span>Auto-order panels</span>
-      </label>
+      <div class="assist-line">
+        <div class="assist-progress"><span id="assistProgressBar"></span></div>
+        <div class="assist-status" id="assistStatus">Idle</div>
+      </div>
+      <div class="assist-line" id="cropRow" hidden>
+        <div class="assist-progress"><span id="cropProgressBar"></span></div>
+        <div class="assist-status" id="cropStatus"></div>
+      </div>
 
-      <div class="assist-progress"><span id="assistProgressBar"></span></div>
-      <div class="assist-status" id="assistStatus">Idle</div>
+      <details class="actions-options" id="actionsOptions">
+        <summary>Options <span class="opt-summary" id="optSummary"></span></summary>
+        <label class="assist-switch">
+          <input type="checkbox" id="autoAllToggle">
+          <span>Keep marking every chapter</span>
+        </label>
+        <label class="assist-switch">
+          <input type="checkbox" id="autoSaveToggle">
+          <span>Auto-save chapters</span>
+        </label>
+        <label class="assist-switch">
+          <input type="checkbox" id="autoOrderToggle">
+          <span>Auto-order panels</span>
+        </label>
+      </details>
+    </section>
+
+    <div class="side-tabs" role="tablist">
+      <button class="side-tab active" id="tabPage" role="tab">This page</button>
+      <button class="side-tab" id="tabSession" role="tab">All chapters</button>
     </div>
 
+    <div class="side-pane" id="panePage">
     <div class="sidebar-section-head">
       <h3>Panels — reading order</h3>
       <span class="count-pill" id="panelCount">0</span>

@@ -817,13 +817,39 @@ Footguns hit while building it, all still live:
   the revision moves. Auto-order replies are adopted only if `editSeq` for that
   page didn't change while the request was out, and only for the same chapter
   (filenames repeat across chapters).
-- **The assist card's status read the CURRENT chapter's detect counters**, so
+- **The action bar's (formerly assist card's) status read the CURRENT chapter's detect counters**, so
   after a range run finished on other chapters it kept "Detecting ch 4 · 2/3
   pages" forever (the open chapter had total 0, so no branch replaced the
   text), and the bar reset per chapter. Status now reports the RUN:
   `run_done/run_total` since the queue was last idle, `active_kind`, and
   `last_run` for the idle message. Reproduced first by sampling the real
   frontend under node every 300ms - do that for any "UI glitch" report.
+- **Recrop (`MarkerSession.queue_recrop` / `_drain_crops`, POST /api/recrop)**
+  has its OWN worker and queue (`_crop_*`), separate from detection: queued
+  behind a Keep-marking run it would have waited hours, same lesson as Reorder.
+  Per chapter: `save_chapter` only if the chapter is in `self.dirty` (auto-save
+  off included - the cropper reads crops.json, not the session), then
+  `CoordinateCropper(cropper_config_for(RemangaConfig.load().for_project(p), p))
+  .crop_chapter_from_json(p, ch, force=True)` with config reloaded per chapter,
+  then `check_panel_narration_mismatch`. A failed chapter never ends the run.
+  Scope "page" is 400 (the cropper wipes panels/ per chapter). `dry_run: true`
+  returns `{chapters, unmarked, narrated}` so the browser confirms before
+  cutting narrated chapters. `crop_result` is the run in progress,
+  `crop_last_run` the finished one - it stays until the next Recrop so a
+  mismatch warning can't fade unseen. Verified: re-cutting an unedited chapter
+  of reincarnatedAsTheLeaderOfAVillainParty reproduces the exact 129 panel
+  names, so no false mismatch.
+- **Worker start races: decide "is a worker running" under the queue lock with
+  a busy flag, never with `thread.is_alive()`.** A job queued in the instant a
+  worker had found the queue empty but not yet exited saw a live thread,
+  started nothing, and sat unrun. `_worker_busy` (detection) and `_crop_busy`
+  (recrop) are set when a worker is started and cleared, under the lock, in the
+  same critical section that finds the queue empty.
+- **Browser tests: headless Firefox via `/snap/bin/geckodriver`** speaking plain
+  W3C WebDriver JSON over HTTP (no selenium needed) - screenshots come back
+  base64, alerts via `/alert/text|accept|dismiss`. Better than the fake-DOM
+  node harness for anything visual. Scope/switch clicks POST /api/settings,
+  which WRITES config.json - snapshot and restore it.
 - **An empty page in crops.json used to mean two different things** and was
   read back as the wrong one. `is_story_page: false, panels: []` was written
   both for a page the user excluded on purpose and for a page nobody had

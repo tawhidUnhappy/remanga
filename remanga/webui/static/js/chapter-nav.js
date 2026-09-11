@@ -108,10 +108,10 @@ function resetAssistCard() {
   // stale "Done · 18 page(s) processed" from the chapter before it is a
   // statement about the wrong chapter.
   assistProgressBar.style.width = "0%";
-  // MAGI being off greys out Detect only (syncAssistCard). Reorder needs no
-  // model at all, so disabling the whole card with it would take that too.
+  // MAGI being off greys out Detect only (syncAssistCard). Reorder and Recrop
+  // need no model at all, so disabling the whole bar with it would take them too.
   assistCard.classList.remove("disabled");
-  assistStatus.textContent = state.magiEnabled ? "Idle" : "MAGI is off in config.json - Reorder still works";
+  assistStatus.textContent = state.magiEnabled ? "Idle" : "MAGI is off in config.json - Reorder and Recrop still work";
   syncAssistCard();
 }
 
