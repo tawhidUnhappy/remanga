@@ -17,6 +17,33 @@ from remanga.status import render_status_panel
 from remanga.verify import verify_project
 
 
+def _chosen_chapters(params: dict[str, Any], otherwise: str) -> list[str]:
+    """The chapters a whole-project command works on: --chapters when given,
+    else every chapter the project has. Empty - and says so, ending with
+    `otherwise` - when the project has none yet."""
+    project = params["project"]
+    chapters = split_chapters(params.get("chapters")) or discover_chapters(project)
+    if not chapters:
+        console.print(f"[yellow]Project '{project}' has no chapters yet - {otherwise}.[/]")
+    return chapters
+
+
+def _mangadex_listing(params: dict[str, Any], config: RemangaConfig, *, refresh: bool):
+    """A downloader, and every chapter MangaDex lists for this project's manga
+    with its local status - empty, and said so, when there are none in the
+    configured language."""
+    from remanga.downloader import MangaDexDownloader
+
+    downloader = MangaDexDownloader(config.downloader)
+    entries = downloader.list_chapters_with_status(params["project"], params.get("url"), force_refresh=refresh)
+    if not entries:
+        console.print(
+            f"[yellow]MangaDex lists no chapters in '{config.downloader.language}' for this "
+            f"manga - nothing to download.[/]"
+        )
+    return downloader, entries
+
+
 def full_recap(params: dict[str, Any], config: RemangaConfig) -> None:
     # One ordered choice in, three booleans out. The modes are strictly
     # increasing in destructiveness (see reset.REBUILD_MODES), so they cannot
@@ -70,19 +97,11 @@ def download_all(params: dict[str, Any], config: RemangaConfig) -> None:
     verify-and-fill-in-what's-missing path, so re-running this on a project
     that already has most of the manga costs a check per chapter and
     downloads only what's actually absent."""
-    from remanga.downloader import MangaDexDownloader
     from remanga.tui import confirm, is_interactive
 
     project = params["project"]
-    downloader = MangaDexDownloader(config.downloader)
-    entries = downloader.list_chapters_with_status(
-        project, params.get("url"), force_refresh=bool(params.get("refetch")),
-    )
+    downloader, entries = _mangadex_listing(params, config, refresh=bool(params.get("refetch")))
     if not entries:
-        console.print(
-            f"[yellow]MangaDex lists no chapters in '{config.downloader.language}' for this "
-            f"manga - nothing to download.[/]"
-        )
         return
 
     numbers = [entry["chapter"] for entry in entries]
@@ -105,6 +124,73 @@ def download_all(params: dict[str, Any], config: RemangaConfig) -> None:
     downloader.download_chapters(project, numbers, params.get("url"), force=bool(params.get("force")))
 
 
+def download_range(params: dict[str, Any], config: RemangaConfig) -> None:
+    """A run of chapters, downloaded - '1-5' is every chapter MangaDex lists
+    from 1 up to the end of 5, the parts in between included (2.1, 2.2, 5.1,
+    5.2), resolved by expand_chapter_selection.
+
+    The listing is always fetched fresh rather than read from the 24h cache:
+    a range is a question about which chapters exist, and a chapter
+    published since yesterday is exactly the one somebody asks for. The
+    range is asked for after that listing is shown, so the question comes
+    with the answer's limits in front of it, and what it resolves to is
+    shown before anything downloads.
+
+    Chapters already downloaded go through download_chapter's re-verify:
+    everything in pages/ that isn't one of the chapter's pages is removed,
+    every page is checked against MangaDex's checksum, and only a page that
+    fails is fetched again."""
+    from remanga.full_recap.discovery import expand_chapter_selection
+    from remanga.tui import ask_text, confirm, is_interactive
+
+    project = params["project"]
+    raw = (params.get("range") or "").strip()
+    if not raw and not is_interactive():
+        raise ValueError("--range is required when not running in an interactive terminal (e.g. --range 1-5).")
+
+    downloader, entries = _mangadex_listing(params, config, refresh=True)
+    if not entries:
+        return
+    available = [entry["chapter"] for entry in entries]
+    downloaded = {entry["chapter"] for entry in entries if entry["status"] == "downloaded"}
+    console.print(
+        f"[bold]{len(available)} chapter(s)[/] on MangaDex in [bold]{config.downloader.language}[/]: "
+        f"{available[0]} … {available[-1]} · [green]{len(downloaded)} already downloaded[/]"
+    )
+
+    if not raw:
+        def check(text: str) -> str | None:
+            try:
+                return None if expand_chapter_selection(text, available, strict=True) else (
+                    "No chapter on MangaDex falls in that range.")
+            except ValueError as error:
+                return str(error)
+
+        raw = ask_text(
+            "Chapters to download", allow_empty=False, validate=check,
+            note="a range takes every chapter in it, parts included - 1-5 is 1, 2.1, 2.2 … 5.1, 5.2 · "
+                 "commas for more: 1-5,8,10-12",
+        )
+    chapters = expand_chapter_selection(raw, available, strict=True)
+    if not chapters:
+        console.print(f"[yellow]No chapter on MangaDex falls in '{raw}' - nothing to download.[/]")
+        return
+
+    have = [c for c in chapters if c in downloaded]
+    console.print(
+        f"[bold]{len(chapters)} chapter(s):[/] {', '.join(chapters)}\n"
+        f"[dim]{len(chapters) - len(have)} to download · {len(have)} already here - re-verified page "
+        f"by page, with anything in pages/ that isn't theirs removed[/]"
+    )
+    if is_interactive() and not confirm(
+        f"Download these {len(chapters)} chapter(s)?", default=True,
+        note="--force on the command line re-fetches every page clean instead",
+    ):
+        return
+    downloader.download_chapters(project, chapters, params.get("url"), force=bool(params.get("force")))
+    console.print(f"[bold green]✓ Chapters {raw}: all {len(chapters)} on disk and verified.[/]")
+
+
 def narration_init_all(params: dict[str, Any], config: RemangaConfig) -> None:
     """A blank narration.json for every chapter in the project - zero bytes,
     not "{}", not "[]".
@@ -124,9 +210,8 @@ def narration_init_all(params: dict[str, Any], config: RemangaConfig) -> None:
     from remanga.tui import confirm, is_interactive
 
     project = params["project"]
-    chapters = split_chapters(params.get("chapters")) or discover_chapters(project)
+    chapters = _chosen_chapters(params, "nothing to do")
     if not chapters:
-        console.print(f"[yellow]Project '{project}' has no chapters yet - nothing to do.[/]")
         return
 
     # Three states, not two: a chapter with no file at all, one that already
@@ -190,9 +275,8 @@ def crop_all(params: dict[str, Any], config: RemangaConfig) -> None:
     from remanga.tui import confirm, is_interactive
 
     project = params["project"]
-    chapters = split_chapters(params.get("chapters")) or discover_chapters(project)
+    chapters = _chosen_chapters(params, "nothing to crop")
     if not chapters:
-        console.print(f"[yellow]Project '{project}' has no chapters yet - nothing to crop.[/]")
         return
 
     marked = [c for c in chapters if has_real_json_content(get_chapter_dir(project, c) / "crops.json")]
@@ -269,9 +353,8 @@ def package_all(params: dict[str, Any], config: RemangaConfig) -> None:
 
     project = params["project"]
     formats = parse_package_formats(params.get("formats"))
-    chapters = split_chapters(params.get("chapters")) or discover_chapters(project)
+    chapters = _chosen_chapters(params, "nothing to package")
     if not chapters:
-        console.print(f"[yellow]Project '{project}' has no chapters yet - nothing to package.[/]")
         return
 
     # Checked once here rather than left to package_chapter, which would say
@@ -337,9 +420,8 @@ def mark_all(params: dict[str, Any], config: RemangaConfig) -> None:
     from remanga.webui import launch_and_wait_all
 
     project = params["project"]
-    chapters = split_chapters(params.get("chapters")) or discover_chapters(project)
+    chapters = _chosen_chapters(params, "download some first")
     if not chapters:
-        console.print(f"[yellow]Project '{project}' has no chapters yet - download some first.[/]")
         return
 
     saved = launch_and_wait_all(project, chapters, config.marker)
@@ -366,9 +448,8 @@ def view_marks(params: dict[str, Any], config: RemangaConfig) -> None:
     from remanga.webui import launch_and_wait_all
 
     project = params["project"]
-    chapters = split_chapters(params.get("chapters")) or discover_chapters(project)
+    chapters = _chosen_chapters(params, "nothing to look at")
     if not chapters:
-        console.print(f"[yellow]Project '{project}' has no chapters yet - nothing to look at.[/]")
         return
 
     launch_and_wait_all(project, chapters, config.marker, read_only=True)

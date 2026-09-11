@@ -33,7 +33,7 @@ from remanga.tui.choices import Choice, Toggle, index_of_value, to_choices
 from remanga.tui.confirm import confirm
 from remanga.tui.fallback import ask_index
 from remanga.tui.keys import is_interactive
-from remanga.tui.result import CANCEL, EXIT, PromptExit, is_cancel
+from remanga.tui.result import CANCEL, EXIT, PromptExit, PromptInterrupt, is_cancel
 from remanga.tui.select import select
 from remanga.tui.text import ask_number, ask_path, ask_text
 
@@ -42,6 +42,7 @@ __all__ = [
     "EXIT",
     "Choice",
     "PromptExit",
+    "PromptInterrupt",
     "Toggle",
     "ask_index",
     "ask_number",

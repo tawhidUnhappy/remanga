@@ -17,6 +17,7 @@ from remanga.config import RemangaConfig
 from remanga.console import console
 from remanga.cropper import CoordinateCropper
 from remanga.downloader import MangaDexDownloader
+from remanga.full_recap.discovery import expand_chapter_selection
 from remanga.narration import TEMPLATE, create_narration_file
 from remanga.packaging import package_chapter
 from remanga.pipeline import load_pipeline, run_pipeline
@@ -55,21 +56,17 @@ def download_chapters(params: dict[str, Any], config: RemangaConfig) -> None:
 
         if not is_interactive():
             raise ValueError(
-                "--chapters is required when not running in an interactive terminal "
+                "--select is required when not running in an interactive terminal "
                 "(a comma list and/or ranges like '1,3,7-9', or 'all')."
             )
         run_download_chapters(project, config, manga_id_or_url)
         return
 
     downloader = MangaDexDownloader(config.downloader)
-    if raw_chapters.strip().lower() == "all":
-        entries = downloader.list_chapters_with_status(project, manga_id_or_url, force_refresh=refetch)
-        chapter_nums = [e["chapter"] for e in entries]
-    else:
-        from remanga.downloader.selection import parse_remote_chapter_selection
-
-        entries = downloader.list_chapters_with_status(project, manga_id_or_url, force_refresh=refetch)
-        chapter_nums = parse_remote_chapter_selection(raw_chapters, [e["chapter"] for e in entries])
+    entries = downloader.list_chapters_with_status(project, manga_id_or_url, force_refresh=refetch)
+    available = [e["chapter"] for e in entries]
+    chapter_nums = (available if raw_chapters.lower() == "all"
+                    else expand_chapter_selection(raw_chapters, available, strict=True))
 
     if not chapter_nums:
         console.print("[yellow]No chapters matched that selection - nothing to download.[/]")

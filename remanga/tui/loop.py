@@ -18,7 +18,7 @@ from remanga.console import console
 from remanga.tui import keys
 from remanga.tui.choices import Choice
 from remanga.tui.frame import answer_line, menu_frame
-from remanga.tui.result import PromptExit, is_cancel
+from remanga.tui.result import CANCEL, PromptExit, PromptInterrupt, is_cancel
 
 # Leaves room for the title, the note/filter line, the two "N more" markers,
 # the highlighted row's detail line and the footer, so a menu never grows
@@ -54,11 +54,20 @@ class MenuState:
         # menus, where filtering "Chapter Production" is impossible without
         # it; False for checklists, where Space is the toggle key.
         self.space_filters = space_filters
-        self.page_size = page_size or default_page_size()
-        self._visible: list[Choice] = list(self.choices)
-        self.cursor = self._clamp(cursor)
+        self._page_size = page_size
+        self._visible: list[Choice] = [c for c in self.choices if not c.hidden]
+        # `cursor` indexes `choices`; the cursor itself indexes what's shown.
+        start = self.choices[cursor] if 0 <= cursor < len(self.choices) else None
+        self.cursor = next((i for i, c in enumerate(self._visible) if c is start), 0)
+        self.skip_disabled(1)
 
     # --- view ---------------------------------------------------------
+    @property
+    def page_size(self) -> int:
+        """Re-read from the terminal on every redraw unless fixed, so a menu
+        follows the window when it's resized while open."""
+        return self._page_size or default_page_size()
+
     @property
     def visible(self) -> list[Choice]:
         return self._visible
@@ -97,7 +106,7 @@ class MenuState:
                     by_text.append(choice)
             self._visible = by_label + by_text
         else:
-            self._visible = list(self.choices)
+            self._visible = [c for c in self.choices if not c.hidden]
         if previous is not None and previous in self._visible:
             self.cursor = self._visible.index(previous)
         else:
@@ -170,6 +179,13 @@ class MenuState:
         self._refilter()
         return True
 
+    def escape(self, can_go_back: bool) -> tuple | None:
+        """Esc, the same in every menu: clear the filter if there is one,
+        else back out - when this menu can be backed out of at all."""
+        if self.clear_query() or not can_go_back:
+            return None
+        return (CANCEL,)
+
 
 def run_menu(
     state: MenuState,
@@ -197,9 +213,9 @@ def run_menu(
     `echo`), so a wizard session scrolls back as a readable list of
     decisions rather than dozens of redrawn menus.
 
-    Ctrl+C raises KeyboardInterrupt with the terminal already restored -
-    cli.py's SIGINT handler prints the same "production paused" message it
-    always has."""
+    Ctrl+C raises PromptInterrupt (a KeyboardInterrupt) with the terminal
+    already restored - see remanga.tui.result for what the wizard does with
+    it."""
     with keys.key_reader() as reader, Live(console=console, auto_refresh=False, transient=True) as live:
         while True:
             live.update(menu_frame(
@@ -211,7 +227,7 @@ def run_menu(
 
             key = reader.read_key()
             if key == keys.CTRL_C:
-                raise KeyboardInterrupt
+                raise PromptInterrupt
             if key in _EXIT_KEYS:
                 raise PromptExit
             if key == keys.UNKNOWN:

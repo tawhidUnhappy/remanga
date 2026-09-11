@@ -9,6 +9,7 @@ against chapters the project really has."""
 from __future__ import annotations
 
 from remanga.full_recap import chapter_sort_key, discover_chapters
+from remanga.full_recap.discovery import expand_chapter_selection
 
 # Applied whenever --keep is left unset entirely (None) - the three things
 # most expensive/annoying to redo (a re-download, re-marking panels, and an
@@ -28,36 +29,12 @@ def split_chapters(raw: str | None) -> list[str] | None:
 
 def parse_chapter_selection(raw: str, project_name: str) -> list[str]:
     """Comma-separated chapter numbers and/or numeric ranges ('N-M') - e.g.
-    '1,3,7-9'.
-
-    A range expands only against chapters this project actually has, so
-    '1-24' can't manufacture chapter numbers that were never downloaded. A
-    plain (non-range) token passes through literally even if it doesn't
-    exist yet, matching split_chapters' permissiveness elsewhere - a wipe
-    naturally no-ops on one that isn't there."""
-    existing = discover_chapters(project_name)
-    result: set = set()
-    for token in raw.split(","):
-        token = token.strip()
-        if not token:
-            continue
-        if "-" in token:
-            lo_s, _, hi_s = token.partition("-")
-            try:
-                lo, hi = float(lo_s), float(hi_s)
-            except ValueError:
-                result.add(token)  # a literal label with a dash, not a range
-                continue
-            for chapter in existing:
-                try:
-                    value = float(chapter)
-                except ValueError:
-                    continue
-                if lo <= value <= hi:
-                    result.add(chapter)
-            continue
-        result.add(token)
-    return sorted(result, key=chapter_sort_key)
+    '1,3,7-9' - against the chapters this project actually has, so '1-24'
+    can't manufacture chapter numbers that were never downloaded. A plain
+    token passes through even if it doesn't exist yet - a wipe naturally
+    no-ops on one that isn't there. See expand_chapter_selection for how a
+    range treats split chapters (5.1, 5.2)."""
+    return expand_chapter_selection(raw, discover_chapters(project_name))
 
 
 def resolve_wipe_keep(keep_raw: str | None, project_name: str | None = None) -> set:

@@ -45,13 +45,12 @@ def run_download_chapters(project_name: str, config: RemangaConfig, manga_id_or_
     missing, force wipes and refetches it from scratch."""
     downloader = MangaDexDownloader(config.downloader)
 
+    # No try/except of its own: a failed fetch or download propagates to
+    # whoever ran the command - the wizard reports it and returns to the
+    # menu, and the command line exits non-zero instead of claiming success.
     force_refresh = False
     while True:
-        try:
-            entries = downloader.list_chapters_with_status(project_name, manga_id_or_url, force_refresh=force_refresh)
-        except Exception as e:
-            console.print(f"[bold red]Couldn't fetch the chapter list:[/] {e}")
-            return
+        entries = downloader.list_chapters_with_status(project_name, manga_id_or_url, force_refresh=force_refresh)
         if not entries:
             console.print("[yellow]MangaDex has no chapters listed for this manga in the configured language.[/]")
             return
@@ -89,9 +88,5 @@ def run_download_chapters(project_name: str, config: RemangaConfig, manga_id_or_
              "what's actually missing",
     )
 
-    try:
-        downloader.download_chapters(project_name, chosen, manga_id_or_url, force=force)
-    except Exception as e:
-        console.print(f"[bold red]Download stopped:[/] {e}")
-        return
+    downloader.download_chapters(project_name, chosen, manga_id_or_url, force=force)
     console.print(f"[bold green]✓ Done with {len(chosen)} chapter(s).[/]")

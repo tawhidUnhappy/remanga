@@ -12,14 +12,22 @@ from remanga.commands.help_text import (
     RESTART_MODE_HELP,
 )
 from remanga.commands.setup_rows import BGM_SETUP, CROP_SETUP, VIDEO_SETUP
-from remanga.commands.spec import Command, Param, chapter_param, force_param, project_param
+from remanga.commands.spec import (
+    Command,
+    Param,
+    chapter_param,
+    chapters_param,
+    force_param,
+    formats_param,
+    project_param,
+    url_param,
+)
 from remanga.reset import (
     DEFAULT_REBUILD_MODE,
     REBUILD_MODE_NAMES,
     REBUILD_MODES,
     RESTART_MODES,
 )
-from remanga.settings.vision import package_switch_names
 
 PROJECT_COMMANDS: list[Command] = [
     Command(
@@ -31,9 +39,7 @@ PROJECT_COMMANDS: list[Command] = [
         project_handlers.download_all,
         [
             project_param(),
-            Param("url", ["--url", "-u"], required=False, default=None,
-                  help="Manga title or MangaDex URL/UUID (optional if saved in project.json)",
-                  prompt="Manga title or MangaDex URL"),
+            url_param(),
             # Both deliberately unasked by the wizard: the handler prints how
             # many chapters there are and how many are already here, then asks
             # one question about the run as a whole. Two yes/no boxes in front
@@ -50,6 +56,35 @@ PROJECT_COMMANDS: list[Command] = [
         detail="the whole manga in one go - re-runnable, and only downloads what's actually missing",
     ),
     Command(
+        "download-range",
+        "Download a range of chapters from MangaDex - '1-5' takes every chapter from 1 to the end "
+        "of 5, parts included (2.1, 2.2, 5.1, 5.2); commas combine ranges and single chapters. "
+        "Chapters already downloaded are re-verified page by page against MangaDex's checksums, "
+        "with anything in pages/ that isn't theirs removed",
+        project_handlers.download_range,
+        [
+            project_param(),
+            url_param(),
+            # cli_only, both: the handler asks for the range itself, after
+            # showing which chapters MangaDex has - a range typed blind, before
+            # knowing whether the manga numbers 5 as "5" or "5.1, 5.2", is the
+            # question asked too early.
+            Param("range", ["--range", "-r"], required=False, default=None, cli_only=True,
+                  help="Chapters to download: a range ('1-5'), single chapters, or both, comma-"
+                       "separated ('1-5,8,10-12'). A whole-number end includes that chapter's "
+                       "parts (1-5 takes 5.1 and 5.2); a decimal end is exact (1-4.1). Asked "
+                       "interactively when left out.",
+                  prompt="Chapters to download"),
+            Param("force", ["--force", "-f"], type="bool", default=False, cli_only=True,
+                  help="Re-fetch every selected chapter clean - wipe its pages first and "
+                       "download all of them again, even pages that verify",
+                  prompt="Re-fetch every selected chapter clean?"),
+        ],
+        category="Project-wide",
+        detail="a run of chapters by number - shows what the range covers before downloading, "
+               "and re-verifies anything already here",
+    ),
+    Command(
         "mark-all",
         "Mark panels for every chapter in the project in ONE browser tab - saving a chapter "
         "writes its crops.json and swaps the next chapter into the same page, and the chapter "
@@ -58,10 +93,7 @@ PROJECT_COMMANDS: list[Command] = [
         project_handlers.mark_all,
         [
             project_param(),
-            Param("chapters", ["--chapters", "-c"], required=False, default=None,
-                  help="Comma-separated chapter numbers to mark, in order (default: every chapter "
-                       "this project has). Chapters with no downloaded pages are skipped.",
-                  prompt="Chapters to mark"),
+            chapters_param("mark", "Chapters with no downloaded pages are skipped."),
         ],
         category="Project-wide",
         detail="one tab, one server, one MAGI load per chapter - the whole manga in one session",
@@ -75,10 +107,7 @@ PROJECT_COMMANDS: list[Command] = [
         project_handlers.view_marks,
         [
             project_param(),
-            Param("chapters", ["--chapters", "-c"], required=False, default=None,
-                  help="Comma-separated chapter numbers to look through (default: every chapter "
-                       "this project has). Chapters with no downloaded pages are skipped.",
-                  prompt="Chapters to look through"),
+            chapters_param("look through", "Chapters with no downloaded pages are skipped."),
         ],
         category="Project-wide",
         detail="the double-check pass - read-only, enforced on the server, not just hidden",
@@ -92,10 +121,7 @@ PROJECT_COMMANDS: list[Command] = [
         project_handlers.crop_all,
         [
             project_param(),
-            Param("chapters", ["--chapters", "-c"], required=False, default=None,
-                  help="Comma-separated chapter numbers to crop (default: every chapter this "
-                       "project has). Chapters with no crops.json are skipped.",
-                  prompt="Chapters to crop"),
+            chapters_param("crop", "Chapters with no crops.json are skipped."),
             # cli_only: the handler asks this itself, once, naming the
             # chapters that are actually already cropped - asked up front it
             # would be "re-crop the cropped ones?" before anyone knows
@@ -118,19 +144,8 @@ PROJECT_COMMANDS: list[Command] = [
         project_handlers.package_all,
         [
             project_param(),
-            Param("chapters", ["--chapters", "-c"], required=False, default=None,
-                  help="Comma-separated chapter numbers to package (default: every chapter this "
-                       "project has). Chapters with no cropped panels are skipped.",
-                  prompt="Chapters to package"),
-            Param(
-                "formats", ["--formats"], required=False, default=None,
-                prompt="What to build for every chapter",
-                help="Comma-separated package formats to build for every selected chapter - any "
-                     f"of: {', '.join(package_switch_names())}, or 'none'. The wizard offers this "
-                     "as a checklist. Whatever you pick is remembered for the project, exactly as "
-                     "`package` remembers it. Left unset: this project's remembered choice, or "
-                     "config.json's cropper.package switches if it has never chosen.",
-            ),
+            chapters_param("package", "Chapters with no cropped panels are skipped."),
+            formats_param("What to build for every chapter"),
         ],
         category="Project-wide",
         detail="the whole-project form of `package` - one formats answer covers every chapter, "
@@ -144,10 +159,7 @@ PROJECT_COMMANDS: list[Command] = [
         project_handlers.narration_init_all,
         [
             project_param(),
-            Param("chapters", ["--chapters", "-c"], required=False, default=None,
-                  help="Comma-separated chapter numbers to give a blank narration.json (default: "
-                       "every chapter this project has)",
-                  prompt="Chapters to give a blank narration.json"),
+            chapters_param("give a blank narration.json"),
             # cli_only: the handler asks this itself, once, naming the
             # chapters that actually have a script - which is a question
             # worth answering. Asked up front by the wizard it would be
@@ -168,10 +180,7 @@ PROJECT_COMMANDS: list[Command] = [
         project_handlers.full_recap,
         [
             project_param(),
-            Param("chapters", ["--chapters", "-c"], required=False, default=None,
-                  help="Comma-separated chapter numbers to include, in any order (default: every "
-                       "chapter found, in order)",
-                  prompt="Chapters to include"),
+            chapters_param("include"),
             Param(
                 "rebuild", ["--rebuild"], type="choice", default=DEFAULT_REBUILD_MODE,
                 choices=list(REBUILD_MODE_NAMES),
@@ -201,9 +210,7 @@ PROJECT_COMMANDS: list[Command] = [
         project_handlers.remix,
         [
             project_param(),
-            Param("chapters", ["--chapters", "-c"], required=False, default=None,
-                  help="Comma-separated chapter numbers to remix (default: every chapter found)",
-                  prompt="Chapters to remix"),
+            chapters_param("remix"),
             Param("bgm", ["--bgm", "-b"], required=False, default=None,
                   help="Override background music audio path", prompt="Background music override"),
             Param("no_rejoin", ["--no-rejoin"], type="bool", default=False,
@@ -229,9 +236,7 @@ PROJECT_COMMANDS: list[Command] = [
         project_handlers.verify,
         [
             project_param(),
-            Param("chapters", ["--chapters", "-c"], required=False, default=None,
-                  help="Comma-separated chapter numbers to verify (default: every chapter found)",
-                  prompt="Chapters to verify"),
+            chapters_param("verify"),
             Param("no_video", ["--no-video"], type="bool", default=False,
                   help="Skip verifying rendered videos, audio only (faster)",
                   prompt="Skip verifying rendered videos (audio only)?"),

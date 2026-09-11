@@ -6,6 +6,7 @@ per-parameter prompting, and both LLM hand-off steps. Split by what each
 piece is for:
 
     app.py           - the menus and the session loop
+    session.py       - the open project, what it remembers, and keep_going
     projects.py      - picking/creating a project, reading direction
     chapters.py      - picking one chapter, or several
     params.py        - prompting for a command's parameters

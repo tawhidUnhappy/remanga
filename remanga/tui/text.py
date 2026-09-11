@@ -24,7 +24,7 @@ from rich.prompt import Prompt
 
 from remanga.console import console, display_path
 from remanga.tui.choices import Choice
-from remanga.tui.result import CANCEL
+from remanga.tui.result import CANCEL, answering
 from remanga.tui.select import select
 
 # Imported for its side effect alone, and this is the module that has to do
@@ -54,7 +54,10 @@ def ask_text(
     if note:
         console.print(f"[dim]{escape(note)}[/]")
     while True:
-        raw = Prompt.ask(f"[bold]{escape(label)}[/]", default=default).strip()
+        with answering():
+            # show_default only when there is one: Rich otherwise prints an
+            # empty "()" after every question that has no default.
+            raw = Prompt.ask(f"[bold]{escape(label)}[/]", default=default, show_default=bool(default)).strip()
         if not raw and not allow_empty:
             console.print("[bold red]An answer is required.[/]")
             continue

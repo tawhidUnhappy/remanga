@@ -162,23 +162,29 @@ The easiest way to produce a recap video is through the interactive terminal wiz
 
 ### How the menus work
 
-Every screen is an arrow-key menu — **↑/↓** to move, **Enter** to pick, **type to filter**, **Esc** to back out one level, **Ctrl+Q** (or the **Exit remanga** row every menu ends with) to quit outright from wherever you are, however deep. Checklists add **Space** to toggle (**Ctrl+A** all, **Ctrl+R** none), and confirmations take **y**/**n** as well as Enter. Whatever is currently configured is pre-highlighted, so Enter alone is always "leave it as it is". Nothing has to be typed from memory: the wizard lists what's actually there. The few places you do type — a project name, a chapter number, a path — are full readline lines: ←/→ move the cursor, Home/End jump, Ctrl+A/Ctrl+E/Ctrl+W and friends work, and ↑/↓ walk that prompt's history.
+Every screen is an arrow-key menu — **↑/↓** to move, **Enter** or **→** to pick, **type to filter**, **Esc** or **←** to back out one level, **Ctrl+Q** (or the **Exit remanga** row) to quit outright from wherever you are, however deep. Checklists add **Space** to toggle (**Ctrl+A** all, **Ctrl+R** none), and confirmations take **y**/**n** as well as Enter. Whatever is currently configured is pre-highlighted, so Enter alone is always "leave it as it is". Nothing has to be typed from memory: the wizard lists what's actually there. The few places you do type — a project name, a chapter number, a range — are full readline lines: ←/→ move the cursor, Home/End jump, Ctrl+A/Ctrl+E/Ctrl+W and friends work, and ↑/↓ walk that prompt's history.
+
+**Type a command's name on the main menu to jump straight to it** — `crop-all` then Enter runs it, without going through its category first. The categories are there for browsing, not a path you have to walk.
+
+**Menus remember where you were.** Coming back to a menu puts the cursor on what you last picked in it, and a chapter picker opens on the chapter you last chose — so `mark`, `crop`, `package` on the same chapter is Enter, Enter, Enter.
+
+**Ctrl+C at a question cancels that command** and returns to the menu — the way out of a typed answer, which Esc can't reach. Ctrl+C while a command is *working* (a download, TTS, a render) stops remanga, which exits with status 130; everything interrupted resumes on the next run.
 
 ```
 ? remanga — MyProject
+  type a command's name to jump straight to it
 ❯ Setup                settings, shared assets, and model weights
   Chapter Production   one chapter, from download to rendered video
   Project-wide         set the whole manga up, compile it, check it, clean it up
   Pipeline             download → mark → crop → narration → review → tts → mix → render
   Switch project       currently: MyProject
   Quit
-  Exit remanga         quit from here
-  ↑↓ move · enter select · type to filter · esc back · ctrl+q exit
+  ↑↓ move · enter/→ select · esc/← back · type to filter · ctrl+q exit
 ```
 
 Short, fixed lists are **numbered** instead, so picking one is a single keystroke rather than an arrow and an Enter. Type the number to pick it, `0` to back out (the same convention the non-tty fallback prompts have always used); the arrow keys still work.
 
-Six commands have a menu of their own — `tts`, `mix`, `render`, `crop`, `full-recap` and `remix` — because the voice, the pacing, the levels, the music and the resolution are things you notice at the moment you go to run them, not while walking through `setup-config`. Row 1 runs the command; the rest are the settings it reads, each stating its current value and opening the same screen the settings menu opens:
+Seven commands have a menu of their own — `tts`, `mix`, `render`, `crop`, `crop-all`, `full-recap` and `remix` — because the voice, the pacing, the levels, the music and the resolution are things you notice at the moment you go to run them, not while walking through `setup-config`. Row 1 runs the command; the rest are the settings it reads, each stating its current value and opening the same screen the settings menu opens:
 
 ```
 ? tts
@@ -191,7 +197,7 @@ Six commands have a menu of their own — `tts`, `mix`, `render`, `crop`, `full-
      Back
      Exit remanga  quit from here
   uses the configured voice and engine unless you pick otherwise
-  type 1-5 · ↑↓ move · enter select · 0 or esc back · ctrl+q exit
+  type 1-5 · ↑↓ move · enter/→ select · 0/esc/← back · ctrl+q exit
 ```
 
 ```
@@ -204,7 +210,7 @@ Six commands have a menu of their own — `tts`, `mix`, `render`, `crop`, `full-
   5. Panel framing  4% padding (adaptive) · 2px border
      Back
   renders at the resolution, background and encoder set below
-  type 1-5 · ↑↓ move · enter select · 0 or esc back · ctrl+q exit
+  type 1-5 · ↑↓ move · enter/→ select · 0/esc/← back · ctrl+q exit
 ```
 
 The rows are pointers, not copies — each runs the very same function `setup-config` runs, so the two can never describe a setting differently. Commands with no settings behind them (`download`, `crop`, `mark`, …) still run straight away. On the CLI nothing changed: `remanga tts` synthesizes a chapter, and every setting keeps its own screen under `setup-config`.
@@ -417,6 +423,20 @@ Pass a title query, title URL, chapter URL, or UUID:
 It fetches the feed in the configured translation language (`downloader.language`, `en` by default) and, where a chapter number appears more than once — two scanlation groups, or one of them re-uploading a fix — takes **the newest upload of it**. Left alone that duplication shows up as the same chapter listed twice in the picker and a download that takes whichever copy the API happened to return first, which is not a choice anyone made and can differ between two runs of the same command; now the picker and the download agree, and both mean "the latest one".
 
 It prints how many chapters exist and how many you already have, then asks once before starting. Chapters already downloaded are *verified*, not re-fetched, so re-running it after a new chapter drops costs a check per chapter and downloads only what's actually missing. `--force` re-fetches every chapter clean instead.
+
+**A range of chapters** — `download-range` (Project-wide in the wizard) downloads chapters by number:
+```bash
+./run.sh download-range --project "my_manga" --range 1-5
+./run.sh download-range --project "my_manga" --range 1-5,8,10-12
+```
+A range takes **every chapter MangaDex lists inside it, parts included**: on a manga numbered 1, 2.1, 2.2, 3.1 … `1-5` is 1, 2.1, 2.2, 3.1, 3.2, 4.1, 4.2, 5.1 and 5.2. A whole-number end covers that chapter's parts (plenty of split manga have no chapter "5" at all, only 5.1 and 5.2); a decimal end is exact, so `1-4.1` stops at 4.1. The chapter list is always fetched fresh, and in the wizard you're shown it before being asked for the range, then shown exactly what the range covers before anything downloads. A chapter MangaDex doesn't list is refused up front, not discovered halfway through. The same range rules apply to `download-chapters --select` and `wipe-chapters`.
+
+**Re-downloading a chapter you already have re-verifies it**, whichever download command gets there:
+- everything in its `pages/` folder that isn't one of that chapter's pages — a stray file, a leftover folder, an old naming scheme — is removed, and named;
+- every page is checked byte for byte against the SHA-256 MangaDex names each page file after, and any page that doesn't match (truncated by a kill, corrupted, replaced upstream) is fetched again;
+- a freshly downloaded page is checked the same way before it's saved.
+
+So a download interrupted with Ctrl+C resumes with just the pages that hadn't landed. Bulk downloads also read MangaDex's chapter feed once for the whole run, rather than once per chapter.
 
 ### 2. Mark Panels
 Launches the **Panel Marker** web UI: draw panel boxes yourself, or press **Detect** and MAGI v3 finds them on a GPU; you drag/adjust/delete to correct them, then **Save** writes `crops.json`. Nothing is detected until you press Detect.
@@ -938,6 +958,8 @@ In short: if a chapter's TTS run gets interrupted or a worker locks up, just re-
 
 ## CLI Command Reference
 
+`./run.sh --help` lists every command grouped the way the wizard groups them, `./run.sh <command> --help` explains one, and `./run.sh --version` prints the version. A mistyped command gets its closest match suggested. Exit status is `0` when a run finishes (or you quit), `1` when it fails, and `130` when Ctrl+C stopped it — so `./run.sh download-all -p x && ./run.sh crop-all -p x` stops when you stop it. Errors and the interruption notice go to stderr.
+
 ```bash
 # Interactive Production Wizard
 ./pipeline.sh
@@ -956,6 +978,7 @@ In short: if a chapter's TTS run gets interrupted or a worker locks up, just re-
 ./run.sh mix      -p <PROJECT> -c <CHAPTER> [-b <BGM_FILE>]
 ./run.sh render   -p <PROJECT> -c <CHAPTER> [-f]
 ./run.sh download-all -p <PROJECT> [-u <URL_OR_ID>] [-f] [--refetch]
+./run.sh download-range -p <PROJECT> -r <RANGE, e.g. 1-5,8> [-u <URL_OR_ID>] [-f]
 ./run.sh mark-all -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>]
 ./run.sh view-marks -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>]
 ./run.sh crop-all -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-f]

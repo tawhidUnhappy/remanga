@@ -11,6 +11,7 @@ from rich.progress import BarColumn, Progress, TextColumn
 
 from remanga.config import DownloaderConfig
 from remanga.console import console, escape as _esc
+from remanga.full_recap.discovery import chapter_key
 
 BASE_URL = "https://api.mangadex.org"
 
@@ -173,17 +174,6 @@ class MangaDexResolver:
                 return str(value)
         return ""
 
-    @staticmethod
-    def _number_key(number: str) -> str:
-        """The chapter numbers that mean the same chapter, as one key: "07",
-        "7" and "7.0" collapse together - the same equivalence
-        _match_chapter_num applies when looking a chapter up, so grouping
-        here can't disagree with matching there."""
-        try:
-            return f"{float(number):g}"
-        except ValueError:
-            return number.lstrip("0") or number
-
     @classmethod
     def latest_versions(cls, chapters: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """One entry per chapter number - the most recently readable one.
@@ -197,14 +187,13 @@ class MangaDexResolver:
         command.
 
         So the duplicates collapse here, newest kept. Chapter numbers are
-        compared the way _match_chapter_num compares them (leading zeros and
-        "7" vs "7.0" are the same chapter), and the input order is preserved
-        - the feed is already in reading order and this must not disturb
-        it."""
+        compared by chapter_key (leading zeros and "7" vs "7.0" are the same
+        chapter), and the input order is preserved - the feed is already in
+        reading order and this must not disturb it."""
         best: dict[str, dict[str, Any]] = {}
         order: list[str] = []
         for chapter in chapters:
-            key = cls._number_key(str(chapter.get("attributes", {}).get("chapter") or "").strip())
+            key = chapter_key(str(chapter.get("attributes", {}).get("chapter") or ""))
             if key not in best:
                 best[key] = chapter
                 order.append(key)
@@ -212,34 +201,23 @@ class MangaDexResolver:
                 best[key] = chapter
         return [best[key] for key in order]
 
-    @staticmethod
-    def _match_chapter_num(target: str, candidate: str) -> bool:
-        """Robustly compare chapter numbers accounting for leading zeros and decimals."""
-        target_s = str(target).strip()
-        cand_s = str(candidate).strip()
-        if not cand_s:
-            return False
-        if target_s == cand_s:
-            return True
-        target_norm = target_s.lstrip("0") or "0"
-        cand_norm = cand_s.lstrip("0") or "0"
-        if target_norm == cand_norm:
-            return True
-        try:
-            if float(target_s) == float(cand_s):
-                return True
-        except ValueError:
-            pass
-        return False
+    def chapter_ids(self, manga_id: str) -> dict[str, str]:
+        """Every chapter this manga's feed lists, as chapter_key -> the id of
+        its latest upload (see latest_versions). One feed fetch, however many
+        chapters are then looked up in it - a bulk download resolves every
+        chapter from a single call instead of paging the whole feed again
+        per chapter."""
+        return {
+            chapter_key(str(ch.get("attributes", {}).get("chapter") or "")): ch["id"]
+            for ch in self.latest_versions(self.list_chapters(manga_id))
+            if ch.get("attributes", {}).get("chapter")
+        }
 
-    def find_chapter_id(self, manga_id: str, chapter_num: str) -> str:
-        """Locate specific chapter ID by chapter number - the latest upload
-        of it, when the feed carries more than one (see latest_versions)."""
-        chapters = self.latest_versions(self.list_chapters(manga_id))
-
-        for ch in chapters:
-            curr_ch = str(ch.get("attributes", {}).get("chapter", ""))
-            if self._match_chapter_num(chapter_num, curr_ch):
-                return ch["id"]
-
-        raise ValueError(f"Chapter '{chapter_num}' not found for manga ID: {manga_id}")
+    def find_chapter_id(self, manga_id: str, chapter_num: str,
+                        ids: dict[str, str] | None = None) -> str:
+        """The id of this chapter's latest upload. `ids` is a chapter_ids()
+        result to look it up in; without one, the feed is fetched for it."""
+        found = (ids if ids is not None else self.chapter_ids(manga_id)).get(chapter_key(chapter_num))
+        if found is None:
+            raise ValueError(f"Chapter '{chapter_num}' not found for manga ID: {manga_id}")
+        return found

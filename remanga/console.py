@@ -27,6 +27,13 @@ from rich.markup import escape
 
 console = Console()
 
+# Where the command line's own last word goes when a run ends badly - the
+# error, the interruption - so it reaches the terminal even when stdout is
+# piped into a file or another program. Only ever printed to after every
+# menu, progress bar and spinner has closed, so it can't fight `console`
+# over the screen the way the per-module consoles above used to.
+err_console = Console(stderr=True)
+
 
 def wrap_at_slashes(text: str) -> str:
     """Pre-wraps an arbitrary long, space-free string (a URL as well as a path)

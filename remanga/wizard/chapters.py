@@ -154,15 +154,17 @@ def suggest_next_chapter(project_name: str) -> ChapterSuggestion:
     return ChapterSuggestion(guess, "one past your newest - MangaDex's chapter list wasn't available")
 
 
-def select_chapter(project_name: str, *, title: str = "Chapter") -> Any:
-    """One chapter. Returns its number as a string, or CANCEL."""
+def select_chapter(project_name: str, *, title: str = "Chapter", default: str | None = None) -> Any:
+    """One chapter. Returns its number as a string, or CANCEL. Opens on
+    `default` when this project still has that chapter, else on the newest."""
     rows = chapter_choices(project_name)
     suggestion = suggest_next_chapter(project_name)
     rows.append(Choice(label="New chapter…", hint=f"suggests {suggestion.number} · {suggestion.origin}",
                        value=_NEW))
 
-    picked = select(title, rows, default=rows[-2].value if len(rows) > 1 else None,
-                    note=f"{len(rows) - 1} chapter(s) in this project")
+    existing = [row.value for row in rows[:-1]]
+    start = default if default in existing else (existing[-1] if existing else None)
+    picked = select(title, rows, default=start, note=f"{len(existing)} chapter(s) in this project")
     if is_cancel(picked):
         return CANCEL
     if picked != _NEW:

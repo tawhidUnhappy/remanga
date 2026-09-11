@@ -40,12 +40,13 @@ def run_narration_step(project: str, chapter: str, config: RemangaConfig) -> Non
 
     groups = upload_groups(project, chapter, config)
     if not groups:
-        console.print(
-            "\n[bold red]Nothing to upload:[/] no panels, sheets, or zip/PDF bundle exist for "
-            "this chapter.\n[dim]Run `crop` for this chapter, or turn a packaging format on "
-            "(Settings → Vision outputs) and run `package`.[/]"
+        # An error, not SystemExit: this runs inside the wizard's pipeline,
+        # and SystemExit ended the whole session instead of this one step.
+        raise FileNotFoundError(
+            f"Nothing to upload for chapter {chapter}: no panels, sheets, or zip/PDF bundle exist. "
+            "Run `crop` for it, or turn a packaging format on (Settings → Vision outputs) and "
+            "run `package`."
         )
-        raise SystemExit(1)
 
     narration_path.parent.mkdir(parents=True, exist_ok=True)
     narration_path.write_text("", encoding="utf-8")

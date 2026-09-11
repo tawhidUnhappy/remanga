@@ -16,7 +16,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from remanga.tui import fallback, keys
-from remanga.tui.choices import Choice
+from remanga.tui.choices import Choice, exit_row
 from remanga.tui.loop import MenuState, run_menu
 from remanga.tui.result import CANCEL, EXIT, PromptExit
 
@@ -60,7 +60,7 @@ def multiselect(
     # reachable with the arrow keys, but it is never checkable: Space and
     # Enter on it quit, ctrl+a skips it, and it can't end up in the result.
     if exit_label:
-        rows = [*rows, Choice(label=exit_label, hint="quit from here", value=EXIT, plain=True)]
+        rows = [*rows, exit_row(exit_label)]
 
     # Check order, which is the run order in `ordered` mode. Seeded from
     # whatever arrived pre-checked so an existing pipeline keeps its order.
@@ -121,9 +121,7 @@ def multiselect(
                 return None
             return (picked,)
         if key == keys.ESC:
-            if menu.clear_query():
-                return None
-            return (CANCEL,) if back_label else None
+            return menu.escape(bool(back_label))
         return None
 
     state = MenuState(rows)

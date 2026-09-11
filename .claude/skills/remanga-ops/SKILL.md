@@ -90,10 +90,28 @@ instead.
 
 ## Chapter downloads: chapter picker + MangaDex chapter-list caching
 
-`download` (`remanga download -p <project> -c <chapter>`) is unchanged -
-one chapter, by number, same idempotent verify-and-fill-in-what's-missing
-behavior it always had (picking the same chapter twice is always safe:
-stray files get swept, only actually-missing pages get fetched).
+`download_chapter` (behind every download command and the pipeline step)
+re-verifies an already-downloaded chapter for real: removes (and names)
+everything in `pages/` that isn't one of its pages - files AND folders - and
+checks every page against the SHA-256 that MangaDex@Home embeds in each page
+filename (`"3-<64 hex>.png"`; verified against real chapters at BOTH
+qualities, 39/39 pages). A mismatch is refetched; a fetched page is checked
+before writing (2 tries, then raise). Footguns fixed on the way:
+- `find_chapter_id` paged the WHOLE feed per chapter, so a bulk download of N
+  chapters was N feed fetches. `download_chapters` now calls
+  `resolver.chapter_ids()` once and passes the map down.
+- `image_quality: "data-saver"` (as config.py documents) was a KeyError: the
+  at-home JSON key is `dataSaver` but the URL path is `data-saver`
+  (`_QUALITY` in mangadex.py maps both spellings).
+- Ranges compared floats against the end, so `1-5` DROPPED 5.1/5.2 (and `1-4`
+  dropped 4.1 on a split manga). One parser now,
+  `full_recap/discovery.py:expand_chapter_selection`: a whole-number end
+  covers its parts, a decimal end is exact, plain tokens come back spelled as
+  the listing spells them ("02" -> "2", else a stray `chapter_02/` folder),
+  `strict=True` refuses chapters not listed. `chapter_key` is the one "same
+  chapter number" equivalence (feed dedupe, lookup, selection).
+`download-range` (Project-wide) = fresh listing -> ask range (cli_only, asked
+after showing the listing) -> preview -> confirm -> `download_chapters`.
 
 `download-chapters` (`remanga/wizard/downloads.py`,
 `downloader/mangadex.py:list_chapters_with_status`/`download_chapters`) is
@@ -102,9 +120,8 @@ new - the "which chapters do I actually have" screen:
   `manifest.json["remote_chapters"]` (`paths/metadata.py:read_remote_chapter_cache`/
   `write_remote_chapter_cache`) for `CHAPTER_LIST_CACHE_TTL_SECONDS` (24h);
   the wizard's "Refetch chapter list from MangaDex" row (or `--refetch`)
-  bypasses it regardless of age. `find_chapter_id`'s own feed fetch inside
-  `download_chapter` is NOT covered by this cache (pre-existing, its own
-  separate call) - only the picker's listing is.
+  bypasses it regardless of age. The chapter-id lookup is NOT covered by this
+  cache (it fetches fresh, once per bulk run) - only the picker's listing is.
 - Each entry is annotated with a local-disk-only status (`_local_chapter_status`:
   "downloaded"/"partial"/"missing", no network call) so the picker always
   reflects what's actually on disk even against a cached remote listing.
@@ -116,9 +133,8 @@ new - the "which chapters do I actually have" screen:
   suspected corrupted or re-uploaded upstream). Non-interactive/CLI use
   passes `--select` instead (comma list and/or ranges - `1,3,7-9` - or
   `all`; ranges expand against MangaDex's own listing via
-  `downloader/selection.py:parse_remote_chapter_selection`, the download-
-  side counterpart to `commands/selection.py`'s local-chapters version)
-  and requires it when stdin isn't a tty.
+  `expand_chapter_selection(strict=True)`) and requires it when stdin isn't
+  a tty.
 - The three flags `--select`/`--force`/`--refetch` are marked
   `Param(cli_only=True)` (new field, honored in `wizard/params.py:
   collect_params`, which leaves them at `default` unasked). Without it the
@@ -625,17 +641,51 @@ never a hand-rolled `console.print` loop, and never Rich markup in a label
 tag). Cancellation is the `CANCEL` sentinel (`is_cancel()`), never `None` -
 `None` is a real answer for optional params.
 
-Every menu ends with an **Exit remanga** row, and **ctrl+q** does the same
-from any prompt at any depth: both raise `PromptExit`, which is a
-*BaseException* on purpose - every `except Exception` in between (the
-wizard's own "command failed, back to the menu" guard included) would
+Every menu ends with an **Exit remanga** row (except the two top-level ones -
+startup picker, main menu - whose "Quit" row already does that), and
+**ctrl+q** does the same from any prompt at any depth: both raise
+`PromptExit`, which is a *BaseException* on purpose - every `except
+Exception` in between (the wizard's `keep_going` guard included) would
 otherwise swallow the user's request to leave. `cli.main` catches it. Note
 `tui/keys.py` clears IXON/IXOFF: with flow control on, the tty eats ctrl+q
 (XON) and it never reaches the program.
 
+**Ctrl+C has two meanings, decided by type, not by where it's caught.** Menus
+(`run_menu`) and typed prompts (`answering()` in `tui/result.py`, wrapping
+every Prompt/Confirm) raise `PromptInterrupt(KeyboardInterrupt)`; the wizard's
+`keep_going` (`wizard/session.py`) turns that into "Cancelled - back to the
+menu". Ctrl+C while work runs is a plain KeyboardInterrupt -> `cli.main` exits
+130. Catching "Ctrl+C during parameter collection" was tried first and was
+wrong: plenty of HANDLERS ask their own questions (`download-range`'s range,
+every confirm). Safe because nothing holds a resource at a question: TTS
+workers start lazily after the voice prompt, web UIs return before follow-up
+prompts. (The web UI launchers do NOT shut their server down on an interrupt -
+never make Ctrl+C mid-`mark` return to the menu without fixing that, or the
+next launch hits "Address already in use".) The old SIGINT handler did
+`sys.exit(0)`: Ctrl+C reported success to `&&` chains and bypassed every
+`except KeyboardInterrupt`. Gone - don't reinstate it.
+
+Also in the wizard refactor (2026-09-11): `Session` (open project + last pick
+per menu + last chapter, so menus reopen where you were); `Choice.hidden` rows
+appear only when the filter matches (every command is searchable from the main
+menu); `keep_going` escapes error text - an unescaped `f"{e}"` does NOT raise
+in Rich, it silently DELETES any `[word]` (a path under "Title [complete]/"
+printed as "Title /"). Code run inside the wizard must never `raise
+SystemExit` - it ends the session (wizard/narration.py did). `Prompt.ask(...,
+default="")` prints an empty "()" unless `show_default=False`.
+
 Filtering ranks label matches above hint matches (typing "package" + Enter
 must run `package`, not `crop`, whose description mentions the word), and
 Space types a space in single-select menus but toggles in checklists.
+
+**Testing the wizard for real:** `pty.fork()` + `TIOCSWINSZ` (e.g. 40x120),
+run `run.sh interactive` from a scratch cwd holding a copied config.json and
+`projects/<name>/` (the projects root is cwd-relative), wait for a regex in
+ANSI-stripped output, send keys. The Bash tool rejects commands containing
+literal control characters (a JSON `` in a heredoc becomes one), so
+write keys as tokens (`<ESC>`, `<CTRL-C>`, `<UP>`) the driver translates.
+Search for the next screen from the last *send*, not the last match - a
+transient menu often redraws in the same read as the line before it.
 
 Non-tty stdin (piped, CI, an editor output pane) auto-falls back to the old
 numbered prompts (`tui/fallback.py`, `0` = back/quit at every level, Exit as
@@ -643,8 +693,8 @@ its own numbered row) - `keys.is_interactive()` decides, so both paths stay
 live.
 
 `tui/keys.py` owns the only raw-tty code: cbreak with ISIG off (so Ctrl+C
-arrives as `\x03` and `cli.main` catches `KeyboardInterrupt` with the
-terminal already restored), OPOST left ON (turning it off, as `tty.setraw`
+arrives as `\x03` and run_menu raises `PromptInterrupt` with the terminal
+already restored), OPOST left ON (turning it off, as `tty.setraw`
 does, staircases Rich output), and reads via `os.read` on the raw fd - NOT
 `sys.stdin.read`, whose buffering swallows the rest of an escape sequence and
 makes every arrow key read as a bare Esc (i.e. Down silently backs out).

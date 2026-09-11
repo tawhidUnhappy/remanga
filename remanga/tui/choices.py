@@ -14,6 +14,8 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from remanga.tui.result import EXIT
+
 
 @dataclass
 class Choice:
@@ -38,6 +40,9 @@ class Choice:
                that is an action rather than one of the things being
                selected (the Exit row). Without it, a checklist's quit row
                shows an empty ○ and reads as something you could tick.
+    hidden   - left out of the list until a typed filter matches it: a
+               shortcut reachable by name without crowding the menu (every
+               command, searchable from the main menu).
     """
 
     label: str
@@ -48,10 +53,17 @@ class Choice:
     disabled: bool = False
     checked: bool = False
     plain: bool = False
+    hidden: bool = False
 
     def __post_init__(self) -> None:
         if self.value is None:
             self.value = self.label
+
+
+def exit_row(label: str) -> Choice:
+    """The quit row every menu ends with (ctrl+q does the same). Plain, so
+    it's never numbered or checkable; menus turn picking it into PromptExit."""
+    return Choice(label=label, hint="quit from here", value=EXIT, plain=True)
 
 
 def to_choices(items: Iterable[Any], *, label: Callable[[Any], str] | None = None,

@@ -53,10 +53,15 @@ def project_choices() -> list[Choice]:
     return rows
 
 
-def select_or_create_project(config: RemangaConfig) -> Any:
-    """Returns the chosen/created project name, or CANCEL if the user quit.
-    Guarantees the project has a reading direction recorded before handing
-    it back, so no later step has to re-ask."""
+def select_or_create_project(config: RemangaConfig, *, switching: bool = False) -> Any:
+    """Returns the chosen/created project name, or CANCEL if the user backed
+    out. Guarantees the project has a reading direction recorded before
+    handing it back, so no later step has to re-ask.
+
+    At startup, backing out quits - so that one row is "Quit", with no second
+    "Exit remanga" row beside it doing the same thing. When `switching`
+    from inside a session, backing out returns to the project that's open,
+    and says "Back"."""
     while True:
         rows = project_choices()
         rows.append(Choice(label="New project…", hint="start a new manga", value=_NEW))
@@ -64,9 +69,10 @@ def select_or_create_project(config: RemangaConfig) -> Any:
                            value=_SETTINGS))
 
         picked = select(
-            "Project", rows,
+            "Switch project" if switching else "Project", rows,
             note="pick up where you left off, or start something new",
-            back_label="Quit",
+            back_label="Back" if switching else "Quit",
+            exit_label="Exit remanga" if switching else None,
         )
         if is_cancel(picked):
             return CANCEL

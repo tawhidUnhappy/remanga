@@ -10,16 +10,16 @@ from collections.abc import Sequence
 from typing import Any
 
 from remanga.tui import fallback, keys
-from remanga.tui.choices import Choice, index_of_value
+from remanga.tui.choices import Choice, exit_row, index_of_value
 from remanga.tui.frame import numbered_rows
 from remanga.tui.loop import MenuState, run_menu
 from remanga.tui.result import CANCEL, EXIT, PromptExit
 
-FOOTER = "↑↓ move · enter select · type to filter · esc back · ctrl+q exit"
+FOOTER = "↑↓ move · enter/→ select · esc/← back · type to filter · ctrl+q exit"
 # Same convention the non-tty fallback has always printed (1..N for the
 # items, 0 for back), so the two ways of answering the same menu don't
 # disagree about what a digit means.
-NUMBERED_FOOTER = "type 1-{count} · ↑↓ move · enter select · 0 or esc back · ctrl+q exit"
+NUMBERED_FOOTER = "type 1-{count} · ↑↓ move · enter/→ select · 0/esc/← back · ctrl+q exit"
 
 
 def select(
@@ -69,7 +69,7 @@ def select(
     if back_label:
         rows = [*rows, Choice(label=back_label, value=CANCEL, hint="", plain=True)]
     if exit_label:
-        rows = [*rows, Choice(label=exit_label, value=EXIT, hint="quit from here", plain=True)]
+        rows = [*rows, exit_row(exit_label)]
 
     if footer is None:
         footer = NUMBERED_FOOTER.format(count=min(len(choices), 9)) if numbered else FOOTER
@@ -79,16 +79,16 @@ def select(
                                exit_label=exit_label)
 
     def on_key(state: MenuState, key: str):
-        if key == keys.ENTER:
+        # → opens the highlighted row and ← backs out, the way every nested
+        # menu reads: the arrows walk in and out as well as up and down.
+        if key in (keys.ENTER, keys.RIGHT):
             current = state.current
             if current is None or current.disabled:
                 return None
             return (current.value,)
         if key == keys.ESC:
-            if state.clear_query():
-                return None
-            return (CANCEL,) if back_label else None
-        if key in (keys.LEFT,) and back_label:
+            return state.escape(bool(back_label))
+        if key == keys.LEFT and back_label:
             return (CANCEL,)
         if numbered and len(key) == 1 and key.isdigit():
             if key == "0":

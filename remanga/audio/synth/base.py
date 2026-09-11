@@ -332,9 +332,9 @@ class BaseWorkerSynthesizer:
             proc.wait(timeout=5)
         except BaseException:
             # BaseException, not Exception: this runs from atexit after a
-            # Ctrl+C (see cli.py's graceful_sigint_handler), and a *second*
+            # Ctrl+C (see cli.py's KeyboardInterrupt handling), and a *second*
             # Ctrl+C landing while proc.wait() above is blocked raises
-            # SystemExit right here - a plain `except Exception` doesn't
+            # KeyboardInterrupt right here - a plain `except Exception` doesn't
             # catch that, so proc.terminate() below would never run and the
             # worker (GPU memory and all) would be orphaned instead of
             # killed. Swallow it here (we're already tearing down) rather

@@ -16,6 +16,9 @@ from typing import Any
 
 from remanga.config import RemangaConfig
 
+# Longest one-line command summary (Command.summary) before it's cut with "…".
+SUMMARY_LIMIT = 72
+
 
 @dataclass
 class Param:
@@ -102,6 +105,14 @@ class Command:
     # what the *command* does.
     setup: tuple[SetupAction, ...] = ()
 
+    @property
+    def summary(self) -> str:
+        """The first sentence of `help`, cut to one line - what a menu row
+        and the grouped `remanga --help` listing show, with the full text
+        kept for the highlighted row and `remanga <command> --help`."""
+        first = self.help.split(" - ")[0].split(". ")[0].strip()
+        return first if len(first) <= SUMMARY_LIMIT else first[:SUMMARY_LIMIT - 1] + "…"
+
 
 def add_param_to_parser(parser, param: Param) -> None:
     """Adds one Param to an argparse (sub)parser exactly the way the
@@ -135,3 +146,37 @@ def chapter_param(help_: str = "Chapter number") -> Param:
 
 def force_param(help_: str = "Skip the confirmation prompt") -> Param:
     return Param("force", ["--force", "-f"], type="bool", default=False, help=help_, prompt=help_)
+
+
+def url_param() -> Param:
+    """The manga source. Optional everywhere: the wizard doesn't even ask
+    once project.json has one saved (see wizard/params.py)."""
+    return Param("url", ["--url", "-u"], required=False, default=None,
+                 help="Manga title or MangaDex URL/UUID (optional once saved in project.json)",
+                 prompt="Manga title or MangaDex URL")
+
+
+def chapters_param(verb: str, skipped: str = "") -> Param:
+    """The optional chapter list of a whole-project command: `verb` is what
+    it does to them ("crop"), `skipped` says which chapters it passes over.
+    Left unset it means every chapter - and in the wizard it's the chapter
+    checklist, where leaving everything unchecked says the same thing."""
+    return Param("chapters", ["--chapters", "-c"], required=False, default=None,
+                 help=f"Comma-separated chapter numbers to {verb} (default: every chapter this project "
+                      f"has).{' ' + skipped if skipped else ''}",
+                 prompt=f"Chapters to {verb}")
+
+
+def formats_param(prompt: str) -> Param:
+    """Which upload formats to build - a checklist in the wizard, remembered
+    per project (see settings/project_prefs.py)."""
+    from remanga.settings.vision import package_switch_names
+
+    return Param(
+        "formats", ["--formats"], required=False, default=None, prompt=prompt,
+        help="Comma-separated package formats to build - any of: "
+             f"{', '.join(package_switch_names())}, or 'none'. The wizard offers this as a checklist. "
+             "Whatever you pick is remembered for the project, so later runs build the same thing "
+             "without asking. Left unset: this project's remembered choice, or config.json's "
+             "cropper.package switches if it has never chosen.",
+    )

@@ -8,6 +8,8 @@ identity check `answer is CANCEL` can't collide with any real value."""
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 
@@ -59,6 +61,28 @@ class PromptExit(BaseException):
     and drop the user back into the menu they just asked to leave. It
     unwinds through the raw-tty and Live context managers on the way out, so
     the terminal is already restored by the time it's caught."""
+
+
+class PromptInterrupt(KeyboardInterrupt):
+    """Ctrl+C pressed while a prompt was waiting for an answer.
+
+    Still a KeyboardInterrupt, so the command line treats it like any other
+    Ctrl+C. It's its own type for the wizard: Ctrl+C at a question means
+    "not this, take me back" - and Esc can't reach a typed answer - while
+    Ctrl+C with work running means stop. Nothing is mid-flight at a question
+    (a download, a web UI, a TTS worker), which is what makes returning to
+    the menu from one safe."""
+
+
+@contextmanager
+def answering() -> Iterator[None]:
+    """Wraps reading one answer, so Ctrl+C there raises PromptInterrupt."""
+    try:
+        yield
+    except PromptInterrupt:
+        raise
+    except KeyboardInterrupt:
+        raise PromptInterrupt from None
 
 
 def is_cancel(value: Any) -> bool:

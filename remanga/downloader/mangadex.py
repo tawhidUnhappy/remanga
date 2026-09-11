@@ -1,18 +1,23 @@
 from __future__ import annotations
 
+import hashlib
+import re
+import shutil
 import time
 import zipfile
+from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import requests
-from rich.progress import BarColumn, DownloadColumn, Progress, TextColumn, TimeRemainingColumn
+from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn, TimeRemainingColumn
 
 from remanga.config import DownloaderConfig
 from remanga.console import console, escape as _esc
 from remanga.cropper.naming import page_stem
 from remanga.downloader.resolve import BASE_URL, MangaDexResolver
-from remanga.full_recap.discovery import chapter_sort_key  # direct submodule import -
+from remanga.full_recap.discovery import chapter_key, chapter_sort_key  # direct submodule import -
 
 # full_recap's own __init__ also pulls in compiler.py (audio/video stack),
 # which this module has no other reason to import
@@ -34,6 +39,56 @@ from remanga.paths import (
 # on every single menu open. Explicit refetch (force_refresh=True) always
 # bypasses this regardless of age.
 CHAPTER_LIST_CACHE_TTL_SECONDS = 24 * 60 * 60
+
+# MangaDex@Home names every page file after the SHA-256 of its own bytes
+# ("3-<64 hex digits>.png") - checked against real chapters at both image
+# qualities. That's what makes re-verifying a downloaded chapter a check of
+# each page's content rather than of its size.
+_PAGE_CHECKSUM = re.compile(r"-([0-9a-f]{64})\.\w+$")
+
+# config's image_quality -> (the at-home response's key for its file list,
+# the URL path segment the files are served under). The smaller images are
+# spelled differently in the two places, and config.py documents
+# "data-saver", so both spellings are accepted.
+_QUALITY = {
+    "data": ("data", "data"),
+    "data-saver": ("dataSaver", "data-saver"),
+    "dataSaver": ("dataSaver", "data-saver"),
+}
+
+
+@dataclass(frozen=True)
+class _Page:
+    """One page of a chapter: where it's saved, and MangaDex's filename for it."""
+
+    path: Path
+    source: str
+
+    @property
+    def checksum(self) -> str | None:
+        match = _PAGE_CHECKSUM.search(self.source)
+        return match.group(1) if match else None
+
+    def matches(self, content: bytes, trust_unchecked: bool = True) -> bool:
+        """Whether `content` is this page: non-empty, and equal to MangaDex's
+        checksum when it gave one (else `trust_unchecked` decides)."""
+        if not content:
+            return False
+        if self.checksum is None:
+            return trust_unchecked
+        return hashlib.sha256(content).hexdigest() == self.checksum
+
+    def valid_on_disk(self, trust_unchecked: bool) -> bool:
+        return self.path.is_file() and self.matches(self.path.read_bytes(), trust_unchecked)
+
+
+def _remove(paths: Iterable[Path]) -> None:
+    """Deletes files, links and folders alike."""
+    for path in list(paths):
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+        else:
+            path.unlink(missing_ok=True)
 
 
 class MangaDexDownloader:
@@ -61,39 +116,34 @@ class MangaDexDownloader:
 
     def download_chapter(
         self, manga_id_or_url: str | None, chapter_num: str, project_name: str, force: bool = False,
+        chapter_ids: dict[str, str] | None = None,
     ) -> Path:
-        """Download high-resolution chapter images with idempotency check, metadata tracking, and auto-zip.
+        """Downloads a chapter's pages - or, for a chapter already here,
+        re-verifies them and fetches only what's wrong or missing.
 
-        Picking an already-downloaded chapter again (the normal, `force=False`
-        path) is always safe and cheap: every page already on disk and
-        verified against the current MangaDex listing is kept as-is, only
-        whatever's actually missing gets fetched, and pages/ is swept of
-        anything that doesn't belong (a stray leftover, an old naming
-        scheme, a page from a different image_quality) - see the stray-file
-        cleanup and cached_meta check below. `force=True` ("reverify and
-        download clean") skips trusting any of that: pages/ is wiped first,
-        so every page is refetched from scratch even if it looked complete
-        and verified before - the deliberate "start over" escape hatch for
-        a chapter suspected of having gotten corrupted or replaced upstream
-        in a way the cheap checks below wouldn't catch."""
-        if force:
-            dest_dir = get_chapter_dir(project_name, chapter_num) / "pages"
-            if dest_dir.exists():
-                for stray in dest_dir.iterdir():
-                    if stray.is_file():
-                        stray.unlink()
-                console.print(
-                    f"[yellow]Force reverify: cleared existing pages for chapter {chapter_num} before "
-                    f"re-downloading.[/]"
-                )
-        if not manga_id_or_url:
-            meta = load_project_metadata(project_name)
-            manga_id_or_url = meta.get("manga_url") or meta.get("manga_id")
-            if not manga_id_or_url:
-                raise ValueError(
-                    f"No MangaDex URL or ID provided and none found saved for project '{project_name}'."
-                )
+        Running it again on a downloaded chapter (the normal, `force=False`
+        path) is always safe, and it is a real check rather than a glance:
+        - pages/ is swept of everything that isn't one of this chapter's
+          pages - a stray file, a leftover folder, an old naming scheme, a
+          page from a different image_quality - and what went is named;
+        - every page left is checked byte for byte against the SHA-256
+          MangaDex names each page file after, and a page that doesn't match
+          (truncated by a kill, corrupted, replaced upstream) is fetched again;
+        - a freshly fetched page is checked the same way before it's written.
+        `force=True` wipes pages/ first and fetches every page from scratch.
 
+        `chapter_ids` is a MangaDexResolver.chapter_ids() result, passed by
+        download_chapters so a bulk download reads the feed once rather than
+        once per chapter."""
+        dest_dir = get_chapter_dir(project_name, chapter_num) / "pages"
+        if force and dest_dir.exists():
+            _remove(dest_dir.iterdir())
+            console.print(
+                f"[yellow]Force reverify: cleared existing pages for chapter {chapter_num} before "
+                f"re-downloading.[/]"
+            )
+
+        manga_id_or_url = self._manga_source(project_name, manga_id_or_url)
         manga_id = self.resolver.parse_manga_id(manga_id_or_url)
 
         # Resolving an ID/URL directly (as opposed to a title search - see
@@ -123,134 +173,83 @@ class MangaDexDownloader:
             "last_chapter": str(chapter_num)
         })
 
-        chapter_dir = get_chapter_dir(project_name, chapter_num)
-        dest_dir = chapter_dir / "pages"
         dest_dir.mkdir(parents=True, exist_ok=True)
-
-        chapter_id = self.resolver.find_chapter_id(manga_id, chapter_num)
+        chapter_id = self.resolver.find_chapter_id(manga_id, chapter_num, chapter_ids)
 
         console.print(f"[cyan]Retrieving MangaDex node for chapter {chapter_num}...[/]")
-        at_home_res = self.resolver.request_with_retry("GET", f"{BASE_URL}/at-home/server/{chapter_id}")
-        server_info = at_home_res.json()
-
+        server_info = self.resolver.request_with_retry("GET", f"{BASE_URL}/at-home/server/{chapter_id}").json()
         base_url = server_info["baseUrl"]
         chapter_data = server_info["chapter"]
-        hash_code = chapter_data["hash"]
         quality_key = self.config.image_quality
-        filenames = chapter_data[quality_key]
+        response_key, url_path = _QUALITY.get(quality_key, (quality_key, quality_key))
+        pages = [
+            _Page(dest_dir / f"{page_stem(chapter_num, idx)}{Path(fn).suffix or '.png'}", fn)
+            for idx, fn in enumerate(chapter_data[response_key], start=1)
+        ]
 
-        # Every page this chapter is expected to have, by its new
-        # {chapter}_{page} filename - built up front (not just up to the
-        # first missing one) so the stray-file cleanup below always has the
-        # complete set to check against.
-        expected_names = {
-            f"{page_stem(chapter_num, idx)}{Path(fn).suffix or '.png'}"
-            for idx, fn in enumerate(filenames, start=1)
-        }
-
-        # Drop anything in pages_dir that doesn't belong there - a stray file
-        # left over from an interrupted run, a manual copy, an old naming
-        # scheme, or a leftover page from a different `image_quality`
-        # setting - so pages_dir always holds exactly this chapter's
-        # downloaded pages, nothing else.
-        for stray in dest_dir.iterdir():
-            if stray.is_file() and stray.name not in expected_names:
-                stray.unlink()
-
-        # Check existing pages & verify against metadata - stored in this
-        # project's shared manifest.json (see paths.update_manifest_chapter)
-        # instead of a per-chapter pages_metadata.json file, since this is
-        # the only thing that ever reads it back.
-        #
-        # Read before it's replaced below: the point of the record is to be
-        # compared against what the API says *now*, so it has to be the
-        # previous attempt's, not this one's.
-        all_present = True
-        cached_meta = read_manifest(project_name).get("chapters", {}).get(str(chapter_num), {}).get("pages")
-        if (
-            cached_meta
-            # Absent on entries written before this field existed, and those
-            # were only ever written after a completed download - so missing
-            # means verified, not unverified.
-            and cached_meta.get("verified", True)
-            and cached_meta.get("total_pages") == len(filenames)
-            and cached_meta.get("chapter_id") == chapter_id
-            # A chapter re-fetched at a different image_quality is a different
-            # set of images, even when the page count and chapter id are
-            # identical - without this, switching quality kept whatever was
-            # already on disk and reported it as verified.
-            and cached_meta.get("quality") == quality_key
-        ):
-            for idx, fn in enumerate(filenames, start=1):
-                page_ext = Path(fn).suffix or ".png"
-                p_file = dest_dir / f"{page_stem(chapter_num, idx)}{page_ext}"
-                if not p_file.exists() or p_file.stat().st_size == 0:
-                    all_present = False
-                    break
-        else:
-            all_present = False
-
-        # Replaced on every attempt, from the at-home response this attempt
-        # just resolved - never carried over from a previous one. A record
-        # left behind by an earlier attempt describes a chapter that may no
-        # longer be the one being downloaded (re-uploaded with a new
-        # chapter_id, a different image_quality, more or fewer pages), and it
-        # is exactly what the check above trusts next time.
-        #
-        # `verified` is what keeps that honest: written False before the first
-        # page is fetched and True only once every page is actually on disk,
-        # so a run killed mid-download leaves a record saying so rather than
-        # one claiming a complete chapter.
-        # A record that disagrees with this attempt means the pages on disk
-        # were fetched for something else - a re-upload under a new
-        # chapter_id, a different image_quality, a different page count - so
-        # they are not a resumable partial download of what's being fetched
-        # now, and reusing them would quietly keep the old images and then
-        # record them as verified. Cleared, rather than skipped over.
-        #
-        # An unverified record is NOT this case: same chapter, interrupted
-        # partway, and every page already on disk is still exactly right.
-        # Neither is a missing record - nothing says the pages are wrong, and
-        # re-fetching a whole chapter on a hunch is worse than trusting them.
-        if cached_meta and not all_present and (
-            cached_meta.get("chapter_id") != chapter_id
-            or cached_meta.get("quality") != quality_key
-            or cached_meta.get("total_pages") != len(filenames)
-        ):
-            for page in dest_dir.iterdir():
-                if page.is_file():
-                    page.unlink()
+        # pages/ holds exactly this chapter's pages and nothing else - a stray
+        # file from an interrupted run, a manual copy, a folder, an old naming
+        # scheme. Anything else is removed, and named, so it's visible.
+        expected = {page.path.name for page in pages}
+        strays = sorted(p for p in dest_dir.iterdir() if p.name not in expected)
+        if strays:
+            names = ", ".join(p.name + ("/" if p.is_dir() else "") for p in strays)
+            _remove(strays)
             console.print(
-                "[yellow]This chapter isn't the one that was downloaded here before[/] "
-                "[dim](re-uploaded, or a different image quality) - re-fetching every page.[/]"
+                f"[yellow]Removed {len(strays)} item(s) from pages/ that aren't chapter {_esc(chapter_num)}'s "
+                f"pages:[/] [dim]{_esc(names)}[/]"
             )
 
+        # This chapter's record from the previous attempt, stored in the
+        # project's shared manifest.json. Only consulted for a page MangaDex
+        # gave no checksum for (never seen in practice): such a page is
+        # trusted when nothing says it's for a different chapter_id, quality
+        # or page count - a missing or interrupted record is still the same
+        # chapter, and re-fetching on a hunch is worse than trusting it.
+        cached_meta = read_manifest(project_name).get("chapters", {}).get(str(chapter_num), {}).get("pages")
+        trust_unchecked = not cached_meta or (
+            cached_meta.get("chapter_id") == chapter_id
+            and cached_meta.get("quality") == quality_key
+            and cached_meta.get("total_pages") == len(pages)
+        )
+        failed = [page for page in pages if page.path.exists() and not page.valid_on_disk(trust_unchecked)]
+        if failed:
+            _remove(page.path for page in failed)
+            console.print(
+                f"[yellow]{len(failed)} page(s) didn't match MangaDex's checksum - fetching them again.[/]"
+            )
+        todo = [page for page in pages if not page.path.exists()]
+
         def record_pages(verified: bool) -> None:
-            # Just enough for the resume-check above (chapter_id, page count,
-            # quality); actual page presence/integrity is always re-verified
-            # against the real files in pages_dir, never trusted from this
-            # alone. No per-page list - filename/source_file/size_bytes for
-            # every page would just repeat what pages_dir itself shows.
+            # Replaced on every attempt, from the at-home response this
+            # attempt resolved. `verified` is written False before the first
+            # page is fetched and True only once every page is on disk and
+            # checked, so a run killed mid-download leaves a record saying so
+            # - the status panel and the download picker read it. No per-page
+            # list: pages/ itself already shows that.
             update_manifest_chapter(project_name, chapter_num, "pages", {
                 "chapter_id": chapter_id,
                 "manga_id": manga_id,
-                "total_pages": len(filenames),
+                "total_pages": len(pages),
                 "quality": quality_key,
                 "timestamp": time.time(),
                 "verified": verified,
             })
 
-        if all_present:
+        if not todo:
             record_pages(True)
             console.print(
-                f"[bold green]✓ All {len(filenames)} pages verified and already downloaded! Skipping download.[/]"
+                f"[bold green]✓ All {len(pages)} pages verified against MangaDex's checksums - "
+                f"nothing to download.[/]"
             )
             if self.config.zip_pages_enabled:
                 self._create_pages_zip(project_name, chapter_num, dest_dir)
             return dest_dir
 
         record_pages(False)
-        console.print(f"[green]Downloading {len(filenames)} pages politely to:[/] {_esc(str(dest_dir))}")
+        console.print(
+            f"[green]Downloading {len(todo)} of {len(pages)} page(s) politely to:[/] {_esc(str(dest_dir))}"
+        )
 
         # refresh_per_second=4 (Rich's default is ~10): a long-lived Progress
         # bar redraws itself that many times a second regardless of whether
@@ -265,48 +264,60 @@ class MangaDexDownloader:
         with Progress(
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
-            DownloadColumn(),
+            MofNCompleteColumn(),
             TimeRemainingColumn(),
             refresh_per_second=4,
         ) as progress:
-            dl_task = progress.add_task("[yellow]Downloading pages...", total=len(filenames))
-
-            for idx, filename in enumerate(filenames, start=1):
-                page_ext = Path(filename).suffix or ".png"
-                out_path = dest_dir / f"{page_stem(chapter_num, idx)}{page_ext}"
-
-                if out_path.exists() and out_path.stat().st_size > 0:
-                    progress.advance(dl_task)
-                    continue
-
-                url = f"{base_url}/{quality_key}/{hash_code}/{filename}"
-                r = self.resolver.request_with_retry("GET", url)
-                with out_path.open("wb") as f:
-                    f.write(r.content)
+            dl_task = progress.add_task("[yellow]Downloading pages...", total=len(pages),
+                                        completed=len(pages) - len(todo))
+            for page in todo:
+                url = f"{base_url}/{url_path}/{chapter_data['hash']}/{page.source}"
+                # Checked before it's written: a page that arrives damaged
+                # gets one more try, and a second bad copy stops the chapter
+                # rather than being recorded as verified.
+                for _attempt in range(2):
+                    content = self.resolver.request_with_retry("GET", url).content
+                    if page.matches(content):
+                        break
+                else:
+                    raise ValueError(
+                        f"Page {page.path.name} of chapter {chapter_num} didn't match MangaDex's "
+                        f"checksum twice in a row - try again later."
+                    )
+                page.path.write_bytes(content)
 
                 if self.config.request_delay_seconds > 0:
                     time.sleep(self.config.request_delay_seconds)
-
                 progress.advance(dl_task)
 
         record_pages(True)
 
-        console.print(f"[bold green]✓ Successfully downloaded and verified all {len(filenames)} pages![/]")
+        console.print(
+            f"[bold green]✓ Downloaded {len(todo)} page(s) - all {len(pages)} verified against "
+            f"MangaDex's checksums.[/]"
+        )
 
         if self.config.zip_pages_enabled:
             self._create_pages_zip(project_name, chapter_num, dest_dir)
 
         return dest_dir
 
+    @staticmethod
+    def _manga_source(project_name: str, manga_id_or_url: str | None) -> str:
+        """The manga to download from: the one given, else the one this
+        project saved the first time it downloaded anything."""
+        if manga_id_or_url:
+            return manga_id_or_url
+        meta = load_project_metadata(project_name)
+        saved = meta.get("manga_url") or meta.get("manga_id")
+        if not saved:
+            raise ValueError(
+                f"No MangaDex URL or ID provided and none found saved for project '{project_name}'."
+            )
+        return saved
+
     def _resolve_manga_id(self, project_name: str, manga_id_or_url: str | None) -> str:
-        if not manga_id_or_url:
-            meta = load_project_metadata(project_name)
-            manga_id_or_url = meta.get("manga_url") or meta.get("manga_id")
-            if not manga_id_or_url:
-                raise ValueError(
-                    f"No MangaDex URL or ID provided and none found saved for project '{project_name}'."
-                )
-        return self.resolver.parse_manga_id(manga_id_or_url)
+        return self.resolver.parse_manga_id(self._manga_source(project_name, manga_id_or_url))
 
     def _local_chapter_status(self, project_name: str, chapter_num: str, expected_pages: int | None) -> str:
         """One of "downloaded" (every expected page present and this
@@ -392,12 +403,19 @@ class MangaDexDownloader:
         wipe-and-redo-clean path) - a failure on one chapter is reported and
         re-raised immediately rather than silently skipped, since a partial
         bulk download that looks like it finished is worse than one that
-        stops where it broke."""
+        stops where it broke.
+
+        The feed is read once, up front, for every chapter's id - not once
+        per chapter, which for a long manga was a whole paginated feed fetch
+        per chapter downloaded."""
         seen: set = set()
-        ordered_nums = [n for n in chapter_nums if not (n in seen or seen.add(n))]
+        ordered_nums = [n for n in chapter_nums if not (chapter_key(n) in seen or seen.add(chapter_key(n)))]
+        ids = self.resolver.chapter_ids(self._resolve_manga_id(project_name, manga_id_or_url))
 
         results: list[Path] = []
         for i, chapter_num in enumerate(ordered_nums, start=1):
             console.print(f"[bold cyan]({i}/{len(ordered_nums)}) Chapter {chapter_num}[/]")
-            results.append(self.download_chapter(manga_id_or_url, chapter_num, project_name, force=force))
+            results.append(self.download_chapter(
+                manga_id_or_url, chapter_num, project_name, force=force, chapter_ids=ids,
+            ))
         return results

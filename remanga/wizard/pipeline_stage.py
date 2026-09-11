@@ -34,6 +34,7 @@ from remanga.console import console, escape as _esc
 from remanga.tui import Choice, is_cancel, select
 from remanga.wizard.chapters import select_chapter
 from remanga.wizard.pipeline_edit import choose_pipeline_steps
+from remanga.wizard.session import keep_going
 
 _RUN = "__run__"
 _EDIT = "__edit__"
@@ -153,9 +154,5 @@ def open_pipeline_stage(project: str, config: RemangaConfig) -> Any:
         request = stage_pipeline(project, config)
         if request is None:
             return None
-        try:
+        with keep_going("Pipeline"):
             run_pipeline(project, request.chapter, config, request.steps)
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except Exception as e:
-            console.print(f"[bold red]Pipeline failed:[/] {e}")

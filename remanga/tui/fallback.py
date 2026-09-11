@@ -20,7 +20,7 @@ from rich.prompt import Confirm, Prompt
 
 from remanga.console import console
 from remanga.tui.choices import Choice
-from remanga.tui.result import CANCEL, PromptExit
+from remanga.tui.result import CANCEL, PromptExit, answering
 
 
 class _ExitRow:
@@ -57,7 +57,8 @@ def ask_index(prompt: str, count: int, default: int = 1, zero_label: str | None 
     lo = 0 if zero_label else 1
     hint = f"{lo}-{count}"
     while True:
-        raw = Prompt.ask(f"[bold]{_safe(prompt)}[/] [dim]({hint})[/]", default=str(default)).strip()
+        with answering():
+            raw = Prompt.ask(f"[bold]{_safe(prompt)}[/] [dim]({hint})[/]", default=str(default)).strip()
         if raw.isdigit() and lo <= int(raw) <= count:
             return int(raw)
         console.print(f"[bold red]Enter a number from {lo} to {count}.[/]")
@@ -65,7 +66,9 @@ def ask_index(prompt: str, count: int, default: int = 1, zero_label: str | None 
 
 def select(title: str, choices: Sequence[Choice], *, default_index: int = 0,
            back_label: str | None = None, exit_label: str | None = None, **_ignored) -> Any:
-    selectable = [c for c in choices if not c.disabled]
+    # Hidden rows are type-to-find shortcuts; with nothing to type into,
+    # they'd only turn a short numbered list into a long one.
+    selectable = [c for c in choices if not c.disabled and not c.hidden]
     if not selectable:
         console.print(f"[dim]{_safe(title)}: nothing to choose from.[/]")
         return CANCEL
@@ -94,10 +97,11 @@ def multiselect(title: str, choices: Sequence[Choice], *, back_label: str | None
         return []
     _print_choices(title, selectable, back_label)
     preselected = [str(i) for i, c in enumerate(selectable, start=1) if c.checked]
-    raw = Prompt.ask(
-        "[bold]Enter number(s), comma-separated[/] [dim](0 = back, blank = keep as shown)[/]",
-        default=",".join(preselected),
-    ).strip()
+    with answering():
+        raw = Prompt.ask(
+            "[bold]Enter number(s), comma-separated[/] [dim](0 = back, blank = keep as shown)[/]",
+            default=",".join(preselected),
+        ).strip()
     if raw == "0":
         return CANCEL
     if not raw:
@@ -114,4 +118,5 @@ def multiselect(title: str, choices: Sequence[Choice], *, back_label: str | None
 
 
 def confirm(title: str, *, default: bool = True, **_ignored) -> bool:
-    return Confirm.ask(f"[bold]{_safe(title)}[/]", default=default)
+    with answering():
+        return Confirm.ask(f"[bold]{_safe(title)}[/]", default=default)

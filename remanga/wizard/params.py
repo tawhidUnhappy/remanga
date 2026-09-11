@@ -30,7 +30,6 @@ from __future__ import annotations
 from typing import Any
 
 from remanga.commands import Command, Param, resolve_wipe_keep
-from remanga.config import RemangaConfig
 from remanga.console import console, display_path
 from remanga.reset import wipeable_entries
 from remanga.settings.project_prefs import (
@@ -41,34 +40,34 @@ from remanga.settings.project_prefs import (
 from remanga.settings.vision import package_choices
 from remanga.tui import CANCEL, Choice, ask_text, confirm, is_cancel, multiselect, select
 from remanga.wizard.chapters import select_chapter, select_chapters
+from remanga.wizard.session import Session
 
 
-def collect_params(cmd: Command, project: str, config: RemangaConfig) -> dict[str, Any] | None:
+def collect_params(cmd: Command, session: Session) -> dict[str, Any] | None:
     """Every parameter this command needs, in order. Returns None if the
     user backed out of any of them - backing out of a question means "don't
     run this command", not "run it with a blank answer"."""
     values: dict[str, Any] = {}
     for param in cmd.params:
         if param.name == "project":
-            values["project"] = project
+            values["project"] = session.project
             continue
         # Left at its default, unasked: the handler opens its own screen that
         # asks this better than a generic prompt could - see Param.cli_only.
         if param.cli_only:
             values[param.name] = param.default
             continue
-        answer = prompt_param(param, project=project, config=config, values=values)
+        answer = prompt_param(param, session, values)
         if is_cancel(answer):
             return None
         values[param.name] = answer
     return values
 
 
-def prompt_param(param: Param, *, project: str, config: RemangaConfig,
-                 values: dict[str, Any]) -> Any:
+def prompt_param(param: Param, session: Session, values: dict[str, Any]) -> Any:
     special = _SPECIAL.get(param.name)
     if special is not None:
-        return special(param, project, config, values)
+        return special(param, session, values)
     if param.type == "bool":
         return confirm(param.label, default=bool(param.default))
     if param.type == "choice":
@@ -79,12 +78,17 @@ def prompt_param(param: Param, *, project: str, config: RemangaConfig,
 # --- discoverable parameters ----------------------------------------------
 
 
-def _prompt_chapter(param: Param, project: str, config: RemangaConfig, values: dict[str, Any]) -> Any:
-    return select_chapter(project, title=param.label)
+def _prompt_chapter(param: Param, session: Session, values: dict[str, Any]) -> Any:
+    """One chapter, opened on the one last picked this session - the next
+    command is usually for the same chapter."""
+    picked = select_chapter(session.project, title=param.label, default=session.chapter)
+    if not is_cancel(picked):
+        session.chapter = picked
+    return picked
 
 
-def _prompt_chapters(param: Param, project: str, config: RemangaConfig, values: dict[str, Any]) -> Any:
-    picked = select_chapters(project, title=param.label)
+def _prompt_chapters(param: Param, session: Session, values: dict[str, Any]) -> Any:
+    picked = select_chapters(session.project, title=param.label)
     if is_cancel(picked):
         return CANCEL
     # An empty selection means "every chapter" for the optional --chapters
@@ -94,17 +98,17 @@ def _prompt_chapters(param: Param, project: str, config: RemangaConfig, values: 
     if not picked:
         if param.required:
             console.print("[yellow]Select at least one chapter.[/]")
-            return _prompt_chapters(param, project, config, values)
+            return _prompt_chapters(param, session, values)
         return None
     return ",".join(picked)
 
 
-def _prompt_keep(param: Param, project: str, config: RemangaConfig, values: dict[str, Any]) -> Any:
+def _prompt_keep(param: Param, session: Session, values: dict[str, Any]) -> Any:
     """The wipe keep-list, as a checklist of what this chapter actually has
     right now - so nobody has to remember whether it's "panels" or
     "panels/", or which generated directories exist for this chapter at
     all. Checked = survives; everything unchecked is what gets deleted."""
-    chapter = values.get("chapter")
+    project, chapter = session.project, values.get("chapter")
     if chapter is None:
         return _prompt_free_text(param)
 
@@ -152,17 +156,17 @@ def _prompt_keep(param: Param, project: str, config: RemangaConfig, values: dict
     return ",".join(picked) if picked else "none"
 
 
-def _prompt_formats(param: Param, project: str, config: RemangaConfig, values: dict[str, Any]) -> Any:
+def _prompt_formats(param: Param, session: Session, values: dict[str, Any]) -> Any:
     """Which upload formats to build, as a checklist - the same one the
     settings screen uses, opened on what this project builds right now
     (its remembered choice, else config.json's switches). Whatever comes
     back is remembered by the handler, so the next chapter doesn't ask."""
-    active = set(active_package_formats(config, project))
-    rows = package_choices(config)
+    active = set(active_package_formats(session.config, session.project))
+    rows = package_choices(session.config)
     for row in rows:
         row.checked = row.value in active
 
-    remembered = remembered_package_formats(project)
+    remembered = remembered_package_formats(session.project)
     origin = ("remembered for this project" if remembered is not None
               else "from config.json's defaults")
     picked = multiselect(
@@ -174,7 +178,7 @@ def _prompt_formats(param: Param, project: str, config: RemangaConfig, values: d
     return ",".join(picked) if picked else "none"
 
 
-def _prompt_steps(param: Param, project: str, config: RemangaConfig, values: dict[str, Any]) -> Any:
+def _prompt_steps(param: Param, session: Session, values: dict[str, Any]) -> Any:
     """Which steps this run executes - which is the same question as what
     this project's pipeline is, so `run` doesn't ask it with a prompt of its
     own: it opens the pipeline's staging screen (wizard/pipeline_stage.py),
@@ -194,7 +198,7 @@ def _prompt_steps(param: Param, project: str, config: RemangaConfig, values: dic
     CLI, which still never writes anything."""
     from remanga.wizard.pipeline_stage import stage_pipeline
 
-    request = stage_pipeline(project, config, chapter=values.get("chapter"))
+    request = stage_pipeline(session.project, session.config, chapter=values.get("chapter"))
     return CANCEL if request is None else None
 
 
@@ -215,8 +219,8 @@ def _not_asked(current_value, where: str):
     setting one row above (Command.setup - see commands/registry.py), so the
     screen is already open in front of you."""
 
-    def prompt(param: Param, project: str, config: RemangaConfig, values: dict[str, Any]) -> Any:
-        configured = current_value(config)
+    def prompt(param: Param, session: Session, values: dict[str, Any]) -> Any:
+        configured = current_value(session.config)
         flag = param.flags[0]
         label = param.prompt or param.name
         console.print(
@@ -228,14 +232,14 @@ def _not_asked(current_value, where: str):
     return prompt
 
 
-def _prompt_url(param: Param, project: str, config: RemangaConfig, values: dict[str, Any]) -> Any:
+def _prompt_url(param: Param, session: Session, values: dict[str, Any]) -> Any:
     """The manga source. Asked only when the project doesn't have one saved -
     the downloader falls back to project.json's manga_url/manga_id whenever
     this is None, so re-typing the same URL for every chapter of the same
     manga was pure ceremony."""
     from remanga.paths import load_project_metadata
 
-    meta = load_project_metadata(project)
+    meta = load_project_metadata(session.project)
     saved = meta.get("manga_url") or meta.get("manga_id")
     if saved:
         title = meta.get("manga_title")

@@ -11,10 +11,17 @@ from remanga.commands.help_text import (
     STEP_NAMES,
 )
 from remanga.commands.setup_rows import BGM_SETUP, CROP_SETUP, TTS_SETUP, VIDEO_SETUP
-from remanga.commands.spec import Command, Param, chapter_param, force_param, project_param
+from remanga.commands.spec import (
+    Command,
+    Param,
+    chapter_param,
+    force_param,
+    formats_param,
+    project_param,
+    url_param,
+)
 from remanga.config.tts import TTS_ENGINE_SPECS, TTS_ENGINES
 from remanga.narration import NARRATION_FILE_MODES, TEMPLATE
-from remanga.settings.vision import package_switch_names
 
 CHAPTER_COMMANDS: list[Command] = [
     Command(
@@ -24,9 +31,7 @@ CHAPTER_COMMANDS: list[Command] = [
         [
             project_param(),
             chapter_param("Chapter number (e.g. 1 or 01)"),
-            Param("url", ["--url", "-u"], required=False, default=None,
-                  help="Manga title or MangaDex URL/UUID (optional if saved)",
-                  prompt="Manga title or MangaDex URL"),
+            url_param(),
         ],
         category="Chapter Production",
         detail="reuses the manga source saved in project.json - only asks when there isn't one",
@@ -38,9 +43,7 @@ CHAPTER_COMMANDS: list[Command] = [
         chapter_handlers.download_chapters,
         [
             project_param(),
-            Param("url", ["--url", "-u"], required=False, default=None,
-                  help="Manga title or MangaDex URL/UUID (optional if saved)",
-                  prompt="Manga title or MangaDex URL"),
+            url_param(),
             # Deliberately NOT named "chapters" - that name is special-cased
             # in wizard/params.py to mean "pick from chapters this project
             # already has on disk" (select_chapters/discover_chapters),
@@ -139,7 +142,8 @@ CHAPTER_COMMANDS: list[Command] = [
     ),
     Command(
         "crop",
-        "Crop panels using coordinates in crops.json and package sheets.zip or panels.zip",
+        "Crop panels out of the pages using the coordinates in crops.json - panels only; "
+        "`package` builds the upload formats from them",
         chapter_handlers.crop,
         [
             project_param(), chapter_param(),
@@ -155,15 +159,7 @@ CHAPTER_COMMANDS: list[Command] = [
         chapter_handlers.package,
         [
             project_param(), chapter_param(),
-            Param(
-                "formats", ["--formats"], required=False, default=None,
-                prompt="What to build for this chapter",
-                help="Comma-separated package formats to build - any of: "
-                     f"{', '.join(package_switch_names())}, or 'none'. The wizard offers this as a "
-                     "checklist. Whatever you pick is remembered for the project, so later chapters "
-                     "build the same thing without asking. Left unset: this project's remembered "
-                     "choice, or config.json's cropper.package switches if it has never chosen.",
-            ),
+            formats_param("What to build for this chapter"),
         ],
         category="Chapter Production",
         detail="pick the upload formats for this chapter; the choice sticks for the project",
