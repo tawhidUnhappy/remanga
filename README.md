@@ -534,6 +534,13 @@ Read-only is **enforced by the server**, not hidden in the browser: `POST /api/m
 ```
 *Creates:* `chapters/chapter_<num>/panels/` (source) and this chapter's `panels` entry in the project's shared `manifest.json`. **That's all it creates** — cropping cuts panels and stops. Building the LLM upload formats is step 3b, its own command, so a 30MB zip never appears as a side effect of a command you ran to cut panels.
 
+**Every chapter at once** — `crop-all` (Project-wide in the wizard) crops every marked chapter in the project in one run:
+```bash
+./run.sh crop-all --project "my_manga"
+./run.sh crop-all --project "my_manga" --chapters 4,5,6
+```
+It's the same cropping `crop` does, with the same panel-detection settings (offered right next to it in the wizard). Chapters with no `crops.json` yet are skipped and named. Chapters already cropped are left alone: it lists them and asks once whether to re-crop all of them (`--force` on the command line), since re-cropping wipes their `panels/` and cuts it again. A chapter that fails stops the run there.
+
 ### 3b. Package the Upload Formats
 ```bash
 ./run.sh package --project "my_manga" --chapter "1" --formats sheets,panels_zip
@@ -951,6 +958,7 @@ In short: if a chapter's TTS run gets interrupted or a worker locks up, just re-
 ./run.sh download-all -p <PROJECT> [-u <URL_OR_ID>] [-f] [--refetch]
 ./run.sh mark-all -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>]
 ./run.sh view-marks -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>]
+./run.sh crop-all -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-f]
 ./run.sh package-all -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [--formats <FORMAT1,FORMAT2,...>]
 ./run.sh narration-init-all -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-f]
 ./run.sh full-recap -p <PROJECT> [-c <CHAPTER1,CHAPTER2,...>] [-f]

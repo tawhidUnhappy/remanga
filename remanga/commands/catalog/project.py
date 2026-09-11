@@ -11,7 +11,7 @@ from remanga.commands.help_text import (
     DEFAULT_KEEP_TEXT,
     RESTART_MODE_HELP,
 )
-from remanga.commands.setup_rows import BGM_SETUP, VIDEO_SETUP
+from remanga.commands.setup_rows import BGM_SETUP, CROP_SETUP, VIDEO_SETUP
 from remanga.commands.spec import Command, Param, chapter_param, force_param, project_param
 from remanga.reset import (
     DEFAULT_REBUILD_MODE,
@@ -82,6 +82,32 @@ PROJECT_COMMANDS: list[Command] = [
         ],
         category="Project-wide",
         detail="the double-check pass - read-only, enforced on the server, not just hidden",
+    ),
+    Command(
+        "crop-all",
+        "Crop panels for every marked chapter in the project at once, from each chapter's "
+        "crops.json - the same cropping as `crop`, run over the whole manga instead of one "
+        "chapter at a time. Chapters not marked yet are skipped and named; chapters already "
+        "cropped are left alone unless you say otherwise",
+        project_handlers.crop_all,
+        [
+            project_param(),
+            Param("chapters", ["--chapters", "-c"], required=False, default=None,
+                  help="Comma-separated chapter numbers to crop (default: every chapter this "
+                       "project has). Chapters with no crops.json are skipped.",
+                  prompt="Chapters to crop"),
+            # cli_only: the handler asks this itself, once, naming the
+            # chapters that are actually already cropped - asked up front it
+            # would be "re-crop the cropped ones?" before anyone knows
+            # whether there are any.
+            Param("force", ["--force", "-f"], type="bool", default=False, cli_only=True,
+                  help="Re-crop chapters that are already cropped too - wipes their panels/ and "
+                       "cuts them again from crops.json",
+                  prompt="Re-crop chapters that are already cropped too?"),
+        ],
+        category="Project-wide",
+        detail="the whole-project form of `crop` - every marked chapter cut into panels in one go",
+        setup=CROP_SETUP,
     ),
     Command(
         "package-all",

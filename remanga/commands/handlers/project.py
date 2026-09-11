@@ -1,7 +1,7 @@
 """Handlers for the project-wide commands: whole-manga compilation, remix,
 status, integrity verification, and the whole-project setup passes -
-fetching every chapter, packaging every cropped chapter, and giving every
-chapter a narration file to fill in."""
+fetching every chapter, cropping and packaging every chapter that's ready
+for it, and giving every chapter a narration file to fill in."""
 
 from __future__ import annotations
 
@@ -164,6 +164,81 @@ def narration_init_all(params: dict[str, Any], config: RemangaConfig) -> None:
         f"[bold green]✓ Blank narration.json written for {len(targets)} chapter(s)[/] "
         f"[dim](0 bytes each: {', '.join(targets)})[/]"
         + (f"\n[dim]{kept} chapter(s) already had one - left as they were.[/]" if kept else "")
+    )
+
+
+def crop_all(params: dict[str, Any], config: RemangaConfig) -> None:
+    """Crops every marked chapter in the project - the whole-project form of
+    `crop`.
+
+    Each chapter goes through crop_chapter_from_json with this project's
+    cropper settings, the same call `crop` and the pipeline's crop step make.
+
+    Chapters nobody has marked yet are skipped and named: in a project being
+    worked through, those are simply the chapters not reached yet. Chapters
+    already cropped are left alone, as `crop` leaves one alone - re-cropping
+    wipes panels/ and cuts it again, so replacing them is one explicit answer
+    covering all of them (`--force`, or the confirmation this asks a real
+    terminal), never a prompt per chapter. A chapter that fails while
+    cropping stops the run where it broke, same as download_chapters."""
+    from remanga.cropper import CoordinateCropper
+    from remanga.cropper.crop import cropped_panels
+    from remanga.json_io import has_real_json_content
+    from remanga.paths import get_chapter_dir
+    from remanga.settings import package_summary
+    from remanga.settings.project_prefs import cropper_config_for
+    from remanga.tui import confirm, is_interactive
+
+    project = params["project"]
+    chapters = split_chapters(params.get("chapters")) or discover_chapters(project)
+    if not chapters:
+        console.print(f"[yellow]Project '{project}' has no chapters yet - nothing to crop.[/]")
+        return
+
+    marked = [c for c in chapters if has_real_json_content(get_chapter_dir(project, c) / "crops.json")]
+    unmarked = [c for c in chapters if c not in marked]
+    if not marked:
+        console.print(
+            f"[yellow]None of the {len(chapters)} chapter(s) have been marked yet - "
+            f"nothing to crop.[/] [dim]Run `mark-all` first.[/]"
+        )
+        return
+
+    done = [c for c in marked if cropped_panels(project, c)]
+    replace = bool(params.get("force"))
+    if done and not replace:
+        console.print(f"[yellow]{len(done)} chapter(s) are already cropped:[/] {', '.join(done)}")
+        replace = is_interactive() and confirm(
+            f"Re-crop those {len(done)} too?", default=False,
+            note="their panels/ is wiped and cut again from crops.json",
+        )
+
+    kept = [] if replace else done
+    notes = (
+        (f"\n[dim]Already cropped, left as they were: {', '.join(kept)}[/]" if kept else "")
+        + (f"\n[dim]Not marked yet, skipped: {', '.join(unmarked)}[/]" if unmarked else "")
+    )
+    targets = [c for c in marked if c not in kept]
+    if not targets:
+        console.print(f"[dim]Nothing to crop - every marked chapter is already cropped.[/]{notes}")
+        return
+
+    console.print(
+        f"[bold]{len(targets)} chapter(s)[/] to crop"
+        + (f" [dim]· {len(kept)} already cropped, left as they are[/]" if kept else "")
+        + (f" [dim]· {len(unmarked)} not marked yet, skipped[/]" if unmarked else "")
+    )
+    cropper_config = cropper_config_for(config, project)
+    cropper = CoordinateCropper(cropper_config)
+    for i, chapter in enumerate(targets, start=1):
+        console.print(f"[bold cyan]({i}/{len(targets)}) Chapter {chapter}[/]")
+        cropper.crop_chapter_from_json(project, chapter, force=replace)
+
+    formats = package_summary(cropper_config.package)
+    console.print(
+        f"[bold green]✓ Cropped {len(targets)} chapter(s)[/]{notes}"
+        + (f"\n[dim]Run `package-all` to build the upload formats ({formats}).[/]"
+           if formats != "panels only" else "")
     )
 
 

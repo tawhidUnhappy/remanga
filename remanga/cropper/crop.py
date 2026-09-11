@@ -23,6 +23,24 @@ from remanga.json_io import has_real_json_content, read_json
 from remanga.paths import get_chapter_dir, read_manifest
 
 
+def cropped_panels(project_name: str, chapter_num: str) -> list[Path]:
+    """This chapter's panels, if cropping has already run to completion for
+    it - else empty. The one definition of "already cropped", shared by the
+    resume check below and `crop-all`, which uses it to find the chapters
+    already cropped before asking anything.
+
+    Decided by this chapter having a "panels" entry in the shared
+    manifest.json (see crop_report.write_manifest) - the crop step's own
+    record that it ran to completion, the same role the old standalone
+    panels_manifest.json's mere existence used to play - AND panels/
+    actually holding files. A panels/ with no manifest entry is a crop that
+    was interrupted, and doesn't count."""
+    panels_dir = get_chapter_dir(project_name, chapter_num) / "panels"
+    existing = sorted(p for p in panels_dir.iterdir() if p.is_file()) if panels_dir.exists() else []
+    recorded = bool(read_manifest(project_name).get("chapters", {}).get(str(chapter_num), {}).get("panels"))
+    return existing if recorded else []
+
+
 class CoordinateCropper:
     def __init__(self, config: CropperConfig | None = None):
         self.config = config or CropperConfig()
@@ -53,14 +71,10 @@ class CoordinateCropper:
             )
 
         # RESUME CHECK: if panels already exist and force=False, skip the
-        # (expensive) re-crop. "Already cropped" is decided by this chapter
-        # having a "panels" entry in the shared manifest.json (see
-        # crop_report.write_manifest) - the crop step's own record that it
-        # ran to completion, the same role the old standalone
-        # panels_manifest.json's mere existence used to play.
-        existing_panels = sorted(p for p in panels_dir.iterdir() if p.is_file()) if panels_dir.exists() else []
-        already_cropped = bool(read_manifest(project_name).get("chapters", {}).get(str(chapter_num), {}).get("panels"))
-        if not force and existing_panels and already_cropped:
+        # (expensive) re-crop - see cropped_panels for what "already cropped"
+        # means.
+        existing_panels = cropped_panels(project_name, chapter_num)
+        if not force and existing_panels:
             console.print(f"[bold green]✓ Found {len(existing_panels)} panels already cropped! Skipping re-crop.[/]")
             return existing_panels
 

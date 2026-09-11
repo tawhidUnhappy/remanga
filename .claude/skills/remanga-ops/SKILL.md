@@ -39,9 +39,10 @@ projects/<name>/
 `narration.json` = `{"chapter","total_panels","narration":[{"panel_id","text"}]}`.
 `panel_id` MUST equal the stem of a file in `panels/` (render.py globs
 `panels/*.png|*.jpg`, keys off `.stem`). A chapter counts as "already
-cropped" purely via `manifest.json["chapters"][N]["panels"]` existing - not
-`crops.json` - so hand-imported pre-cropped panels skip the crop step for
-free once that manifest entry is written.
+cropped" via `manifest.json["chapters"][N]["panels"]` existing AND `panels/`
+holding files - not `crops.json` - so hand-imported pre-cropped panels skip
+the crop step for free once that manifest entry is written. One definition:
+`cropper/crop.py:cropped_panels`, used by crop's resume check and `crop-all`.
 
 ## venvs
 
