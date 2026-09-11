@@ -594,45 +594,6 @@ It won't overwrite a narration.json that already has content unless you pass `--
 ```
 Chapters that already hold a *written* narration are named and left alone; replacing them is one explicit answer covering all of them (`--force`, or the confirmation it asks a real terminal), never a prompt per chapter. Chapters that already have the blank file are simply not touched — so re-running it says what's there rather than reporting work it didn't do.
 
-### 3d. Make the Narration Safe to Speak
-```bash
-./run.sh normalize-narration --project "my_manga" --chapter "1" --dry-run
-./run.sh normalize-narration --project "my_manga" --chapter "1"
-```
-LLM output and hand-written text carry things a TTS engine turns into noise. This rewrites the narration text so every engine says what you meant:
-
-| Removed (makes artifacts) | Kept (carries delivery) |
-| --- | --- |
-| Emoji, arrows, box drawing — anything outside a speakable whitelist | **`?` and `!`** — the engine's own phrasing cues, and the emotion classifier's when it's on |
-| Leftover markdown (`**bold**` gets voiced as "asterisk asterisk") | **`...`** — a pause the engine actually performs |
-| URLs, email addresses, and citations like `(see https://…)` | Commas, periods, apostrophes, quotes — the phrasing |
-| SHOUTED words — many front-ends spell all-caps out letter by letter | Single capitals (`A rank`, `S-class`) — those really are letters |
-| Streeeetched letters (capped at three) | Intra-word hyphens (`re-read`, `T-shirt`, `A-rank`) |
-| Stammers lettered as a letter before a hyphen or dots — `W-what` → `What`, `y..yeah` → `yeah` (Kokoro reads that letter's name: "double-u what", "why… yeah") | A real word repeated as a hesitation — `I... I'm sorry` |
-| Raw digits — `3,000` becomes `three thousand`, `2nd` becomes `second`, `50%` becomes `fifty percent` | |
-| Zero-width and control characters, smart quotes, em dashes | |
-
-Runs of `!!!` collapse to one (same meaning to a model, less risk of over-reading), and a mixed `?!` survives intact — that pairing is its own tone.
-
-It also fixes what reads *flat* rather than what glitches:
-
-- **`'speech'` → `"speech"`** — a single quote is also the apostrophe, so a tokenizer can't tell `sneers, 'a worthless skill'` from `Dragon King's Flame`. Double quotes for speech leave `'` meaning exactly one thing.
-- **Quoted speech gets a capital** — `pleads, 'please stop!'` reads to the model as the middle of a clause and gets that flat continuation prosody; `pleads, "Please stop!"` starts a fresh utterance, which is what it is.
-- **`Mr.` → `Mister`**, and **`A rank` → `A-rank`** — both are otherwise read as letters or as the article "a".
-
-It also reports what it deliberately **doesn't** touch — problems whose only honest fix is a rewrite: empty lines, narration repeated on two panels, and the one that never announces itself in any single line — most sentences opening the same way:
-
-```
-Worth a look - not changed, because only a rewrite fixes these:
-  • 59 of 129 lines (46%) open with an '-ing' phrase
-      001_001_01: Collapsing to the ground outside the shop, a terrified black...
-      001_003_03: Flashing a ruthless smirk, Lloyd coldly states, "I will not ...
-    Each line reads fine on its own, but one sentence shape repeated for a whole
-    chapter sounds like a drone however well it's synthesized.
-```
-
-It always shows every line it would change, with which rules fired, and asks before writing — narration text isn't regenerable from anything on disk. `--dry-run` previews and exits; `--force` skips the confirmation. Running it twice changes nothing the second time.
-
 ### 4. Generate and Place `narration.json` + `memory.json`
 Upload **any one** of your generated vision archives — whichever package formats are active (`panels_zip`, `pdf`, `sheets_zip`) — and `prompts/narration.md` to your LLM, attaching the project's current `memory.json` too, once it has real content, so continuity carries across chapters. **From chapter 2 onward, `memory.json` isn't optional** — the interactive wizard blocks and re-prompts until it has real content, since it's the only thing carrying character/plot continuity forward from the previous chapter. The prompt asks for **exactly two fenced JSON code blocks and nothing else** (no commentary before/after), so the LLM's reply can be copy-pasted straight into each file. The interactive wizard prints every archive actually available to upload this run as a ctrl+click-openable path (VS Code and similar editors), and both destination paths, when it gets to this step:
 ```text
@@ -941,7 +902,7 @@ If you want a male narrator, `am_fenrir` is the pick — but note it's three gra
 A recap narrator should sound like one person telling the story evenly from start to finish — not like someone reacting to it. Kokoro reads every panel in the configured voice's own register, and there is no per-panel emotion system to tune.
 
 1. **The voice is the delivery.** With no cloning and no emotion vector, what you choose in `tts.kokoro.voice` is what every panel sounds like, first to last. If narration sounds wrong, the voice is the thing to change — there is no reference clip to blame any more, which was the point.
-2. **Punctuate anyway.** `prompts/narration.md` (Rule 3) has the LLM write real punctuation — `!`, `?`, `...` — wherever the panel genuinely is exclamatory, interrogative, or hesitant. Kokoro reads punctuation for phrasing and pacing. There's no emotion field in `narration.json` — each entry is just `panel_id` + `text`.
+2. **Punctuate anyway.** `prompts/narration.md` has the LLM write real punctuation — `!`, `?`, `...` — wherever the panel genuinely is exclamatory, interrogative, or hesitant. Kokoro reads punctuation for phrasing and pacing. There's no emotion field in `narration.json` — each entry is just `panel_id` + `text`.
 3. **Speed** (`tts.speed`) is applied by the model itself as a generation parameter, not by an ffmpeg pass afterwards, so it doesn't cost quality.
 
 ## Reliability: Crashes, Interrupts & Resuming
@@ -1093,8 +1054,8 @@ remanga/
 
 ### 2. A specific narration line sounds unstable, or too dramatic
 Every panel is read in the same voice and the same register (see [Narration Voice & Delivery](#narration-voice--delivery)), so an odd-sounding line almost always traces back to what's written for that panel rather than to synthesis:
-- Check whether that panel's `narration.json` text over-punctuates — a line stacking multiple `!`/`?`/`...` reads as more dramatic than intended. `prompts/narration.md` Rule 3 asks the LLM to reserve emphatic punctuation for panels that genuinely call for it; if it slipped through anyway, trim the line's punctuation back to plain prose and re-run.
-- Run `./run.sh normalize-narration` — leftover markdown, emoji, raw digits and SHOUTED words all turn into artifacts, and it rewrites them into something speakable.
+- Check whether that panel's `narration.json` text over-punctuates — a line stacking multiple `!`/`?`/`...` reads as more dramatic than intended. `prompts/narration.md` asks the LLM to reserve emphatic punctuation for panels that genuinely call for it; if it slipped through anyway, trim the line's punctuation back to plain prose and re-run.
+- Check the line against the "Writing for the voice" section of `prompts/narration.md` — ALL-CAPS shouting, markdown, emoji, a letter glued to a hyphen (`W-what`) or an unhyphenated `A rank` all come out wrong. The LLM writes the text ready to speak and nothing rewrites it afterwards, so fix that panel's line by hand, or flag it in `review` for the next fix pass.
 - If the *whole* recap sounds wrong rather than one line, that's the voice, not the text: try a different `tts.kokoro.voice` (grades are shown in the picker; several of the 54 are graded D or F and are genuinely worse).
 
 ### 3. NVENC GPU encoder error during video rendering

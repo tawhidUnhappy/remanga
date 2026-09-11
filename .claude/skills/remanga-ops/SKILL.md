@@ -727,40 +727,26 @@ keeps), reachable from the menu like everything else.
   dict anywhere else. Refuses to clobber real content without `--force`; a
   blank file is not content (`has_real_json_content`), so blank → template
   needs no flag.
-- `normalize-narration` (Chapter Production): rewrites narration.json into
-  TTS-safe text. Rules live in `remanga/narration/normalize.py` as named
-  `Rule` objects applied in order, and `normalize_text` reports which fired -
-  that report is what the command previews. Two invariants when touching it:
-  `?`, `!` and `...` are never removed (only de-duplicated) because the
-  engines infer emotion from them with no emo_vector sent, and the final
-  `charset` pass is a WHITELIST (`ALLOWED_PUNCTUATION`) - a missed exotic
-  character is a glitch mid-chapter, which is worse than dropping it. Order
-  matters: `charset` runs before `punctuation` so the gap a removed emoji
-  leaves gets cleaned up rather than frozen in ("mage , meets"). Must stay
-  idempotent - the command's second run has to report "already TTS-safe".
-  `stutters` runs 2nd, before `typographic` (which would turn an en-dash
-  stammer into a comma first): Kokoro's G2P reads a letter glued to a hyphen
-  or dots as the letter's NAME - "W-what" -> "double-u what", "N-no" -> "en
-  no", "y..yeah" -> "why.. yeah" (checked with `KPipeline(lang_code="a",
-  model=False)`, which phonemizes without loading weights - the cheap way to
-  settle any "how will Kokoro say this" question). It collapses to the whole
-  word only for a 1-letter or all-consonant 2-letter start with a longer word
-  after it, skipping i/a/o - so re-read, no-nonsense, X-ray, "I... I'm" stay.
-  Also measured: "..." inside a quote is NOT dead air on Kokoro (190-280ms,
-  the same as a comma); an old prompt rule banning it was wrong.
-  `normalize.py` holds the safety rules; `delivery.py` holds the ones that
-  change how a line is *performed* (single->double speech quotes, capitalized
-  speech, Mr.->Mister, A rank->A-rank) and runs last, on already-clean text.
-  The quote conversion is safe because an apostrophe is the only single quote
-  with letters on BOTH sides - that one distinction is what makes it
-  automatable; don't replace it with a positional guess. `advisories.py` is
-  the deliberate other half: problems only a rewrite fixes (empty lines,
-  narration duplicated across panels, and >35% of
-  lines opening with an "-ing" participle - measured at 46% on a real chapter
-  and audible as a drone). Those are REPORTED on every run, including the run
-  where nothing needed changing, and never auto-rewritten. When a new
-  narration problem turns up that has no mechanical answer, it belongs there
-  plus a line in prompts/narration.md - not as a rule that guesses.
+- **`normalize-narration` was REMOVED (2026-09-12, user's decision).** Making
+  narration text speakable is the LLM's job: prompts/narration.md
+  `<writing_for_the_voice>`, self-checked in `<process>` step 4. The command and
+  `narration/{normalize,delivery,numbers,advisories}.py` live on branch
+  `legacy/normalize-narration` - don't re-add a code normalizer without
+  asking. What Kokoro actually does with raw text, checked with
+  `KPipeline(lang_code="a", model=False)` (phonemizes without loading the
+  weights - the cheap way to settle any "how will Kokoro say this" question):
+  - read WRONG: a letter glued to a hyphen or dots ("W-what" -> "double-u
+    what", "N-no" -> "en no", "y..yeah" -> "why.. yeah"), ALL-CAPS words
+    ("SHUT UP" -> "shut U-P"), markdown ("**Bold**" -> "asterisk asterisk"),
+    emoji (said by NAME: 😀 -> "grinning face"), URLs (spelled out), "Grr",
+    "Tch"; and "A rank" takes "a" as the article - write "A-rank".
+  - read RIGHT as-is: digits ("3,000", "2nd", "50%", "$20", "4.5"), "Mr.",
+    "Dr.", "&", "+", "?!", and single / double / curly quotes and straight /
+    curly apostrophes, which phonemize identically.
+  - "..." is a 190-280ms pause, the same as a comma - not dead air.
+  The old advisories (empty lines, duplicate lines, >35% "-ing" openers -
+  measured at 46% on a real chapter and audible as a drone) are now checks
+  the LLM runs on itself (`<craft>` 5, `<process>`).
 - **Narration style = every line of dialogue verbatim + a full explanation of
   each panel, NO word limit** (user's decision, 2026-09-11). The old recap
   style (10-20 words, 26-word ceiling, quote only the "key" line, synthesize
@@ -771,8 +757,18 @@ keeps), reachable from the menu like everything else.
   ambiguous), each entry carries on from the previous panel, rhythm varies,
   and data (status windows, stat blocks) is said naturally, not read field by
   field. A literal "tag every quote" rule was shipped once and produced
-  transcript-style narration - Rule 5 now has "the words" and "the telling"
-  halves; reviewer tag `transcript_style` flags the failure.
+  transcript-style narration; reviewer tag `transcript_style` flags it.
+- **prompts/narration.md and narration_review.md were rewritten 2026-09-12**
+  from researched craft, not pipeline rules (the user asked for it): XML-tag
+  sections (`<role>`, `<craft>`, `<writing_for_the_voice>`, `<inputs>`,
+  `<process>`, `<examples>`, `<output_format>`), seven named craft principles
+  each with its WHY (every word of dialogue; explain don't describe - viewers
+  already see the panel, "say cow, see cow"; "but/so" not "and then"; action
+  beats and plain says/asks over tags; write for the ear; one steady
+  storyteller voice; no spoilers), calm wording instead of NEVER/CRITICAL
+  (current models over-apply shouted rules), no contradictions (the old one
+  demanded a note to the user AND a reply of only JSON blocks). Reference
+  sections by tag name - the old "Rule N" numbers are gone.
   Long panels are safe: KPipeline's chunks are concatenated in
   kokoro_worker.py, and a panel is held on screen for its own clip's length
   (audio_timing.json), never sped up to fit.

@@ -1,29 +1,30 @@
-# Narration Fix-Pass Prompt (Human Review Round)
+# Narration Review Fix-Pass Prompt
 
-## Role & Mission
-You already wrote a narration script for this chapter using `prompts/narration.md`. A human has
-now reviewed that script panel-by-panel against the actual manga art and flagged specific lines
-that are wrong, plus optionally an overall note about the chapter. Your job this round is
-narrower than the original scriptwriting pass: **fix exactly what was flagged, leave everything
-else untouched, and record what kind of mistake this was so it generalizes to future chapters and
-other manga** — not just this one.
+<role>
+You wrote a narration script for this chapter using `prompts/narration.md`. A person has since
+checked it panel by panel against the manga art and flagged lines that are wrong, sometimes with a
+note about the chapter as a whole. This round has two jobs:
 
-You'll be given, alongside this prompt:
-1. This chapter's current `narration.json` (the script you're correcting).
-2. `narration_review.json` — the human's flagged panels and general note (schema below).
-3. The current `memory.json` — story continuity for this project, unchanged by this prompt except
-   as `prompts/narration.md` already directs.
-4. `narration_lessons.json` — a running, cross-manga log of generalized mistakes and how to avoid
-   them (schema below). May be empty/placeholder on the very first review round ever.
+1. Fix exactly what was flagged, and leave everything else as it is.
+2. Turn each mistake into a general lesson, so the same kind of mistake doesn't come back on a
+   later chapter or in a different manga. This is what makes a review round worth doing.
 
-The original panel images/PDF/zip for this chapter are **not** necessarily re-attached this round
-— you already analyzed them once. If a flagged issue genuinely requires re-examining a panel's art
-and the images aren't in this conversation, say so and ask for that specific panel image rather
-than guessing at a fix.
+Everything in `prompts/narration.md` still applies to every line you touch - above all `<craft>`
+(every word of dialogue, explained and told like a story) and `<writing_for_the_voice>`.
+</role>
 
----
+<inputs>
+## What you're given
 
-## Input Schema: `narration_review.json`
+1. The chapter's current `narration.json`: the script you're correcting.
+2. `narration_review.json`: the flagged panels and the general note, described below.
+3. The current `memory.json`.
+4. `narration_lessons.json`: the running list of lessons shared across every manga, described
+   under `<lessons>`. It may be empty on the first review round.
+
+The panel images may not be attached again. If fixing a flag really needs a panel's art and the
+image isn't in the conversation, ask for that specific panel rather than guessing.
+
 ```json
 {
   "chapter": "01",
@@ -36,162 +37,121 @@ than guessing at a fix.
     {
       "panel_id": "01_003_02",
       "text_at_flag": "The exact narration text that was flagged, as it read at flag time.",
-      "issue": "The human's description of what's wrong with this panel's line.",
+      "issue": "The reviewer's description of what's wrong with this panel's line.",
       "tag": "wrong_speaker"
     }
   ]
 }
 ```
-`tag` is one of: `wrong_detail`, `wrong_speaker`, `dropped_content`, `flattened_dialogue`,
-`transcript_style`, `tts_unsafe_typography`, `quoted_sfx`, `content_shift`, `empty_text`,
-`spoiler`, `punctuation`, `word_budget`, `continuity`, `other`, or empty.
-`flattened_dialogue` means a panel's dialogue was paraphrased, summarized, or cut down to one line
-instead of quoted in full, word for word (Rule 5 of `prompts/narration.md`) — fix it by quoting
-every bubble, thought and caption in that panel in full, woven in the way Rule 5's "telling" part
-describes, not by rephrasing the paraphrase.
-`transcript_style` means the words are all there but the line reads like a transcript instead
-of a story: a "says" tag on every quote or on back-to-back lines, tags where the speaker is
-already obvious, an entry that restarts instead of carrying on from the one before, or data
-(a status window, a stat block) recited field by field (Rule 5, "The telling"). Fix the telling
-- action beats instead of tags, a connection to the previous panel, varied rhythm, data said
-naturally - and **never** change or drop a word of the dialogue itself.
-`word_budget` means a line's length doesn't match what its panel holds: usually **cut short** -
-dialogue or explanation condensed into a recap-style summary (put the full words and the full
-explanation back) - or padded with things the panel doesn't show. There is no word ceiling (Rule
-4 of `prompts/narration.md`): a long line is never a problem by itself, and a fix never shortens
-a quote.
-`tts_unsafe_typography` means a stammer or hesitation is still spelled the way manga lettering
-draws it, so the voice mispronounces it: a letter or partial syllable before a hyphen or dots
-("w-what" is read "double-u what", "N-no" "en no", "y..yeah" "why... yeah"). Fix it per Rule 5's
-"Written for the voice" in `prompts/narration.md`: write the whole word - repeated with a comma
-or "..." to keep the stammer audible ("What, what are you doing?", "Yeah... yeah."), or once
-with the stammer carried by the telling - choosing the spelling that keeps the character's tone.
-A plain "..." pause is fine and is not this tag. If more than one or two panels this chapter got
-flagged with this tag, say so explicitly in the generalized lesson (Block 3 below) — it means
-the pattern needs reinforcing, not just this line fixing.
-`quoted_sfx` means a `text` value quotes sound lettering that isn't a word ("Hii!", "Tch",
-"Grr", "Kyaa!") as if it were spoken dialogue — **never valid** per Rule 5 of
-`prompts/narration.md`; the voice reads it as a nonsense syllable or spells it out, not as the
-sound. Fix it by narrating the reaction it conveys instead (a frightened yelp, clicking his
-tongue). Ordinary interjections ("Huh?", "Hmm...", "Ugh.") and short real words shouted as
-exclamations ("Stop!", "No!") are genuine dialogue, not this tag.
-`content_shift` means this panel's `panel_id` is correctly spelled, but the text describes a
-*different* panel's art — usually the one right before or after it — because an image got
-skipped or read out of order during scriptwriting (Rule 6 of `prompts/narration.md`), most
-common on `panels_N.zip` uploads. This is different from `wrong_detail`: a wrong-detail flag
-means one fact in an otherwise-right-panel entry is off, `content_shift` means the whole
-entry belongs to the wrong panel. Fixing one instance likely means every following panel
-shifted too - re-check the panels after the flagged one, not just the one flagged, and note
-in the general lesson (Block 3) if more than one showed up, since it means the drift needs
-correcting at its source panel, not patched one at a time.
-`empty_text` means a panel was left with `"text": ""` — **never valid** per Rule 4 of
-`prompts/narration.md`; every panel that reaches this pipeline already passed human
-panel-relevance filtering during marking, so describe what the panel actually shows instead
-of leaving it blank, even for a silent/reaction beat. Treat `tag` as a hint about *what kind*
-of mistake
-this is — useful for writing a good generalized lesson (see Block 3 below) — not as the whole
-instruction; always read `issue` for the actual specifics.
 
-`text_at_flag` may not exactly match this panel's current text in `narration.json` if a prior
-round already partially addressed it — trust the current `narration.json` as the panel's present
-state, and `issue`/`tag` as what's still believed wrong with it.
+`text_at_flag` is the line as it read when it was flagged, and an earlier round may already have
+changed it: treat the current `narration.json` as the panel's present state, and `issue` as what's
+still believed wrong. Always read `issue` for the specifics - `tag` only says what kind of mistake
+it is.
 
----
+### What each tag means, and how to fix it
+- `wrong_detail`: a fact in the line doesn't match the art. Correct that fact.
+- `wrong_speaker`: a line is attributed to the wrong character. Give it to the right one, following
+  the bubble's tail.
+- `dropped_content`: a bubble, thought, caption or action is missing. Add it to that panel's own
+  entry, word for word.
+- `flattened_dialogue`: dialogue was paraphrased, summarized or cut down to one line. Quote every
+  bubble, thought and caption in the panel in full, woven into the telling (`<craft>` 1 and 4) -
+  rather than rewording the paraphrase.
+- `transcript_style`: the words are all there, but it reads like a transcript - "says" on every
+  line, tags where the speaker is obvious, entries that don't connect, data read out field by
+  field. Fix the telling with action beats, a link to the panel before, varied rhythm and data said
+  naturally (`<craft>` 1, 3, 4 and 5), without changing a word of the dialogue.
+- `word_budget`: the entry's length doesn't fit what the panel holds - usually cut short into a
+  recap-style summary (restore the full words and the explanation), occasionally padded with
+  things the panel doesn't show. There is no word limit, so a long entry isn't a problem in itself,
+  and no fix shortens a quote.
+- `tts_unsafe_typography`: a stammer is spelled the way manga letters it, so the voice
+  mispronounces it ("w-what" is read as "double-u what"). Write the whole word as
+  `<writing_for_the_voice>` describes, keeping the character's tone. A plain "..." pause is fine
+  and isn't this tag.
+- `quoted_sfx`: a sound effect that isn't a word ("Hii!", "Tch", "Grr") is quoted as if it were
+  dialogue. Narrate the reaction it conveys instead. Ordinary interjections ("Huh?", "Ugh.") and
+  real shouted words ("Stop!") are dialogue, not this tag.
+- `content_shift`: the `panel_id` is right, but the text describes a different panel - usually its
+  neighbour - because an image was skipped or read out of order. The panels after it have probably
+  shifted too, so check them as well as the flagged one.
+- `empty_text`: the panel has no narration. Every panel belongs to the story; narrate what it shows
+  and what it means.
+- `spoiler`: a name or a reveal arrives before the chapter gives it (`<craft>` 7).
+- `punctuation`: emphatic punctuation is overused, or missing where the moment calls for it
+  (`<craft>` 6).
+- `continuity`: the line contradicts `memory.json` or earlier chapters.
+- `other`, or no tag: go by `issue`.
+</inputs>
 
-## Process
-1. **Fix only flagged panels.** For each entry in `flagged_panels`, re-examine that panel against
-   Rule 2 (objective visual grounding), Rule 3 (prosody/punctuation), Rule 4 (length: as long as the
-   panel needs), Rule 5 (every word of dialogue, told like a story), Rule 7 (complete
-   dialogue/action coverage),
-   and whichever Golden Rule the `issue` text and `tag` point to in `prompts/narration.md`, and
-   rewrite that panel's `text` to actually fix the described problem. Do not rewrite a flagged
-   panel's line more than the issue calls for — fix the specific thing, don't rephrase what wasn't
-   flagged as wrong. **No fix ever shortens, paraphrases, or drops a line of dialogue** - every
-   panel's bubbles stay quoted in full, per the Core Requirement of `prompts/narration.md`. And
-   a fix keeps the storytelling: a corrected or restored line is woven in with action beats and
-   a connection to the panel before it, not dropped in as a bare "X says" quote.
-2. **Leave every unflagged panel exactly as it was.** This is not a chance to re-polish the whole
-   script — a panel not present in `flagged_panels` is left character-for-character unchanged.
-3. **Apply `general_note`, if present**, as a chapter-wide instruction (e.g. "punctuation is
-   overused in the back half") — it may mean touching panels beyond `flagged_panels` if the note
-   genuinely describes a pattern across the chapter; if so, note in your reply which additional
-   panels you touched and why.
-4. **Re-run Rule 9's full-script verification pass** (from `prompts/narration.md`) over the whole
-   updated script, not just the fixed panels — a fix to one panel can create a new gap or
-   contradiction with its neighbors.
-5. **Write the generalized lesson(s)** for `narration_lessons.json` — see Block 3 below. This is
-   the step most likely to be skipped under time pressure; it is not optional.
+<process>
+## How to work
 
----
+1. For each flagged panel, check its line against the art and the `issue`, and rewrite only what
+   the issue calls for, following `prompts/narration.md`. A fix never shortens, paraphrases or
+   drops dialogue, and a restored or corrected line is woven into the telling like the rest of the
+   script rather than dropped in as a bare "X says" quote.
+2. Leave every panel that wasn't flagged exactly as it is, character for character.
+3. If there's a `general_note`, apply it as an instruction for the whole chapter. When it describes
+   a pattern, fix that pattern wherever it appears, including in panels that weren't flagged.
+4. Run steps 4 to 6 of `<process>` in `prompts/narration.md` over the whole updated script: a fix
+   in one panel can open a gap or a contradiction with its neighbours.
+5. Write the lessons, as `<lessons>` describes.
+</process>
 
-## Block 3 Is the Point of This Prompt: Generalize, Don't Log the Incident
-The single most important output of a review round isn't the fixed panel — it's making sure the
-**same class of mistake** doesn't recur on a later chapter, or a completely different manga. That
-means every lesson you write must be phrased as a **general narration-writing principle**, never
-as a note about this specific chapter, character, or series.
+<lessons>
+## Writing lessons that generalize
 
-- ❌ **Too specific (do not write this):** *"Panel 01_003_02 in chapter 1 had Lloyd's line
-  attributed to the wrong character."*
-- ✅ **Correctly generalized:** *"When two characters are close together in a panel and only one
-  speech bubble tail is visible, trace the tail to its source before attributing the line — don't
-  default to the more prominent/foregrounded character."*
+The most valuable output of a review round isn't the fixed panel - it's making sure the same kind
+of mistake doesn't happen again, on a later chapter or in a completely different manga. So each
+lesson is a general principle of writing narration, phrased so it still makes sense for a manga
+with different characters, different art and a different genre - never a note about this chapter.
 
-- ❌ **Too specific:** *"Chapter 3's ellipses were overused on the fight scene panels."*
-- ✅ **Correctly generalized:** *"A run of consecutive action panels tends to accumulate `...` even
-  when only the first one or two panels are actually hesitant — check each panel's ellipsis against
-  Rule 3 individually rather than carrying the previous panel's punctuation tone forward."*
+- Too specific: "Panel 01_003_02 in chapter 1 had Lloyd's line attributed to the wrong character."
+- General: "When two characters are close together and only one bubble tail is visible, trace the
+  tail to its source before attributing the line, rather than defaulting to the more prominent
+  character."
 
-For each flagged panel (and anything `general_note` caught), ask: *"What would have prevented this,
-phrased so it still makes sense on a manga with different characters, different art, a different
-genre?"* That sentence is the lesson. If an issue is truly one-off and doesn't generalize (e.g. a
-factual typo), it's fine to skip logging it — don't force a lesson that doesn't teach anything
-reusable.
+- Too specific: "Chapter 3's ellipses were overused in the fight scene."
+- General: "Runs of action panels tend to pile up '...' even when only the first panel is actually
+  hesitant; judge each panel's punctuation on its own moment rather than carrying the previous
+  panel's tone forward."
 
-**Read the existing `narration_lessons.json` first** and don't duplicate a lesson that's already
-there in substance, even if this round's wording would differ slightly — if this mistake is a
-specific instance of an existing lesson, skip adding a near-duplicate. Only append lessons that are
-genuinely new generalizations. Keep the list itself reasonably tidy — if two existing lessons could
-be merged into one clearer principle, merging them is welcome, but never delete a lesson just
-because it wasn't relevant this round.
+For each flagged panel, and anything the general note caught, ask what would have prevented it.
+That answer, phrased for any manga, is the lesson. When several flags this round share a cause -
+more than one stammer spelling, or more than one shifted panel - say so in the lesson, because the
+pattern needs reinforcing rather than one-off fixes. A truly one-off slip that teaches nothing
+reusable, like a typo, doesn't need a lesson.
 
-### Schema: `narration_lessons.json`
+Read the existing lessons first. Don't add one that's already there in substance, even in
+different words; merging two near-duplicates into one clearer lesson is welcome; and keep lessons
+that didn't apply this round - they still apply to other chapters. Every future chapter's
+narration reads this list as part of its instructions.
+
 ```json
 {
   "lessons": [
-    "One generalized, manga-agnostic sentence per lesson, phrased as a standing rule to check against on every future chapter."
+    "One general, manga-agnostic sentence per lesson, phrased as a standing rule for every future chapter."
   ]
 }
 ```
-Plain array of strings, nothing else. Append new entries to the end; never renumber, remove, or
-rewrite an existing entry except to merge near-duplicates as described above.
+</lessons>
 
-**This file is consulted going forward on every chapter this pipeline narrates, for any project** —
-`prompts/narration.md` treats it as a standing checklist alongside the Golden Rules. Writing a
-sharp, genuinely general lesson here is the mechanism that makes review rounds worth doing at all;
-a lesson too specific to reuse is functionally the same as not writing one.
+<output_format>
+## Output
 
----
+Your reply is copied straight into three files and read by a program as JSON, so it must be
+exactly three fenced ```json code blocks, one right after another, with nothing before, between or
+after them. Each block is the complete file. Use standard JSON: double-quoted keys and strings, no
+trailing commas, no comments.
 
-## Output Schema Requirements — Read Carefully, This Gets Parsed by Code
-Exactly the same hard requirement as `prompts/narration.md`: **your entire response must be
-exactly three fenced ` ```json ` code blocks, back to back, and nothing else** — no greeting, no
-commentary, no text between blocks, nothing after the third block. Standard JSON only:
-double-quoted keys/strings, no trailing commas, no comments.
-
-### Block 1: `narration.json`
-Save to: `projects/<project_name>/chapters/chapter_<num>/narration.json`
-Same schema as `prompts/narration.md` Section 4, Block 1 (`chapter`, `total_panels`, `narration[]`
-of `{panel_id, text}`) — the **complete** script, fixed panels updated, everything else unchanged,
-`total_panels` recounted to match `narration.length`.
-
-### Block 2: `memory.json`
-Save to: `projects/<project_name>/memory.json`
-Same schema as `prompts/narration.md` Section 4, Block 2. Update it only if a flagged fix actually
-changes what happened in the chapter (e.g. a corrected speaker changes a relationship fact) —
-otherwise carry it forward unchanged, same rule as any other pass: never discard existing content.
-
-### Block 3: `narration_lessons.json`
-Save to: `global/narration_lessons.json`
-The schema above — the existing list plus any new, genuinely generalized lesson(s) from this round.
-If this round produced no lesson worth generalizing, output the list **unchanged** (don't pad it
-with something trivial just to have written something).
+1. **narration.json**, saved to `projects/<project_name>/chapters/chapter_<num>/narration.json`:
+   the complete script in the format `<output_format>` in `prompts/narration.md` defines - flagged
+   panels fixed, everything else unchanged, `total_panels` recounted.
+2. **memory.json**, saved to `projects/<project_name>/memory.json`: in the same format. Change it
+   only if a fix changes what happened in the chapter (a corrected speaker can change a
+   relationship, for example); otherwise output it unchanged. Never drop existing content.
+3. **narration_lessons.json**, saved to `global/narration_lessons.json`: the existing list plus
+   any new lessons from this round, or the list unchanged if this round taught nothing general.
+</output_format>

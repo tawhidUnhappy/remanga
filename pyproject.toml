@@ -68,9 +68,9 @@ select = [
     "RUF",
 ]
 ignore = [
-    # The narration front-end exists precisely to handle typographic
-    # characters (smart quotes, en/em dashes, the ellipsis) and names them
-    # literally in its tables and its prose - see narration/normalize.py.
+    # Some modules handle non-ASCII characters on purpose and name them
+    # literally - the OCR cleanup matches full-width brackets DeepSeek-OCR
+    # emits (ocr/cleanup.py), and the menus draw with "❯" (tui/frame.py).
     # Flagging those as "ambiguous unicode" is the linter misreading the
     # subject matter.
     "RUF001", "RUF002", "RUF003",
