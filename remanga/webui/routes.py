@@ -107,7 +107,6 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
         index = (request.get_json(force=True) or {}).get("index")
         if not isinstance(index, int) or not session.goto(index, save=not session.read_only):
             return jsonify({"ok": False, "error": f"No chapter at index {index} in this session"}), 400
-        session.start_detection(config)
         return jsonify({"ok": True, **chapter_payload()})
 
     @app.get("/api/pages/<path:filename>")
@@ -319,7 +318,6 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
         # save=False: save_current() above already wrote this chapter, and
         # goto's own save would write it a second time and report it twice.
         session.goto(session.index + 1, save=False)
-        session.start_detection(config)
         return jsonify({"ok": True, "done": False, **chapter_payload()})
 
     return app

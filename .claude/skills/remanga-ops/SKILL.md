@@ -744,7 +744,7 @@ import chapter-nav). Command: `mark-all` (Project-wide).
 
 `view-marks` is the same session with `MarkerSession(read_only=True)`: the
 server 403s `/api/marks` and `/api/detect`, `save_current()` no-ops, and
-`start_detection()` returns early (MAGI WRITES marks - a viewer that runs it
+`queue_detection()` returns early (MAGI WRITES marks - a viewer that runs it
 fills up with boxes nobody saved). The browser hides the editing chrome, and
 `flushSave()` returns early - without that, every chapter change in a viewer
 POSTs marks and logs a 403. Sidebar has two panes (`sidebar.js`): the page's
@@ -776,9 +776,13 @@ Footguns hit while building it, all still live:
   into the new chapter's state.
 - **`session.goto(i, save=False)` from /api/finish** - it already saved; the
   default `save=True` would write that crops.json twice and report it twice.
-- **MAGI must start once per chapter, on arrival** (`detection.start_once`,
-  guarded by `MarkerState.detect_started`) - every navigation back would
-  otherwise spawn another worker and reload the model.
+- **Detection is user-initiated ONLY** (user's decision: "it should be the
+  user who decides what to mark"). Nothing queues it on session start,
+  /api/goto or /api/finish - `MarkerSession.start_detection` was removed. The
+  single entry point is POST /api/detect (the Detect button).
+  `MarkerState.detect_started` still skips a chapter already detected this
+  session when a chapter/range/all Detect includes it again; the This page
+  scope bypasses it. Don't reintroduce any automatic detection.
 - **`src` (AI vs manual) was never written to crops.json**, and
   `_load_existing_crops` hardcoded `"src": "manual"` - every AI mark came back
   MANUAL on the first save+reopen. Each panel now carries `src`. A relabel
@@ -825,8 +829,7 @@ Footguns hit while building it, all still live:
   frontend under node every 300ms - do that for any "UI glitch" report.
 - **"Keep marking every chapter" (`auto_detect_all`, `set_auto_all`) was REMOVED
   at the user's request**: Detect with the All chapters scope does the same
-  thing with an explicit click. Unprompted, a session detects only the chapter
-  on screen (`start_detection`). Don't re-add it. A stale `auto_detect_all` key
+  thing with an explicit click. Don't re-add it. A stale `auto_detect_all` key
   in an old config.json is ignored (pydantic's default extra="ignore").
 - **Recrop (`MarkerSession.queue_recrop` / `_drain_crops`, POST /api/recrop)**
   has its OWN worker and queue (`_crop_*`), separate from detection: queued

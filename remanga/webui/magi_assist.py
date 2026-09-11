@@ -3,9 +3,10 @@
 MAGI (https://github.com/ragavsachdeva/magi, https://huggingface.co/ragavsachdeva/magiv3)
 is a manga-understanding vision-language model from Oxford (Sachdeva & Zisserman)
 that localizes panels, characters, text blocks, and speech-bubble tails on a raw
-page image. This module only uses its panel detection: it pre-fills every page's
-panel boxes so a person only has to adjust them in the web UI, not draw from
-scratch (`remanga/webui/server.py` calls `detect_panels_for_pages`).
+page image. This module only uses its panel detection: when the marker's Detect
+button asks, it finds the pages' panel boxes so a person only has to adjust them
+in the web UI, not draw from scratch (`remanga/webui/detection.py` calls
+`detect_panels_for_pages`). Nothing runs it unasked.
 
 License note: the magiv3 model card permits "personal, research, non-commercial,
 and not-for-profit" use only - fine for running your own chapters through this

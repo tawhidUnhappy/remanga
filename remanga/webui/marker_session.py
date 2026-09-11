@@ -210,20 +210,6 @@ class MarkerSession:
     # several model loads racing for one GPU, and a progress report that
     # can't say what it is progressing through.
 
-    def start_detection(self, config) -> None:
-        """Queue MAGI's pass for the chapter now under the cursor, if it
-        hasn't had one this session.
-
-        Never in a read-only session, and this is the reason that rule lives
-        here rather than at each call site: detection WRITES - it fills
-        `marks` for every untouched page - so a viewer opened to check what
-        was actually saved would quietly fill up with AI guesses that are in
-        nobody's crops.json. A session that cannot save must also not
-        invent."""
-        if self.read_only or not config.magi_enabled:
-            return
-        self.queue_detection(config, [self.chapter_num])
-
     @property
     def reading_direction(self) -> str:
         """How this manga is read - what "reading order" means for it."""
@@ -245,7 +231,12 @@ class MarkerSession:
     def queue_detection(self, config, chapters: list[str], pages: list[str] | None = None,
                         force: bool = False) -> list[str]:
         """Adds work to the detection queue and makes sure the worker is
-        running. Returns the chapters actually queued.
+        running. Returns the chapters actually queued. The only way detection
+        starts: nothing queues it on its own - see POST /api/detect.
+
+        Never in a read-only session: detection WRITES - it fills `marks` for
+        every untouched page - so a viewer opened to check what was actually
+        saved would fill up with AI guesses that are in nobody's crops.json.
 
         A chapter whose pass already ran this session is skipped - `pages`
         aside, which is the "just this page" request and is always honoured,

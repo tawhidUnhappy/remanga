@@ -59,10 +59,11 @@ class MarkerState:
         self.detect_done = 0
         self.detect_total = 0
         self.detect_error: str | None = None
-        # Whether a detection pass has already been kicked off for this
-        # chapter. In a multi-chapter session a chapter can be opened, left
-        # and come back to; MAGI must run for it once, on arrival, not again
-        # every time the cursor lands here (see MarkerSession.queue_detection).
+        # Whether a detection pass has already been run for this chapter this
+        # session. A second Detect over it (a range or All chapters that
+        # includes it again) would only re-send MAGI the pages it already
+        # found nothing on, so it is skipped; the This page scope is how to
+        # ask again for one page (see MarkerSession.queue_detection).
         self.detect_started = False
         # Bumped whenever the SERVER rewrites marks the browser is holding (a
         # reorder). The browser compares it on every status poll and reloads

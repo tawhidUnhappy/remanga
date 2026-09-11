@@ -77,7 +77,7 @@ CHAPTER_COMMANDS: list[Command] = [
         chapter_handlers.mark,
         [project_param(), chapter_param()],
         category="Chapter Production",
-        detail="MAGI v3 pre-fills what it can find; you adjust and save",
+        detail="Draw panels, or press Detect for MAGI v3 to find them; you adjust and save",
     ),
     Command(
         "review",

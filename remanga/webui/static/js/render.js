@@ -64,7 +64,7 @@ function renderList() {
   if (!state.marks.length) {
     panelList.innerHTML = state.readOnly
       ? `<div class="empty-list">No panels marked on this page.</div>`
-      : `<div class="empty-list">No panels marked on this page yet.<br>Drag on the canvas to add one, or wait for MAGI v3.</div>`;
+      : `<div class="empty-list">No panels marked on this page yet.<br>Drag on the canvas to add one, or press <b>Detect</b>.</div>`;
     return;
   }
   panelList.innerHTML = "";

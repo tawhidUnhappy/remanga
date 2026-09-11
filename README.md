@@ -419,7 +419,7 @@ It fetches the feed in the configured translation language (`downloader.language
 It prints how many chapters exist and how many you already have, then asks once before starting. Chapters already downloaded are *verified*, not re-fetched, so re-running it after a new chapter drops costs a check per chapter and downloads only what's actually missing. `--force` re-fetches every chapter clean instead.
 
 ### 2. Mark Panels
-Launches the **Panel Marker** web UI: MAGI v3 pre-fills every page's panel boxes on a GPU, you drag/adjust/delete to correct them, then Save & Continue writes `crops.json`.
+Launches the **Panel Marker** web UI: draw panel boxes yourself, or press **Detect** and MAGI v3 finds them on a GPU; you drag/adjust/delete to correct them, then Save & Continue writes `crops.json`. Nothing is detected until you press Detect.
 ```bash
 ./run.sh mark --project "my_manga" --chapter "1"
 ```
@@ -471,7 +471,7 @@ Recropping a chapter that **already has narration** asks first. If its marks hav
 
 Where a mark came from also survives a save now. `crops.json` used not to record it, so every chapter reopened with **every** mark tagged manual — and with background auto-save, that was every chapter. Each panel now carries `src`; files written before that can't say, and read as manual.
 
-**Detecting a whole project** is **Detect** with *All chapters* (or a range): the chapters are queued and worked through in the background while you mark the one in front of you, so arriving at chapter 6 finds it already detected instead of starting a wait. Unprompted, the marker only ever detects the chapter you open. **`Auto-save chapters`** controls whether a chapter's `crops.json` is written without being asked for — when you leave it, and when the background detector finishes one. The switches and the scope are **saved into `config.json`** (`marker.auto_save`, `marker.auto_order`, `marker.auto_detect_scope`) and apply to the next session and the next project: they describe how you work, not anything about today's manga.
+**Detecting a whole project** is **Detect** with *All chapters* (or a range): the chapters are queued and worked through in the background while you mark the one in front of you, so arriving at chapter 6 finds it already detected instead of starting a wait. Nothing is detected on its own — not when the marker opens, and not when you move to another chapter. What gets marked, and when, is your call. **`Auto-save chapters`** controls whether a chapter's `crops.json` is written without being asked for — when you leave it, and when the background detector finishes one. The switches and the scope are **saved into `config.json`** (`marker.auto_save`, `marker.auto_order`, `marker.auto_detect_scope`) and apply to the next session and the next project: they describe how you work, not anything about today's manga.
 
 Everything here is safe on a half-finished project, which is the point:
 
@@ -767,7 +767,7 @@ Each part carries the same project/manga/chapter identity, plus which part it is
 
 Panel cropping is done by hand in a local browser tool instead of an LLM round-trip — `./run.sh mark -p <PROJECT> -c <CHAPTER>` (or step 5 of the interactive wizard) opens it automatically:
 
-- **[MAGI v3](https://github.com/ragavsachdeva/magi)** (a manga-understanding vision model, GPU required) pre-fills every page's panel boxes the moment the tool launches, running in the background while you start adjusting already-detected pages.
+- **[MAGI v3](https://github.com/ragavsachdeva/magi)** (a manga-understanding vision model, GPU required) finds panel boxes when you press **Detect** (this page, this chapter, a range or all chapters), running in the background while you keep working. It never runs unless you ask.
 - **Draw tool (`D`):** left-click and drag on a page to mark a panel (drag can start outside the page edge, Canva-style, and can start on top of an existing mark to draw an overlapping one without disturbing it — see click-to-select below).
 - **Select tool (`V`):** click a mark to select it, then drag its body to move it or a corner/edge handle to resize it. Dashed guide lines appear when an edge lines up with another panel's — a visual aid, not a hard snap.
 - **Delete:** right-click a mark.

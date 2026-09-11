@@ -62,7 +62,7 @@ function chevron(isOpen) {
 
 // An empty page is two different things, and the difference is the whole
 // point of looking at this list on a half-finished chapter:
-//   0  (dashed)  nobody has been here - MAGI will still detect it
+//   0  (dashed)  nobody has been here - Detect will still fill it in
 //   —  (solid)   somebody looked and said there are no panels
 // A page with panels just shows how many.
 function pagePill(page) {

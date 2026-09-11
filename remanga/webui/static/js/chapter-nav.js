@@ -100,7 +100,7 @@ function updateReadOnlyChrome() {
 
 function resetAssistCard() {
   // A read-only session never runs detection (it would write marks nobody
-  // saved - see MarkerSession.start_detection), so the card has nothing to
+  // saved - see MarkerSession.queue_detection), so the card has nothing to
   // report and no button worth showing.
   assistCard.hidden = state.readOnly;
   if (state.readOnly) return;

@@ -46,8 +46,9 @@ class MarkerConfig(ConfigModel):
     port: int = 8765
     auto_open_browser: bool = True
 
-    # MAGI v3 (https://github.com/ragavsachdeva/magi) pre-fills every page's panel
-    # boxes on launch so the user only has to adjust, not draw from scratch.
+    # MAGI v3 (https://github.com/ragavsachdeva/magi) finds panel boxes when the
+    # marker's Detect button asks for them - never on its own - so the user only
+    # has to adjust, not draw from scratch.
     # Research/non-commercial license (ragavsachdeva/magiv3 model card) - fine for
     # personal use, but not something to redistribute commercially as-is.
     magi_enabled: bool = True

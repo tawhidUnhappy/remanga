@@ -104,9 +104,9 @@ def launch_and_wait_all(project_name: str, chapters: list[str], config: MarkerCo
     # On: every chapter is put in reading order before the tab even opens
     # (the rest in the background) - see MarkerSession.set_auto_order.
     session.set_auto_order(config.auto_order)
-    # Only the chapter on screen is detected unprompted. Anything wider - a
-    # range, every chapter - is the Detect button, pressed by a person.
-    session.start_detection(config)
+    # Nothing is detected here, or when a chapter is opened: MAGI runs only
+    # when someone presses Detect, on the pages they chose. What gets marked
+    # is the user's call, not something the marker starts on its own.
 
     if read_only:
         waiting_for = "look through the marks and close the session in the browser"
