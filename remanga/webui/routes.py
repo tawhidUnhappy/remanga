@@ -265,7 +265,7 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
 
     @app.post("/api/settings")
     def post_settings():
-        """The assist card's switches. Applied to this session AND written
+        """The action bar's scope and switches. Applied to this session AND written
         into config.json, because they describe how someone works rather
         than anything about today's manga - see
         settings_store.persist_marker_settings."""
@@ -274,10 +274,6 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
         body = request.get_json(silent=True) or {}
         saved: dict[str, Any] = {}
 
-        if "auto_all" in body:
-            session.set_auto_all(bool(body["auto_all"]), config)
-            config.auto_detect_all = session.auto_all
-            saved["auto_detect_all"] = session.auto_all
         if "auto_save" in body:
             session.set_auto_save(bool(body["auto_save"]))
             config.auto_save = session.auto_save

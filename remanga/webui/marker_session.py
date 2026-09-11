@@ -95,13 +95,12 @@ class MarkerSession:
         self._run_kinds: set[str] = set()
         self._run_chapters: set[str] = set()
         self._last_run: dict[str, Any] | None = None
-        self.auto_all = False
         # Keep marks in reading order as they are saved (config.auto_order).
         self.auto_order = False
         # The recrop queue: chapters waiting to have their panel images cut
         # again from their marks. Its own worker, separate from detection -
         # cropping is CPU and disk, MAGI is GPU, and neither should wait for
-        # the other: a Recrop queued behind an hours-deep Keep-marking run
+        # the other: a Recrop queued behind an hours-deep all-chapters Detect
         # would look exactly like a Recrop that did nothing.
         self._crop_jobs: list[str] = []
         self._crop_lock = threading.Lock()
@@ -223,11 +222,6 @@ class MarkerSession:
         invent."""
         if self.read_only or not config.magi_enabled:
             return
-        if self.auto_all:
-            # Already detecting the whole session; queueing this chapter
-            # again would only jump it ahead of chapters queued before it.
-            self.queue_all(config)
-            return
         self.queue_detection(config, [self.chapter_num])
 
     @property
@@ -280,29 +274,12 @@ class MarkerSession:
 
     def queue_all(self, config) -> list[str]:
         """Every chapter from the one on screen to the end, then the ones
-        before it. In that order because "keep marking" is nearly always
+        before it. In that order because "all chapters" is nearly always
         asked while looking at where you stopped - the chapters ahead are
         the ones about to be needed, and the ones behind are usually already
         done."""
         ordered = self.chapters[self.index:] + self.chapters[:self.index]
         return self.queue_detection(config, ordered)
-
-    def set_auto_all(self, enabled: bool, config) -> None:
-        """Turns the keep-going switch on or off for this session. On queues
-        everything immediately; off clears what hasn't started yet and lets
-        the running chapter finish - killing a pass mid-chapter would waste
-        the model load it already paid for and leave half a chapter detected
-        with no way to tell which half."""
-        self.auto_all = bool(enabled)
-        if self.auto_all:
-            self.queue_all(config)
-            return
-        with self._jobs_lock:
-            for job in self._jobs:
-                if job["pages"] is None:
-                    self.state_for(job["chapter"]).detect_started = False
-            self._run_total -= len(self._jobs)
-            self._jobs.clear()
 
     def _ensure_worker(self, config) -> None:
         with self._jobs_lock:
@@ -522,7 +499,7 @@ class MarkerSession:
         whose order changed}.
 
         Not queued behind detection. Reorder needs no GPU and takes
-        milliseconds, but with Keep marking on the detection queue can be hours
+        milliseconds, but a Detect over all chapters can leave the queue hours
         deep, and a Reorder that waited its turn behind that is a Reorder that
         looks like it did nothing. Each chapter's lock keeps it from
         interleaving with a detection pass on the same pages.
@@ -587,7 +564,6 @@ class MarkerSession:
             active, active_kind = self._active, self._active_kind
         state = self._states.get(active) if active else None
         return {
-            "auto_all": self.auto_all,
             "auto_save": self.auto_save,
             "auto_order": self.auto_order,
             "unsaved": self.unsaved_chapters(),
@@ -710,6 +686,5 @@ class MarkerSession:
             "chapters": list(self.chapters),
             "has_next": self.has_next,
             "read_only": self.read_only,
-            "auto_all": self.auto_all,
             "auto_save": self.auto_save,
         }

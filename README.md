@@ -394,7 +394,7 @@ A few worth calling out specifically - `cropper.package` is the flat vision-outp
 - **`downloader.zip_pages_enabled`** (default `false`) — bundles the raw downloaded pages into `pages.zip`. Off by default because nothing downstream reads it; it's only useful if you want to hand a chapter's pages to an LLM by hand. Named for exactly what it zips (the downloaded *pages*) so it's never confused with `cropper.package` below, which zips something completely different.
 - **`cropper.package.sheets`** (default `true`) — generates `sheets/` contact sheet composites. `cropper.package.sheets_zip` (below) builds them automatically the moment it's checked, whether or not this is also on. Every sheet is merged from its panels' **full original resolution** — never downscaled — with only lossless re-encoding used to keep the file size down.
 - **`marker.click_to_select`** (default `true`) — see [Panel Marker Web UI](#panel-marker-web-ui) for what this protects against.
-- **`marker.auto_detect_scope`** (default `"chapter"`), **`marker.auto_detect_all`** (default `false`), **`marker.auto_save`** (default `true`) and **`marker.auto_order`** (default `false`) — the action bar's scope and Options switches, written by the marker itself when you change them in the browser. See [Mark Panels](#2-mark-panels).
+- **`marker.auto_detect_scope`** (default `"chapter"`), **`marker.auto_save`** (default `true`) and **`marker.auto_order`** (default `false`) — the action bar's scope and Options switches, written by the marker itself when you change them in the browser. See [Mark Panels](#2-mark-panels).
 - **`tts.synth_timeout_seconds`** (default `180`) — see [Reliability](#reliability-crashes-interrupts--resuming).
 
 ---
@@ -440,7 +440,7 @@ Chapters with nothing downloaded are named and skipped before the browser opens.
 [ This chapter            ▾ ]
 [ ✦ Detect ] [ ⇅ Reorder ] [ ✂ Recrop ]
 ━━━━━━━━━━━━━━━━  Done · detected 3 chapters
-› Options · keep marking · auto-order
+› Options · auto-order
 ```
 
 **Detect** (MAGI finds the panels), **Reorder** (renumber them into reading order) and **Recrop** (cut fresh panel images from the marks). All three take the same scope:
@@ -456,7 +456,7 @@ Each button's tooltip says what it does. The three switches fold away under **Op
 
 The range is the one that pays for itself: *"the power went out somewhere around chapter 9"* is a from/to, and saying it any other way is either nine trips through the UI or redetecting a manga that was already three-quarters done. Reversed is fine — pick 9 then 4 and it means the same span.
 
-**Reorder** puts each page's panels into the order a reader meets them — the panel number *is* the narration order, because it becomes `panel_id`. It runs immediately, not in the detection queue, so it never waits behind a long Keep-marking run. The ordering is a recursive XY-cut: split the page at a gutter running across every panel and read above before below; failing that, split at a vertical gutter and read the side your manga starts on first (right for right-to-left, from the project's reading direction); then do the same inside each part. A grid beside a tall panel is read row by row, and a tall panel beside a stack comes before or after it depending only on which side it's on.
+**Reorder** puts each page's panels into the order a reader meets them — the panel number *is* the narration order, because it becomes `panel_id`. It runs immediately, not in the detection queue, so it never waits behind a long detection run. The ordering is a recursive XY-cut: split the page at a gutter running across every panel and read above before below; failing that, split at a vertical gutter and read the side your manga starts on first (right for right-to-left, from the project's reading direction); then do the same inside each part. A grid beside a tall panel is read row by row, and a tall panel beside a stack comes before or after it depending only on which side it's on.
 
 Real marks overlap their neighbours by 20–70px (MAGI's boxes take in borders and bleed), so a "gutter" allows an overlap of up to a quarter of the smaller panel, not a fixed few pixels. Where no gutter exists at all, panels count as one row only when their **tops line up** — an inset slanting across the bottom of a big panel overlaps it, but is read after it. Checked against a fully narrated project, where the saved order is order a person already verified: it agrees on **126 of 126** pages with two or more panels.
 
@@ -471,7 +471,7 @@ Recropping a chapter that **already has narration** asks first. If its marks hav
 
 Where a mark came from also survives a save now. `crops.json` used not to record it, so every chapter reopened with **every** mark tagged manual — and with background auto-save, that was every chapter. Each panel now carries `src`; files written before that can't say, and read as manual.
 
-**`Keep marking every chapter`** queues the whole session and works forward through it in the background while you mark the one in front of you, so arriving at chapter 6 finds it already detected instead of starting a wait. **`Auto-save chapters`** controls whether a chapter's `crops.json` is written without being asked for — when you leave it, and when the background detector finishes one. Both switches, and the scope, are **saved into `config.json`** (`marker.auto_detect_all`, `marker.auto_save`, `marker.auto_detect_scope`) and apply to the next session and the next project: they describe how you work, not anything about today's manga.
+**Detecting a whole project** is **Detect** with *All chapters* (or a range): the chapters are queued and worked through in the background while you mark the one in front of you, so arriving at chapter 6 finds it already detected instead of starting a wait. Unprompted, the marker only ever detects the chapter you open. **`Auto-save chapters`** controls whether a chapter's `crops.json` is written without being asked for — when you leave it, and when the background detector finishes one. The switches and the scope are **saved into `config.json`** (`marker.auto_save`, `marker.auto_order`, `marker.auto_detect_scope`) and apply to the next session and the next project: they describe how you work, not anything about today's manga.
 
 Everything here is safe on a half-finished project, which is the point:
 

@@ -26,7 +26,6 @@ export const scopeSelect = document.getElementById("scopeSelect");
 export const assistRange = document.getElementById("assistRange");
 export const rangeFrom = document.getElementById("rangeFrom");
 export const rangeTo = document.getElementById("rangeTo");
-export const autoAllToggle = document.getElementById("autoAllToggle");
 export const autoSaveToggle = document.getElementById("autoSaveToggle");
 export const autoOrderToggle = document.getElementById("autoOrderToggle");
 export const reorderBtn = document.getElementById("reorderBtn");

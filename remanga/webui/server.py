@@ -99,17 +99,14 @@ def launch_and_wait_all(project_name: str, chapters: list[str], config: MarkerCo
         console.print("[dim]Open that URL in your browser to continue.[/]")
 
     # The saved switches (config.json's marker section) are what this session
-    # opens with: auto-save as it was left, and - if the last session turned
-    # it on - the whole project queued for detection before anyone clicks
-    # anything.
+    # opens with: auto-save as it was left.
     session.auto_save = config.auto_save
     # On: every chapter is put in reading order before the tab even opens
     # (the rest in the background) - see MarkerSession.set_auto_order.
     session.set_auto_order(config.auto_order)
-    if config.auto_detect_all:
-        session.set_auto_all(True, config)
-    else:
-        session.start_detection(config)
+    # Only the chapter on screen is detected unprompted. Anything wider - a
+    # range, every chapter - is the Detect button, pressed by a person.
+    session.start_detection(config)
 
     if read_only:
         waiting_for = "look through the marks and close the session in the browser"

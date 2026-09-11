@@ -757,8 +757,7 @@ MAGI detection is a QUEUE on the session, not a call per request
 (`MarkerSession._jobs` + one worker thread; `detection.run_detection` is just
 the unit of work). `POST /api/detect` takes `scope`: page / chapter / range
 (`from`+`to` as chapter NUMBERS, reversed accepted) / all. `POST /api/settings`
-writes `auto_detect_scope`, `auto_detect_all` (queue the whole session and keep
-going in the background) and `auto_save` into config.json via
+writes `auto_detect_scope`, `auto_save` and `auto_order` into config.json via
 `settings_store.persist_marker_settings` - config.json's marker section is
 merged, never rewritten. A chapter detected in the background is saved as soon
 as its pass ends (auto_save on) so a closed tab costs nothing computed; with
@@ -824,9 +823,14 @@ Footguns hit while building it, all still live:
   `run_done/run_total` since the queue was last idle, `active_kind`, and
   `last_run` for the idle message. Reproduced first by sampling the real
   frontend under node every 300ms - do that for any "UI glitch" report.
+- **"Keep marking every chapter" (`auto_detect_all`, `set_auto_all`) was REMOVED
+  at the user's request**: Detect with the All chapters scope does the same
+  thing with an explicit click. Unprompted, a session detects only the chapter
+  on screen (`start_detection`). Don't re-add it. A stale `auto_detect_all` key
+  in an old config.json is ignored (pydantic's default extra="ignore").
 - **Recrop (`MarkerSession.queue_recrop` / `_drain_crops`, POST /api/recrop)**
   has its OWN worker and queue (`_crop_*`), separate from detection: queued
-  behind a Keep-marking run it would have waited hours, same lesson as Reorder.
+  behind an all-chapters Detect it would have waited hours, same lesson as Reorder.
   Per chapter: `save_chapter` only if the chapter is in `self.dirty` (auto-save
   off included - the cropper reads crops.json, not the session), then
   `CoordinateCropper(cropper_config_for(RemangaConfig.load().for_project(p), p))

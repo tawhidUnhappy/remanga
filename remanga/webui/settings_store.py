@@ -37,12 +37,12 @@ def persist_shortcuts(shortcuts: dict[str, Any]) -> None:
 
 
 def persist_marker_settings(values: dict[str, Any]) -> None:
-    """Writes the assist card's switches into config.json - see
+    """Writes the action bar's scope and switches into config.json - see
     POST /api/settings.
 
-    Saved rather than remembered per session on purpose: "keep marking every
-    chapter" is a way of working, not a choice about today's manga. Someone
-    who wants the whole project detected in the background wants that on the
+    Saved rather than remembered per session on purpose: auto-save and
+    auto-order are a way of working, not a choice about today's manga.
+    Someone who wants their panels kept in reading order wants that on the
     next project too, and having to find the switch again each time is how a
     setting ends up never being used."""
     _write_marker_keys(values)

@@ -11,7 +11,7 @@
 
 import {
   assistBtn, reorderBtn, recropBtn, assistProgressBar, assistStatus, scopeSelect,
-  assistRange, rangeFrom, rangeTo, autoAllToggle, autoSaveToggle, autoOrderToggle,
+  assistRange, rangeFrom, rangeTo, autoSaveToggle, autoOrderToggle,
   cropRow, cropProgressBar, cropStatus, optSummary, actionsOptions,
 } from "./dom.js";
 import { state, currentFilename } from "./state.js";
@@ -63,7 +63,6 @@ function syncScopeUi() {
 // never hides that auto-order is quietly re-sorting every page.
 function syncOptionsSummary() {
   const on = [];
-  if (autoAllToggle.checked) on.push("keep marking");
   if (autoOrderToggle.checked) on.push("auto-order");
   if (!autoSaveToggle.checked) on.push("auto-save off");
   optSummary.textContent = on.length ? `· ${on.join(" · ")}` : "";
@@ -74,7 +73,6 @@ function syncOptionsSummary() {
 export function syncAssistCard() {
   if (!state.chapter) return;
   scopeSelect.value = state.chapter.detect_scope || "chapter";
-  autoAllToggle.checked = !!state.chapter.auto_all;
   autoSaveToggle.checked = state.chapter.auto_save !== false;
   state.autoOrder = !!state.chapter.auto_order;
   autoOrderToggle.checked = state.autoOrder;
@@ -210,7 +208,7 @@ async function saveSetting(values) {
     // The payload the tab is holding is what syncAssistCard reads on the next
     // chapter change, so it has to learn what was just saved too.
     if (state.chapter) Object.assign(state.chapter, {
-      auto_all: res.auto_all, auto_save: res.auto_save, auto_order: res.auto_order,
+      auto_save: res.auto_save, auto_order: res.auto_order,
       detect_scope: values.scope ?? state.chapter.detect_scope,
     });
     syncOptionsSummary();
@@ -368,6 +366,5 @@ assistBtn.addEventListener("click", runDetect);
 reorderBtn.addEventListener("click", runReorder);
 recropBtn.addEventListener("click", runRecrop);
 scopeSelect.addEventListener("change", () => { syncScopeUi(); saveSetting({ scope: scopeSelect.value }); });
-autoAllToggle.addEventListener("change", () => saveSetting({ auto_all: autoAllToggle.checked }));
 autoSaveToggle.addEventListener("change", () => saveSetting({ auto_save: autoSaveToggle.checked }));
 autoOrderToggle.addEventListener("change", () => saveSetting({ auto_order: autoOrderToggle.checked }));

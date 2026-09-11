@@ -59,24 +59,12 @@ class MarkerConfig(ConfigModel):
     # settings_store.persist_marker_settings), so they survive into the next
     # session and the next project.
     #
-    # How much MAGI detects when the assist card's Run button is pressed:
+    # Which pages the action bar's buttons (Detect / Reorder / Recrop) act on:
     # "page" (just the page on screen), "chapter" (the chapter on screen),
     # "range" (a from/to span of chapters) or "all" (every chapter in the
     # session). Saved so the dropdown opens on whatever was used last, which
     # for most people is the same answer every time.
     auto_detect_scope: str = "chapter"
-
-    # Keep detecting forward through the session on its own: every chapter
-    # gets queued, one at a time, in the background, while you mark the one
-    # in front of you. The reason this is a saved setting rather than a
-    # per-session click is that it describes a way of working - "I want the
-    # whole manga pre-detected, always" - and a switch you have to find again
-    # every session is a switch nobody uses.
-    #
-    # It never overwrites a page you have touched (MarkerState.apply_detected
-    # refuses), so leaving it on while working through a half-marked project
-    # fills in what's missing and leaves the rest alone.
-    auto_detect_all: bool = False
 
     # Whether a chapter's crops.json is written without being asked for -
     # when you leave the chapter, and when the background detector finishes
