@@ -19,7 +19,7 @@ import { api } from "./api.js";
 import { state } from "./state.js";
 
 export const ACTIONS = [
-  { id: "save", label: "Save & continue" },
+  { id: "save", label: "Save all & exit" },
   { id: "mark_full_page", label: "Mark whole page as one panel" },
   { id: "tool_draw", label: "Draw tool" },
   { id: "tool_adjust", label: "Adjust tool" },

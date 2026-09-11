@@ -737,8 +737,14 @@ keeps), reachable from the menu like everything else.
 front). `launch_and_wait_all(project, [chapters], config)` is the entry point;
 `launch_and_wait(project, chapter, config)` is a one-item list, so `mark`, the
 pipeline's mark step and a "remark" restart are unchanged. `POST /api/finish`
-saves + advances (`{"end": true}` stops early); `POST /api/goto {"index": n}`
-jumps and saves the chapter being left. Frontend split: `page-nav.js` = pages,
+is the Save button: writes every `unsaved_chapters()` + the current chapter,
+sets `finished`, returns `{written, saved_chapters}` - it never advances (the
+old Save & Next / Finish here were replaced at the user's request by
+Save = save all & exit). `POST /api/goto {"index": n}` jumps and saves the
+chapter being left. Moving chapter to chapter is `page-nav.js:stepPage` -
+past a chapter's last/first page it `gotoChapter`s the neighbour (landing on
+its first/LAST page) via a DYNAMIC import of chapter-nav, with a `crossing`
+guard so a held arrow key switches once. Frontend split: `page-nav.js` = pages,
 `chapter-nav.js` = chapters/save/init, one-way import (page-nav must never
 import chapter-nav). Command: `mark-all` (Project-wide).
 
@@ -774,8 +780,6 @@ Footguns hit while building it, all still live:
 - **`state.pageLoaded = false` before `loadPage(0)` on a chapter change**, or
   loadPage's "flush the page we're leaving" posts the previous chapter's marks
   into the new chapter's state.
-- **`session.goto(i, save=False)` from /api/finish** - it already saved; the
-  default `save=True` would write that crops.json twice and report it twice.
 - **Detection is user-initiated ONLY** (user's decision: "it should be the
   user who decides what to mark"). Nothing queues it on session start,
   /api/goto or /api/finish - `MarkerSession.start_detection` was removed. The
@@ -831,27 +835,26 @@ Footguns hit while building it, all still live:
   at the user's request**: Detect with the All chapters scope does the same
   thing with an explicit click. Don't re-add it. A stale `auto_detect_all` key
   in an old config.json is ignored (pydantic's default extra="ignore").
-- **Recrop (`MarkerSession.queue_recrop` / `_drain_crops`, POST /api/recrop)**
-  has its OWN worker and queue (`_crop_*`), separate from detection: queued
-  behind an all-chapters Detect it would have waited hours, same lesson as Reorder.
-  Per chapter: `save_chapter` only if the chapter is in `self.dirty` (auto-save
-  off included - the cropper reads crops.json, not the session), then
-  `CoordinateCropper(cropper_config_for(RemangaConfig.load().for_project(p), p))
-  .crop_chapter_from_json(p, ch, force=True)` with config reloaded per chapter,
-  then `check_panel_narration_mismatch`. A failed chapter never ends the run.
-  Scope "page" is 400 (the cropper wipes panels/ per chapter). `dry_run: true`
-  returns `{chapters, unmarked, narrated}` so the browser confirms before
-  cutting narrated chapters. `crop_result` is the run in progress,
-  `crop_last_run` the finished one - it stays until the next Recrop so a
-  mismatch warning can't fade unseen. Verified: re-cutting an unedited chapter
-  of reincarnatedAsTheLeaderOfAVillainParty reproduces the exact 129 panel
-  names, so no false mismatch.
+- **Remark (POST /api/remark, `MarkerSession.queue_remark`)** replaced a
+  browser Recrop (re-cut panels/) the same week - the user wanted "remark with
+  AI", not recrop; the crop step stays in the pipeline. Remark = a "remark" job
+  on the DETECTION queue with `replace=True`: `run_detection` sends every page
+  asked for (touched or not) and, only after the whole pass returns, calls
+  `MarkerState.replace_with_detected(results)` - marks replaced, page removed
+  from touched AND decided, `revision` +1 once so the tab reloads (its autosave
+  would otherwise write the old marks back). A pass that raises replaces
+  nothing; a page MAGI failed on (absent from results) keeps its marks.
+  `dry_run` -> `remark_plan`: `{pages, marked, hand_made, emptied, narrated}`
+  from session state if opened, else crops.json (no image decode); a panel
+  without `src` counts as hand-made. The browser confirms whenever anything
+  would be replaced. Not blocked by `detect_started`; a whole-chapter remark
+  sets it. Don't confuse with the CLI `remark` reset mode (remanga/reset/).
 - **Worker start races: decide "is a worker running" under the queue lock with
   a busy flag, never with `thread.is_alive()`.** A job queued in the instant a
   worker had found the queue empty but not yet exited saw a live thread,
-  started nothing, and sat unrun. `_worker_busy` (detection) and `_crop_busy`
-  (recrop) are set when a worker is started and cleared, under the lock, in the
-  same critical section that finds the queue empty.
+  started nothing, and sat unrun. `_worker_busy` is set when the worker is
+  started and cleared, under the lock, in the same critical section that finds
+  the queue empty.
 - **Browser tests: headless Firefox via `/snap/bin/geckodriver`** speaking plain
   W3C WebDriver JSON over HTTP (no selenium needed) - screenshots come back
   base64, alerts via `/alert/text|accept|dismiss`. Better than the fake-DOM

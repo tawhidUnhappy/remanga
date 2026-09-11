@@ -1,18 +1,18 @@
-// The action bar: choosing which pages, running Detect / Reorder / Recrop on
-// them, the saved switches, and reporting what the session's detection and
-// crop workers are doing.
+// The action bar: choosing which pages, running Detect / Remark / Reorder on
+// them, the saved switches, and reporting what the session's detection worker
+// is doing.
 //
 // One scope control drives all three buttons, because "chapters 4 to 9" means
-// the same pages whether MAGI is finding panels in them, they are being put
-// into reading order, or their panels are being cut again. None of them can
-// undo anyone's drawing: Detect is refused on a page that has been edited
-// (MarkerState.apply_detected), Reorder only renumbers, and Recrop cuts images
-// from the marks without changing a single one.
+// the same pages whether MAGI is filling in the unmarked ones, marking every
+// one of them again, or they are being put into reading order. Detect is
+// refused on a page that has been edited (MarkerState.apply_detected) and
+// Reorder only renumbers; Remark is the one that replaces marks, so it is the
+// one that asks first.
 
 import {
-  assistBtn, reorderBtn, recropBtn, assistProgressBar, assistStatus, scopeSelect,
+  assistBtn, remarkBtn, reorderBtn, assistProgressBar, assistStatus, scopeSelect,
   assistRange, rangeFrom, rangeTo, autoSaveToggle, autoOrderToggle,
-  cropRow, cropProgressBar, cropStatus, optSummary, actionsOptions,
+  optSummary, actionsOptions,
 } from "./dom.js";
 import { state, currentFilename } from "./state.js";
 import { api } from "./api.js";
@@ -20,7 +20,7 @@ import { render } from "./render.js";
 import { refreshOutline } from "./outline.js";
 import { flushSave } from "./marks.js";
 
-const MAGI_OFF = "MAGI is off in config.json - Reorder and Recrop still work";
+const MAGI_OFF = "MAGI is off in config.json - Reorder still works";
 const OPTIONS_OPEN_KEY = "remanga.marker.optionsOpen";
 
 function fillRangeSelects() {
@@ -42,21 +42,8 @@ function fillRangeSelects() {
   if (!chapters.includes(rangeTo.value)) rangeTo.value = chapters[chapters.length - 1] || "";
 }
 
-// Recrop can't do "This page" - the cropper works a chapter at a time and
-// wipes its panels first - so on that scope the button says why instead of
-// doing something wider than was asked.
-let cropBusy = false;
-function syncRecropButton() {
-  const pageScope = scopeSelect.value === "page";
-  recropBtn.disabled = cropBusy || pageScope;
-  recropBtn.title = pageScope
-    ? "Recrop works on whole chapters - pick This chapter or wider"
-    : "Recrop - save the marks and cut fresh panel images from them. Whole chapters only.";
-}
-
 function syncScopeUi() {
   assistRange.hidden = scopeSelect.value !== "range";
-  syncRecropButton();
 }
 
 // What's switched on, readable with Options folded away - so folding them
@@ -76,7 +63,7 @@ export function syncAssistCard() {
   autoSaveToggle.checked = state.chapter.auto_save !== false;
   state.autoOrder = !!state.chapter.auto_order;
   autoOrderToggle.checked = state.autoOrder;
-  assistBtn.disabled = !state.magiEnabled;
+  assistBtn.disabled = remarkBtn.disabled = !state.magiEnabled;
   fillRangeSelects();
   syncScopeUi();
   syncOptionsSummary();
@@ -161,43 +148,45 @@ export async function runReorder() {
   }
 }
 
-// Recrop asks the server what it would do first (dry_run), and only then does
-// it. The question that matters is narration: cutting a narrated chapter's
-// panels again changes nothing if its marks haven't changed, but if a mark was
-// moved, added, removed or renumbered since it was narrated, its narration now
-// names panels that don't exist and TTS/render will refuse it. That is worth
-// one confirm, asked before - not a warning discovered after.
-export async function runRecrop() {
+// Remark replaces marks - hand-drawn ones included - so before anything is
+// queued it asks the server what would be replaced (dry_run) and says so, in
+// numbers, in a confirm. Over pages with nothing on them it loses nothing and
+// just runs.
+export async function runRemark() {
   const body = scopeBody();
-  if (body.scope === "page") return;
-  recropBtn.disabled = true;
+  remarkBtn.disabled = true;
   await flushSave(true);
   try {
-    const plan = await postJson("/api/recrop", { ...body, dry_run: true });
-    if (!plan.chapters.length) {
-      notice(`Nothing to recrop - ${describeScope(body)} has no marks yet`);
-      return;
+    const plan = await postJson("/api/remark", { ...body, dry_run: true });
+    const where = describeScope(body);
+    const lines = [];
+    if (plan.marked) {
+      lines.push(`• ${plan.marked} page(s) have marks now and get new ones` +
+        (plan.hand_made ? ` - ${plan.hand_made} of them with marks you drew or edited.` : "."));
     }
+    if (plan.emptied) lines.push(`• ${plan.emptied} page(s) you emptied on purpose get marked again.`);
     if (plan.narrated.length) {
       const list = plan.narrated.length > 8
         ? `${plan.narrated.slice(0, 8).join(", ")} and ${plan.narrated.length - 8} more`
         : plan.narrated.join(", ");
+      lines.push(`• Already narrated: ch ${list}. New marks mean new panel numbers, and the narration won't match them.`);
+    }
+    if (lines.length) {
       const go = confirm(
-        `${plan.narrated.length} of the ${plan.chapters.length} chapter(s) to recrop already have narration ` +
-        `(ch ${list}).\n\n` +
-        "Recropping replaces their panel images. If a chapter's marks changed since it was narrated - " +
-        "a panel moved, added, removed or reordered - its narration will no longer match, and TTS and " +
-        "render will stop on it until the narration is updated.\n\n" +
-        `Recrop ${plan.chapters.length} chapter(s)?`);
+        `Remark ${where} with AI?\n\n` +
+        `MAGI marks ${plan.pages} page(s) again and replaces what's on them:\n` +
+        `${lines.join("\n")}\n\nThis can't be undone.`);
       if (!go) {
-        notice("Recrop cancelled - nothing changed");
+        notice("Remark cancelled - nothing changed");
         return;
       }
     }
-    await postJson("/api/recrop", body);
+    const res = await postJson("/api/remark", body);
+    if (!res.accepted.length) notice("That's already waiting to be remarked");
   } catch (e) {
-    notice("Couldn't recrop: " + e.message);
+    notice("Couldn't remark: " + e.message);
   } finally {
+    // The button comes back when the poll says the worker is free.
     pollDetectStatus();
   }
 }
@@ -228,51 +217,6 @@ async function saveSetting(values) {
   }
 }
 
-function renderCropStatus(status) {
-  cropBusy = !!status.crop_active || (status.crop_queued || []).length > 0;
-  syncRecropButton();
-  const result = cropBusy ? status.crop_result : status.crop_last_run;
-  if (!cropBusy && !result) {
-    cropRow.hidden = true;
-    return;
-  }
-  cropRow.hidden = false;
-
-  if (cropBusy) {
-    const total = status.crop_run_total || 0;
-    cropProgressBar.style.width = total ? Math.round((status.crop_run_done / total) * 100) + "%" : "0%";
-    cropStatus.className = "assist-status";
-    cropStatus.title = "";
-    // Right after the button, the chapter is still queued rather than active.
-    const chapter = status.crop_active || (status.crop_queued || [])[0];
-    cropStatus.textContent =
-      `Recropping ch ${chapter}${total > 1 ? ` · ${Math.min(status.crop_run_done + 1, total)} of ${total}` : ""}`;
-    return;
-  }
-
-  // The finished run stays on screen until the next Recrop: a warning that
-  // narration no longer matches is the one thing here nobody should miss.
-  cropProgressBar.style.width = "100%";
-  const done = result.chapters || [];
-  const parts = [];
-  if (done.length) {
-    parts.push(`Recropped ${done.length === 1 ? "ch " + done[0] : done.length + " chapters"} · ${result.panels} panels`);
-  } else {
-    parts.push("Nothing was recropped");
-  }
-  if ((result.failed || []).length) parts.push(`failed: ch ${result.failed.map(f => f.chapter).join(", ")}`);
-  if ((result.mismatched || []).length) {
-    parts.push(`narration no longer matches: ch ${result.mismatched.map(m => m.chapter).join(", ")}`);
-  }
-  const warn = (result.failed || []).length || (result.mismatched || []).length;
-  cropStatus.className = "assist-status" + (warn ? " warn" : "");
-  cropStatus.textContent = parts.join(" · ");
-  cropStatus.title = [
-    ...(result.failed || []).map(f => `ch ${f.chapter}: ${f.error}`),
-    ...(result.mismatched || []).map(m => `ch ${m.chapter}: ${m.issue}`),
-  ].join("\n");
-}
-
 // The chapter the worker was on at the last poll. When it changes, a chapter
 // has just finished - which is the moment the outline's counts for it stopped
 // being right, and the only moment worth refetching them.
@@ -288,11 +232,9 @@ export async function pollDetectStatus() {
     refreshOutline();
   }
 
-  renderCropStatus(status);
-
   const queued = status.queued || [];
   const busy = !!status.active || queued.length > 0;
-  assistBtn.disabled = busy || !state.magiEnabled;
+  assistBtn.disabled = remarkBtn.disabled = busy || !state.magiEnabled;
 
   // Everything below reads the RUN (run_done / run_total, last_run), never the
   // chapter on screen. Reading the current chapter's own counters is what left
@@ -302,7 +244,8 @@ export async function pollDetectStatus() {
     const within = status.active_total ? status.active_done / status.active_total : 0;
     const overall = status.run_total ? Math.min(1, (status.run_done + within) / status.run_total) : 0;
     assistProgressBar.style.width = Math.round(overall * 100) + "%";
-    let text = status.active ? `Detecting ch ${status.active}` : "Starting…";
+    const verb = status.active_kind === "remark" ? "Remarking" : "Detecting";
+    let text = status.active ? `${verb} ch ${status.active}` : "Starting…";
     if (status.active && status.active_total) text += ` · page ${status.active_done}/${status.active_total}`;
     if (status.run_total > 1) text += ` · ${Math.min(status.run_done + 1, status.run_total)} of ${status.run_total}`;
     assistStatus.textContent = text;
@@ -313,8 +256,11 @@ export async function pollDetectStatus() {
   } else if (status.last_run && status.last_run.jobs) {
     assistProgressBar.style.width = "100%";
     const chapters = status.last_run.chapters || [];
+    const kinds = status.last_run.kinds || [];
+    const verb = !kinds.includes("remark") ? "detected"
+      : kinds.includes("detect") ? "detected & remarked" : "remarked";
     assistStatus.textContent =
-      `Done · detected ${chapters.length === 1 ? "ch " + chapters[0] : chapters.length + " chapters"}`;
+      `Done · ${verb} ${chapters.length === 1 ? "ch " + chapters[0] : chapters.length + " chapters"}`;
   } else {
     assistProgressBar.style.width = "0%";
     assistStatus.textContent = state.magiEnabled ? "Idle" : MAGI_OFF;
@@ -364,7 +310,7 @@ actionsOptions.addEventListener("toggle", () => {
 
 assistBtn.addEventListener("click", runDetect);
 reorderBtn.addEventListener("click", runReorder);
-recropBtn.addEventListener("click", runRecrop);
+remarkBtn.addEventListener("click", runRemark);
 scopeSelect.addEventListener("change", () => { syncScopeUi(); saveSetting({ scope: scopeSelect.value }); });
 autoSaveToggle.addEventListener("change", () => saveSetting({ auto_save: autoSaveToggle.checked }));
 autoOrderToggle.addEventListener("change", () => saveSetting({ auto_order: autoOrderToggle.checked }));

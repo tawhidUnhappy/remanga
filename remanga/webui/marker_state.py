@@ -230,17 +230,49 @@ class MarkerState:
             # have it written back to crops.json as "deliberately empty".
             if boxes:
                 self.decided.discard(filename)
-            marks = [
-                {"id": f"ai-{filename}-{i}", "x": b[0], "y": b[1], "w": b[2] - b[0], "h": b[3] - b[1], "src": "ai"}
-                for i, b in enumerate(boxes)
-            ]
-            # The auto-order switch reaching detection: MAGI returns panels in
-            # whatever order it found them, and with auto-order on a freshly
-            # detected page has to arrive in reading order, or "every chapter
-            # stays in order" would only hold for pages somebody had touched.
-            if order_direction and len(marks) > 1:
-                marks = reading_order(marks, order_direction)
-            self.marks[filename] = marks
+            self.marks[filename] = self._ai_marks(filename, boxes, order_direction)
+
+    @staticmethod
+    def _ai_marks(filename: str, boxes: list[list[float]], order_direction: str | None) -> list[dict[str, Any]]:
+        marks = [
+            {"id": f"ai-{filename}-{i}", "x": b[0], "y": b[1], "w": b[2] - b[0], "h": b[3] - b[1], "src": "ai"}
+            for i, b in enumerate(boxes)
+        ]
+        # The auto-order switch reaching detection: MAGI returns panels in
+        # whatever order it found them, and with auto-order on a freshly
+        # detected page has to arrive in reading order, or "every chapter
+        # stays in order" would only hold for pages somebody had touched.
+        if order_direction and len(marks) > 1:
+            marks = reading_order(marks, order_direction)
+        return marks
+
+    def replace_with_detected(self, detected: dict[str, list[list[float]]],
+                              order_direction: str | None = None) -> int:
+        """Remark: each page in `detected` gets MAGI's boxes in place of
+        whatever it had - hand-drawn marks, edits, a "no panels here" - and
+        goes back to being an untouched, undecided page, exactly as if it had
+        just been detected for the first time. Returns how many pages changed.
+
+        Everything is applied at once, under the lock, after the whole pass
+        has come back: a pass that dies half-way replaces nothing, rather than
+        leaving a chapter where some pages are the old marks and some the new
+        with no way to tell which. A page MAGI returned nothing for (it failed
+        on that page) isn't in `detected`, so it keeps its marks.
+
+        Bumps `revision` so the tab holding this chapter drops its copy and
+        reloads - its autosave would otherwise put the old marks straight back."""
+        with self.lock:
+            replaced = 0
+            for filename, boxes in detected.items():
+                if filename not in self.marks:
+                    continue
+                self.marks[filename] = self._ai_marks(filename, boxes, order_direction)
+                self.touched.discard(filename)
+                self.decided.discard(filename)
+                replaced += 1
+            if replaced:
+                self.revision += 1
+            return replaced
 
     # --- server-side rewrites of the marks -----------------------------
 

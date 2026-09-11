@@ -67,9 +67,9 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
     def chapter_payload() -> dict:
         """Everything the browser needs to draw the chapter it's now on -
         the session's own shape plus this chapter's pages and marks. One
-        builder, because /api/chapter (the first load), /api/goto and
-        /api/finish's advance all hand the frontend the same thing; a tab
-        arriving at a chapter must not be able to tell how it got there."""
+        builder, because /api/chapter (the first load) and /api/goto both
+        hand the frontend the same thing; a tab arriving at a chapter must not
+        be able to tell how it got there."""
         state = session.current
         return {
             **session.describe(),
@@ -152,31 +152,29 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
         changed = session.reorder(chapters, pages)
         return jsonify({"ok": True, "changed": changed, "revision": session.current.revision})
 
-    @app.post("/api/recrop")
-    def recrop_chapters():
-        """Cut panels/ again from the marks, for a chapter, a range or every
-        chapter - queued on the crop worker (MarkerSession.queue_recrop).
+    @app.post("/api/remark")
+    def remark():
+        """MAGI detects the pages again and REPLACES their marks - hand-drawn
+        and edited ones included - for this page, this chapter, a range or
+        every chapter. Queued on the same worker as Detect (one GPU).
 
-        Whole chapters only: the cropper works a chapter at a time and wipes
-        its panels/ first, so "just this page" isn't a thing it can do.
-
-        `dry_run` answers without doing anything - which chapters have marks
-        to crop, which have none, and which already have narration - so the
-        browser can say what's about to happen to narrated chapters before it
-        happens."""
+        `dry_run` answers without doing anything - how many pages, how many
+        with marks (and hand-made ones) would be replaced, how many emptied on
+        purpose, which chapters are narrated - so the browser can say exactly
+        what is about to be lost before it is."""
         if session.read_only:
             return jsonify({"ok": False, "error": "This session is read-only"}), 403
+        if not config.magi_enabled:
+            return jsonify({"ok": False, "error": "MAGI v3 assist is disabled in config.json"}), 400
         body = request.get_json(silent=True) or {}
-        if str(body.get("scope") or "chapter") == "page":
-            return jsonify({"ok": False, "error": "Recrop works on whole chapters - pick This chapter or wider"}), 400
         target = _scope_targets(session, body)
         if isinstance(target, str):
             return jsonify({"ok": False, "error": target}), 400
-        chapters, _ = target
-        plan = session.recrop_plan(chapters)
+        chapters, pages = target
+        plan = session.remark_plan(chapters, pages)
         if body.get("dry_run"):
             return jsonify({"ok": True, **plan})
-        accepted = session.queue_recrop(plan["chapters"])
+        accepted = session.queue_remark(config, plan["chapters"], pages)
         return jsonify({"ok": True, **plan, "accepted": accepted, **session.detection_status()})
 
     @app.get("/api/outline")
@@ -294,30 +292,30 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
 
     @app.post("/api/finish")
     def finish():
-        """Save this chapter and move on: to the next chapter if the session
-        has one, otherwise to the end of the session.
+        """Save and exit: the chapter on screen and every chapter holding marks
+        that aren't on disk yet are written, and the session ends - the
+        terminal, blocked on it, moves on.
 
-        Saving here is explicit - the user pressed the button - so it happens
-        whether or not auto-save is on.
-
-        `end` forces the second - the "I'm done, don't walk me through the
-        remaining fifteen" answer, which has to exist because the terminal is
-        blocked on this session and closing the tab is not a way to tell it
-        anything. `save_all` writes every chapter still holding unsaved
-        marks, which is what the browser offers when auto-save has been off
-        and the session is about to close."""
-        body = request.get_json(silent=True) or {}
-        end_now = bool(body.get("end"))
-        if body.get("save_all"):
+        Saving here is explicit - the user pressed Save - so it happens whether
+        or not auto-save is on. Moving between chapters is navigation, not
+        this: the page arrows and the chapter arrows (see /api/goto). In a
+        read-only session nothing is written; it only closes."""
+        written: list[str] = []
+        if not session.read_only:
             for chapter in session.unsaved_chapters():
                 session.save_chapter(chapter)
-        session.save_current()
-        if end_now or not session.has_next:
-            session.finished.set()
-            return jsonify({"ok": True, "done": True, "unsaved": session.unsaved_chapters()})
-        # save=False: save_current() above already wrote this chapter, and
-        # goto's own save would write it a second time and report it twice.
-        session.goto(session.index + 1, save=False)
-        return jsonify({"ok": True, "done": False, **chapter_payload()})
+                written.append(chapter)
+            if session.chapter_num not in written:
+                session.save_current()
+                written.append(session.chapter_num)
+        session.finished.set()
+        return jsonify({
+            "ok": True,
+            "done": True,
+            "written": written,
+            # Everything this session put on disk, auto-saves included - what
+            # the closing screen reports.
+            "saved_chapters": list(session.saved_chapters),
+        })
 
     return app

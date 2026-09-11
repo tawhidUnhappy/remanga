@@ -419,7 +419,7 @@ It fetches the feed in the configured translation language (`downloader.language
 It prints how many chapters exist and how many you already have, then asks once before starting. Chapters already downloaded are *verified*, not re-fetched, so re-running it after a new chapter drops costs a check per chapter and downloads only what's actually missing. `--force` re-fetches every chapter clean instead.
 
 ### 2. Mark Panels
-Launches the **Panel Marker** web UI: draw panel boxes yourself, or press **Detect** and MAGI v3 finds them on a GPU; you drag/adjust/delete to correct them, then Save & Continue writes `crops.json`. Nothing is detected until you press Detect.
+Launches the **Panel Marker** web UI: draw panel boxes yourself, or press **Detect** and MAGI v3 finds them on a GPU; you drag/adjust/delete to correct them, then **Save** writes `crops.json`. Nothing is detected until you press Detect.
 ```bash
 ./run.sh mark --project "my_manga" --chapter "1"
 ```
@@ -430,7 +430,9 @@ Launches the **Panel Marker** web UI: draw panel boxes yourself, or press **Dete
 ./run.sh mark-all --project "my_manga"
 ./run.sh mark-all --project "my_manga" --chapters 4,5,6
 ```
-One server, one browser tab, one session. **Save & Next chapter** writes that chapter's `crops.json` and swaps the next chapter's pages into the page already open — no reload, so the zoom, the tool and the shortcuts survive it — and the **‹ Ch › arrows** in the top bar go back to a chapter already done, so checking chapter 3's marks after finishing chapter 9 costs a click rather than another run of the command. Leaving a chapter always writes its `crops.json` first, so nothing lives only in the server's memory. **Finish here** ends the session early and leaves the remaining chapters unmarked; it asks first, because the terminal is blocked on the session and closing the tab tells it nothing.
+One server, one browser tab, one session, and the chapters read as one run of pages: **→ on a chapter's last page opens the next chapter's first page**, and ← on a chapter's first page goes back to the previous chapter's last — the same keys and arrows as moving a page, with no reload, so the zoom, the tool and the shortcuts survive it. The **‹ Ch › arrows** in the top bar jump a whole chapter at a time. Leaving a chapter writes its `crops.json` (with auto-save on), so nothing lives only in the server's memory.
+
+**Save** (`Ctrl+S`) is the one way out, and it means the same thing on every chapter: it writes every chapter holding marks that aren't on disk yet, plus the chapter on screen, then ends the session so the terminal carries on. Chapters you never opened are left exactly as they were. The closing screen lists the chapters this session wrote.
 
 Chapters with nothing downloaded are named and skipped before the browser opens.
 
@@ -438,16 +440,16 @@ Chapters with nothing downloaded are named and skipped before the browser opens.
 
 ```
 [ This chapter            ▾ ]
-[ ✦ Detect ] [ ⇅ Reorder ] [ ✂ Recrop ]
+[ ✦ Detect ] [ ↻ Remark ] [ ⇅ Reorder ]
 ━━━━━━━━━━━━━━━━  Done · detected 3 chapters
 › Options · auto-order
 ```
 
-**Detect** (MAGI finds the panels), **Reorder** (renumber them into reading order) and **Recrop** (cut fresh panel images from the marks). All three take the same scope:
+**Detect** (MAGI marks the pages that have no marks yet), **Remark** (MAGI marks the pages again, replacing what's there) and **Reorder** (renumber the panels into reading order). All three take the same scope:
 
 | Scope | What the buttons work on |
 |---|---|
-| **This page** | just the page on screen (Detect and Reorder — Recrop is greyed out, see below) |
+| **This page** | just the page on screen |
 | **This chapter** | the chapter on screen (what the button always used to mean) |
 | **Chapter range…** | every chapter from one to another, inclusive — a from/to pair of dropdowns, opening on *this chapter → the last one* |
 | **All chapters** | every chapter in the session |
@@ -460,9 +462,22 @@ The range is the one that pays for itself: *"the power went out somewhere around
 
 Real marks overlap their neighbours by 20–70px (MAGI's boxes take in borders and bleed), so a "gutter" allows an overlap of up to a quarter of the smaller panel, not a fixed few pixels. Where no gutter exists at all, panels count as one row only when their **tops line up** — an inset slanting across the bottom of a big panel overlaps it, but is read after it. Checked against a fully narrated project, where the saved order is order a person already verified: it agrees on **126 of 126** pages with two or more panels.
 
-**Recrop** is `./run.sh crop --force` from the browser: for each chapter in scope, the marks are written to `crops.json` if the session holds changes that aren't on disk yet (even with auto-save off — pressing Recrop is asking for panels cut from what's on screen), then `panels/` is cleared and every panel is cut again. A chapter with no unsaved changes is cropped from its `crops.json` as it stands and isn't rewritten. It works on whole chapters only, because the cropper does, and it has its own worker: it never waits behind a detection run, and chapters with no marks at all are left alone.
+**Remark** is Detect that starts over: MAGI marks every page in scope again, and its marks **replace** what the page has — hand-drawn and edited marks included, and pages you emptied on purpose too. Every remarked page comes back as fresh AI marks, exactly as if it had just been detected for the first time. It runs on the same queue as Detect (one GPU), so the bar reports it the same way (`Remarking ch 4 · page 3/18`).
 
-Recropping a chapter that **already has narration** asks first. If its marks haven't changed since it was narrated, nothing changes — the same panels come out under the same names. But if a panel was moved, added, removed or reordered, its `narration.json` now names panels that don't exist, and TTS and render will stop on that chapter until the narration is updated. After the run each chapter is checked against its narration, and any mismatch stays in the bar in red (details in its tooltip) until the next Recrop, rather than surfacing an hour later when a render refuses to start.
+Because it replaces work, **Remark asks first**, with the server's own count of what it's about to replace:
+
+```
+Remark ch 4–9 with AI?
+
+MAGI marks 212 page(s) again and replaces what's on them:
+• 150 page(s) have marks now and get new ones - 37 of them with marks you drew or edited.
+• 5 page(s) you emptied on purpose get marked again.
+• Already narrated: ch 4, 5. New marks mean new panel numbers, and the narration won't match them.
+
+This can't be undone.
+```
+
+Remark over pages with nothing on them loses nothing, so it just runs. A chapter's marks are replaced all at once, when its whole pass is back: if MAGI dies half-way through a chapter, that chapter keeps its old marks rather than ending up half old and half new. A single page MAGI fails on keeps its marks too. A `crops.json` written before marks recorded their source counts every mark as hand-made, so the confirm never understates what's at stake.
 
 **`Auto-order panels`** decides who owns the order:
 
@@ -475,15 +490,15 @@ Where a mark came from also survives a save now. `crops.json` used not to record
 
 Everything here is safe on a half-finished project, which is the point:
 
-- **A page you have edited is never overwritten.** The server refuses to apply a detection to a page with marks on it, so the widest scope still only fills in what's actually missing.
+- **Detect never overwrites a page you have edited.** The server refuses to apply a detection to a page with marks on it, so the widest scope still only fills in what's actually missing. Remark is the one button that replaces marks, and it asks first.
 - **An empty page and an empty page are not the same thing.** A page you emptied on purpose (a title page, an ad, credits) is a decision MAGI must not overturn; a page that simply hasn't been marked yet is exactly what MAGI is for. `crops.json` records which is which per page (`user_decided`, alongside a `marks_format` marker on the file), so a chapter written before its detection finished — you left it early, or the background worker saved it — doesn't come back with every undetected page frozen as "no panels here". The sidebar shows the difference: a page reads <code>3</code> panels, <code>—</code> (emptied on purpose) or a dashed <code>0</code> (not marked yet), and each chapter's header counts the pages still waiting.
 - **Only emptying a page decides it — visiting one doesn't.** The browser autosaves the page you're *leaving*, so paging through a chapter to look at it posts an unchanged empty list for every page on the way. That is not an edit, and it no longer counts as one: a page becomes "deliberately empty" when its marks go from something to nothing (you deleted the last one), not when you scrolled past it. Otherwise browsing a chapter would quietly exclude every blank page you passed.
 - Running *This page* on a page recorded as having no panels **does** detect it — naming one page is asking for that page, and there is nothing on it to lose. A page with marks is still refused. That's also the way out for a chapter frozen by a `crops.json` written before this existed: such files keep the old, protective reading (every empty page counts as a decision), since they can't be asked what was meant.
-- **A chapter already detected this session isn't detected twice** — asking for "all chapters" when everything is done queues nothing and says so.
+- **A chapter already detected this session isn't detected twice** by Detect — asking for "all chapters" when everything is done queues nothing and says so.
 - Detection is **one chapter at a time**, on a single worker. Each pass loads MAGI onto the GPU, so two at once is not twice as fast.
 - A chapter detected in the background is **written to disk as soon as its pass finishes** (with auto-save on), so a closed tab, an early Finish or another power cut costs nothing that was already computed.
 
-With auto-save **off**, nothing reaches disk until you press Save. Marks still live in the session — leave a chapter and come back and they're there — and the action bar keeps a running count of unsaved chapters. Closing the session asks whether to write them, so "I decide when" never quietly turns into losing an afternoon.
+With auto-save **off**, nothing reaches disk until you press Save. Marks still live in the session — leave a chapter and come back and they're there — and the action bar keeps a running count of unsaved chapters. Save writes all of them, so "I decide when" never quietly turns into losing an afternoon.
 
 **The session outline** — the sidebar has two tabs: **This page** (the panel list for the page you're on) and **All chapters**, a collapsible tree of the whole session:
 
@@ -772,9 +787,10 @@ Panel cropping is done by hand in a local browser tool instead of an LLM round-t
 - **Select tool (`V`):** click a mark to select it, then drag its body to move it or a corner/edge handle to resize it. Dashed guide lines appear when an edge lines up with another panel's — a visual aid, not a hard snap.
 - **Delete:** right-click a mark.
 - **Reorder:** drag a panel's `⠿` grip in the right-hand panel list — that order becomes narration order (with auto-order off; see [Mark Panels](#2-mark-panels)).
-- **Action bar** (top of the right sidebar): **Detect**, **Reorder** and **Recrop** for this page, this chapter, a range or all chapters, plus the saved Options switches — see [Mark Panels](#2-mark-panels).
+- **Action bar** (top of the right sidebar): **Detect**, **Remark** and **Reorder** for this page, this chapter, a range or all chapters, plus the saved Options switches — see [Mark Panels](#2-mark-panels).
+- **Pages and chapters:** `←` / `→` (or the page arrows) move a page, and carry straight on into the neighbouring chapter past either end of one.
 - **Zoom & pan:** Ctrl/Cmd+scroll to zoom (anchored under the cursor), plain scroll or Alt+scroll to pan, spacebar+drag or middle-mouse-drag for the hand tool, `0` to reset the view.
-- **Finish:** `Ctrl+S` (`⌘S` on macOS) or the **Save & Continue** button writes `crops.json` and signals the CLI/wizard to move on to cropping.
+- **Save:** `Ctrl+S` (`⌘S` on macOS) or the **Save** button writes `crops.json` for every chapter with unsaved marks (and the one on screen), ends the session and signals the CLI/wizard to move on to cropping.
 
 **Click-to-select (`marker.click_to_select`, default on):** a mark only becomes draggable once it's already selected — a first click just selects it, a second, deliberate drag actually moves/resizes it. This means one accidental click-drag can never nudge the wrong mark on a page with tightly packed panels. It also means the Draw tool never moves an existing mark: starting a new box on top of one (even one you'd already selected) just draws, full stop. Set `"click_to_select": false` in `config.json`'s `"marker"` section to go back to the old any-drag-moves-it behavior.
 
@@ -782,11 +798,11 @@ Panel cropping is done by hand in a local browser tool instead of an LLM round-t
 
 | Action | Default key |
 |---|---|
-| Save & continue | `Ctrl`/`Cmd` + `S` |
+| Save all & exit | `Ctrl`/`Cmd` + `S` |
 | Mark whole page as one panel | `Ctrl`/`Cmd` + `F` |
 | Draw tool | `D` |
 | Select tool | `V` |
-| Previous / next page | `←` / `→` |
+| Previous / next page (past a chapter's end, the neighbouring chapter) | `←` / `→` |
 | Delete selected mark | `Delete` or `Backspace` |
 | Reset zoom & position | `0` |
 

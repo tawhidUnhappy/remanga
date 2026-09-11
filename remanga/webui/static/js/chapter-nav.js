@@ -1,7 +1,7 @@
 // The chapter level of the app: loading a chapter into the open tab, moving
-// between the chapters in this session, and the Save button - which is what
-// "next chapter" actually is (save this one server-side, get the next one
-// back, draw it here).
+// between the chapters in this session (the chapter arrows, and page-nav.js's
+// stepPage past either end of a chapter), and the Save button - save every
+// chapter and exit.
 //
 // Nothing in this file reloads the page. A chapter change is a fetch and a
 // re-render, so the zoom, the tool, the shortcuts and the scroll position all
@@ -12,7 +12,7 @@
 // one-way from here - never the reverse, so there's no cycle between them.
 
 import {
-  saveOverlay, saveOverlayTitle, saveOverlayText, saveBtn, saveLabel, finishBtn,
+  saveOverlay, saveOverlayTitle, saveOverlayText, saveBtn, saveLabel,
   chapterNav, chapterName, chapterPos, prevChapterBtn, nextChapterBtn, pageTotalEl,
   assistCard, assistStatus, assistProgressBar,
   toolbar, viewBadge, hintToast, sidebarFooter,
@@ -27,8 +27,8 @@ import { setMode } from "./keyboard.js";
 import { refreshOutline, renderOutline } from "./outline.js";
 import { render } from "./render.js";
 
-// Applies a chapter payload (/api/chapter, /api/goto, or /api/finish's
-// advance - all three return the same shape) to the running app.
+// Applies a chapter payload (/api/chapter or /api/goto - both return the same
+// shape) to the running app.
 //
 // pageLoaded is cleared BEFORE loadPage(0): loadPage flushes "the page we're
 // leaving" whenever a page is already up, and after a chapter change that
@@ -69,22 +69,16 @@ export async function applyChapter(payload, startPage = 0) {
 function updateChapterUi() {
   const { chapter, chapter_index: index, chapter_total: total, has_next: hasNext } = state.chapter;
   // A one-chapter session is every single-chapter caller (`mark`, the
-  // pipeline's mark step, a "remark" restart). It gets the screen it always
-  // had: no chapter arrows, and a Save button that says what it does.
+  // pipeline's mark step, a "remark" restart): no chapter arrows.
   chapterNav.hidden = total <= 1;
   chapterName.textContent = chapter;
   chapterPos.textContent = `${index + 1}/${total}`;
   prevChapterBtn.disabled = index === 0;
   nextChapterBtn.disabled = !hasNext;
-  if (state.readOnly) {
-    saveLabel.textContent = hasNext ? "Next chapter" : "Close viewer";
-    finishBtn.hidden = true;
-    return;
-  }
-  saveLabel.textContent = total <= 1 ? "Save & Continue"
-    : hasNext ? "Save & Next chapter" : "Save & Finish";
-  // Only worth offering while there are chapters left to skip.
-  finishBtn.hidden = !hasNext;
+  // One button, one meaning, on every chapter: Save writes everything and
+  // exits. Going to the next chapter is the arrows' job.
+  saveLabel.textContent = state.readOnly ? "Close" : "Save";
+  saveBtn.title = state.readOnly ? "Close the viewer" : "Save every chapter and exit";
 }
 
 // A viewer keeps everything that helps you look and drops everything that
@@ -108,10 +102,10 @@ function resetAssistCard() {
   // stale "Done · 18 page(s) processed" from the chapter before it is a
   // statement about the wrong chapter.
   assistProgressBar.style.width = "0%";
-  // MAGI being off greys out Detect only (syncAssistCard). Reorder and Recrop
-  // need no model at all, so disabling the whole bar with it would take them too.
+  // MAGI being off greys out Detect and Remark only (syncAssistCard). Reorder
+  // needs no model at all, so disabling the whole bar with it would take it too.
   assistCard.classList.remove("disabled");
-  assistStatus.textContent = state.magiEnabled ? "Idle" : "MAGI is off in config.json - Reorder and Recrop still work";
+  assistStatus.textContent = state.magiEnabled ? "Idle" : "MAGI is off in config.json - Reorder still works";
   syncAssistCard();
 }
 
@@ -151,49 +145,42 @@ export async function gotoChapter(index, startPage = 0) {
   }
 }
 
-// Save this chapter. `end` forces the session to stop here instead of
-// advancing - the "I'm done, don't walk me through the rest" answer, which
-// has to exist because the terminal is blocked on this session and closing
-// the tab tells it nothing.
-export async function saveAndContinue(end = false, saveAll = false) {
+// Save: the chapter on screen and every chapter with unsaved marks are
+// written, the session ends, and the terminal carries on. Pressed twice (a
+// double Ctrl+S) it saves once - the second request would reach a server
+// that is already shutting down and report a failure that isn't one.
+let exiting = false;
+
+export async function saveAndExit() {
+  if (exiting || !state.chapter) return;
+  exiting = true;
   await flushSave(true);
+  let res;
   try {
-    const res = await api("/api/finish", {
+    res = await api("/api/finish", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ end, save_all: saveAll }),
+      body: "{}",
     });
-    if (!res.done) {
-      await applyChapter(res);
-      return;
-    }
-    // With auto-save off, chapters edited or detected along the way are
-    // still only in the session. This is the last moment anyone can be
-    // asked, so they are - rather than the switch quietly costing an
-    // afternoon, or overriding it and making the switch a lie.
-    const unsaved = res.unsaved || [];
-    if (unsaved.length && !saveAll) {
-      const write = confirm(
-        `${unsaved.length} chapter(s) still have marks that were never saved: ` +
-        `${unsaved.join(", ")}.\n\nWrite their crops.json now?`);
-      if (write) { await saveAndContinue(true, true); return; }
-    }
-    const done = state.chapter.chapter_index + 1;
-    const total = state.chapter.chapter_total;
-    if (state.readOnly) {
-      saveOverlayTitle.textContent = "Closed";
-      saveOverlayText.innerHTML =
-        "Nothing was changed - this was a read-only session.<br>You can close this tab now.";
-    } else {
-      saveOverlayTitle.textContent = total > 1 ? `Saved — ${done} of ${total} chapters` : "Saved";
-      saveOverlayText.innerHTML =
-        "crops.json is written and the pipeline will continue in your terminal.<br>You can close this tab now.";
-    }
-    saveOverlay.classList.add("visible");
-    setTimeout(() => { try { window.close(); } catch {} }, 400);
   } catch (e) {
+    exiting = false;
     alert("Failed to save: " + e.message);
+    return;
   }
+  if (state.readOnly) {
+    saveOverlayTitle.textContent = "Closed";
+    saveOverlayText.innerHTML =
+      "Nothing was changed - this was a read-only session.<br>You can close this tab now.";
+  } else {
+    const saved = res.saved_chapters || [];
+    const list = saved.length > 12 ? `${saved.slice(0, 12).join(", ")} and ${saved.length - 12} more` : saved.join(", ");
+    saveOverlayTitle.textContent = state.chapter.chapter_total > 1 ? `Saved — ${saved.length} chapter(s)` : "Saved";
+    saveOverlayText.innerHTML =
+      (state.chapter.chapter_total > 1 && saved.length ? `crops.json written for ch ${list}.<br>` : "crops.json is written.<br>") +
+      "The pipeline will continue in your terminal - you can close this tab now.";
+  }
+  saveOverlay.classList.add("visible");
+  setTimeout(() => { try { window.close(); } catch {} }, 400);
 }
 
 export async function init() {
@@ -205,11 +192,5 @@ export async function init() {
 
 prevChapterBtn.addEventListener("click", () => gotoChapter(state.chapter.chapter_index - 1));
 nextChapterBtn.addEventListener("click", () => gotoChapter(state.chapter.chapter_index + 1));
-saveBtn.addEventListener("click", () => saveAndContinue(false));
-finishBtn.addEventListener("click", () => {
-  const left = state.chapter.chapter_total - state.chapter.chapter_index - 1;
-  if (confirm(`Save this chapter and end the session? ${left} chapter(s) after it will be left unmarked.`)) {
-    saveAndContinue(true);
-  }
-});
+saveBtn.addEventListener("click", saveAndExit);
 window.addEventListener("beforeunload", () => flushSave(true));

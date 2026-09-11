@@ -18,7 +18,7 @@ from remanga.webui.marker_state import MarkerState
 
 def run_detection(state: MarkerState, config: MarkerConfig,
                   only_pages: list[str] | None = None, force: bool = False,
-                  order_direction: str | None = None) -> None:
+                  order_direction: str | None = None, replace: bool = False) -> None:
     """Detects panels for this chapter, streaming progress into `state`.
 
     `only_pages` narrows it to specific page filenames - what the assist
@@ -33,6 +33,10 @@ def run_detection(state: MarkerState, config: MarkerConfig,
     where it lets a page previously recorded as having no panels be detected
     after all - see MarkerState.apply_detected for why that is safe and why
     a page with marks on it is still refused.
+
+    `replace` is Remark: every page asked for is detected, touched or not, and
+    MAGI's boxes REPLACE what is there - applied only once the whole pass is
+    back (MarkerState.replace_with_detected), so a failed pass changes nothing.
     """
     from remanga.webui.magi_assist import detect_panels_for_pages
 
@@ -51,7 +55,7 @@ def run_detection(state: MarkerState, config: MarkerConfig,
         filename = page["filename"]
         if wanted is not None and filename not in wanted:
             return False
-        if filename not in state.touched:
+        if replace or filename not in state.touched:
             return True
         # Touched: only a forced request for a page with nothing on it gets
         # through, which is exactly what apply_detected will accept.
@@ -69,12 +73,15 @@ def run_detection(state: MarkerState, config: MarkerConfig,
         return
 
     def on_page_done(filename: str, boxes: list[list[float]]) -> None:
-        state.apply_detected(filename, boxes, force=force, order_direction=order_direction)
+        if not replace:
+            state.apply_detected(filename, boxes, force=force, order_direction=order_direction)
         state.detect_done += 1
 
     try:
         page_paths = [state.pages_dir / p["filename"] for p in pending_pages]
-        detect_panels_for_pages(page_paths, config, on_page_done=on_page_done)
+        results = detect_panels_for_pages(page_paths, config, on_page_done=on_page_done)
+        if replace:
+            state.replace_with_detected(results, order_direction=order_direction)
     except Exception as e:
         state.detect_error = str(e)
         console.print(f"[bold red]MAGI v3 detection failed:[/] {_esc(str(e))}")

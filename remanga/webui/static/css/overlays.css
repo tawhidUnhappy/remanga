@@ -1,5 +1,5 @@
 /* Floating UI that sits above the canvas/sidebar: the bottom hint toast and
-   the full-screen "saved" overlay shown on Save & Continue. */
+   the full-screen "saved" overlay shown when Save ends the session. */
 
 .hint-toast {
   position: fixed;

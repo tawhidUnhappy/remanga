@@ -67,6 +67,9 @@ class MarkerSession:
         self._states: dict[str, MarkerState] = {}
         self._states_lock = threading.Lock()
         self.saved: list[Path] = []
+        # The same, as chapter numbers in the order first written - what Save
+        # reports back to the tab.
+        self.saved_chapters: list[str] = []
         self.finished = threading.Event()
 
         # The detection queue: chapters (and single pages) waiting for MAGI,
@@ -74,9 +77,10 @@ class MarkerSession:
         # pass spawns a worker subprocess that loads the model onto the GPU,
         # so two at once is not twice as fast, it is two processes fighting
         # over the same card.
-        # Each job is {"kind": "detect", "chapter", "pages" (None = every
-        # page), "force"}. Only detection is queued - it's the part that needs
-        # the GPU. Reorder runs straight away in the request (see reorder()).
+        # Each job is {"kind": "detect" | "remark", "chapter", "pages" (None =
+        # every page), "force", "replace"}. Only MAGI work is queued - it's the
+        # part that needs the GPU. Reorder runs straight away in the request
+        # (see reorder()).
         self._jobs: list[dict[str, Any]] = []
         self._jobs_lock = threading.Lock()
         self._worker: threading.Thread | None = None
@@ -97,19 +101,6 @@ class MarkerSession:
         self._last_run: dict[str, Any] | None = None
         # Keep marks in reading order as they are saved (config.auto_order).
         self.auto_order = False
-        # The recrop queue: chapters waiting to have their panel images cut
-        # again from their marks. Its own worker, separate from detection -
-        # cropping is CPU and disk, MAGI is GPU, and neither should wait for
-        # the other: a Recrop queued behind an hours-deep all-chapters Detect
-        # would look exactly like a Recrop that did nothing.
-        self._crop_jobs: list[str] = []
-        self._crop_lock = threading.Lock()
-        self._crop_busy = False
-        self._crop_active: str | None = None
-        self._crop_run_total = 0
-        self._crop_run_done = 0
-        self._crop_result: dict[str, Any] = self._empty_crop_result()
-        self._crop_last_run: dict[str, Any] | None = None
         # Whether a chapter is written to disk on its own - when you leave
         # it, and when the detection worker finishes one. Off means only an
         # explicit Save writes anything, so `dirty` is what would be lost:
@@ -180,6 +171,8 @@ class MarkerSession:
         )
         if crops_path not in self.saved:
             self.saved.append(crops_path)
+        if chapter_num not in self.saved_chapters:
+            self.saved_chapters.append(chapter_num)
         self.dirty.discard(chapter_num)
         return crops_path
 
@@ -263,6 +256,33 @@ class MarkerSession:
             self._ensure_worker(config)
         return queued
 
+    def queue_remark(self, config, chapters: list[str], pages: list[str] | None = None) -> list[str]:
+        """Queues Remark: MAGI detects the pages again and its marks REPLACE
+        what is on them, hand-drawn or not (MarkerState.replace_with_detected).
+        Returns the chapters queued.
+
+        Always honoured, unlike Detect: a chapter detected earlier this session
+        is exactly what someone remarks. Only a remark for the same chapter and
+        pages that is still waiting is not queued twice. The browser confirms
+        before asking for this - see remark_plan."""
+        if self.read_only or not config.magi_enabled:
+            return []
+        queued: list[str] = []
+        with self._jobs_lock:
+            self._begin_run_if_idle()
+            waiting = {(job["chapter"], tuple(job["pages"] or ())) for job in self._jobs if job["kind"] == "remark"}
+            for chapter in chapters:
+                if chapter not in self.chapters or (chapter, tuple(pages or ())) in waiting:
+                    continue
+                self._jobs.append({
+                    "kind": "remark", "chapter": chapter, "pages": pages, "force": False, "replace": True,
+                })
+                self._note_queued("remark", chapter)
+                queued.append(chapter)
+        if queued:
+            self._ensure_worker(config)
+        return queued
+
     def queue_all(self, config) -> list[str]:
         """Every chapter from the one on screen to the end, then the ones
         before it. In that order because "all chapters" is nearly always
@@ -315,7 +335,12 @@ class MarkerSession:
                 run_detection(
                     state, config, only_pages=job["pages"], force=job["force"],
                     order_direction=self.reading_direction if self.auto_order else None,
+                    replace=job.get("replace", False),
                 )
+                if job["kind"] == "remark" and job["pages"] is None:
+                    # A whole chapter has now had a pass; a later Detect over it
+                    # has nothing left to fill in.
+                    state.detect_started = True
                 self.mark_dirty(chapter)
                 # The chapter on screen is saved when it's left, like any
                 # other; anything else is saved here so a background pass
@@ -332,155 +357,73 @@ class MarkerSession:
             self._active_kind = None
             self._worker_busy = False
 
-    # --- recropping ------------------------------------------------------
-
-    @staticmethod
-    def _empty_crop_result() -> dict[str, Any]:
-        return {"chapters": [], "panels": 0, "mismatched": [], "failed": [], "skipped": []}
-
-    def chapter_has_marks(self, chapter_num: str) -> bool:
-        """Whether a chapter has anything to crop from: its marks in this
-        session if it has been opened, otherwise what its crops.json holds."""
-        state = self._states.get(chapter_num)
-        if state is not None:
-            with state.lock:
-                return any(state.marks.get(page["filename"]) for page in state.pages)
-        return any(panels for panels, _ in self._saved_page_facts(chapter_num).values())
+    # --- remarking ------------------------------------------------------
 
     def chapter_is_narrated(self, chapter_num: str) -> bool:
         return has_real_json_content(get_chapter_dir(self.project, chapter_num) / "narration.json")
 
-    def recrop_plan(self, chapters: list[str]) -> dict[str, list[str]]:
-        """What a Recrop over `chapters` would do, without doing any of it: the
-        chapters with marks to crop (in session order), the ones with none, and
-        which croppable ones already have narration - because a crop that
-        changes a chapter's panels changes the panel ids its narration was
-        written against, and the browser asks before that."""
+    def _page_marks_now(self, chapter_num: str) -> dict[str, tuple[int, int, bool]]:
+        """{filename: (marks, hand-made marks, emptied on purpose)} for every
+        page with something to lose - from the session if the chapter has been
+        opened, otherwise from its crops.json, without decoding a single image
+        (a plan over "all chapters" must not open every page of the project).
+        A panel saved before `src` was recorded counts as hand-made: the file
+        can't say otherwise, and overstating what a remark replaces is the
+        safe direction to be wrong in."""
+        state = self._states.get(chapter_num)
+        if state is not None:
+            with state.lock:
+                return {
+                    page["filename"]: (
+                        len(state.marks.get(page["filename"]) or []),
+                        sum(1 for m in state.marks.get(page["filename"]) or [] if m.get("src") != "ai"),
+                        page["filename"] in state.decided,
+                    )
+                    for page in state.pages
+                }
+        crops_path = get_chapter_dir(self.project, chapter_num) / "crops.json"
+        if not has_real_json_content(crops_path):
+            return {}
+        try:
+            entries = read_json(crops_path).get("pages", [])
+        except Exception:
+            return {}
+        facts = self._saved_page_facts(chapter_num)
+        out: dict[str, tuple[int, int, bool]] = {}
+        for entry in entries:
+            filename = entry.get("page_filename")
+            panels = entry.get("panels") or []
+            decided = facts.get(filename, (0, False))[1]
+            out[filename] = (len(panels), sum(1 for panel in panels if panel.get("src") != "ai"), decided)
+        return out
+
+    def remark_plan(self, chapters: list[str], pages: list[str] | None = None) -> dict[str, Any]:
+        """What a Remark over `chapters` (only `pages` of them, if given) would
+        replace, without doing any of it - the numbers the browser's confirm
+        states before anything is lost: how many pages, how many of those have
+        marks now and how many have marks someone drew or edited, how many were
+        emptied on purpose, and which chapters already have narration (their
+        panel ids can change under it)."""
         wanted = set(chapters)
         targets = [c for c in self.chapters if c in wanted]
-        croppable = [c for c in targets if self.chapter_has_marks(c)]
+        total = marked = hand_made = emptied = 0
+        for chapter in targets:
+            names = pages if pages is not None else self.page_names(chapter)
+            facts = self._page_marks_now(chapter)
+            total += len(names)
+            for name in names:
+                count, manual, decided = facts.get(name, (0, 0, False))
+                marked += count > 0
+                hand_made += manual > 0
+                emptied += decided and count == 0
         return {
-            "chapters": croppable,
-            "unmarked": [c for c in targets if c not in croppable],
-            "narrated": [c for c in croppable if self.chapter_is_narrated(c)],
+            "chapters": targets,
+            "pages": total,
+            "marked": marked,
+            "hand_made": hand_made,
+            "emptied": emptied,
+            "narrated": [c for c in targets if self.chapter_is_narrated(c)],
         }
-
-    def queue_recrop(self, chapters: list[str]) -> list[str]:
-        """Queues chapters to have their panels cut again, and starts the crop
-        worker if it isn't running. Returns the chapters accepted - one already
-        waiting or being cropped isn't queued twice."""
-        if self.read_only:
-            return []
-        accepted: list[str] = []
-        start = False
-        with self._crop_lock:
-            if not self._crop_busy:
-                self._crop_run_total = self._crop_run_done = 0
-                self._crop_result = self._empty_crop_result()
-            for chapter in chapters:
-                if chapter not in self.chapters or chapter in self._crop_jobs or chapter == self._crop_active:
-                    continue
-                self._crop_jobs.append(chapter)
-                self._crop_run_total += 1
-                accepted.append(chapter)
-            # Decided under the lock, like the detection worker: a thread that
-            # is already on its way out must not count as "running".
-            if accepted and not self._crop_busy:
-                self._crop_busy = start = True
-        if start:
-            threading.Thread(target=self._drain_crops, daemon=True).start()
-        return accepted
-
-    def _drain_crops(self) -> None:
-        """The recrop worker: one chapter at a time until the queue is empty.
-
-        Each chapter is exactly `remanga crop --force` - panels/ cleared and
-        every panel cut again from crops.json - preceded by writing crops.json
-        if this session holds marks for it that aren't on disk yet, because the
-        cropper reads the file, not the session. That write happens with
-        auto-save off too: pressing Recrop is asking for panels cut from the
-        marks on screen. A chapter with nothing unsaved is cropped from its
-        file as it stands, and never rewritten just to be read back.
-
-        Afterwards each chapter is checked against its narration.json. A crop
-        that added, removed or renumbered panels leaves narration naming panels
-        that no longer exist, and TTS and render refuse that (verify/gate.py) -
-        the time to hear it is now, where the change was made, not when a
-        render stops an hour later."""
-        from remanga.config import RemangaConfig
-        from remanga.cropper import CoordinateCropper
-        from remanga.settings.project_prefs import cropper_config_for
-        from remanga.verify.panels import check_panel_narration_mismatch
-
-        while not self.finished.is_set():
-            with self._crop_lock:
-                if not self._crop_jobs:
-                    self._crop_active = None
-                    self._crop_last_run = self._copy_crop_result()
-                    self._crop_busy = False
-                    return
-                chapter = self._crop_jobs.pop(0)
-                self._crop_active = chapter
-            outcome: tuple[str, Any] = ("failed", {"chapter": chapter, "error": "interrupted"})
-            try:
-                if not self.chapter_has_marks(chapter):
-                    outcome = ("skipped", chapter)
-                else:
-                    if chapter in self.dirty:
-                        self.save_chapter(chapter)
-                    # Loaded per chapter, not once: a cropper setting changed in
-                    # the terminal between two chapters of a long run should
-                    # apply to the chapters still to come.
-                    config = RemangaConfig.load().for_project(self.project)
-                    panels = CoordinateCropper(cropper_config_for(config, self.project)).crop_chapter_from_json(
-                        self.project, chapter, force=True,
-                    )
-                    outcome = ("done", (chapter, len(panels), check_panel_narration_mismatch(self.project, chapter)))
-            except Exception as e:  # a failed chapter must not end the queue
-                console.print(f"[bold red]Recrop failed for chapter {_esc(chapter)}:[/] {_esc(str(e))}")
-                outcome = ("failed", {"chapter": chapter, "error": (str(e).splitlines() or [type(e).__name__])[0]})
-            finally:
-                with self._crop_lock:
-                    self._record_crop(outcome)
-                    self._crop_run_done += 1
-        with self._crop_lock:
-            self._crop_active = None
-            self._crop_busy = False
-
-    def _record_crop(self, outcome: tuple[str, Any]) -> None:
-        """Adds one chapter's outcome to the run. Caller holds _crop_lock."""
-        kind, value = outcome
-        result = self._crop_result
-        if kind == "done":
-            chapter, count, issue = value
-            result["chapters"].append(chapter)
-            result["panels"] += count
-            if issue:
-                result["mismatched"].append({"chapter": chapter, "issue": issue})
-        elif kind == "skipped":
-            result["skipped"].append(value)
-        else:
-            result["failed"].append(value)
-
-    def _copy_crop_result(self) -> dict[str, Any]:
-        """A copy safe to hand to jsonify while the worker keeps appending.
-        Caller holds _crop_lock."""
-        return {key: (list(value) if isinstance(value, list) else value) for key, value in self._crop_result.items()}
-
-    def crop_status(self) -> dict[str, Any]:
-        with self._crop_lock:
-            return {
-                "crop_active": self._crop_active,
-                "crop_queued": list(self._crop_jobs),
-                "crop_run_done": self._crop_run_done,
-                "crop_run_total": self._crop_run_total,
-                # The run so far while it's going, and the finished run once it
-                # isn't. The finished one stays until the next Recrop: "narration
-                # no longer matches" is the one thing here nobody should miss,
-                # and a message that fades after a few seconds gets missed.
-                "crop_result": self._copy_crop_result(),
-                "crop_last_run": self._crop_last_run,
-            }
 
     # --- reading order --------------------------------------------------
 
@@ -573,7 +516,6 @@ class MarkerSession:
             # the card had nothing to say once the queue emptied, and kept
             # whatever it said last - "Detecting ch 4 · 2/3 pages", forever.
             "last_run": last_run,
-            **self.crop_status(),
         }
 
     def page_names(self, chapter_num: str) -> list[str]:

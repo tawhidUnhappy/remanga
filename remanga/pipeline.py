@@ -70,7 +70,7 @@ def _run_mark(project: str, chapter: str, config: RemangaConfig) -> None:
         "Opening the Panel Marker web UI. Mark each panel on every story page "
         f"(or press Detect to have MAGI v3 find them), then press "
         f"{'⌘S' if config.marker.auto_open_browser else 'Ctrl+S'} or click "
-        "Save & Continue in the browser tab.\n"
+        "Save in the browser tab.\n"
     )
     launch_panel_marker(project, chapter, config.marker)
     console.print("[green]✓ Panels marked and crops.json saved.[/]")

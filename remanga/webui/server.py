@@ -113,7 +113,7 @@ def launch_and_wait_all(project_name: str, chapters: list[str], config: MarkerCo
     elif len(session.chapters) == 1:
         waiting_for = "mark panels and save (Ctrl/Cmd+S in the browser)"
     else:
-        waiting_for = "mark every chapter and finish in the browser"
+        waiting_for = "mark the chapters, then press Save in the browser (it saves every chapter and exits)"
     console.print(f"[yellow]Waiting for you to {waiting_for}...[/]")
     session.finished.wait()
     server_thread.join(timeout=5)

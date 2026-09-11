@@ -60,7 +60,7 @@ class MarkerConfig(ConfigModel):
     # settings_store.persist_marker_settings), so they survive into the next
     # session and the next project.
     #
-    # Which pages the action bar's buttons (Detect / Reorder / Recrop) act on:
+    # Which pages the action bar's buttons (Detect / Remark / Reorder) act on:
     # "page" (just the page on screen), "chapter" (the chapter on screen),
     # "range" (a from/to span of chapters) or "all" (every chapter in the
     # session). Saved so the dropdown opens on whatever was used last, which

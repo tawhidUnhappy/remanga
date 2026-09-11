@@ -27,9 +27,9 @@
   </div>
 
   <div class="page-nav">
-    <button id="prevPage" title="Previous page (←)">‹</button>
+    <button id="prevPage" title="Previous page (←) - from the first page, the previous chapter">‹</button>
     <span>Page <span class="count mono" id="pageNum">–</span> / <span class="count mono" id="pageTotal">–</span></span>
-    <button id="nextPage" title="Next page (→)">›</button>
+    <button id="nextPage" title="Next page (→) - from the last page, the next chapter">›</button>
     <span class="story-badge" id="storyBadge">no panels</span>
   </div>
 
@@ -52,9 +52,7 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M9 13h6"/></svg>
   </button>
 
-  <button class="ghost-btn" id="finishBtn" hidden title="Save this chapter and end the session, skipping the rest">Finish here</button>
-
-  <button class="save-btn" id="saveBtn"><span id="saveLabel">Save &amp; Continue</span> <kbd id="saveKbd">Ctrl+S</kbd></button>
+  <button class="save-btn" id="saveBtn" title="Save every chapter and exit"><span id="saveLabel">Save</span> <kbd id="saveKbd">Ctrl+S</kbd></button>
 </div>
 
 <div class="body-row">
@@ -80,18 +78,14 @@
       </div>
 
       <div class="actions-buttons">
-        <button class="act-btn ai" id="assistBtn" title="Detect - MAGI marks the panels it finds. Never touches a page you've edited."><span class="act-ico">✦</span><span>Detect</span></button>
+        <button class="act-btn ai" id="assistBtn" title="Detect - MAGI marks the pages that have no marks yet. Never touches a page you've edited."><span class="act-ico">✦</span><span>Detect</span></button>
+        <button class="act-btn ai" id="remarkBtn" title="Remark - MAGI marks the pages again and REPLACES their marks, including ones you drew. Asks first."><span class="act-ico">↻</span><span>Remark</span></button>
         <button class="act-btn" id="reorderBtn" title="Reorder - renumber the panels into reading order."><span class="act-ico">⇅</span><span>Reorder</span></button>
-        <button class="act-btn" id="recropBtn" title="Recrop - save the marks and cut fresh panel images from them. Whole chapters only."><span class="act-ico">✂</span><span>Recrop</span></button>
       </div>
 
       <div class="assist-line">
         <div class="assist-progress"><span id="assistProgressBar"></span></div>
         <div class="assist-status" id="assistStatus">Idle</div>
-      </div>
-      <div class="assist-line" id="cropRow" hidden>
-        <div class="assist-progress"><span id="cropProgressBar"></span></div>
-        <div class="assist-status" id="cropStatus"></div>
       </div>
 
       <details class="actions-options" id="actionsOptions">
@@ -147,7 +141,7 @@
   <span><b>Drag</b> to mark a panel</span>
   <span><b>Click</b> a mark to adjust it</span>
   <span><b>Right-click</b> a mark to delete it</span>
-  <span><kbd id="hintSaveKbd">Ctrl+S</kbd> save &amp; continue</span>
+  <span><kbd id="hintSaveKbd">Ctrl+S</kbd> save all &amp; exit</span>
 </div>
 
 <div class="save-overlay" id="saveOverlay">

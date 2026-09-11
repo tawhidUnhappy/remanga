@@ -1,9 +1,9 @@
-/* Right sidebar: the action bar (scope, Detect / Reorder / Recrop, progress,
+/* Right sidebar: the action bar (scope, Detect / Remark / Reorder, progress,
    the saved switches) and the panel reading-order list. */
 
 .sidebar { width: 288px; flex: none; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
 
-/* The action bar: what you DO to marks - Detect, Reorder, Recrop - pinned to
+/* The action bar: what you DO to marks - Detect, Remark, Reorder - pinned to
    the top of the sidebar, above the tabs, so it's on screen whichever tab is
    open. It used to sit inside "This page" under a paragraph of explanation,
    which put every button out of sight the moment you opened the chapter
@@ -29,11 +29,9 @@
 .act-btn.ai .act-ico { color: var(--ai); }
 .act-btn:disabled { opacity: 0.45; cursor: default; }
 
-.assist-line[hidden] { display: none; }
 .assist-progress { height: 3px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
 .assist-progress span { display: block; height: 100%; width: 0%; background: var(--ai); transition: width 0.3s; }
 .assist-status { margin-top: 4px; font-size: 10.5px; line-height: 1.45; color: var(--text-faint); font-family: "JetBrains Mono", monospace; }
-.assist-status.warn { color: var(--accent); }
 
 .actions-options summary { font-size: 11px; color: var(--text-dim); cursor: pointer; list-style: none; user-select: none; }
 .actions-options summary::-webkit-details-marker { display: none; }
