@@ -5,14 +5,14 @@ continuous recap video rather than leaving 24 separate ones as the only
 whole-manga option.
 
     discovery.py - which chapters a project has, in reading order
-    timeline.py  - the one continuous cross-chapter audio/frame timeline
-    compiler.py  - the two-phase compile and its final encode
+    timeline.py  - the one continuous cross-chapter audio timeline
+    compiler.py  - the two-phase compile and its stream-copy join
 
 Keeping each chapter's own MP4 is deliberate: TTS and frame compositing are
 the expensive steps and are already cached, but so are the mix and the
-per-chapter render now - re-running after only a BGM/volume change re-mixes
-and re-encodes just the per-chapter video, never touching TTS or frame
-compositing."""
+per-chapter picture now - re-running after only a BGM/volume change re-mixes
+and re-encodes just the sound, never touching TTS, frame compositing or the
+picture."""
 
 from __future__ import annotations
 

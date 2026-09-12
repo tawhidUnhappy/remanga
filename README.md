@@ -55,8 +55,9 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
   - Broadcast EBU R128 loudness normalization (`-16 LUFS`).
 - **Multi-Resolution Video Compositor & GPU Renderer:**
   - Presets for **1080p Full HD**, **1440p 2K QHD**, **2160p 4K UHD**, and **720p HD**.
-  - Fast Bokeh Canvas Blur (<1.5ms per frame) or Solid Black canvas.
+  - Fast bokeh canvas blur or solid black canvas, composited on every CPU core at once.
   - Automatic NVIDIA NVENC GPU hardware encoding (`h264_nvenc`) with automatic CPU fallback (`libx264`).
+  - Slideshow-aware encoding: 5 fps, with every panel change snapped into the silent pause before its line, and the picture cached apart from the sound — a 7.6-minute chapter encodes in ~8s on an RTX 3060 (it took ~65s at 30 fps), and a BGM change or a whole-manga join re-encodes no video at all.
 - **Safe to Interrupt, Safe to Resume:** Ctrl+C (or a crash) mid-synthesis never leaves a corrupt clip behind — panel exports are atomic, and resuming automatically re-synthesizes the panel that was interrupted plus the two just before it, rather than trusting whatever's on disk. A worker that stops responding gets killed and replaced automatically instead of hanging forever. See [Reliability](#reliability-crashes-interrupts--resuming).
 - **Three-Tier Chapter Reset:** hard (keep only downloads), marks-only (also keep your panel marks), or soft (also keep the cropped panels and narration script) — pick how much work to throw away. See [Resetting/Restarting a Chapter](#resettingrestarting-a-chapter).
 
@@ -653,7 +654,13 @@ Composites frames onto the chosen background canvas and renders hardware-acceler
 ```bash
 ./run.sh render --project "my_manga" --chapter "1"
 ```
-*Output File:* `projects/my_manga/chapters/chapter_1/my_manga_ch1_recap.mp4`
+*Output File:* `projects/my_manga/video/chapter_1/my_manga_ch1_recap.mp4`
+
+A recap is a slideshow — nothing on screen moves until the panel changes — and rendering is built around that:
+
+- **Frames are composited once**, on every CPU core in parallel, and cached in `video/chapter_<num>/_work/frames/`.
+- **The picture is encoded at 5 fps** (`video.fps`). The frame rate only decides how finely a panel change can be timed, and each change is snapped onto a frame boundary *inside the silent pause* before its line, so a picture never changes mid-sentence. 6× fewer frames than 30 fps, the same picture, a fraction of the encode.
+- **Picture and sound are cached apart.** The video-only stream is kept as `_work/picture.mp4`; when only the mix changed (BGM, volume), rendering reuses it and costs one audio encode.
 
 Re-running `download` for a chapter that's already there re-checks it rather than re-fetching it: every page must exist, be non-empty, and match what MangaDex reports for that chapter *right now* — same chapter id, same page count, same image quality. That record lives in the project's `manifest.json` and is rewritten on every download attempt, marked `verified` only once every page is actually on disk, so a run killed mid-download resumes instead of reporting a complete chapter. If the chapter has changed since it was last fetched here (re-uploaded under a new id, or you switched `image_quality`), the old pages are cleared and every page is re-fetched — they were images of something else.
 
@@ -694,7 +701,7 @@ Two commands - both reachable from `remanga interactive`'s project-picker menu (
 ```bash
 ./run.sh full-recap --project "my_manga" [--chapters 1,2,3] [--force]
 ```
-It runs each chapter's remaining TTS/mix/render steps (skipping whatever's already cached) and **keeps every chapter's own MP4** — under `video/chapter_<num>/` — then builds the joined video separately: one continuous narration track, ONE background-music loop under the whole thing (a single fade-in at the very start, a single fade-out at the very end — never restarted per chapter), and ONE loudness-normalization pass, so there's no audible BGM restart or loudness jump at a chapter boundary the way naively concatenating N independently-mixed chapter videos would produce. The result lands at `video/<project>_full_recap.mp4`.
+It runs each chapter's remaining TTS/mix/render steps (skipping whatever's already cached) and **keeps every chapter's own MP4** — under `video/chapter_<num>/` — then builds the joined video separately: one continuous narration track, ONE background-music loop under the whole thing (a single fade-in at the very start, a single fade-out at the very end — never restarted per chapter), and ONE loudness-normalization pass, so there's no audible BGM restart or loudness jump at a chapter boundary the way naively concatenating N independently-mixed chapter videos would produce. The joined *picture* isn't encoded again at all: every chapter's cached picture stream is stream-copied end to end, and only the new soundtrack is encoded, so the join takes about as long as encoding its audio. The result lands at `video/<project>_full_recap.mp4`.
 
 `--rebuild` (the wizard asks it as *"How much to rebuild"*) decides how much is thrown away first. One ordered choice rather than a set of yes/no flags to combine, because the three options are strictly increasing in destructiveness and combining them was how people ended up re-synthesizing a project by accident:
 
@@ -725,7 +732,7 @@ Wiping the **whole project** up front, rather than each chapter as the compile r
 ```bash
 ./run.sh remix --project "my_manga" [--chapters 1,2] [--bgm new_song.wav] [--no-rejoin]
 ```
-It re-mixes and re-renders only the chapters you name (default: all of them) — never touching TTS or frame compositing, the genuinely expensive steps — then re-joins the full-recap video too if one already exists, so it never silently drifts out of sync with a BGM change applied to its chapters. Pass `--bgm` to swap the music file itself; to change only `bgm_volume_db`, run `setup-config` first (or answer yes when the wizard's remix option offers to) and then remix with no `--bgm`.
+It re-mixes and re-renders only the chapters you name (default: all of them) — never touching TTS, frame compositing or the encoded picture, so each chapter costs a mix and an audio encode — then re-joins the full-recap video too if one already exists, so it never silently drifts out of sync with a BGM change applied to its chapters. Pass `--bgm` to swap the music file itself; to change only `bgm_volume_db`, run `setup-config` first (or answer yes when the wizard's remix option offers to) and then remix with no `--bgm`.
 
 ---
 
@@ -995,7 +1002,7 @@ remanga/
 │       ├── audio/chapter_<num>/                    # Synthesized vocal WAV per panel + audio_timing.json + master_audio.wav
 │       └── video/                                  # Only ever holds finished MP4s at each level - see below
 │           ├── chapter_<num>/
-│           │   ├── _work/                          # frames/, concat_list.txt - build artifacts, not deliverables
+│           │   ├── _work/                          # frames/, concat_list.txt, picture.mp4 (video-only stream) - build artifacts, not deliverables
 │           │   └── <project>_ch<num>_recap.mp4      # This chapter's own video (kept - see `remix` below)
 │           ├── _work/                               # full-recap's own master audio/concat list
 │           └── <project>_full_recap.mp4             # `full-recap`'s whole-manga joined video
@@ -1079,7 +1086,7 @@ nvidia-smi --query-gpu=utilization.gpu,utilization.encoder --format=csv
 
 Ubuntu's own **Resources** app (`resources`, the default system monitor since it replaced GNOME System Monitor) reads the same NVML counters and shows them separately: its GPU tab has a **Video Encoder** / **Video Decoder** figure alongside the main GPU utilization graph — that's the one that moves during a render, while the headline graph stays near idle. To see it per-process, turn on the **Video Encoder** column in Settings → Processes (or Apps), and ffmpeg's row will show it. Either way, don't read the general "GPU" percentage as "is my GPU being used" for an encode.
 
-The CPU work is real, but it's everything that *isn't* H.264 encoding: decoding the panel PNGs, converting RGB→YUV, duplicating each panel's frame out to the configured fps (a 12-minute recap at 30fps is ~21,000 frames), encoding the AAC audio, and muxing the MP4. None of that has a GPU path worth taking here, and at ~7x realtime it isn't the bottleneck either. The frame-compositing phase *before* the encode is 100% CPU by design (Pillow), as is the audio assembly (pydub).
+The CPU work is real, but it's everything that *isn't* H.264 encoding: decoding the panel PNGs, converting RGB→YUV, duplicating each panel's frame out to the configured fps (a 12-minute recap is ~3,600 frames at the default 5fps, ~21,000 at 30fps), encoding the AAC audio, and muxing the MP4. None of that has a GPU path worth taking here. The frame-compositing phase *before* the encode is CPU by design (Pillow, one thread per core), as is the audio assembly (pydub).
 
 ### 4. How do I get contact sheets instead of individual panels?
 Contact sheets (`sheets`) are on by default; `panels_zip` is off. To get individual panels instead of, or in addition to, sheets:

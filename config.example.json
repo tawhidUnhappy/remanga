@@ -125,7 +125,7 @@
   "video": {
     "width": 1920,
     "height": 1080,
-    "fps": 30,
+    "fps": 5,
     "background_style": "blur",
     "blur_brightness": 0.42,
     "background_color": "#000000",

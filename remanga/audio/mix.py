@@ -6,6 +6,7 @@ from typing import Any
 from pydub import AudioSegment
 
 from remanga import settings
+from remanga.audio.join import join_segments
 from remanga.audio.recipe import mix_fingerprint, write_recipe
 from remanga.audio.resample import load_audio
 from remanga.config import AudioConfig, RemangaConfig
@@ -114,20 +115,22 @@ class AudioProcessor:
         # roughly a quarter of real time per chapter for a subtle result),
         # so nothing is written back per clip either - audio_modified/ holds
         # only the mixed master now.
-        combined_voice = AudioSegment.empty()
+        segments: list[AudioSegment] = []
         for p in panels:
             clip_file = audio_dir / p["audio_file"]
             if clip_file.exists():
-                segment = AudioSegment.from_file(clip_file)
+                segments.append(AudioSegment.from_file(clip_file))
             else:
-                segment = AudioSegment.silent(duration=p["duration_ms"], frame_rate=self.config.sample_rate)
-
-            combined_voice += segment
+                segments.append(AudioSegment.silent(duration=p["duration_ms"], frame_rate=self.config.sample_rate))
 
             # Append inter-panel silence pause
             pause_ms = p.get("pause_after_ms", 0)
             if pause_ms > 0:
-                combined_voice += AudioSegment.silent(duration=pause_ms, frame_rate=self.config.sample_rate)
+                segments.append(AudioSegment.silent(duration=pause_ms, frame_rate=self.config.sample_rate))
+
+        # One join rather than `+=` per clip, which re-copied the whole track
+        # so far on every append - see audio/join.py.
+        combined_voice = join_segments(segments)
 
         # Convert to 2-channel stereo for master output
         master_audio = combined_voice.set_channels(2).set_frame_rate(self.config.sample_rate)

@@ -26,9 +26,9 @@ remanga/                                     # package: json_io.py, ffmpeg_io.py
   settings/{files,fields,assets,vision,presets,engine,video,tuning,sections,summary,wizard,paths_ui}.py
   full_recap/{discovery,timeline,compiler}.py   verify/{models,panels,probe,runner,report}.py
   reset/{modes,entries,actions}.py              status/{compute,panel,badges}.py
-  audio/{tts.py,mix.py,clips.py,resample.py,synth/{base,kokoro}.py,scripts/kokoro_worker.py}
+  audio/{tts.py,mix.py,join.py,clips.py,resample.py,synth/{base,kokoro}.py,scripts/kokoro_worker.py}
   cropper/{crop*.py,gutter/{sampling,bands,refine}.py,...}
-  video/{compose.py,render.py}
+  video/{compose.py,frame_timeline.py,encoding.py,render.py}
   models/{weights.py,scripts/download_*.py}
 projects/<name>/
   project.json  manifest.json  memory.json
@@ -87,6 +87,15 @@ need to find "the" existing full-recap without already knowing its exact
 range (remix.py's rejoin check, verify's report) use the new
 `find_full_recap_video(project)` glob-based lookup (newest by mtime)
 instead.
+
+The join encodes NO video (2026-09-12): phase 2 calls
+`VideoRenderer.ensure_picture` per chapter (builds `_work/picture.mp4` for a
+chapter rendered before pictures existed) and stream-copies them with the
+concat demuxer (`-auto_convert 0`). Needs byte-identical codec parameter sets
+- `encoding.stream_signature` compares extradata hashes and falls back to a
+re-encode if any chapter differs. Each chapter's narration is padded to its
+picture's whole-frame length (`assemble_combined_audio(chapter_lengths_sec=)`),
+else the sound runs up to a frame ahead at every chapter boundary.
 
 ## Chapter downloads: chapter picker + MangaDex chapter-list caching
 
@@ -1089,7 +1098,47 @@ encoder reads as an idle GPU. Query `utilization.encoder` before concluding
 anything - Ubuntu's default Resources app (net.nokyan.Resources, NVML-backed)
 shows the same split as a "Video Encoder" figure on its GPU tab, and as an
 optional per-process column. The CPU side is the unavoidable prep: PNG decode, rgb24→yuv420p,
-duplicating each panel's frame out to fps, AAC, muxing.
+duplicating each panel's frame out to fps, AAC, muxing. (That measurement was
+the old 30fps p6 encode; see the next section for what replaced it.)
+
+## Rendering: a recap is a slideshow - encode frames, not seconds (2026-09-12)
+
+Measured on reincarnated ch2.1 (7.6 min, 71 panels), RTX 3060. The table and
+choices live in `video/encoding.py`; the timeline in `video/frame_timeline.py`.
+
+- **NVENC time is frames x preset, nothing else.** Swapping `fps,format` to
+  `format,fps` and uploading once with `hwupload_cuda` both measured 0 gain
+  (65s). Only fewer frames or a faster preset moved it.
+- **5fps CFR, cuts snapped into the inter-panel pause** (`build_frame_timeline`):
+  every cut on all 14 chapters here lands in silence, image 0-175ms before its
+  line. Default `video.fps` 5 (the user's config.json was changed 30 -> 5 the
+  same day). NVENC p4 CQ18: 7.8s, 56.0dB vs 65.5s/56.5dB before.
+- **VFR (one frame per panel) was tried and rejected**: 46dB on NVENC (each
+  panel gets one frame, no P-frame refinement), and YouTube guidance favours
+  CFR. Don't bring it back without asking.
+- **Cap `-frames:v`**: the concat demuxer stretches the repeated trailing entry
+  - uncapped, a picture came out 6.4s (32 frames) longer than its narration.
+- **Seek-based frame checks lie for stills.** `-ss` accurate seek drops a frame
+  whose pts is before the seek point, so "frame before the cut" measured as the
+  wrong image. Check frames by index: `select=eq(n\,K),setpts=0`.
+- **`-cq` without `-b:v 0` is fine in current ffmpeg** (nvenc.c zeroes the
+  average bitrate in CQ mode) - the forum advice is outdated.
+- **`-aac_coder fast`**: ffmpeg's docs call it better AND much faster above
+  64kbps; 3.2s vs 9.4s. AAC was the floor once the picture got cheap.
+- **Frame PNG `optimize=True` was 91% of compositing** (589 of 648ms) and made
+  the file BIGGER than `compress_level=1`. Compositing now threads (Pillow drops
+  the GIL; 12 threads = 12 processes): 103s -> 2.6s for 159 panels.
+- **`Image.resize(box=)` rejects a float box -1e-13 outside the image** - clamp.
+- **pydub `track += clip` in a loop is quadratic**: 168.9s of copying on an
+  82-min recap. `audio/join.py:join_segments` = byte-identical in 0.23s.
+- `picture.mp4` + `picture_fingerprint.json` (timing mtime, codec, video config,
+  `PICTURE_FORMAT_VERSION`): a sound-only change remuxes (4.1s, video stream
+  md5-identical). Bump `PICTURE_FORMAT_VERSION` when encode args change.
+- Testing a render without touching real output: scratch cwd with `config.json`,
+  `global/bgm`, and `cp -p` copies of chapters/panels/audio/audio_modified (the
+  projects root is cwd-relative). The mix fingerprint stores the ABSOLUTE BGM
+  path, so a copied project re-mixes once - expected, not a bug.
+- Remaining full-recap floor is loudnorm (~42x realtime, single-threaded).
 
 ## Audio quality: three post-synthesis bugs, all fixed - don't reintroduce
 

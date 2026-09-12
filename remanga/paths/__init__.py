@@ -72,6 +72,7 @@ from .projects import (
     get_video_concat_path,
     get_video_dir,
     get_video_frames_dir,
+    get_video_picture_path,
     get_video_work_dir,
 )
 from .review import get_narration_review_history_dir, get_narration_review_path
@@ -137,6 +138,7 @@ __all__ = [
     "get_video_concat_path",
     "get_video_dir",
     "get_video_frames_dir",
+    "get_video_picture_path",
     "get_video_work_dir",
     "list_projects",
     "load_project_metadata",

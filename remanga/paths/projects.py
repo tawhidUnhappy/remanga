@@ -164,6 +164,14 @@ def get_video_concat_path(project_name: str, chapter_num: str, create: bool = Tr
     return get_video_work_dir(project_name, chapter_num, create=create) / "concat_list.txt"
 
 
+def get_video_picture_path(project_name: str, chapter_num: str, create: bool = True) -> Path:
+    """This chapter's encoded picture stream - video only, no sound. Kept
+    apart from the final MP4 so a sound-only change remuxes it instead of
+    re-encoding it, and so full-recap can stream-copy every chapter's
+    picture into the join (see video/render.py)."""
+    return get_video_work_dir(project_name, chapter_num, create=create) / "picture.mp4"
+
+
 def get_project_video_dir(project_name: str, create: bool = True) -> Path:
     """{manga}/video/ - one chapter_N/ subfolder per chapter (see
     get_video_dir) plus the manga-wide full-recap join's own output

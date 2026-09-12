@@ -3,8 +3,9 @@
 Phase 1 makes sure every chapter has its own finished MP4 - kept, not a
 throwaway intermediate, so a later BGM/volume-only change can rebuild just
 the mix and that file instead of re-running TTS and frame compositing.
-Phase 2 joins them by rebuilding one continuous timeline (see timeline.py)
-and encoding it in a single ffmpeg pass.
+Phase 2 joins them: every chapter's already-encoded picture stream-copied
+end to end, under one continuous soundtrack rebuilt for the whole manga (see
+timeline.py) - the only thing the join encodes.
 
 The join itself needs an explicit --force to rebuild: detecting "did
 anything downstream change" across every chapter at once isn't worth the
@@ -25,7 +26,13 @@ from remanga.ffmpeg_io import run_ffmpeg
 from remanga.full_recap.discovery import discover_chapters
 from remanga.full_recap.timeline import assemble_combined_audio
 from remanga.humanize import fmt_duration
-from remanga.paths import get_chapter_dir, get_final_video_path, get_full_recap_concat_path, get_full_recap_video_path
+from remanga.paths import (
+    get_chapter_dir,
+    get_final_video_path,
+    get_full_recap_concat_path,
+    get_full_recap_video_path,
+    get_full_recap_work_dir,
+)
 from remanga.reset import (
     KEEP_ON_SOURCES_REBUILD,
     PROJECT_KEEP,
@@ -39,6 +46,8 @@ from remanga.reset import (
 )
 from remanga.settings.project_prefs import cropper_config_for
 from remanga.video.compose import FrameCompositor
+from remanga.video.encoding import AUDIO_CODEC_ARGS, COLOR_TAG_ARGS, MUX_ARGS, picture_codec_args, stream_signature
+from remanga.video.frame_timeline import concat_quote
 from remanga.video.render import VideoRenderer
 
 
@@ -46,8 +55,8 @@ class FullRecapCompiler:
     """Owns one whole-manga compilation run. Reuses TTSEngine/AudioProcessor/
     VideoRenderer for the per-chapter work (all already resumable on their
     own - an interrupted run just picks up where it left off), then does its
-    own cross-chapter audio/frame assembly and a single ffmpeg encode for
-    the join."""
+    own cross-chapter audio assembly and a stream-copy join of the chapters'
+    pictures."""
 
     def __init__(self, config: RemangaConfig | None = None):
         self.config = config or RemangaConfig.load()
@@ -336,65 +345,54 @@ class FullRecapCompiler:
                 force_tts=deep, force_mix=deep, regenerate_all=deep,
             ))
 
-        # Phase 2: the whole-manga join - a fresh continuous audio timeline
-        # (see timeline.assemble_combined_audio's docstring for why this can't just
-        # reuse the per-chapter mixed audio from phase 1) plus one concat
-        # list spanning every chapter's frames in order.
-        master_audio_path, frame_timeline = assemble_combined_audio(self.config, project_name, chapter_list)
-        if not frame_timeline:
+        # Phase 2: the whole-manga join. The picture is every chapter's own
+        # picture stream, stream-copied end to end - encoded once per chapter
+        # (in phase 1, or just below for a chapter rendered before pictures
+        # were kept) and never again for the join. The sound is a fresh
+        # continuous timeline (see timeline.assemble_combined_audio's
+        # docstring for why this can't just reuse the per-chapter mixed audio
+        # from phase 1), padded at each chapter boundary to that chapter's
+        # picture length.
+        pictures = [self._renderer.ensure_picture(project_name, chapter_num) for chapter_num in chapter_list]
+        if not any(timeline.total_frames for _, timeline in pictures):
             raise RuntimeError("No panels found across any chapter - nothing to compile.")
+        master_audio_path = assemble_combined_audio(
+            self.config, project_name, chapter_list, [timeline.duration_sec for _, timeline in pictures],
+        )
 
         concat_file = get_full_recap_concat_path(project_name)
-        with concat_file.open("w", encoding="utf-8") as f:
-            for frame_path, duration in frame_timeline:
-                f.write(f"file '{frame_path.resolve()}'\n")
-                f.write(f"duration {duration}\n")
-            last_frame = frame_timeline[-1][0]
-            f.write(f"file '{last_frame.resolve()}'\n")
+        concat_file.write_text("".join(f"file '{concat_quote(picture)}'\n" for picture, _ in pictures),
+                               encoding="utf-8")
 
-        gpu_ffmpeg, note = self._renderer._resolve_gpu_ffmpeg()
-        use_gpu = gpu_ffmpeg is not None
-        # resolve_gpu_codec(), never the raw gpu_codec field: that field
-        # defaults to "auto", which is a marker meaning "ask hardware.py what
-        # this machine has", not an encoder name. Passing it straight to
-        # ffmpeg fails with "Unknown encoder 'auto'" - and fails HERE, at the
-        # very end, after every chapter has already been rendered. The
-        # per-chapter path (video/render.py) always resolved it; this one did
-        # not, so full-recap was broken for anyone who had never pinned an
-        # explicit encoder.
-        codec = (
-            self.config.system.resolve_gpu_codec() if use_gpu
-            else self.config.system.fallback_codec
-        )
-        ffmpeg_bin = gpu_ffmpeg or "ffmpeg"
-        console.print(
-            f"[cyan]Rendering full-manga video using codec:[/] [bold]{codec}[/] "
-            f"[dim]({'Hardware GPU' if use_gpu else 'CPU fallback'})[/]"
-        )
-        if note:
-            console.print(f"[dim]({note})[/]")
-
-        cmd = [
-            ffmpeg_bin, "-y",
-            "-f", "concat",
-            "-safe", "0",
-            "-i", str(concat_file),
-            "-i", str(master_audio_path),
-            "-vf", f"fps={self.config.video.fps},format=yuv420p",
-            "-c:v", codec,
-        ]
-        if not use_gpu:
-            cmd.extend(["-preset", "medium", "-crf", "19", "-threads", str(self.config.system.threads)])
+        # -auto_convert 0 keeps the packets exactly as they sit in each MP4;
+        # the default rewrites H.264 to Annex B on the way through, which a
+        # join of identically-encoded streams doesn't need.
+        cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-auto_convert", "0", "-i", str(concat_file),
+               "-i", str(master_audio_path), "-map", "0:v:0", "-map", "1:a:0"]
+        if len({stream_signature(picture) for picture, _ in pictures} - {None}) == 1:
+            console.print("[cyan]Joining every chapter's picture as-is (stream copy - no video re-encode)...[/]")
+            cmd += ["-c:v", "copy"]
         else:
-            cmd.extend(["-preset", "p6", "-cq", "20"])
-        cmd.extend(["-c:a", "aac", "-b:a", "192k", "-shortest", str(final_video)])
+            # Only when chapters' pictures can't be spliced byte for byte -
+            # encoded with different encoders or settings.
+            ffmpeg_bin, codec, use_gpu, _ = self._renderer.encoder()
+            console.print(
+                f"[yellow]Chapter pictures weren't all encoded the same way - re-encoding the join with "
+                f"{codec}.[/]"
+            )
+            cmd[0] = ffmpeg_bin
+            cmd += [*picture_codec_args(codec, use_gpu, self.config.system.threads), *COLOR_TAG_ARGS, "-bf", "0"]
+        partial = get_full_recap_work_dir(project_name) / f"{final_video.stem}.part.mp4"
+        cmd += [*AUDIO_CODEC_ARGS, *MUX_ARGS, str(partial)]
 
-        total_video_sec = sum(d for _, d in frame_timeline)
+        total_video_sec = sum(timeline.duration_sec for _, timeline in pictures)
         result = run_ffmpeg(cmd, capture=True, show_progress=True, total_seconds=total_video_sec,
-                            description="Encoding full-manga recap")
+                            description="Writing full-manga recap")
         if result.returncode != 0:
+            partial.unlink(missing_ok=True)
             console.print(f"[red]FFmpeg Error Details:\n{_esc(result.stderr)}[/]")
             raise RuntimeError("FFmpeg full-manga rendering failed.")
+        partial.replace(final_video)
 
         elapsed_sec = time.perf_counter() - start_time
         console.print(f"[bold green]✓ Full-manga recap compiled successfully![/] "

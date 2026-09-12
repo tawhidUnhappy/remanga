@@ -12,9 +12,9 @@ concatenated from the same already-edge-faded per-panel clips a single
 chapter's mix uses (which makes a chapter boundary just another
 panel-to-panel join), ONE background-music loop under the whole thing with
 exactly one fade-in at the start and one fade-out at the end, and exactly
-one loudnorm pass over the result. The frame timeline it returns is built in
-the same pass from the same per-panel timings, so the video side can't drift
-from the audio side."""
+one loudnorm pass over the result. Each chapter's stretch is padded out to
+the length of that chapter's picture stream, which the join stream-copies
+alongside it, so the video side can't drift from the audio side."""
 
 from __future__ import annotations
 
@@ -24,29 +24,30 @@ from pydub import AudioSegment
 from rich.progress import BarColumn, Progress, TextColumn
 
 from remanga import settings
+from remanga.audio.join import join_segments
 from remanga.config import RemangaConfig
 from remanga.console import console, escape as _esc
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.json_io import read_json
-from remanga.paths import (
-    get_audio_dir,
-    get_audio_timing_path,
-    get_full_recap_master_audio_path,
-    get_video_frames_dir,
-)
+from remanga.paths import get_audio_dir, get_audio_timing_path, get_full_recap_master_audio_path
 
 
 def assemble_combined_audio(
     config: RemangaConfig, project_name: str, chapters: list[str],
-) -> tuple[Path, list[tuple[Path, float]]]:
-    """Returns the finished master WAV path plus the (frame_path,
-    duration_sec) timeline every frame in the whole manga plays for, in
-    order, for the video side to reuse without re-deriving it."""
-    audio_config = config.audio
-    valid_bgm = settings.ensure_valid_bgm(config, interactive=False)
+    chapter_lengths_sec: list[float] | None = None,
+) -> Path:
+    """Returns the finished master WAV path.
 
-    combined_voice = AudioSegment.empty()
-    frame_timeline: list[tuple[Path, float]] = []
+    `chapter_lengths_sec` (one per chapter) pads each chapter's narration
+    with silence out to that running length: the whole-frame length of the
+    chapter's picture, which ends up to one frame after its last word.
+    Unpadded, every chapter boundary would put the sound that much ahead of
+    the picture, and over dozens of chapters those add up."""
+    if chapter_lengths_sec is not None and len(chapter_lengths_sec) != len(chapters):
+        raise ValueError(f"{len(chapter_lengths_sec)} chapter lengths given for {len(chapters)} chapters")
+    audio_config = config.audio
+    sample_rate = audio_config.sample_rate
+    valid_bgm = settings.ensure_valid_bgm(config, interactive=False)
 
     # Load every chapter's panel timing up front so the progress bar below
     # can show a real total (every panel across the whole manga) instead
@@ -57,12 +58,19 @@ def assemble_combined_audio(
     ]
     total_panels = sum(len(panels) for _, panels in per_chapter_timing)
 
+    segments: list[AudioSegment] = []
+    samples = 0  # running length at sample_rate, exact - pydub's len() rounds to whole ms per segment
+    boundary_sec = 0.0
+
+    def add(segment: AudioSegment) -> None:
+        nonlocal samples
+        segments.append(segment)
+        samples += round(segment.frame_count() * sample_rate / segment.frame_rate)
+
     console.print("[cyan]Assembling one continuous narration track across every chapter...[/]")
-    # This is pure CPU work (pydub decoding/concatenating every panel's WAV
-    # clip in sequence, plus PIL frame compositing next) - the GPU-accelerated
-    # part of this whole pipeline is only the final ffmpeg encode below,
-    # which now shows its own live progress too. Silent for a couple thousand
-    # panels' worth of I/O otherwise looked identical to a hang.
+    # Pure CPU work (pydub decoding every panel's WAV clip in sequence), and
+    # without a bar a couple thousand panels' worth of it looks exactly like
+    # a hang.
     with Progress(
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
@@ -70,33 +78,37 @@ def assemble_combined_audio(
         refresh_per_second=4,
     ) as progress:
         task = progress.add_task("[yellow]Concatenating narration clips...", total=total_panels)
-        for chapter_num, panels in per_chapter_timing:
+        for index, (chapter_num, panels) in enumerate(per_chapter_timing):
             audio_dir = get_audio_dir(project_name, chapter_num)
-            frames_dir = get_video_frames_dir(project_name, chapter_num)
 
             for p in panels:
                 clip_file = audio_dir / p["audio_file"]
                 if clip_file.exists():
-                    segment = AudioSegment.from_file(clip_file)
+                    add(AudioSegment.from_file(clip_file))
                 else:
-                    segment = AudioSegment.silent(duration=p["duration_ms"], frame_rate=audio_config.sample_rate)
-                combined_voice += segment
+                    add(AudioSegment.silent(duration=p["duration_ms"], frame_rate=sample_rate))
 
                 pause_ms = p.get("pause_after_ms", 0)
                 if pause_ms > 0:
-                    combined_voice += AudioSegment.silent(duration=pause_ms, frame_rate=audio_config.sample_rate)
-
-                frame_timeline.append((frames_dir / f"frame_{p['panel_id']}.png", p["total_slot_sec"]))
+                    add(AudioSegment.silent(duration=pause_ms, frame_rate=sample_rate))
                 progress.update(task, advance=1)
 
-    master_audio = combined_voice.set_channels(2).set_frame_rate(audio_config.sample_rate)
+            if chapter_lengths_sec is not None:
+                boundary_sec += chapter_lengths_sec[index]
+                gap = round(boundary_sec * sample_rate) - samples
+                if gap > 0:
+                    add(AudioSegment.silent(duration=gap * 1000 / sample_rate, frame_rate=sample_rate))
+
+    # One join rather than `+=` per clip - 168.9s -> 0.23s on an 82-minute
+    # recap, see audio/join.py.
+    master_audio = join_segments(segments).set_channels(2).set_frame_rate(sample_rate)
 
     if valid_bgm and audio_config.bgm_enabled:
         console.print(
             f"[cyan]Overlaying one continuous background music track (no per-chapter restarts):[/] {_esc(valid_bgm)}"
         )
         bgm_track = AudioSegment.from_file(valid_bgm)
-        bgm_track = bgm_track.set_channels(2).set_frame_rate(audio_config.sample_rate)
+        bgm_track = bgm_track.set_channels(2).set_frame_rate(sample_rate)
         bgm_track = bgm_track + audio_config.bgm_volume_db
 
         total_duration_ms = len(master_audio)
@@ -121,7 +133,7 @@ def assemble_combined_audio(
             "ffmpeg", "-y",
             "-i", str(raw_path),
             "-af", "loudnorm=I=-16:LRA=11:TP=-1.5",
-            "-ar", str(audio_config.sample_rate),
+            "-ar", str(sample_rate),
             str(final_path),
         ]
         try:
@@ -138,5 +150,4 @@ def assemble_combined_audio(
     else:
         raw_path.rename(final_path)
 
-    return final_path, frame_timeline
-
+    return final_path
