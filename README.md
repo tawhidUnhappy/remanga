@@ -388,7 +388,7 @@ Every **Panel detection** pass is normally right and occasionally wrong on an un
   "video": {
     "width": 1920,
     "height": 1080,
-    "fps": 30,
+    "fps": 5,
     "background_style": "blur",
     "blur_brightness": 0.42,
     "panel_border_width": 2,
@@ -403,6 +403,7 @@ A few worth calling out specifically - `cropper.package` is the flat vision-outp
 - **`marker.click_to_select`** (default `true`) — see [Panel Marker Web UI](#panel-marker-web-ui) for what this protects against.
 - **`marker.auto_detect_scope`** (default `"chapter"`), **`marker.auto_save`** (default `true`) and **`marker.auto_order`** (default `false`) — the action bar's scope and Options switches, written by the marker itself when you change them in the browser. See [Mark Panels](#2-mark-panels).
 - **`tts.synth_timeout_seconds`** (default `180`) — see [Reliability](#reliability-crashes-interrupts--resuming).
+- **`video.fps`** (default `5`) — a recap is a slideshow, so the frame rate only decides how finely a panel change can be timed, and every change is placed inside the silent pause before its line. 5 encodes 6× fewer frames than 30 with the same picture; raise it only if you want finer cut timing. See [Render Final Recap Video](#7-render-final-recap-video).
 
 ---
 

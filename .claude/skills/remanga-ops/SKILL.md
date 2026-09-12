@@ -1139,6 +1139,11 @@ choices live in `video/encoding.py`; the timeline in `video/frame_timeline.py`.
   projects root is cwd-relative). The mix fingerprint stores the ABSOLUTE BGM
   path, so a copied project re-mixes once - expected, not a bug.
 - Remaining full-recap floor is loudnorm (~42x realtime, single-threaded).
+- **`config.example.json` IS the generated default** (bootstrap.sh copies it to
+  config.json; `RemangaConfig.load` and webui/settings_store.py fall back to
+  it). Changing a model default does not reach it - regenerate it with
+  `write_json(path, RemangaConfig().model_dump())`. It had silently drifted
+  (no `writer` section, no `marker.auto_*`) before the fps change caught it.
 
 ## Audio quality: three post-synthesis bugs, all fixed - don't reintroduce
 

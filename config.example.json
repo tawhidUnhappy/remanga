@@ -39,10 +39,10 @@
     "gutter_bg_tolerance": 20.0,
     "gutter_min_run_pixels": 3,
     "gutter_min_background_fraction": 0.96,
-    "gutter_background_sample_strip_pixels": 12,
     "reconcile_panel_seams": true,
     "seam_max_gap_fraction": 0.15,
     "seam_min_axis_overlap_fraction": 0.5,
+    "gutter_background_sample_strip_pixels": 12,
     "trim_panel_whitespace": true,
     "trim_min_background_fraction": 0.985,
     "trim_max_margin_fraction": 0.04,
@@ -57,6 +57,9 @@
     "magi_repo_id": "ragavsachdeva/magiv3",
     "magi_model_dir": "checkpoints/magiv3",
     "magi_panel_score_threshold": 0.5,
+    "auto_detect_scope": "chapter",
+    "auto_save": true,
+    "auto_order": false,
     "click_to_select": true,
     "shortcuts": {
       "save": [
@@ -91,6 +94,11 @@
     "port": 8766,
     "auto_open_browser": true
   },
+  "writer": {
+    "host": "127.0.0.1",
+    "port": 8767,
+    "auto_open_browser": true
+  },
   "tts": {
     "engine": "kokoro",
     "lang": "EN",
@@ -119,8 +127,8 @@
     "bgm_enabled": false,
     "bgm_path": "",
     "bgm_volume_db": -22.0,
-    "enable_loudnorm": true,
-    "bgm_target_below_narration_db": 18.0
+    "bgm_target_below_narration_db": 18.0,
+    "enable_loudnorm": true
   },
   "video": {
     "width": 1920,
