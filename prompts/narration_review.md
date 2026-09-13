@@ -10,7 +10,8 @@ note about the chapter as a whole. This round has two jobs:
    later chapter or in a different manga. This is what makes a review round worth doing.
 
 Everything in `prompts/narration.md` still applies to every line you touch - above all `<craft>`
-(every word of dialogue, explained and told like a story) and `<writing_for_the_voice>`.
+(everything anyone says reported in full, never quoted, told as one continuous account in a flat
+declarative register) and `<writing_for_the_voice>`.
 </role>
 
 <inputs>
@@ -51,36 +52,39 @@ it is.
 
 ### What each tag means, and how to fix it
 - `wrong_detail`: a fact in the line doesn't match the art. Correct that fact.
-- `wrong_speaker`: a line is attributed to the wrong character. Give it to the right one, following
-  the bubble's tail.
-- `dropped_content`: a bubble, thought, caption or action is missing. Add it to that panel's own
-  entry, word for word.
-- `flattened_dialogue`: dialogue was paraphrased, summarized or cut down to one line. Quote every
-  bubble, thought and caption in the panel in full, woven into the telling (`<craft>` 1 and 4) -
-  rather than rewording the paraphrase.
-- `transcript_style`: the words are all there, but it reads like a transcript - "says" on every
-  line, tags where the speaker is obvious, entries that don't connect, data read out field by
-  field. Fix the telling with action beats, a link to the panel before, varied rhythm and data said
-  naturally (`<craft>` 1, 3, 4 and 5), without changing a word of the dialogue.
-- `word_budget`: the entry's length doesn't fit what the panel holds - usually cut short into a
-  recap-style summary (restore the full words and the explanation), occasionally padded with
-  things the panel doesn't show. There is no word limit, so a long entry isn't a problem in itself,
-  and no fix shortens a quote.
-- `tts_unsafe_typography`: a stammer is spelled the way manga letters it, so the voice
-  mispronounces it ("w-what" is read as "double-u what"). Write the whole word as
-  `<writing_for_the_voice>` describes, keeping the character's tone. A plain "..." pause is fine
-  and isn't this tag.
-- `quoted_sfx`: a sound effect that isn't a word ("Hii!", "Tch", "Grr") is quoted as if it were
-  dialogue. Narrate the reaction it conveys instead. Ordinary interjections ("Huh?", "Ugh.") and
-  real shouted words ("Stop!") are dialogue, not this tag.
+- `wrong_speaker`: something is attributed to the wrong character. Give it to the right one,
+  following the bubble's tail.
+- `dropped_content`: a bubble, thought, caption or action is missing entirely. Add it to that
+  panel's own entry, reported like the rest.
+- `gist_only`: the bubble is there, but only its gist survived - the claims, the threat, the
+  question or the insult inside it were compressed away ("they argue about money"). Report
+  everything that was actually said, beat by beat (`<craft>` 1), rather than rewording the
+  summary.
+- `quoted_dialogue`: words are quoted, or written as direct speech, instead of being reported.
+  Convert them to reported speech and drop the quotation marks (`<craft>` 1).
+- `register_break`: the flat narrator register slipped - an exclamation mark or question mark, a
+  contraction, an ellipsis, an interjection or sound effect transcribed instead of reported, the
+  narrator addressing the viewer or commenting on the moment, past tense, or first or second
+  person. Restore the register (`<craft>` 2 and 5) without changing what is reported.
+- `tts_unsafe_typography`: lettering the voice mispronounces - a spelled-out stammer ("w-what" is
+  read as "double-u what"), capitals for emphasis ("SHUT UP" is read as "shut U-P"), an unhyphenated
+  letter grade, or a number that reads wrong. Fix it as `<writing_for_the_voice>` describes; a
+  stammer becomes a report ("he stammers that...").
+- `disconnected`: the entry doesn't follow from the one before it, or a scene change isn't marked,
+  so the script reads as a list of captions rather than one continuous telling. Link it by cause,
+  contrast or timing, and mark the cut where there is one (`<craft>` 4).
+- `entry_length`: the entry doesn't fit what the panel holds - usually cut short, so content is
+  missing (restore it), occasionally padded with things the panel doesn't show (cut the padding).
+  There is no word limit, so a long entry isn't a problem in itself, and no fix drops content to
+  shorten one.
 - `content_shift`: the `panel_id` is right, but the text describes a different panel - usually its
   neighbour - because an image was skipped or read out of order. The panels after it have probably
   shifted too, so check them as well as the flagged one.
 - `empty_text`: the panel has no narration. Every panel belongs to the story; narrate what it shows
   and what it means.
 - `spoiler`: a name or a reveal arrives before the chapter gives it (`<craft>` 7).
-- `punctuation`: emphatic punctuation is overused, or missing where the moment calls for it
-  (`<craft>` 6).
+- `too_explicit`: suggestive or graphic material is told too bluntly for a public video platform.
+  Report it obliquely and move on, without losing what actually happened (`<craft>` 8).
 - `continuity`: the line contradicts `memory.json` or earlier chapters.
 - `other`, or no tag: go by `issue`.
 </inputs>
@@ -89,9 +93,9 @@ it is.
 ## How to work
 
 1. For each flagged panel, check its line against the art and the `issue`, and rewrite only what
-   the issue calls for, following `prompts/narration.md`. A fix never shortens, paraphrases or
-   drops dialogue, and a restored or corrected line is woven into the telling like the rest of the
-   script rather than dropped in as a bare "X says" quote.
+   the issue calls for, following `prompts/narration.md`. A fix never drops or thins out what was
+   said, and a restored line is reported and connected like the rest of the script rather than
+   dropped in as a bare quote.
 2. Leave every panel that wasn't flagged exactly as it is, character for character.
 3. If there's a `general_note`, apply it as an instruction for the whole chapter. When it describes
    a pattern, fix that pattern wherever it appears, including in panels that weren't flagged.
@@ -113,15 +117,14 @@ with different characters, different art and a different genre - never a note ab
   tail to its source before attributing the line, rather than defaulting to the more prominent
   character."
 
-- Too specific: "Chapter 3's ellipses were overused in the fight scene."
-- General: "Runs of action panels tend to pile up '...' even when only the first panel is actually
-  hesitant; judge each panel's punctuation on its own moment rather than carrying the previous
-  panel's tone forward."
+- Too specific: "Chapter 3 quoted the villain's threat instead of reporting it."
+- General: "A long, quotable threat is the line most likely to slip back into direct speech; report
+  it with a verb that carries the sneer rather than preserving its wording."
 
 For each flagged panel, and anything the general note caught, ask what would have prevented it.
 That answer, phrased for any manga, is the lesson. When several flags this round share a cause -
-more than one stammer spelling, or more than one shifted panel - say so in the lesson, because the
-pattern needs reinforcing rather than one-off fixes. A truly one-off slip that teaches nothing
+more than one spelled-out stammer, or more than one shifted panel - say so in the lesson, because
+the pattern needs reinforcing rather than one-off fixes. A truly one-off slip that teaches nothing
 reusable, like a typo, doesn't need a lesson.
 
 Read the existing lessons first. Don't add one that's already there in substance, even in

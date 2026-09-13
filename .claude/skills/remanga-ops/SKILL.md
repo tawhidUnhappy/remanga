@@ -756,28 +756,41 @@ keeps), reachable from the menu like everything else.
   The old advisories (empty lines, duplicate lines, >35% "-ing" openers -
   measured at 46% on a real chapter and audible as a drone) are now checks
   the LLM runs on itself (`<craft>` 5, `<process>`).
-- **Narration style = every line of dialogue verbatim + a full explanation of
-  each panel, NO word limit** (user's decision, 2026-09-11). The old recap
-  style (10-20 words, 26-word ceiling, quote only the "key" line, synthesize
-  the rest) produced chapters that skipped dialogue and was rejected. So there
-  is no length advisory and no word ceiling anywhere - don't add one back.
-  Every word is kept but TOLD, not recited (user, same day): speaker shown by
-  action beats rather than a "says" tag on every quote (tags only when truly
-  ambiguous), each entry carries on from the previous panel, rhythm varies,
-  and data (status windows, stat blocks) is said naturally, not read field by
-  field. A literal "tag every quote" rule was shipped once and produced
-  transcript-style narration; reviewer tag `transcript_style` flags it.
-- **prompts/narration.md and narration_review.md were rewritten 2026-09-12**
-  from researched craft, not pipeline rules (the user asked for it): XML-tag
-  sections (`<role>`, `<craft>`, `<writing_for_the_voice>`, `<inputs>`,
-  `<process>`, `<examples>`, `<output_format>`), seven named craft principles
-  each with its WHY (every word of dialogue; explain don't describe - viewers
-  already see the panel, "say cow, see cow"; "but/so" not "and then"; action
-  beats and plain says/asks over tags; write for the ear; one steady
-  storyteller voice; no spoilers), calm wording instead of NEVER/CRITICAL
-  (current models over-apply shouted rules), no contradictions (the old one
-  demanded a note to the user AND a reply of only JSON blocks). Reference
-  sections by tag name - the old "Rule N" numbers are gone.
+- **Narration style = reported speech, never quoted** (user's decision,
+  2026-09-13, against a sample script the user supplied). Everything anyone
+  says, thinks or reads is converted to reported speech and folded into the
+  telling ("she admits that...", "he wonders whether...") - there are no
+  quotation marks in the script at all, and no question marks or exclamation
+  marks either, because a reported question is a statement and the reporting
+  verb (boasts/insists/begs/mocks) carries the force. Third person, present
+  tense, NO contractions ("does not", "cannot"), narrator never addresses the
+  viewer or comments. Entries link by cause/contrast/timing (However, Since,
+  Just then, Hearing this) and scene cuts are marked (Meanwhile, somewhere
+  nearby). Suggestive material told obliquely, violence plainly.
+  This REPLACES the 2026-09-11 "every line verbatim, quoted in full" rule -
+  don't restore quoted dialogue. What survives from it: there is still NO word
+  limit or length ceiling anywhere (the 2026-09-11 rejection of the 10-20 word
+  / 26-word-ceiling recap stands), and content is still complete - every claim,
+  threat and question inside a bubble survives the conversion to reported
+  speech; only the gist surviving is the reviewer tag `gist_only`. Typical
+  entry is now 1-2 sentences because reporting compresses, not because
+  anything is dropped.
+- **prompts/narration.md and narration_review.md keep their XML-tag shape**
+  (`<role>`, `<craft>`, `<writing_for_the_voice>`, `<inputs>`, `<process>`,
+  `<examples>`, `<output_format>`) from the 2026-09-12 rewrite, with calm
+  wording instead of NEVER/CRITICAL (current models over-apply shouted rules)
+  and no contradictions (an older one demanded a note to the user AND a reply
+  of only JSON blocks). Reference sections by tag name - the old "Rule N"
+  numbers are gone. `<craft>` was re-pointed at the reported-speech style on
+  2026-09-13: eight principles, each with its WHY (report don't quote; a
+  reported question is a statement; explain don't describe - viewers already
+  see the panel; connect every moment and mark scene cuts; one flat narrator;
+  how much each panel gets; no spoilers; discretion). Three worked examples,
+  all in reported speech. Reviewer tags were re-cut to match: `gist_only`,
+  `quoted_dialogue`, `register_break`, `disconnected`, `entry_length`,
+  `too_explicit` replaced `flattened_dialogue`, `transcript_style`,
+  `quoted_sfx`, `punctuation`, `word_budget` - the list lives in BOTH
+  narration_review.md and webui/static_review/app.js and must stay in sync.
   Long panels are safe: KPipeline's chunks are concatenated in
   kokoro_worker.py, and a panel is held on screen for its own clip's length
   (audio_timing.json), never sped up to fit.
