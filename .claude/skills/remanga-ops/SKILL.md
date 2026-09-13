@@ -161,11 +161,74 @@ new - the "which chapters do I actually have" screen:
   chapters very possibly not downloaded yet) - the flag is `--select`
   instead.
 
-## TTS engine (`config.json` → `tts.engine`)
+## Tool environments are a registry now (`remanga/tool_envs.py`, 2026-09-13)
 
-One engine: `kokoro` (hexgrad/Kokoro-82M, 82M params, StyleTTS 2 + iSTFTNet,
-Apache-2.0 code *and* weights). IndexTTS-2.5 and Audio8 TTS were removed -
-see branch `legacy/indextts-audio8` for what they did.
+Every `.tools/venv-<name>` (kokoro, chatterbox, magi, deepseek-ocr) is
+described in ONE place - a `TOOLS` tuple of `ToolSpec`s (name, display name,
+install steps). `bootstrap.sh` no longer hand-writes a shell block per tool;
+it calls `python -m remanga.tool_envs install --torch-backend $X` and that's
+the whole "4. Virtual environments" section now. `remanga setup-tools`
+(new command) does the same thing on demand, and `remanga.venvs.
+get_tool_python` (re-exported, used everywhere else in the tree unchanged)
+is now `tool_envs.ensure_tool` - a tool's environment auto-installs itself
+the first time that tool actually runs, the same way weights already
+lazy-fetch on first use. **Adding a tool is one `ToolSpec` in that list, not
+a bootstrap.sh edit** - see the fingerprint mechanism (`ToolSpec.fingerprint`,
+a `.remanga-tool.json` marker per venv) for how a changed entry is detected
+and re-installed without disturbing every other environment. A marker-less
+env (anything installed before this existed) is treated as current, not
+stale, and gets a marker backfilled on next use - don't "fix" that into a
+mandatory reinstall, it would force-reinstall every existing user's working
+kokoro/magi/deepseek-ocr envs for nothing.
+
+## TTS engines (`config.json` → `tts.engine`)
+
+Two engines now: `kokoro` (default, hexgrad/Kokoro-82M, 82M params, StyleTTS 2
++ iSTFTNet, Apache-2.0, fixed named voices) and `chatterbox`
+(ResembleAI/chatterbox-turbo, 2026-09-13, MIT, clones a narrator from a
+recording). `TTSEngineSpec.clones_voice` is what the rest of the codebase
+branches on instead of the engine name - it decides whether a voice is a NAME
+(checked against Kokoro's catalogue) or a PATH (checked on disk via
+`settings/assets.py:clip_problem`: exists, decodable, longer than 5s - Turbo
+asserts on anything shorter and that used to only surface at synthesis time).
+`TTSConfig.voice_label`/`voice_detail` are the one place that renders either
+shape for a screen; grepping for `.kokoro.spec` outside `KokoroConfig` itself
+means something is still assuming there's only one engine.
+
+Chatterbox has no speaking-rate control - `tts.speed` is applied by
+time-stretching the finished clip (`_adjust_audio_speed`, ffmpeg atempo) in
+`_post_synthesize`, not as a generation parameter like Kokoro's. It also has
+a real per-call generation budget (Turbo: 1000 speech tokens ≈ 40s of audio,
+silently truncated past that, no error) - `ChatterboxSynthesizer.
+chunk_max_chars = 300` routes anything longer through `BaseWorkerSynthesizer`'s
+existing sentence-boundary chunking (built for exactly this, previously
+unused since Kokoro has no such limit). Verified live against the actual
+longest narration line in this repo (370 chars, mermaidWife ch1) - came back
+as 3 chunks joined into one clean 20s clip, no truncation.
+
+**PyPI's `resemble-perth` is a stub - install the git version.** Chatterbox
+constructs a `perth.PerthImplicitWatermarker()` on load; the PyPI package by
+that name is an abstract-base-class shim with `PerthImplicitWatermarker`
+importing as `None`, so every worker dies on `'NoneType' object is not
+callable` with no hint why. `chatterbox-tts`'s own pyproject.toml already
+pins `resemble-perth @ git+https://github.com/resemble-ai/Perth.git@master`
+instead - `tool_envs.py` and `bootstrap.sh` install that same git ref. Also:
+`chatterbox-tts==0.1.7` pins `torch==2.6.0` exactly, unsatisfiable on cu129
+wheels (2.6 doesn't exist there) - installed `--no-deps` after its real deps
+go in against this machine's torch, same pattern as DeepSeek-OCR-2's pin.
+
+Resume tracks the VOICE a chapter's cached clips are actually in now
+(`audio_timing.json`'s new `"voice"` key, `audio/tts.py:
+narration_voice_identity` - engine name, plus the clip's own path+size+mtime
+for a cloning engine, so re-exporting a cleaner take of the same-named file
+is correctly treated as a different narrator). Switching engine or narrator
+and re-running `tts` forces a full re-synthesis instead of silently
+"resuming" panels in the old voice - this did not exist before Chatterbox,
+because with one engine and named voices there was never a way to get it
+wrong silently.
+
+Old engine, unchanged below - see IndexTTS-2.5 / Audio8 (removed, branch
+`legacy/indextts-audio8`) for what predates both current engines:
 
 - **No cloning.** `tts.kokoro.voice` is a NAME from the model's own
   catalogue (`config/kokoro_voices.py`), not a path. There is no reference
