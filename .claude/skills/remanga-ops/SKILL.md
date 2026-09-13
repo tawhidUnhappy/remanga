@@ -420,9 +420,14 @@ audio-only stream.
 
 **`bgm_volume_db` is relative to the FILE's own loudness**, not absolute, so
 a value tuned for one track is wrong for the next. Fixed by an ACTION, not by
-runtime magic: Settings -> Audio levels offers "Measure your narration and
-music, and correct the music level?", which measures both
-(`audio/leveling.py`) and WRITES a plain number into config.json.
+runtime magic: Settings -> Audio levels -> "Balance voice and music
+automatically" asks which balance you want (`BALANCE_PRESETS`), measures both
+sides (`audio/leveling.py`) and WRITES a plain number into config.json.
+
+The default `-35.0` is the arithmetic for a typical -10 LUFS music file at
+the 20 LU default target, not a tuned value - it exists so a first render
+with any ordinary track is listenable. The old `-22.0` left such a track ~6
+LU under the narration, fighting every line.
 
 Deliberately not computed at mix time. A level the mix works out on every run
 is invisible in the config, unquestionable, and un-nudgeable; a number
@@ -443,8 +448,22 @@ somebody can read and adjust is what a settings file is for.
   each other, so a handful is at the noise floor of the question; median
   rather than mean so one clip that is a single quiet word cannot drag it.
   Falls back to `TYPICAL_NARRATION_LUFS = -25.7` on a fresh install.
+- Clips come from ONE chapter folder, with the `volume_boost_db` baked into
+  them read from the `audio_timing.json` beside them. That is what makes
+  `read_levels(..., narration_boost_db=)` correct: the music is measured as
+  it is now, the narration from clips written at whatever boost was set THEN,
+  and the next tts run applies the difference - so the level balanced against
+  is `measured + (current_boost - baked_boost)`. Verified: +6 dB on the voice
+  moves the suggested music gain +6.0 dB.
 - Whole action costs ~250ms. It is a deliberate one-shot the user navigates
   to, so correctness beats shaving milliseconds.
+- **Settings -> Audio levels is a MENU, not a walkthrough** (user's request,
+  2026-09-13): auto-balance, narration volume, music volume, music on/off,
+  loudnorm - each a row that renders its live value, looping until Back. The
+  music-volume row is hidden when music is off. Every action that touches the
+  balance routes through `_ensure_music`, which offers the file picker rather
+  than doing nothing. Presets are named by what they SOUND like ("Voice
+  first", 20 LU) because the LU number is the part nobody has intuition for.
 
 ## Where the knobs live (`settings/sections.py` + `commands/setup_rows.py`)
 
@@ -1122,10 +1141,18 @@ choices live in `video/encoding.py`; the timeline in `video/frame_timeline.py`.
 - **NVENC time is frames x preset, nothing else.** Swapping `fps,format` to
   `format,fps` and uploading once with `hwupload_cuda` both measured 0 gain
   (65s). Only fewer frames or a faster preset moved it.
-- **5fps CFR, cuts snapped into the inter-panel pause** (`build_frame_timeline`):
-  every cut on all 14 chapters here lands in silence, image 0-175ms before its
-  line. Default `video.fps` 5 (the user's config.json was changed 30 -> 5 the
-  same day). NVENC p4 CQ18: 7.8s, 56.0dB vs 65.5s/56.5dB before.
+- **CFR, cuts snapped into the inter-panel pause** (`build_frame_timeline`):
+  measured at 5fps, every cut on all 14 chapters here landed in silence, image
+  0-175ms before its line; a 24fps frame is 42ms, so the same cuts sit inside
+  the same 350ms pause with room to spare. NVENC p4 CQ18 at 5fps: 7.8s,
+  56.0dB vs 65.5s/56.5dB at 30fps before.
+- **Default `video.fps` is 24** (user's request, 2026-09-13; it was 5, and
+  before that 30). The rate changes nothing visible - a recap is a slideshow -
+  so the reason is what everything downstream expects a video to be: a single
+  digit rate is unusual enough for players and platform encoders to treat as
+  an error case. The duplicate frames compress to almost nothing between the
+  forced keyframes at each panel change. Don't "optimize" it back down without
+  asking; encode time on a CPU-only box is the one legitimate reason.
 - **VFR (one frame per panel) was tried and rejected**: 46dB on NVENC (each
   panel gets one frame, no P-frame refinement), and YouTube guidance favours
   CFR. Don't bring it back without asking.

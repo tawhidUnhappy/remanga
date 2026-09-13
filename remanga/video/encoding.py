@@ -12,7 +12,12 @@ quality is PSNR of the decoded video against the composited source frames:
              5fps  NVENC p6 CQ18                           13.7s  55.0dB
              5fps  libx264 slow stillimage CRF18, 12 thr   22.1s  56.1dB
 
-Every one of those is far past visually lossless (~45dB)."""
+Every one of those is far past visually lossless (~45dB).
+
+Those rows were measured when video.fps defaulted to 5; it defaults to 24
+now (config/video.py), which puts a real encode between the 5fps and 30fps
+rows - the extra frames are exact duplicates of the one before them, so they
+cost far less than their number suggests."""
 
 from __future__ import annotations
 

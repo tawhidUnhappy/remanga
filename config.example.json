@@ -126,14 +126,14 @@
     "pause_between_panels_ms": 350,
     "bgm_enabled": false,
     "bgm_path": "",
-    "bgm_volume_db": -22.0,
-    "bgm_target_below_narration_db": 18.0,
+    "bgm_volume_db": -35.0,
+    "bgm_target_below_narration_db": 20.0,
     "enable_loudnorm": true
   },
   "video": {
     "width": 1920,
     "height": 1080,
-    "fps": 5,
+    "fps": 24,
     "background_style": "blur",
     "blur_brightness": 0.42,
     "background_color": "#000000",

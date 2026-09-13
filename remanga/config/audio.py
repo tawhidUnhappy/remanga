@@ -23,31 +23,49 @@ class AudioConfig(ConfigModel):
     # the synthesis, the assembly. 350ms puts the total gap in the middle of
     # that natural range.
     pause_between_panels_ms: int = 350
+    # Off until a music file is actually chosen - nothing ships one, and a
+    # mix that starts by warning about a path that was never set is a worse
+    # first run than a recap with no bed under it. Choosing a file in
+    # Settings -> Audio levels (or Assets) turns it on.
     bgm_enabled: bool = False
     bgm_path: str = ""
-    # Fixed gain applied to the music, in dB. Used as-is when
-    # bgm_auto_level is off; ignored when it is on.
+    # Fixed gain applied to the music, in dB.
     #
     # Worth knowing what this number is NOT: it is relative to the music
     # FILE's own loudness, not an absolute level. Two tracks mastered 6dB
     # apart at the same bgm_volume_db sit 6dB apart under the narration, so
     # a value tuned for one track is wrong for the next one dropped in.
-    # That is what bgm_auto_level exists to fix.
-    bgm_volume_db: float = -22.0
-    # The separation the "correct my levels" action aims for, in LU
-    # (ITU-R BS.1770 loudness units - the same scale EBU R128 uses).
+    #
+    # Which is why no default can be right for a file nobody has picked yet.
+    # This one is the arithmetic for a TYPICAL modern-mastered track, about
+    # -10 LUFS: Kokoro's narration measures -25.7 LUFS, so -35 puts the bed
+    # at -45 LUFS, a little over 19 LU under the voice. That is close enough
+    # to be listenable on the first render with any ordinary music file,
+    # rather than the old -22, which left the same track roughly 6 LU under
+    # the narration - loud enough to fight every line.
+    #
+    # It is still a guess about somebody else's file. Settings -> Audio
+    # levels -> "Balance voice and music automatically" measures both sides
+    # and replaces it with the real number (audio/leveling.py).
+    bgm_volume_db: float = -35.0
+    # The separation the automatic balance aims for, in LU (ITU-R BS.1770
+    # loudness units - the same scale EBU R128 uses).
     #
     # Not applied at mix time - nothing here runs automatically. It is the
     # target the settings action uses when it MEASURES your narration and
     # your music and writes a corrected bgm_volume_db above, so the value in
     # config stays a plain number you can read and adjust.
     #
-    # 18 is the middle of broadcast practice (15-20 below dialogue). Under
-    # 15 the music starts masking consonants, worst on phone speakers.
+    # 20 is just past the quiet end of broadcast practice (15-20 below
+    # dialogue), and that is deliberate: broadcast dialogue shares the track
+    # with scenes the music carries alone, where a recap is spoken word from
+    # first panel to last. Under 15 the music starts masking consonants,
+    # worst on phone speakers. See leveling.BALANCE_PRESETS for the named
+    # choices the settings screen offers around this one.
     #
     # Measured in LOUDNESS, not RMS, and the difference is real: this repo's
     # bed reads -12.61 dBFS RMS but -9.90 LUFS, so an RMS-derived gain leaves
     # the music ~2.7dB louder than intended - and by a margin that changes
     # with the track's spectral content.
-    bgm_target_below_narration_db: float = 18.0
+    bgm_target_below_narration_db: float = 20.0
     enable_loudnorm: bool = True

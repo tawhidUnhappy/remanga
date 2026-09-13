@@ -10,9 +10,11 @@ boundary inside that silence, and a new picture always appears just before
 its line - never partway through the previous one.
 
 With a 350ms pause, any rate above ~3fps has a boundary inside every pause.
-At the 5fps default, a real 71-panel chapter put 70 of its 70 cuts inside
-the pause, each picture leading its voice by 0-175ms. A pause shorter than
-one frame falls back to the nearest boundary - never worse than rounding.
+Measured at 5fps, a real 71-panel chapter put 70 of its 70 cuts inside the
+pause, each picture leading its voice by 0-175ms; at the 24fps default a
+frame is 42ms, so the same cuts land inside the same silence with room to
+spare. A pause shorter than one frame falls back to the nearest boundary -
+never worse than rounding.
 
 Integer milliseconds throughout, so a chapter's frame count is exact rather
 than a float sum that drifts by a frame over a long chapter. Pure, so a

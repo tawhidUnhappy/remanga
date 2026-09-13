@@ -28,7 +28,9 @@ same units means the number here survives that pass unchanged.
 
 Broadcast practice puts music 15-20 LU below dialogue. Under 15 it starts
 masking consonants, and that is worst on phone speakers, which is where most
-of this gets watched."""
+of this gets watched. A recap is spoken word from end to end - there is no
+scene the music carries on its own - so the default sits just past the quiet
+end of that band; see BALANCE_PRESETS for the named choices around it."""
 
 from __future__ import annotations
 
@@ -38,11 +40,14 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from remanga.audio.clips import clamp_boost
+from remanga.json_io import read_json_or
 from remanga.paths import get_projects_dir
 
-# Integrated loudness of Kokoro-82M narration, measured across a real
-# chapter. Used when a project has not synthesized anything yet, so the
-# action still answers on a fresh install instead of refusing to help.
+# Integrated loudness of Kokoro-82M narration at volume_boost_db 0, measured
+# across a real chapter. Used when a project has not synthesized anything
+# yet, so the action still answers on a fresh install instead of refusing to
+# help.
 TYPICAL_NARRATION_LUFS = -25.7
 
 # A few clips, not one and not all. The engine reads at a consistent level -
@@ -51,6 +56,65 @@ TYPICAL_NARRATION_LUFS = -25.7
 # question. The median of them shrugs off a clip that happens to be a single
 # quiet word, which one clip on its own cannot do.
 _MAX_CLIPS = 5
+
+# bgm_volume_db's own range, so a reading can never suggest a value the
+# settings screen would refuse to write. Nothing realistic reaches either
+# end: at this narration level the lower one needs a music file louder than
+# full scale and the upper one needs a file quieter than -65 LUFS.
+_MIN_GAIN_DB, _MAX_GAIN_DB = -60.0, 20.0
+
+
+@dataclass(frozen=True)
+class BalancePreset:
+    """One named answer to "how loud should the music be", as a separation
+    in LU below the narration.
+
+    Named rather than left as a bare number because the number is the part
+    nobody has intuition for: "20" means nothing, "the bed is felt rather
+    than heard" is the thing somebody actually wants. Every value here is
+    inside the 15-20 LU band broadcast uses for music under dialogue, or
+    deliberately past its quiet end - a recap is spoken word from start to
+    finish, and the voice IS the content."""
+
+    key: str
+    label: str
+    separation_db: float
+    note: str
+
+
+BALANCE_PRESETS: tuple[BalancePreset, ...] = (
+    BalancePreset(
+        "recap", "Voice first", 20.0,
+        "how most manga recaps sit - the bed is felt rather than heard",
+    ),
+    BalancePreset(
+        "quiet", "Almost silent bed", 24.0,
+        "music only just present; the safest choice on phone speakers",
+    ),
+    BalancePreset(
+        "present", "Music noticeable", 17.0,
+        "the bed comes up between lines, still clearly under the voice",
+    ),
+    BalancePreset(
+        "forward", "Music forward", 14.0,
+        "about as loud as music gets before it starts masking consonants",
+    ),
+)
+
+# What a fresh install balances to, and what the first row of the picker
+# offers. Also the default of audio.bgm_target_below_narration_db - the two
+# are the same decision, so they are the same number.
+DEFAULT_SEPARATION_DB = BALANCE_PRESETS[0].separation_db
+
+PRESET_BY_SEPARATION = {preset.separation_db: preset for preset in BALANCE_PRESETS}
+
+
+@dataclass(frozen=True)
+class NarrationSample:
+    """Narration clips to measure, and the gain already baked into them."""
+
+    clips: list[Path]
+    baked_boost_db: float
 
 
 @dataclass(frozen=True)
@@ -99,28 +163,44 @@ def _narration_lufs(clips: list[Path]) -> tuple[float | None, int]:
     return statistics.median(values), len(values)
 
 
-def find_narration_clips(limit: int = _MAX_CLIPS) -> list[Path]:
+def find_narration_clips(limit: int = _MAX_CLIPS) -> NarrationSample:
     """Synthesized narration already on disk, from any project.
 
     Any project, deliberately: the question being answered is "how loud does
     this engine's narration come out", which is a property of the voice and
-    the engine rather than of one manga."""
+    the engine rather than of one manga.
+
+    One chapter's folder rather than a handful swept across several, because
+    the sample has to come with the gain that was baked into it: clips carry
+    their volume_boost_db from the run that wrote them (audio/tts.py), and
+    the chapter's audio_timing.json next to them is what records it. Clips
+    from two chapters synthesized at different boosts have no single answer
+    to that, and averaging across them would quietly measure neither."""
     projects = get_projects_dir()
     if not projects.is_dir():
-        return []
-    clips: list[Path] = []
+        return NarrationSample([], 0.0)
     for audio_dir in sorted(projects.glob("*/audio/chapter_*")):
-        for clip in sorted(audio_dir.glob("*.wav")):
-            clips.append(clip)
-            if len(clips) >= limit:
-                return clips
-    return clips
+        clips = sorted(audio_dir.glob("*.wav"))[:limit]
+        if not clips:
+            continue
+        baked = read_json_or(audio_dir / "audio_timing.json", {}).get("volume_boost_db", 0.0)
+        return NarrationSample(clips, clamp_boost(baked))
+    return NarrationSample([], 0.0)
 
 
-def read_levels(bgm_path: str | Path, sample_rate: int, target_below_db: float,
-                current_gain_db: float) -> LevelReading | None:
+def read_levels(bgm_path: str | Path, target_below_db: float, current_gain_db: float,
+                narration_boost_db: float = 0.0) -> LevelReading | None:
     """Measure narration and music, and suggest the gain that separates them
-    by `target_below_db`. None when the music file cannot be read."""
+    by `target_below_db`. None when the music file cannot be read.
+
+    `narration_boost_db` is the voice gain currently configured
+    (tts.<engine>.volume_boost_db). It matters because the two sides of this
+    calculation are measured at different times: the music file is measured
+    as it is now, but the narration is measured from clips written by an
+    earlier run, at whatever boost was configured THEN. The next tts run
+    applies the difference to those clips, so the level that will actually
+    be mixed is the measured one plus that difference - which is what gets
+    balanced against, rather than the level currently on disk."""
     bgm_file = Path(str(bgm_path or "")).expanduser()
     if not bgm_file.is_file():
         return None
@@ -128,13 +208,19 @@ def read_levels(bgm_path: str | Path, sample_rate: int, target_below_db: float,
     if bgm_lufs is None:
         return None
 
-    measured, count = _narration_lufs(find_narration_clips())
-    narration = TYPICAL_NARRATION_LUFS if measured is None else measured
+    boost = clamp_boost(narration_boost_db)
+    sample = find_narration_clips()
+    measured, count = _narration_lufs(sample.clips)
+    narration = (
+        TYPICAL_NARRATION_LUFS + boost if measured is None
+        else measured + (boost - sample.baked_boost_db)
+    )
 
+    suggested = round(narration - target_below_db - bgm_lufs, 1)
     return LevelReading(
         narration_lufs=narration,
         bgm_lufs=bgm_lufs,
-        suggested_gain_db=round(narration - target_below_db - bgm_lufs, 1),
+        suggested_gain_db=max(_MIN_GAIN_DB, min(_MAX_GAIN_DB, suggested)),
         clips_measured=0 if measured is None else count,
         current_separation_db=narration - (bgm_lufs + current_gain_db),
     )

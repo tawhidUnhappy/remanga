@@ -57,7 +57,7 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
   - Presets for **1080p Full HD**, **1440p 2K QHD**, **2160p 4K UHD**, and **720p HD**.
   - Fast bokeh canvas blur or solid black canvas, composited on every CPU core at once.
   - Automatic NVIDIA NVENC GPU hardware encoding (`h264_nvenc`) with automatic CPU fallback (`libx264`).
-  - Slideshow-aware encoding: 5 fps, with every panel change snapped into the silent pause before its line, and the picture cached apart from the sound — a 7.6-minute chapter encodes in ~8s on an RTX 3060 (it took ~65s at 30 fps), and a BGM change or a whole-manga join re-encodes no video at all.
+  - Slideshow-aware encoding: every panel change snapped into the silent pause before its line, and the picture cached apart from the sound — nothing moves between cuts, so the duplicate frames compress to almost nothing (a 7.6-minute chapter encoded in ~8s on an RTX 3060 at the old 5 fps default, against ~65s at 30 fps), and a BGM change or a whole-manga join re-encodes no video at all.
 - **Safe to Interrupt, Safe to Resume:** Ctrl+C (or a crash) mid-synthesis never leaves a corrupt clip behind — panel exports are atomic, and resuming automatically re-synthesizes the panel that was interrupted plus the two just before it, rather than trusting whatever's on disk. A worker that stops responding gets killed and replaced automatically instead of hanging forever. See [Reliability](#reliability-crashes-interrupts--resuming).
 - **Three-Tier Chapter Reset:** hard (keep only downloads), marks-only (also keep your panel marks), or soft (also keep the cropped panels and narration script) — pick how much work to throw away. See [Resetting/Restarting a Chapter](#resettingrestarting-a-chapter).
 
@@ -295,7 +295,7 @@ Every row shows what that setting is **right now**, so the screen doubles as a p
   Assets (BGM)                            bgm: ok
   Narration language                      English (EN)
   Narration pacing                        1x speed · 350ms between panels
-  Audio levels                            voice +0.0dB · music -26.0dB · normalized
+  Audio levels                            voice +0.0dB · music -35.7dB · normalized
   Panel detection                         MAGI, gutter-snap, trim, dedupe
   Panel framing                           4% padding (adaptive) · 2px border
   Vision outputs (what to generate/zip)   sheets, panels_zip (split at 50MB)
@@ -316,13 +316,41 @@ Four screens cover the settings you find by watching a chapter back and adjustin
 | Screen | Controls | Where it also appears |
 |---|---|---|
 | **Narration pacing** | narration speed, and the silence held after each panel | under `tts` |
-| **Audio levels** | narration gain, music gain, loudness normalization on/off | under `mix` |
+| **Audio levels** | automatic voice/music balance, narration gain, music gain, background music on/off, loudness normalization | under `mix` |
 | **Panel detection** | MAGI auto-detection, gutter-snap, whitespace trim, duplicate dropping | under `crop` |
 | **Panel framing** | padding around each panel, adaptive padding, bokeh brightness, border width | under `render` |
 
 They're grouped by the question you're actually asking, not by which config block the answer lives in — "the narration is too fast" shouldn't require knowing that speed is a `tts` setting while the gap between panels is an `audio` one.
 
-Two things worth knowing before you turn these:
+**Audio levels** is a menu of its own, because the settings under it are rarely all wrong at once:
+
+```
+? Audio levels
+  with normalization on, raising the voice pushes the music down under it rather than making the finished file louder
+❯ Balance voice and music automatically    voice first
+  Narration volume                         +0.0 dB
+  Background music volume                  -35.7 dB
+  Background music                    [ok] global/bgm/unravelTokyoGhoul.mp3
+  Loudness normalization                   on
+  Back
+```
+
+**Balance voice and music automatically** is the one to reach for first. `bgm_volume_db` is a gain *relative to the music file's own loudness*, which makes it a number nobody can set by intuition — the same value under two tracks mastered a few dB apart puts the music a few dB apart under the narration. So this measures both sides as ITU-R BS.1770 integrated loudness (ffmpeg's `ebur128`, ~120ms per file), asks how loud you want the bed, and writes the gain that actually produces that separation:
+
+| Balance | Music sits | Sounds like |
+|---|---|---|
+| **Voice first** (default) | 20 LU under the voice | how most manga recaps sit — the bed is felt rather than heard |
+| Almost silent bed | 24 LU | music only just present; the safest choice on phone speakers |
+| Music noticeable | 17 LU | the bed comes up between lines, still clearly under the voice |
+| Music forward | 14 LU | about as loud as music gets before it starts masking consonants |
+
+Broadcast practice puts music 15–20 LU below dialogue, and under 15 it starts masking consonants — worst on phone speakers, which is where most of this gets watched. The default sits just past the quiet end of that band because a recap is spoken word from the first panel to the last: there is no scene here the music carries on its own.
+
+It's an **action, not a mode**. It measures once, writes a plain number into `bgm_volume_db` and leaves — nothing recomputes behind your back at mix time, and what ends up in `config.json` stays a number you can read, question and nudge by hand from the same screen. It also accounts for the narration gain you have set, including one you set but haven't re-synthesized yet.
+
+**Background music** turns the bed off (the file is remembered, so turning it back on is one keystroke), or points it at a different file. With music off, the music-volume row disappears rather than sitting there describing something that isn't happening.
+
+Two more things worth knowing before you turn these:
 
 - **Raising the narration mostly turns the music *down*.** With loudness normalization on (the default), the finished master is pulled to a fixed target afterwards, so boosting the voice pushes the BGM under it rather than making the file louder. Turn off **Audio levels → normalize** if you want the boost to survive into the absolute output level.
 - **Changing the narration gain does not force a re-synthesis.** `audio_timing.json` records the gain already baked into the clips on disk, and the next `tts` run applies only the difference to clips it would otherwise reuse.
@@ -382,13 +410,13 @@ Every **Panel detection** pass is normally right and occasionally wrong on an un
     "pause_between_panels_ms": 350,
     "bgm_enabled": false,
     "bgm_path": "",
-    "bgm_volume_db": -22.0,
+    "bgm_volume_db": -35.0,
     "enable_loudnorm": true
   },
   "video": {
     "width": 1920,
     "height": 1080,
-    "fps": 5,
+    "fps": 24,
     "background_style": "blur",
     "blur_brightness": 0.42,
     "panel_border_width": 2,
@@ -403,7 +431,7 @@ A few worth calling out specifically - `cropper.package` is the flat vision-outp
 - **`marker.click_to_select`** (default `true`) — see [Panel Marker Web UI](#panel-marker-web-ui) for what this protects against.
 - **`marker.auto_detect_scope`** (default `"chapter"`), **`marker.auto_save`** (default `true`) and **`marker.auto_order`** (default `false`) — the action bar's scope and Options switches, written by the marker itself when you change them in the browser. See [Mark Panels](#2-mark-panels).
 - **`tts.synth_timeout_seconds`** (default `180`) — see [Reliability](#reliability-crashes-interrupts--resuming).
-- **`video.fps`** (default `5`) — a recap is a slideshow, so the frame rate only decides how finely a panel change can be timed, and every change is placed inside the silent pause before its line. 5 encodes 6× fewer frames than 30 with the same picture; raise it only if you want finer cut timing. See [Render Final Recap Video](#7-render-final-recap-video).
+- **`video.fps`** (default `24`) — a recap is a slideshow, so the frame rate only decides how finely a panel change can be timed, and every change is placed inside the silent pause before its line. Which means almost any rate looks identical, and 24 is chosen for what everything downstream expects it to be: players, editors and platform encoders all handle the standard video rate without comment. The extra frames are exact duplicates and compress to almost nothing; drop it to `5` if encode time on a CPU-only machine is what you're optimizing. See [Render Final Recap Video](#7-render-final-recap-video).
 
 ---
 
@@ -660,7 +688,7 @@ Composites frames onto the chosen background canvas and renders hardware-acceler
 A recap is a slideshow — nothing on screen moves until the panel changes — and rendering is built around that:
 
 - **Frames are composited once**, on every CPU core in parallel, and cached in `video/chapter_<num>/_work/frames/`.
-- **The picture is encoded at 5 fps** (`video.fps`). The frame rate only decides how finely a panel change can be timed, and each change is snapped onto a frame boundary *inside the silent pause* before its line, so a picture never changes mid-sentence. 6× fewer frames than 30 fps, the same picture, a fraction of the encode.
+- **The picture is encoded at 24 fps** (`video.fps`). The frame rate only decides how finely a panel change can be timed, and each change is snapped onto a frame boundary *inside the silent pause* before its line, so a picture never changes mid-sentence — at 24 fps a frame is 42ms, well inside the 350ms pause. Nothing moves between cuts, so those frames are exact duplicates of one another and cost far less than their number suggests.
 - **Picture and sound are cached apart.** The video-only stream is kept as `_work/picture.mp4`; when only the mix changed (BGM, volume), rendering reuses it and costs one audio encode.
 
 Re-running `download` for a chapter that's already there re-checks it rather than re-fetching it: every page must exist, be non-empty, and match what MangaDex reports for that chapter *right now* — same chapter id, same page count, same image quality. That record lives in the project's `manifest.json` and is rewritten on every download attempt, marked `verified` only once every page is actually on disk, so a run killed mid-download resumes instead of reporting a complete chapter. If the chapter has changed since it was last fetched here (re-uploaded under a new id, or you switched `image_quality`), the old pages are cleared and every page is re-fetched — they were images of something else.
@@ -1089,7 +1117,7 @@ nvidia-smi --query-gpu=utilization.gpu,utilization.encoder --format=csv
 
 Ubuntu's own **Resources** app (`resources`, the default system monitor since it replaced GNOME System Monitor) reads the same NVML counters and shows them separately: its GPU tab has a **Video Encoder** / **Video Decoder** figure alongside the main GPU utilization graph — that's the one that moves during a render, while the headline graph stays near idle. To see it per-process, turn on the **Video Encoder** column in Settings → Processes (or Apps), and ffmpeg's row will show it. Either way, don't read the general "GPU" percentage as "is my GPU being used" for an encode.
 
-The CPU work is real, but it's everything that *isn't* H.264 encoding: decoding the panel PNGs, converting RGB→YUV, duplicating each panel's frame out to the configured fps (a 12-minute recap is ~3,600 frames at the default 5fps, ~21,000 at 30fps), encoding the AAC audio, and muxing the MP4. None of that has a GPU path worth taking here. The frame-compositing phase *before* the encode is CPU by design (Pillow, one thread per core), as is the audio assembly (pydub).
+The CPU work is real, but it's everything that *isn't* H.264 encoding: decoding the panel PNGs, converting RGB→YUV, duplicating each panel's frame out to the configured fps (a 12-minute recap is ~17,000 frames at the default 24fps, ~3,600 at 5fps), encoding the AAC audio, and muxing the MP4. None of that has a GPU path worth taking here. The frame-compositing phase *before* the encode is CPU by design (Pillow, one thread per core), as is the audio assembly (pydub).
 
 ### 4. How do I get contact sheets instead of individual panels?
 Contact sheets (`sheets`) are on by default; `panels_zip` is off. To get individual panels instead of, or in addition to, sheets:
