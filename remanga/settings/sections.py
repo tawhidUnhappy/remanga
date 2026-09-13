@@ -52,17 +52,16 @@ SECTIONS: tuple[Section, ...] = (
         # engine row states both: picking an engine IS picking a narrator,
         # and a row that named only the model would hide half of what
         # changing it does.
-        lambda c: f"{c.tts.spec.display_name} · {c.tts.kokoro.spec.label}"
+        lambda c: f"{c.tts.spec.display_name} · {c.tts.voice_label}"
         if c.tts.active_voice else f"{c.tts.spec.display_name} · no voice set",
         engine.configure_engine,
         detail="which model synthesizes the narration, and the voice it narrates in",
     ),
     Section(
         "voice", "Narrator voice",
-        lambda c: f"{c.tts.kokoro.spec.label} ({c.tts.kokoro.spec.name}, grade {c.tts.kokoro.spec.grade})"
-        if c.tts.active_voice else "no voice set",
+        lambda c: c.tts.voice_detail if c.tts.active_voice else "no voice set",
         engine.configure_voice,
-        detail="which of the engine's built-in voices reads every panel",
+        detail="the voice that reads every panel - one of Kokoro's own, or a recording Chatterbox clones",
     ),
     Section(
         "assets", "Assets (BGM)",

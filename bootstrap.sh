@@ -27,9 +27,9 @@ BIN_DIR="$SCRIPT_DIR/bin"
 CACHE_DIR="$SCRIPT_DIR/.cache"
 TOOLS_DIR="$SCRIPT_DIR/.tools"
 VENV_DIR="$SCRIPT_DIR/.venv"
-KOKORO_VENV_DIR="$TOOLS_DIR/venv-kokoro"
-MAGI_VENV_DIR="$TOOLS_DIR/venv-magi"
-DEEPSEEK_OCR_VENV_DIR="$TOOLS_DIR/venv-deepseek-ocr"
+# Individual tool venv paths (venv-kokoro, venv-chatterbox, ...) are no
+# longer named here - remanga/tool_envs.py's TOOLS list is the one place
+# that names them now. See "4. Virtual environments" below.
 
 WARNINGS=()
 
@@ -50,14 +50,15 @@ try_step() {
 
 echo "=== Initializing self-contained remanga environment ==="
 
-# global/bgm, not assets/: shared assets live under global/ (paths/roots.py's
-# GLOBAL_DIR), and that is the only place the settings screens look. This used
-# to create assets/voices and assets/bgm, which nothing has read for a long
-# time - a new user who dropped their music into the folder bootstrap had just
-# made for them would have found remanga unable to see it. There is no voice
-# folder any more either: Kokoro's voices are named, not supplied.
+# global/bgm and global/voice, not assets/: shared assets live under global/
+# (paths/roots.py's GLOBAL_DIR), and that is the only place the settings
+# screens look. This used to create assets/voices and assets/bgm, which
+# nothing has read for a long time - a new user who dropped their music into
+# the folder bootstrap had just made for them would have found remanga unable
+# to see it. global/voice is where Chatterbox's recordings to clone go;
+# Kokoro's voices are named, not supplied, and never need it.
 mkdir -p "$BIN_DIR" "$CACHE_DIR/uv" "$CACHE_DIR/huggingface" "$CACHE_DIR/torch" \
-         "$TOOLS_DIR" global/bgm projects || die "could not create working directories"
+         "$TOOLS_DIR" global/bgm global/voice projects || die "could not create working directories"
 
 # Every cache stays inside the repo, so provisioning never writes to (or is
 # poisoned by) a shared machine-wide cache.
@@ -221,64 +222,17 @@ say "Creating main environment ($VENV_DIR)..."
 make_venv "$VENV_DIR" || die "could not create the main virtual environment"
 "$UV" pip install --python "$VENV_DIR" -e . || die "could not install remanga into the main environment"
 
-say "Creating Kokoro-82M environment [$REMANGA_TORCH_BACKEND wheels]..."
-if make_venv "$KOKORO_VENV_DIR"; then
-    try_step "Kokoro install" \
-        "$UV" pip install --python "$KOKORO_VENV_DIR" "${TORCH_ARGS[@]}" \
-        torch kokoro soundfile numpy huggingface-hub
-
-    # misaki (Kokoro's English G2P, pulled in above) loads a spaCy pipeline,
-    # and spaCy ships its models as separate packages rather than fetching
-    # them at runtime - without this every synthesis dies on
-    # "Can't find model 'en_core_web_sm'".
-    #
-    # Installed from the release URL rather than via `python -m spacy
-    # download`: that command shells out to the ambient installer, which
-    # under uv reports "Download and installation successful" and installs
-    # NOTHING into the target venv. Verified - it exits 0 and the model is
-    # still absent. The URL form is the only one that reliably lands here.
-    try_step "Kokoro G2P model install" \
-        "$UV" pip install --python "$KOKORO_VENV_DIR" \
-        "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
-else
-    warn "could not create the Kokoro environment"
-fi
-
-say "Creating MAGI v3 environment [$REMANGA_TORCH_BACKEND wheels]..."
-if make_venv "$MAGI_VENV_DIR"; then
-    # einops/matplotlib: undeclared imports MAGI v3's remote modeling code
-    # needs beyond its own requirements. magi_assist.py auto-installs anything
-    # still missing on first load; listing the known ones saves a round-trip.
-    try_step "MAGI v3 install" \
-        "$UV" pip install --python "$MAGI_VENV_DIR" "${TORCH_ARGS[@]}" \
-        torch "transformers<4.52.0" timm shapely pytorch-metric-learning huggingface-hub \
-        pillow numpy einops matplotlib
-else
-    warn "could not create the MAGI v3 environment"
-fi
-
-say "Creating DeepSeek-OCR-2 environment [$REMANGA_TORCH_BACKEND wheels]..."
-if make_venv "$DEEPSEEK_OCR_VENV_DIR"; then
-    # transformers is pinned exactly, torch is not. The model card pins both
-    # (transformers==4.46.3, torch==2.6.0), but the pins are not equally
-    # load-bearing: the pinned transformers is what the model's own
-    # trust_remote_code modeling code is written against, while torch 2.6
-    # simply is not in the wheel index this machine resolves to (cu129 jumps
-    # from <2.6 to >2.7), so honouring it would mean installing CUDA wheels
-    # built for a different machine. einops/addict/easydict are undeclared
-    # imports that modeling code needs.
-    #
-    # flash-attn is deliberately absent. The card uses it, but it is a long,
-    # fragile CUDA extension build and transformers falls back to its own
-    # attention without it - the same reasoning that keeps every other
-    # optional kernel build out of a first run.
-    try_step "DeepSeek-OCR-2 install" \
-        "$UV" pip install --python "$DEEPSEEK_OCR_VENV_DIR" "${TORCH_ARGS[@]}" \
-        torch "transformers==4.46.3" "tokenizers==0.20.3" einops addict easydict \
-        accelerate pillow huggingface-hub safetensors
-else
-    warn "could not create the DeepSeek-OCR-2 environment"
-fi
+# Every OTHER environment - one per ML engine (Kokoro, Chatterbox, MAGI v3,
+# DeepSeek-OCR-2, ...) - is provisioned from ONE place: remanga/tool_envs.py's
+# TOOLS list, not a hand-written block per tool here. That module runs on the
+# main env's own interpreter (just installed above) with no other remanga
+# machinery needed - same reason remanga/hardware.py runs on a bare
+# interpreter earlier in this script. Adding or removing a tool is now a
+# change to that one list; this script never needs editing for it again.
+# --torch-backend is passed through from hardware detection, same as before.
+say "Provisioning tool environments (Kokoro, Chatterbox, MAGI v3, DeepSeek-OCR-2)..."
+try_step "tool environment provisioning" \
+    "$VENV_DIR/bin/python3" -m remanga.tool_envs install --torch-backend "$REMANGA_TORCH_BACKEND"
 
 # ---------------------------------------------------------------------------
 # 5. Config + weights

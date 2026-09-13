@@ -2,15 +2,16 @@
 
 Every screen is built from data that already exists elsewhere: the engine
 list comes from config.TTS_ENGINE_SPECS (the same specs remanga/audio/synth/
-maps to Synthesizer classes), and the voice list from the engine's own voice
-catalogue (config/kokoro_voices.py) rather than from anything written out
-again here."""
+maps to Synthesizer classes), and the voice choices from what that engine
+takes - Kokoro's own catalogue (config/kokoro_voices.py), or the recordings
+already in global/voice/ for Chatterbox to clone - rather than from anything
+written out again here."""
 
 from __future__ import annotations
 
 from remanga.config import RemangaConfig
 from remanga.config.tts import TTS_ENGINE_SPECS
-from remanga.console import console
+from remanga.console import console, escape
 from remanga.settings.assets import pick_voice
 from remanga.settings.fields import set_field
 from remanga.settings.presets import CUSTOM, language_choices
@@ -41,11 +42,7 @@ def configure_engine(config: RemangaConfig) -> None:
     # to set it here when that engine has none, since the alternative is
     # discovering it at synth time.
     if config.tts.active_voice:
-        voice = config.tts.kokoro.spec
-        console.print(
-            f"[dim]{config.tts.spec.display_name} narrates as {voice.label} "
-            f"({voice.name}, grade {voice.grade})[/]"
-        )
+        console.print(f"[dim]{config.tts.spec.display_name} narrates as {escape(config.tts.voice_detail)}[/]")
     else:
         console.print(f"[yellow]{config.tts.spec.display_name} has no voice set yet[/]")
         if confirm(f"Pick {config.tts.spec.display_name}'s voice now?", default=True):
@@ -53,11 +50,9 @@ def configure_engine(config: RemangaConfig) -> None:
 
 
 def configure_voice(config: RemangaConfig) -> None:
-    """The narrator's voice, on its own settings row.
-
-    A picker rather than a file browser: Kokoro ships fixed voices and
-    clones nothing, so there is no clip to point at - see
-    remanga/config/kokoro_voices.py."""
+    """The narrator's voice, on its own settings row: a pick from Kokoro's
+    catalogue, or a recording for Chatterbox to clone - pick_voice asks
+    whichever the active engine takes."""
     pick_voice(config)
 
 

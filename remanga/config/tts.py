@@ -3,20 +3,20 @@
 Shape: the handful of settings that mean the same thing whichever engine is
 driving (which engine that is, the speaking rate, how long to wait on a
 worker) sit at the top of TTSConfig, and everything that belongs to ONE
-engine - its model, its sampling knobs, its voice - lives in that engine's
-own block. There is one engine today; the split is kept because it is what
-makes adding or removing one a contained change (see tts_engines.py).
+engine - its model, its voice, its gain - lives in that engine's own block,
+which is what makes adding or removing an engine a contained change (see
+tts_engines.py).
 
-The big change from the IndexTTS-2.5 / Audio8 era: Kokoro does not clone a
-voice from a reference clip. It ships fixed, named voices, so the narrator
-is chosen from a list (config/kokoro_voices.py) rather than pointed at a
-WAV. Everything those engines needed and Kokoro does not - the reference
-clip, its transcript, per-engine sampling temperature - is gone rather than
-carried forward, and old config.json files are migrated on load by
+The two engines take a voice in opposite ways. Kokoro ships fixed, named
+voices, so its narrator is chosen from a list (config/kokoro_voices.py).
+Chatterbox Turbo clones one from a reference recording, so its narrator is
+a file path. Neither carries forward the settings of the retired
+IndexTTS-2.5 / Audio8 engines: old config.json files are migrated on load by
 TTSConfig._migrate_retired_engines below."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
@@ -43,6 +43,7 @@ __all__ = [
     "KOKORO_VOICES",
     "TTS_ENGINES",
     "TTS_ENGINE_SPECS",
+    "ChatterboxConfig",
     "KokoroConfig",
     "KokoroVoice",
     "TTSConfig",
@@ -96,6 +97,16 @@ class KokoroConfig(ConfigModel):
         return voice_spec(self.voice)
 
     @property
+    def voice_label(self) -> str:
+        """The voice as a menu row names it, e.g. "Heart (female)"."""
+        return self.spec.label
+
+    @property
+    def voice_detail(self) -> str:
+        """The voice with what identifies it exactly - name and grade."""
+        return f"{self.spec.label} ({self.spec.name}, grade {self.spec.grade})"
+
+    @property
     def lang_code(self) -> str:
         """Kokoro's one-character accent code for the active voice.
 
@@ -105,9 +116,44 @@ class KokoroConfig(ConfigModel):
         return lang_code_for(self.voice)
 
 
+class ChatterboxConfig(ConfigModel):
+    """Settings specific to the chatterbox engine - ResembleAI/chatterbox-turbo
+    on Hugging Face, Resemble AI's 350M-parameter distilled Chatterbox (MIT).
+    Runs in its own isolated `.tools/venv-chatterbox`.
+
+    The opposite trade from Kokoro: there are no built-in voices, it clones
+    whoever is speaking in `voice`. That makes the recording the voice - its
+    accent, pace, microphone and room all come through, noise included -
+    which is exactly the quality risk the retired cloning engines had, and
+    why Kokoro stays the default. English only."""
+
+    hf_repo_id: str = "ResembleAI/chatterbox-turbo"
+    model_dir: str = "checkpoints/chatterbox_turbo"
+    # Path to the recording to clone: one speaker, no music, longer than 5
+    # seconds (Turbo refuses anything shorter). The speaker embedding hears
+    # the whole clip, but the speech it imitates is taken from the first 10
+    # to 15 seconds, so that is where the best of the voice should be.
+    # Recordings normally live in global/voice/. Empty until one is chosen -
+    # there is no sensible default for a voice that is meant to be yours.
+    voice: str = ""
+    # Gain applied to synthesized narration clips, in decibels - the same
+    # knob as tts.kokoro.volume_boost_db, see there.
+    volume_boost_db: float = 0.0
+
+    @property
+    def voice_label(self) -> str:
+        """The recording as a menu row names it - its filename."""
+        return Path(self.voice).name
+
+    @property
+    def voice_detail(self) -> str:
+        """The recording with what identifies it exactly - its full path."""
+        return f"clone of {self.voice}"
+
+
 # Settings that belonged to the retired IndexTTS-2.5 / Audio8 blocks and
-# have no meaning under Kokoro. Named explicitly so migration can drop them
-# quietly rather than leaving them to fail validation on load.
+# have no meaning under the current engines. Named explicitly so migration
+# can drop them quietly rather than leaving them to fail validation on load.
 RETIRED_ENGINE_BLOCKS = ("indextts", "audio8")
 RETIRED_TOP_LEVEL_FIELDS = (
     "hf_repo_id", "model_dir", "cfg_path", "use_bf16", "temperature", "top_p",
@@ -127,21 +173,21 @@ class TTSConfig(ConfigModel):
     # CPU, so this is a generous ceiling, not a tight budget.
     synth_timeout_seconds: int = 180
     kokoro: KokoroConfig = Field(default_factory=KokoroConfig)
+    chatterbox: ChatterboxConfig = Field(default_factory=ChatterboxConfig)
 
     @model_validator(mode="before")
     @classmethod
     def _migrate_retired_engines(cls, data: Any) -> Any:
         """Reads a config.json written for IndexTTS-2.5 or Audio8.
 
-        Those engines cloned from a reference WAV; Kokoro has fixed voices,
-        so there is nothing in their settings worth carrying forward - a
-        `spk_audio_prompt` path is not a Kokoro voice name, and a
-        temperature it has no sampler for is noise. Pydantic ignores unknown
-        keys, so the practical job here is narrower than the old migration's:
-        drop the retired blocks and the older flat keys, and force `engine`
-        onto a name that still exists, so an upgraded install starts in a
-        valid state instead of failing validation or selecting an engine
-        whose code was deleted."""
+        Those engines cloned from a reference WAV, but through settings no
+        current engine shares - a `spk_audio_prompt` path is not a Kokoro
+        voice name, and a temperature neither engine is configured with is
+        noise. Pydantic ignores unknown keys, so the practical job here is
+        narrower than the old migration's: drop the retired blocks and the
+        older flat keys, and force `engine` onto a name that still exists, so
+        an upgraded install starts in a valid state instead of failing
+        validation or selecting an engine whose code was deleted."""
         if not isinstance(data, dict):
             return data
 
@@ -176,6 +222,19 @@ class TTSConfig(ConfigModel):
         wants "the voice being used" asks this instead of reaching into a
         block and assuming which engine is selected."""
         return getattr(self.engine_block, "voice", "") or ""
+
+    @property
+    def voice_label(self) -> str:
+        """The active voice as a menu row names it - a Kokoro voice's label,
+        or the filename of the recording Chatterbox clones. Empty when the
+        active engine has no voice set."""
+        return self.engine_block.voice_label if self.active_voice else ""
+
+    @property
+    def voice_detail(self) -> str:
+        """The active voice with what identifies it exactly, for the screens
+        that have room: Kokoro's name and grade, or the recording's path."""
+        return self.engine_block.voice_detail if self.active_voice else ""
 
     @property
     def active_voice_field(self) -> str:

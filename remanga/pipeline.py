@@ -190,7 +190,7 @@ def _run_review(project: str, chapter: str, config: RemangaConfig) -> None:
 
 
 def _run_tts(project: str, chapter: str, config: RemangaConfig) -> None:
-    console.print("\n[bold]Step — Synthesizing Vocal Audio via Kokoro-82M[/]")
+    console.print(f"\n[bold]Step — Synthesizing Vocal Audio via {config.tts.spec.display_name}[/]")
     tts = TTSEngine(config.tts, config.audio)
     tts.generate_narration_audio(project, chapter, interactive=True)
 

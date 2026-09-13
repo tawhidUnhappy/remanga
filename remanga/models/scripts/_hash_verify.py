@@ -66,6 +66,7 @@ def _resolve_local_path(model_dir: str, rfilename: str, cache_layout: bool) -> P
 
 def verify_repo_files(
     model_dir: str, repo_id: str, hf_token: str | None, cache_layout: bool = False,
+    allow_patterns: list[str] | None = None,
 ) -> tuple[bool, list[str]]:
     """Compares every LFS file's recorded sha256 (from the Hub's own repo
     metadata) against the freshly-downloaded file on disk. Prints one line
@@ -75,7 +76,12 @@ def verify_repo_files(
     instead of re-fetching the whole snapshot. Never raises on its own - a
     metadata-fetch failure (offline, rate-limited, private repo without
     files_metadata access) is reported and treated as "could not verify",
-    not a hard failure, since the download itself already succeeded."""
+    not a hard failure, since the download itself already succeeded.
+
+    `allow_patterns` is the same list the caller gave snapshot_download: a
+    file it skipped on purpose (download_chatterbox.py leaves out a 1GB
+    checkpoint Turbo never loads) is not "missing", and without the filter
+    it would fail verification and send the download round again for it."""
     try:
         from huggingface_hub import HfApi
         info = HfApi().model_info(repo_id, token=hf_token, files_metadata=True)
@@ -84,6 +90,9 @@ def verify_repo_files(
         return True, []
 
     lfs_siblings = [s for s in info.siblings if s.lfs is not None and s.lfs.get("sha256")]
+    if allow_patterns is not None:
+        from fnmatch import fnmatch
+        lfs_siblings = [s for s in lfs_siblings if any(fnmatch(s.rfilename, p) for p in allow_patterns)]
     if not lfs_siblings:
         print(">> Hash verification skipped (no LFS files with a recorded sha256 in this repo)")
         return True, []

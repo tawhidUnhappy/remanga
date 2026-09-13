@@ -141,13 +141,17 @@ bash bootstrap.sh
    decided at any time with `./run.sh hardware`. It never aborts on an
    optional step: anything skipped is listed as a warning in its summary.
 1. Downloads and provisions static `bin/uv`, `bin/ffmpeg`, and `bin/ffprobe` for this platform (macOS uses the system ffmpeg) — `ffmpeg` is pinned to a specific tested build rather than always the newest one, so its NVENC GPU encoder keeps working across a wide range of NVIDIA driver versions instead of silently requiring whatever driver was newest the day it was compiled (see [Troubleshooting #3](#troubleshooting--faq)).
-2. Provisions **five** isolated Python 3.11 virtual environments instead of one, each installed from the wheel index this machine needs:
+2. Provisions **six** isolated Python 3.11 virtual environments instead of one, each installed from the wheel index this machine needs:
    - `.venv/` — remanga's own lightweight core (Pillow, Pydantic, requests, rich, pydub, Flask). No ML libraries at all.
    - `.tools/venv-kokoro/` — PyTorch + Kokoro and its misaki/spaCy G2P stack.
+   - `.tools/venv-chatterbox/` — PyTorch + Chatterbox Turbo's own pinned dependencies.
    - `.tools/venv-magi/` — PyTorch + MAGI v3's own pinned dependencies (including a `transformers` capped below its DaViT-breaking `4.52`).
+   - `.tools/venv-deepseek-ocr/` — PyTorch + DeepSeek-OCR-2's own pinned dependencies.
 
-MAGI v3 pins `transformers<4.52` and DeepSeek-OCR-2 pins `==4.46.3` — separate environments mean neither can ever silently break the other. The main env only ever talks to them as subprocesses (see `remanga/venvs.py`); the storage trade-off buys permanent isolation instead of a pin that has to be babysat.
-3. Turbo-downloads official `hexgrad/Kokoro-82M` weights into `checkpoints/kokoro_82m` and `ragavsachdeva/magiv3` weights into `checkpoints/magiv3`.
+MAGI v3 pins `transformers<4.52`, DeepSeek-OCR-2 pins `==4.46.3`, and Chatterbox pins `==5.2.0` — separate environments mean none of them can ever silently break another. The main env only ever talks to them as subprocesses (see `remanga/venvs.py`); the storage trade-off buys permanent isolation instead of a pin that has to be babysat.
+
+What actually goes into each of these lives in **one place**, `remanga/tool_envs.py` - not hand-written per-tool blocks in this script. Adding or removing a tool is a change to that module's `TOOLS` list; bootstrap.sh, `remanga setup-tools`, and a tool's own first use all provision from the same list, so none of them can drift from the others. An environment also installs itself automatically the first time its engine actually runs (switching `tts.engine` in config.json is enough - no re-bootstrap needed), the same way its weights already download on first use; `remanga setup-tools` exists for provisioning ahead of time or repairing one by hand.
+3. Turbo-downloads official `hexgrad/Kokoro-82M` weights into `checkpoints/kokoro_82m` and `ragavsachdeva/magiv3` weights into `checkpoints/magiv3`. Chatterbox's and DeepSeek-OCR-2's weights lazy-fetch the first time their engine is actually used.
 5. Initializes default `config.json`.
 
 ---
@@ -866,22 +870,22 @@ It's written for reuse rather than for a fresh write-up every chapter: the descr
 
 ## The TTS Engine
 
-remanga drives **Kokoro-82M** (`tts.engine: "kokoro"`), an 82M-parameter StyleTTS 2 / iSTFTNet model with fixed built-in voices, in its own isolated `.tools/venv-kokoro` environment.
+remanga can drive two engines, picked with `tts.engine` (`config.json`) or `--engine` for a single run - each in its own isolated `.tools/venv-<name>` environment, described in `remanga/tool_envs.py`.
 
-It replaced IndexTTS-2.5 and Audio8 TTS, both of which cloned a narrator from a reference clip. If you need what those did, they're preserved on the **`legacy/indextts-audio8`** branch.
-
-**Why the change**, measured on an RTX 3060 (12GB):
-
-| | IndexTTS-2.5 | **Kokoro-82M** |
+| | **Kokoro-82M** (default) | **Chatterbox Turbo** |
 |---|---|---|
-| real-time factor | 1.42 — *slower* than real time | **0.021 — 48x faster than real time** |
-| per panel | 7.7s | **0.12s** |
-| a 450-panel recap | **58 minutes** of synthesis | **under 1 minute** |
-| weights | 3.3GB | 327MB |
-| voice | you supply a reference clip | 54 built-in voices |
-| licence (weights) | — | Apache-2.0 |
+| `tts.engine` | `"kokoro"` | `"chatterbox"` |
+| voice | 54 fixed built-in voices | clones whoever is speaking in a recording you supply |
+| voice field | `tts.kokoro.voice` — a NAME | `tts.chatterbox.voice` — a PATH |
+| languages | English only | English only |
+| weights | 327MB, Apache-2.0 | ~2.9GB, MIT |
+| per-panel speed (RTX 3060) | 0.12s | a few seconds |
 
-The reference clip was also the single largest source of quality problems: IndexTTS truncates it to its first 15 seconds and derives the narrator's entire delivery from that, so a badly-chosen clip — or one cut mid-word — poisoned every panel of every chapter. Kokoro removes that whole category of failure.
+**Kokoro** replaced IndexTTS-2.5 and Audio8 TTS, both of which cloned a narrator from a reference clip. Measured on an RTX 3060 (12GB) against IndexTTS: real-time factor 0.021 (48x faster than real time) vs 1.42 (slower than real time); weights 327MB vs 3.3GB. The reference clip was also the single largest source of quality problems there: IndexTTS truncates it to its first 15 seconds and derives the narrator's entire delivery from that, so a badly-chosen clip — or one cut mid-word — poisoned every panel of every chapter. That history is why Kokoro stays the default. If you need what those old engines did, they're preserved on the **`legacy/indextts-audio8`** branch.
+
+**Chatterbox Turbo** brings cloning back as the *alternative*, for when no built-in voice matches the narrator you want. It carries the same quality risk the retired engines did - the recording's accent, pace, microphone and room all come through - so pick a clean, single-speaker clip with no music, longer than 5 seconds (`remanga/settings/assets.py:clip_problem` checks this before a run starts, not after). Point `tts.chatterbox.voice` at it, or pick one from the **Narrator voice** row after switching engines - it becomes a recording picker over `global/voice/` instead of Kokoro's list. It has no speaking-rate control of its own, so `tts.speed` is applied by time-stretching the finished clip (pitch-preserving) rather than as a generation parameter.
+
+Switching a chapter's engine or narrator and re-running `tts` re-synthesizes every panel automatically - the voice actually baked into a chapter's cached clips is tracked in `audio_timing.json` (`resume` never mixes voices).
 
 ### Choosing the voice
 
@@ -998,11 +1002,14 @@ In short: if a chapter's TTS run gets interrupted or a worker locks up, just re-
 remanga/
 ├── bin/                        # Isolated standalone binaries (uv, ffmpeg, ffprobe)
 ├── .venv/                      # Main env - remanga's own lightweight core, no ML libs
-├── .tools/
+├── .tools/                     # One env per ML tool - see remanga/tool_envs.py
 │   ├── venv-kokoro/            # Isolated env - PyTorch + Kokoro + misaki/spaCy G2P
-│   └── venv-magi/              # Isolated env - PyTorch + MAGI v3's own pins
+│   ├── venv-chatterbox/        # Isolated env - PyTorch + Chatterbox Turbo's own pins
+│   ├── venv-magi/              # Isolated env - PyTorch + MAGI v3's own pins
+│   └── venv-deepseek-ocr/      # Isolated env - PyTorch + DeepSeek-OCR-2's own pins
 ├── checkpoints/
 │   ├── kokoro_82m/             # Kokoro-82M weights + all 54 voice packs
+│   ├── chatterbox_turbo/       # Chatterbox Turbo weights (fetched on first use)
 │   └── magiv3/                 # MAGI v3 panel-detection weights (Panel Marker assist)
 ├── prompts/
 │   ├── narration.md         # Master objective scriptwriter prompt
@@ -1053,11 +1060,12 @@ remanga/
 │   │                           # vision.py (packaging checklist), presets.py, engine.py, video.py,
 │   │                           # sections.py (every setting as one list), wizard.py, paths_ui.py
 │   ├── audio/                  # tts.py + mix.py; synth/ = one module per engine over a shared worker base
-│   │   └── scripts/             # kokoro_worker.py - runs inside its own venv
+│   │   └── scripts/             # kokoro_worker.py, chatterbox_worker.py - each runs inside its own venv
+│   ├── tool_envs.py             # Single source of truth for every .tools/venv-<name> environment
 │   ├── cropper/                # crop.py (coordinate cropper), sheets.py, gutter/ (edge snapping), ...
 │   ├── downloader/             # mangadex.py (MangaDex client) & resolve.py (id/title/language lookup)
 │   ├── models/                 # weights.py (talks to the isolated venvs to fetch/verify weights)
-│   │   └── scripts/             # download_kokoro.py, download_deepseek_ocr.py
+│   │   └── scripts/             # download_kokoro.py, download_chatterbox.py, download_deepseek_ocr.py
 │   ├── webui/                  # Panel Marker: server.py (entry point/lifecycle), routes.py (Flask app/API),
 │   │   │                       # marker_state.py (session state), detection.py + magi_assist.py (MAGI v3),
 │   │   │                       # settings_store.py (Shortcuts + assist persistence)
@@ -1088,7 +1096,7 @@ remanga/
 
 ### 1. `CUDA out of memory` during TTS synthesis
 - In `config.json`, verify `"use_bf16": true`.
-- Kokoro-82M needs only ~2-3GB VRAM, and runs faster than real time on CPU alone.
+- Kokoro-82M needs only ~2-3GB VRAM, and runs faster than real time on CPU alone. Chatterbox Turbo needs more (a few GB) and is slower per panel - if it's the constraint, switch back to Kokoro (`tts.engine: "kokoro"`) for the run.
 
 ### 2. A specific narration line sounds unstable, or too dramatic
 Every panel is read in the same voice and the same register (see [Narration Voice & Delivery](#narration-voice--delivery)), so an odd-sounding line almost always traces back to what's written for that panel rather than to synthesis:

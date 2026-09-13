@@ -22,15 +22,16 @@ def render_status_panel(project: str, chapter: str) -> str:
     # This project's settings, not the machine's - the panel says what a
     # render of THIS chapter would use.
     config = RemangaConfig.load().for_project(project)
-    # A NAME from the engine's own catalogue, not a path on disk. This used
-    # to stat() it as a file, which meant a perfectly configured voice was
-    # reported as "Not set / Missing" on every single run - the engines that
-    # took a reference WAV are gone, and the check went stale with them.
-    voice = config.tts.kokoro.spec if config.tts.active_voice else None
-    voice_status = (
-        f"[green]{voice.label} ({voice.name}, grade {voice.grade})[/]"
-        if voice else "[yellow]Not set[/]"
-    )
+    # Kokoro's voice is a NAME from its catalogue and Chatterbox's is a PATH,
+    # so only the engine that takes a file gets its voice checked on disk.
+    # This used to stat() every voice as a file, which reported a perfectly
+    # configured Kokoro voice as "Not set / Missing" on every single run.
+    if not config.tts.active_voice:
+        voice_status = "[yellow]Not set[/]"
+    elif config.tts.spec.clones_voice and not Path(config.tts.active_voice).expanduser().is_file():
+        voice_status = f"[red]Recording not found ({_esc(config.tts.active_voice)})[/]"
+    else:
+        voice_status = f"[green]{_esc(config.tts.voice_detail)}[/]"
 
     bgm_path = Path(config.audio.bgm_path).expanduser() if config.audio.bgm_path else None
     bgm_status = (
@@ -59,7 +60,7 @@ def render_status_panel(project: str, chapter: str) -> str:
         if st["review_pending"] else off("no pending review")
     )
     audio_status = (
-        done("Generated (Kokoro-82M)") if st["master_audio_exist"]
+        done("Generated") if st["master_audio_exist"]
         else missing(f"Not built ({st['audio_clips_count']}/{st['total_narration_entries']} clips)")
     )
     video_status = (

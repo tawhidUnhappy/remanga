@@ -59,8 +59,8 @@ def asset_setup(key: str, label: str, detail: str) -> SetupAction:
 TTS_SETUP: tuple[SetupAction, ...] = (
     section_setup("engine", "which model synthesizes the narration voice - "
                    + ", ".join(spec.display_name for spec in TTS_ENGINE_SPECS)),
-    section_setup("voice", "which of the engine's built-in voices reads this chapter - "
-                   "a name from its own catalogue, not a clip to clone"),
+    section_setup("voice", "which voice reads this chapter - a name from Kokoro's catalogue, "
+                   "or the recording Chatterbox clones"),
     section_setup("language", "passed straight through to the engine"),
     section_setup("pacing", "how fast this chapter reads, and the gap held after each panel"),
 )

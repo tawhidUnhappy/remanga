@@ -110,6 +110,12 @@
       "voice": "af_heart",
       "volume_boost_db": 0.0,
       "sample_rate": 24000
+    },
+    "chatterbox": {
+      "hf_repo_id": "ResembleAI/chatterbox-turbo",
+      "model_dir": "checkpoints/chatterbox_turbo",
+      "voice": "",
+      "volume_boost_db": 0.0
     }
   },
   "ocr": {

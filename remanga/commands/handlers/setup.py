@@ -18,6 +18,26 @@ def paths(params: dict[str, Any], config: RemangaConfig) -> None:
     run_paths_manager(config)
 
 
+def setup_tools(params: dict[str, Any], config: RemangaConfig) -> None:
+    """Installs/updates the isolated `.tools/venv-<name>` environments
+    remanga.tool_envs describes - the dependency layer under setup-models'
+    weights. Normally nothing to run by hand: each environment installs
+    itself the first time its engine is used (remanga.venvs.get_tool_python),
+    the same way its weights already download on first use. This is for
+    provisioning ahead of time, or repairing one after a failed auto-install."""
+    from remanga.tool_envs import TOOL_NAMES, orphan_envs, provision
+
+    tool = params.get("tool")
+    failed = provision([tool] if tool else None, force=bool(params.get("force")))
+    for path in orphan_envs():
+        console.print(f"[yellow]{_esc(str(path))} belongs to no tool any more[/] "
+                      f"[dim]- safe to delete by hand if you don't need it.[/]")
+    if failed:
+        console.print(f"[bold red]Failed:[/] {', '.join(failed)}")
+    else:
+        console.print(f"[bold green]✓ Every tool environment is ready[/] [dim]({', '.join(TOOL_NAMES)})[/]")
+
+
 def setup_models(params: dict[str, Any], config: RemangaConfig) -> None:
     """Downloads/verifies every model the current configuration will
     actually use.

@@ -1,19 +1,24 @@
 """Auto-heal helper for the isolated per-tool virtual environments
-bootstrap.sh provisions: parses "missing package" errors out of a worker
-subprocess's stderr so remanga/audio/synth/ and remanga/webui/magi_assist.py
-can pip-install the gap and retry, instead of just failing.
+remanga/tool_envs.py provisions: parses "missing package" errors out of a
+worker subprocess's stderr so remanga/audio/synth/ and
+remanga/webui/magi_assist.py can pip-install the gap and retry, instead of
+just failing.
 
 Path resolution for those environments themselves (REPO_ROOT, TOOLS_DIR,
-get_tool_python, get_scripts_dir) now lives in remanga/paths/ - the single
-source of truth for every path remanga resolves - and is re-exported below
-so every existing `from remanga.venvs import ...` elsewhere in the codebase
-keeps working unchanged."""
+get_scripts_dir) lives in remanga/paths/ - the single source of truth for
+every path remanga resolves - and is re-exported below so every existing
+`from remanga.venvs import ...` elsewhere in the codebase keeps working
+unchanged. `get_tool_python` itself is now `tool_envs.ensure_tool`: the one
+call every engine already made to find its interpreter is also what
+installs the environment the first time that engine runs, the same way its
+weights already download on first use."""
 
 from __future__ import annotations
 
 import re
 
-from remanga.paths import REPO_ROOT, TOOLS_DIR, get_scripts_dir, get_tool_python
+from remanga.paths import REPO_ROOT, TOOLS_DIR, get_scripts_dir
+from remanga.tool_envs import ensure_tool as get_tool_python
 
 __all__ = [
     "REPO_ROOT",

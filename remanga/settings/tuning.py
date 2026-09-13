@@ -49,7 +49,8 @@ def configure_pacing(config: RemangaConfig) -> None:
     whether the words or the gaps are what feels wrong."""
     if not _number(config, "tts.speed", "Narration speed (1.0 = the voice's natural pace)",
                    minimum=0.5, maximum=2.0,
-                   note="applied by the model itself, not by stretching the audio afterwards"):
+                   note="Kokoro applies it in the model; Chatterbox has no rate control, "
+                        "so its clips are time-stretched instead"):
         return
     if not _number(config, "audio.pause_between_panels_ms", "Pause between panels, in milliseconds",
                    minimum=0, maximum=5000, integer=True,

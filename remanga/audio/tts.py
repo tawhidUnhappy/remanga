@@ -11,11 +11,28 @@ from remanga.audio.clips import apply_edge_fades, apply_gain, atomic_export, cla
 from remanga.audio.resample import load_audio
 from remanga.audio.synth import create_synthesizer
 from remanga.config import AudioConfig, RemangaConfig, TTSConfig
-from remanga.console import console
+from remanga.config.tts import engine_spec
+from remanga.console import console, escape
 from remanga.json_io import read_json, read_json_or, write_json
 from remanga.paths import get_audio_dir, get_audio_timing_path, get_chapter_dir
 from remanga.settings.fields import set_field
 from remanga.verify import ensure_panels_match_narration
+
+
+def narration_voice_identity(engine: str, voice: str) -> dict[str, Any]:
+    """The voice a chapter's clips are in, as audio_timing.json records it.
+
+    A recording is identified by its size and modification time as well as
+    its path - the way the mix fingerprint identifies the BGM file - because
+    re-exporting a cleaner take of the clip under the same name makes a
+    different narrator, and the chapter should be re-voiced with it."""
+    identity: dict[str, Any] = {"engine": engine, "voice": voice}
+    if engine_spec(engine).clones_voice:
+        clip = Path(voice).expanduser()
+        if clip.is_file():
+            stat = clip.stat()
+            identity.update(voice=str(clip.resolve()), clip_bytes=stat.st_size, clip_mtime_ns=stat.st_mtime_ns)
+    return identity
 
 
 class TTSEngine:
@@ -33,7 +50,7 @@ class TTSEngine:
         force: bool = False,
     ) -> Path:
         """
-        Synthesizes narration audio per panel with Kokoro-82M.
+        Synthesizes narration audio per panel with the configured TTS engine.
         Resumes automatically by checking existing panel WAV clips.
         """
         # Refuse to produce output that would be silently degraded - see
@@ -85,20 +102,42 @@ class TTSEngine:
         console.print(
             f"[cyan]Synthesizing consistent speech via {self._synth.display_name}[/] "
             f"[dim](Lang: {self.tts_config.lang}, "
-            f"Voice: {self.tts_config.kokoro.spec.label} [{voice}], "
+            f"Voice: {escape(self.tts_config.voice_detail)}, "
             f"Speed: {self.tts_config.speed}x)[/]"
         )
+
+        timing_manifest_path = get_audio_timing_path(project_name, chapter_num)
+        previous_timing = read_json_or(timing_manifest_path, {})
+
+        # Which voice the clips already on disk are in. Resume reuses any clip
+        # that is there, so without this, switching the engine or the narrator
+        # and re-running a chapter would "resume" every panel in the old voice
+        # and change nothing at all. Manifests written before this was
+        # recorded all came from Kokoro, so for those only the engine can be
+        # compared.
+        voice_identity = narration_voice_identity(self.tts_config.spec.name, voice)
+        previous_voice = previous_timing.get("voice") or {"engine": "kokoro"}
+        if "voice" in previous_voice:
+            voice_changed = previous_voice != voice_identity
+        else:
+            voice_changed = previous_voice.get("engine") != voice_identity["engine"]
+        if previous_timing and voice_changed and not force:
+            was = engine_spec(str(previous_voice.get("engine", ""))).display_name
+            if previous_voice.get("voice"):
+                was += f", {Path(str(previous_voice['voice'])).name}"
+            console.print(
+                f"[yellow]This chapter's existing clips are in another voice[/] "
+                f"[dim]({escape(was)}) - synthesizing every panel again.[/]"
+            )
+            force = True
 
         # This engine's own gain (see config/tts.py), and how much of it the
         # clips on disk are still missing. audio_timing.json records what was
         # baked in last time, so raising the boost from +3 to +6 costs one
         # +3 dB pass over the cached clips rather than a whole re-synthesis -
         # a volume knob nobody can afford to turn is not a volume knob.
-        timing_manifest_path = get_audio_timing_path(project_name, chapter_num)
         boost_db = clamp_boost(getattr(self.tts_config.engine_block, "volume_boost_db", 0.0))
-        previous_boost_db = clamp_boost(
-            read_json_or(timing_manifest_path, {}).get("volume_boost_db", 0.0)
-        )
+        previous_boost_db = clamp_boost(previous_timing.get("volume_boost_db", 0.0))
         boost_delta_db = boost_db - previous_boost_db
         if boost_db:
             console.print(
@@ -304,6 +343,12 @@ class TTSEngine:
             "total_timeline_sec": round(current_timeline_ms / 1000.0, 3),
             "panels": timing_data
         }
+        # The voice the clips are in (see voice_changed above) - recorded once
+        # this run synthesized something, or the file already carried it. Adding
+        # it to an untouched older manifest would change the file for nothing,
+        # and mix and render would take that as new audio and redo themselves.
+        if needs_synthesis or "voice" in previous_timing:
+            new_timing["voice"] = voice_identity
         if read_json_or(timing_manifest_path, None) != new_timing:
             write_json(timing_manifest_path, new_timing)
 

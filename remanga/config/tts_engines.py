@@ -30,31 +30,41 @@ class TTSEngineSpec:
     `config_attr` is what lets that stay true for the per-engine blocks
     too: TTSConfig.engine_block resolves it instead of branching on the
     engine name, so "which block holds the active engine's voice" is
-    answered by the same spec that answers everything else about it."""
+    answered by the same spec that answers everything else about it.
+
+    `clones_voice` says what that voice IS: False, a name from the engine's
+    own catalogue; True, the path of a recording to clone. It decides
+    whether the voice screens offer a list or a file picker, and what "this
+    voice is valid" gets checked against - a name against the catalogue, a
+    path against the disk. Mixing those two up is how a correctly configured
+    voice once read as "Missing" on every status screen."""
 
     name: str
     display_name: str
     summary: str
     config_attr: str
+    clones_voice: bool = False
 
 
-# Every TTS engine remanga can drive. There is one, and the machinery around
-# it is deliberately still plural: this catalogue, the per-engine settings
-# block and the name->class map in audio/synth/ are what made removing two
-# engines a contained change rather than a rewrite, and they are what would
-# make adding one back the same. A second engine means: a new *Config class
+# Every TTS engine remanga can drive. Adding one means: a new *Config class
 # in tts.py, a spec here, a worker script and Synthesizer subclass
 # (remanga/audio/synth/), and a venv provisioning block in bootstrap.sh.
 #
-# Kokoro replaced IndexTTS-2.5 and Audio8 TTS, which both cloned a voice
-# from a reference clip. It does not clone at all - it ships fixed, named
-# voices - so `spk_audio_prompt` and the reference-transcript asset that
-# went with those engines are gone rather than renamed. See KokoroConfig.
+# Kokoro comes first, which makes it the default and the fallback for an
+# unrecognized name. It replaced IndexTTS-2.5 and Audio8 TTS, which cloned
+# from a reference clip, because the clip was the largest single source of
+# quality problems. Chatterbox brings cloning back as the alternative for a
+# narrator no built-in voice matches - not as a replacement for Kokoro.
 TTS_ENGINE_SPECS: tuple[TTSEngineSpec, ...] = (
     TTSEngineSpec(
         "kokoro", "Kokoro-82M",
         "Fixed studio voices, no reference clip - fast and consistent",
         config_attr="kokoro",
+    ),
+    TTSEngineSpec(
+        "chatterbox", "Chatterbox Turbo",
+        "Clones the narrator from a reference recording you supply - English only",
+        config_attr="chatterbox", clones_voice=True,
     ),
 )
 

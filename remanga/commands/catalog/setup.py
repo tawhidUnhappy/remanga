@@ -5,7 +5,8 @@ from __future__ import annotations
 from remanga.commands.handlers import (
     setup as setup_handlers,
 )
-from remanga.commands.spec import Command
+from remanga.commands.spec import Command, Param
+from remanga.tool_envs import TOOL_NAMES
 
 SETUP_COMMANDS: list[Command] = [
     Command(
@@ -36,5 +37,20 @@ SETUP_COMMANDS: list[Command] = [
         setup_handlers.setup_models,
         category="Setup",
         detail="fetches only what the current configuration actually uses",
+    ),
+    Command(
+        "setup-tools",
+        "Install/update the isolated .tools/venv-<name> environments (see remanga/tool_envs.py)",
+        setup_handlers.setup_tools,
+        [
+            Param("tool", ["--tool"], type="choice", choices=list(TOOL_NAMES), required=False,
+                  help="Only this tool - every tool by default",
+                  cli_only=True),
+            Param("force", ["--force", "-f"], type="bool", required=False, default=False,
+                  help="Rebuild from scratch instead of updating in place",
+                  cli_only=True),
+        ],
+        category="Setup",
+        detail="normally not needed - each environment installs itself the first time its engine runs",
     ),
 ]
