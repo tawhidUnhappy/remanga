@@ -8,15 +8,17 @@ against chapters the project really has."""
 
 from __future__ import annotations
 
+from remanga.extensions import extension_source_files
 from remanga.full_recap import chapter_sort_key, discover_chapters
 from remanga.full_recap.discovery import expand_chapter_selection
 
 # Applied whenever --keep is left unset entirely (None) - the three things
 # most expensive/annoying to redo (a re-download, re-marking panels, and an
-# LLM narration pass) survive a wipe by default; everything generated from
-# them (panels/, sheets/zips, audio, video) does not. Pass --keep explicitly
-# (a comma list, or "none" for an absolute full wipe) to override this.
-DEFAULT_WIPE_KEEP = {"pages", "crops.json", "llm_crops.json", "narration.json"}
+# LLM narration pass) survive a wipe by default, along with every extension's
+# source files (an LLM crop reply, for one); everything generated from them
+# (panels/, sheets/zips, audio, video) does not. Pass --keep explicitly (a
+# comma list, or "none" for an absolute full wipe) to override this.
+DEFAULT_WIPE_KEEP = {"pages", "crops.json", "narration.json"} | extension_source_files()
 
 
 def split_chapters(raw: str | None) -> list[str] | None:

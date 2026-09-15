@@ -46,11 +46,22 @@ def get_chapter_dir(project_name: str, chapter_num: str) -> Path:
 #   2. `remanga/reset/` can wipe every generated artifact for a chapter (or a whole
 #      project) by clearing these directories, without ever touching, or
 #      needing to know the shape of, the source folder next to them.
-GENERATED_KINDS = (
+#
+# Extensions add their own kinds (remanga.extensions.Extension.generated_kinds),
+# after the core ones.
+CORE_GENERATED_KINDS = (
     "pages_zip", "sheets", "sheets_zip", "sheets_folders", "panels_zip",
-    "panels_pdf", "grid_pages", "grid_zip", "grid_pdf", "llm_crop",
-    "audio", "audio_modified", "video",
+    "panels_pdf", "audio", "audio_modified", "video",
 )
+
+
+def _with_extension_kinds(core: tuple[str, ...]) -> tuple[str, ...]:
+    from remanga.extensions import extension_generated_kinds
+
+    return core + extension_generated_kinds()
+
+
+GENERATED_KINDS = _with_extension_kinds(CORE_GENERATED_KINDS)
 
 
 def get_generated_dir(project_name: str, kind: str, chapter_num=None, create: bool = True) -> Path:

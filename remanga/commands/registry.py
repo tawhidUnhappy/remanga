@@ -14,9 +14,15 @@ from __future__ import annotations
 from remanga.commands.catalog import CHAPTER_COMMANDS, PROJECT_COMMANDS, SETUP_COMMANDS
 from remanga.commands.categories import CATEGORIES, Category
 from remanga.commands.spec import Command
+from remanga.extensions import load_extensions, place
 
-# Category order is menu order and --help order (see catalog/__init__).
-COMMAND_REGISTRY: list[Command] = [*SETUP_COMMANDS, *CHAPTER_COMMANDS, *PROJECT_COMMANDS]
+# Category order is menu order and --help order (see catalog/__init__), with
+# every extension's commands placed among the catalog's (remanga.extensions).
+COMMAND_REGISTRY: list[Command] = place(
+    [*SETUP_COMMANDS, *CHAPTER_COMMANDS, *PROJECT_COMMANDS],
+    [placed for extension in load_extensions() if extension.commands for placed in extension.commands()],
+    lambda cmd: cmd.name,
+)
 
 COMMAND_BY_NAME: dict[str, Command] = {cmd.name: cmd for cmd in COMMAND_REGISTRY}
 

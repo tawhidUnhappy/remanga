@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from remanga.commands.catalog.llm_crop import LLM_CROP_CHAPTER_COMMANDS
 from remanga.commands.handlers import (
     chapter as chapter_handlers,
     cleanup as cleanup_handlers,
@@ -83,8 +82,6 @@ CHAPTER_COMMANDS: list[Command] = [
         category="Chapter Production",
         detail="Draw panels, or press Detect for MAGI v3 to find them; you adjust and save",
     ),
-    # The Gemini alternative to `mark`, listed right after it.
-    *LLM_CROP_CHAPTER_COMMANDS,
     Command(
         "review",
         "Launch the Narration Reviewer web UI to flag narration issues (writes "

@@ -10,29 +10,23 @@ walkthrough).
 
 `current` is what makes the menu worth reading: the resolution row says
 "1080p Full HD (1920x1080)" before you open it, so the settings screen
-doubles as the status screen for settings."""
+doubles as the status screen for settings.
+
+Extensions add their own sections, placed among these (remanga.extensions)."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
-
 from remanga.config import RemangaConfig
-from remanga.settings import engine, llm_crop, tuning, video
+from remanga.extensions import load_extensions, place
+from remanga.settings import engine, tuning, video
 from remanga.settings.assets import ASSETS, asset_relevant, asset_status, run_asset_menu
 from remanga.settings.browser import run_all_settings
 from remanga.settings.presets import background_label, language_label, resolution_label
 from remanga.settings.schema import fields_by_section
+from remanga.settings.section_spec import Section
 from remanga.settings.vision import configure_vision_outputs, package_summary
 
-
-@dataclass(frozen=True)
-class Section:
-    key: str
-    title: str
-    describe: Callable[[RemangaConfig], str]
-    run: Callable[[RemangaConfig], None]
-    detail: str = ""
+__all__ = ["SECTIONS", "SECTION_BY_KEY", "Section"]
 
 
 def _assets_summary(config: RemangaConfig) -> str:
@@ -45,7 +39,7 @@ def _assets_summary(config: RemangaConfig) -> str:
     return ", ".join(parts)
 
 
-SECTIONS: tuple[Section, ...] = (
+CORE_SECTIONS: tuple[Section, ...] = (
     Section(
         "engine", "TTS engine",
         # The voice belongs to the engine now (see config/tts.py), so the
@@ -95,12 +89,6 @@ SECTIONS: tuple[Section, ...] = (
         detail="which cleanup passes run between downloading a page and narrating it",
     ),
     Section(
-        "llm_crop", "LLM crop (Gemini)",
-        llm_crop.llm_crop_summary,
-        llm_crop.configure_llm_crop,
-        detail="what crop-grid builds for Gemini, how readily it groups panels, and how its crops are cut",
-    ),
-    Section(
         "framing", "Panel framing",
         lambda c: (f"{c.video.panel_padding_percent:g}% padding"
                    f"{' (adaptive)' if c.video.auto_adaptive_padding else ''}"
@@ -135,5 +123,11 @@ SECTIONS: tuple[Section, ...] = (
         video.configure_hardware,
     ),
 )
+
+SECTIONS: tuple[Section, ...] = tuple(place(
+    CORE_SECTIONS,
+    [placed for extension in load_extensions() if extension.settings for placed in extension.settings()],
+    lambda section: section.key,
+))
 
 SECTION_BY_KEY = {section.key: section for section in SECTIONS}
