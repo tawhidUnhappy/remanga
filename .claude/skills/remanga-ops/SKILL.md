@@ -192,7 +192,7 @@ Two engines now: `kokoro` (default, hexgrad/Kokoro-82M, 82M params, StyleTTS 2
 recording). `TTSEngineSpec.clones_voice` is what the rest of the codebase
 branches on instead of the engine name - it decides whether a voice is a NAME
 (checked against Kokoro's catalogue) or a PATH (checked on disk via
-`settings/assets.py:clip_problem`: exists, decodable, longer than 5s - Turbo
+`settings/voice.py:clip_problem`: exists, decodable, longer than 5s - Turbo
 asserts on anything shorter and that used to only surface at synthesis time).
 `TTSConfig.voice_label`/`voice_detail` are the one place that renders either
 shape for a screen; grepping for `.kokoro.spec` outside `KokoroConfig` itself

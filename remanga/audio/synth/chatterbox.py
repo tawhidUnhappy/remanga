@@ -62,7 +62,7 @@ class ChatterboxSynthesizer(BaseWorkerSynthesizer):
         """One panel's request.
 
         `voice` is the PATH of the reference clip being cloned - validated
-        before the run started (settings/assets.py:ensure_valid_voice) and
+        before the run started (settings/voice.py:ensure_valid_voice) and
         resolved here against remanga's working directory, which is what a
         relative path in config.json means everywhere else."""
         return {

@@ -12,9 +12,9 @@ from __future__ import annotations
 from remanga.config import RemangaConfig
 from remanga.config.tts import TTS_ENGINE_SPECS
 from remanga.console import console, escape
-from remanga.settings.assets import pick_voice
 from remanga.settings.fields import set_field
 from remanga.settings.presets import CUSTOM, language_choices
+from remanga.settings.voice import pick_voice
 from remanga.tui import Choice, ask_text, confirm, is_cancel, select
 
 

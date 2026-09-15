@@ -893,7 +893,7 @@ remanga can drive two engines, picked with `tts.engine` (`config.json`) or `--en
 
 **Kokoro** replaced IndexTTS-2.5 and Audio8 TTS, both of which cloned a narrator from a reference clip. Measured on an RTX 3060 (12GB) against IndexTTS: real-time factor 0.021 (48x faster than real time) vs 1.42 (slower than real time); weights 327MB vs 3.3GB. The reference clip was also the single largest source of quality problems there: IndexTTS truncates it to its first 15 seconds and derives the narrator's entire delivery from that, so a badly-chosen clip — or one cut mid-word — poisoned every panel of every chapter. That history is why Kokoro stays the default. If you need what those old engines did, they're preserved on the **`legacy/indextts-audio8`** branch.
 
-**Chatterbox Turbo** brings cloning back as the *alternative*, for when no built-in voice matches the narrator you want. It carries the same quality risk the retired engines did - the recording's accent, pace, microphone and room all come through - so pick a clean, single-speaker clip with no music, longer than 5 seconds (`remanga/settings/assets.py:clip_problem` checks this before a run starts, not after). Point `tts.chatterbox.voice` at it, or pick one from the **Narrator voice** row after switching engines - it becomes a recording picker over `global/voice/` instead of Kokoro's list. It has no speaking-rate control of its own, so `tts.speed` is applied by time-stretching the finished clip (pitch-preserving) rather than as a generation parameter.
+**Chatterbox Turbo** brings cloning back as the *alternative*, for when no built-in voice matches the narrator you want. It carries the same quality risk the retired engines did - the recording's accent, pace, microphone and room all come through - so pick a clean, single-speaker clip with no music, longer than 5 seconds (`remanga/settings/voice.py:clip_problem` checks this before a run starts, not after). Point `tts.chatterbox.voice` at it, or pick one from the **Narrator voice** row after switching engines - it becomes a recording picker over `global/voice/` instead of Kokoro's list. It has no speaking-rate control of its own, so `tts.speed` is applied by time-stretching the finished clip (pitch-preserving) rather than as a generation parameter.
 
 Switching a chapter's engine or narrator and re-running `tts` re-synthesizes every panel automatically - the voice actually baked into a chapter's cached clips is tracked in `audio_timing.json` (`resume` never mixes voices).
 
@@ -1057,7 +1057,7 @@ remanga/
 ├── remanga/                    # Python core pipeline package - one directory per concern,
 │   │                           # each file small enough to read top to bottom
 │   ├── tui/                    # Interactive terminal: arrow-key menus, checklists, confirmations
-│   │                           # keys.py (raw tty + mouse/paste immunity), select.py, checklist.py,
+│   │                           # keys.py (raw tty + mouse/paste immunity; key_names.py, key_decode.py), select.py, checklist.py,
 │   │                           # confirm.py, text.py, frame.py (how a menu looks), fallback.py (non-tty)
 │   ├── commands/               # Every subcommand, shared by the CLI and the wizard:
 │   │   │                       # spec.py (Command/Param + argparse glue), registry.py (the list),
@@ -1066,11 +1066,11 @@ remanga/
 │   ├── wizard/                 # The interactive session: app.py (menus), projects.py, chapters.py,
 │   │                           # params.py (prompts a command's parameters), pipeline_edit.py,
 │   │                           # narration.py + review.py + uploads.py + handoff.py (LLM hand-offs)
-│   ├── settings/               # Everything that reads/writes config.json: assets.py (voice/BGM/transcript),
+│   ├── settings/               # Everything that reads/writes config.json: assets.py (BGM), voice.py (narrator voice),
 │   │                           # vision.py (packaging checklist), presets.py, engine.py, video.py,
 │   │                           # sections.py (every setting as one list), tuning.py + levels.py + balance.py
 │   │                           # (how it sounds and looks), field_prompts.py, wizard.py, paths_ui.py
-│   ├── audio/                  # tts.py + mix.py; synth/ = one module per engine over a shared worker base
+│   ├── audio/                  # tts.py + mix.py; synth/ = one module per engine over a shared worker base (base.py + worker_process.py)
 │   │   └── scripts/             # kokoro_worker.py, chatterbox_worker.py - each runs inside its own venv
 │   ├── tool_envs/              # Single source of truth for every .tools/venv-<name> environment:
 │   │                           # catalog.py (TOOLS), spec.py, install.py, cli.py (python -m remanga.tool_envs)
@@ -1089,7 +1089,7 @@ remanga/
 │   │   │                       # settings_store.py (Shortcuts + assist persistence)
 │   │   ├── static/js/           # Frontend: render/drag-resize/draw/zoom-pan/shortcuts/magi/page-nav modules
 │   │   └── scripts/             # magi_worker.py, download_magi.py - run inside .tools/venv-magi
-│   ├── video/                  # compose.py (frame compositor) & render.py (GPU/CPU renderer)
+│   ├── video/                  # compose.py (frame compositor), render.py (GPU/CPU renderer) & encoder_probe.py (which encoder works here)
 │   ├── full_recap/             # discovery.py, timeline.py (one continuous audio timeline), compiler.py, wipes.py
 │   ├── verify/                 # models.py, panels.py, probe.py, runner.py, report.py
 │   ├── reset/                  # modes.py (restart presets), entries.py (what exists), actions.py (deletes)

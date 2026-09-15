@@ -9,12 +9,14 @@ usable on its own:
     files.py     - path validation, transcript I/O, and finding the asset
                    files already on disk
     fields.py    - get/set one config field by dotted name
-    assets.py    - the voice/BGM/transcript registry, its editors, and the
-                   ensure_valid_* validators the audio pipeline calls
+    assets.py    - the BGM registry, its editor, and ensure_valid_bgm
+    voice.py     - the narrator voice: ensure_valid_voice and its picker
     vision.py    - the packaging checklist, generated from PackageConfig
     presets.py   - resolution/background/language option tables
     engine.py    - TTS engine + narration language screens
     video.py     - resolution/background/GPU screens
+    tuning.py    - pacing, panel detection and framing walkthroughs
+    levels.py    - the Audio levels menu; balance.py is its measured balance
     sections.py  - every settings area as one ordered list
     summary.py   - the settings summary table
     wizard.py    - `remanga setup-config`
@@ -26,13 +28,7 @@ ensure_valid_bgm, ...`) are re-exported below.
 
 from __future__ import annotations
 
-from remanga.settings.assets import (
-    ASSETS,
-    ensure_valid_bgm,
-    ensure_valid_voice,
-    pick_voice,
-    run_asset_menu,
-)
+from remanga.settings.assets import ASSETS, ensure_valid_bgm, run_asset_menu
 from remanga.settings.browser import run_all_settings
 from remanga.settings.fields import get_field, set_field
 from remanga.settings.files import (
@@ -44,6 +40,7 @@ from remanga.settings.paths_ui import run_paths_manager
 from remanga.settings.schema import FieldSpec, all_fields, fields_by_section
 from remanga.settings.summary import settings_summary
 from remanga.settings.vision import configure_vision_outputs, package_summary
+from remanga.settings.voice import ensure_valid_voice, pick_voice
 from remanga.settings.wizard import run_setup_wizard
 
 __all__ = [

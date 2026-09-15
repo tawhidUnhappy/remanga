@@ -11,11 +11,12 @@ restores the exact attributes it found, even on an exception.
 Key names are normalized strings ("up", "enter", "ctrl-a", "a", ...) rather
 than raw escape bytes, so menu code never parses ANSI sequences itself and
 the Windows branch below can produce identical names from a completely
-different API.
+different API. The names live in key_names.py (re-exported here), and the
+bytes-to-name decoding in key_decode.py.
 
 Mouse input is actively neutralized rather than merely unused - see
-_MOUSE_OFF and _read_escape below for exactly what a stray click or wheel
-event would otherwise do to a menu.
+_MOUSE_OFF below and key_decode.read_escape for exactly what a stray click
+or wheel event would otherwise do to a menu.
 """
 
 from __future__ import annotations
@@ -25,22 +26,30 @@ import os
 import sys
 from contextlib import contextmanager
 
-UP = "up"
-DOWN = "down"
-LEFT = "left"
-RIGHT = "right"
-ENTER = "enter"
-SPACE = "space"
-TAB = "tab"
-ESC = "esc"
-BACKSPACE = "backspace"
-DELETE = "delete"
-HOME = "home"
-END = "end"
-PAGE_UP = "pgup"
-PAGE_DOWN = "pgdn"
-CTRL_C = "ctrl-c"
-UNKNOWN = "unknown"
+from remanga.tui.key_decode import read_escape, translate
+from remanga.tui.key_names import (
+    BACKSPACE,
+    CTRL_C,
+    DELETE,
+    DOWN,
+    END,
+    ENTER,
+    ESC,
+    HOME,
+    LEFT,
+    PAGE_DOWN,
+    PAGE_UP,
+    RIGHT,
+    SPACE,
+    TAB,
+    UNKNOWN,
+    UP,
+)
+
+__all__ = [
+    "BACKSPACE", "CTRL_C", "DELETE", "DOWN", "END", "ENTER", "ESC", "HOME", "LEFT", "PAGE_DOWN",
+    "PAGE_UP", "RIGHT", "SPACE", "TAB", "UNKNOWN", "UP", "is_interactive", "key_reader",
+]
 
 try:  # POSIX
     import select as _select
@@ -55,12 +64,6 @@ except ImportError:  # pragma: no cover - POSIX
     msvcrt = None
 
 
-# Final byte of a CSI ("ESC [ ...") sequence -> key name, for the sequences a
-# cursor key sends. Anything not listed maps to UNKNOWN and is ignored by
-# callers rather than being mistaken for a printable character.
-_CSI_FINAL = {"A": UP, "B": DOWN, "C": RIGHT, "D": LEFT, "H": HOME, "F": END}
-# "ESC [ <n> ~" sequences (keypad/navigation cluster), keyed by <n>.
-_CSI_TILDE = {"1": HOME, "3": DELETE, "4": END, "5": PAGE_UP, "6": PAGE_DOWN, "7": HOME, "8": END}
 # Windows getwch() special-key second byte -> key name.
 _WIN_SPECIAL = {
     "H": UP, "P": DOWN, "K": LEFT, "M": RIGHT, "G": HOME, "O": END,
@@ -88,7 +91,7 @@ _WIN_SPECIAL = {
 # So: disable the reporting modes on the way in (defensive - remanga never
 # enables them), and enable bracketed paste so any paste that does arrive
 # comes wrapped in ESC[200~ ... ESC[201~ and can be recognized and dropped
-# whole (see _read_escape) instead of being replayed key by key.
+# whole (see key_decode.read_escape) instead of being replayed key by key.
 _MOUSE_OFF = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1005l\x1b[?1006l\x1b[?1015l"
 _PASTE_ON = "\x1b[?2004h"
 _PASTE_OFF = "\x1b[?2004l"
@@ -190,8 +193,8 @@ class _PosixReader:
     def read_key(self) -> str:
         ch = self._read()
         if ch == "\x1b":
-            return _read_escape(self._read, self._pending)
-        return _translate(ch)
+            return read_escape(self._read, self._pending)
+        return translate(ch)
 
 
 class _WindowsReader:  # pragma: no cover - exercised only on Windows
@@ -209,7 +212,7 @@ class _WindowsReader:  # pragma: no cover - exercised only on Windows
         ch = msvcrt.getwch()
         if ch in ("\x00", "\xe0"):
             return _WIN_SPECIAL.get(msvcrt.getwch(), UNKNOWN)
-        return _translate(ch)
+        return translate(ch)
 
 
 def _write_control(sequence: str) -> None:
@@ -221,88 +224,6 @@ def _write_control(sequence: str) -> None:
         sys.stdout.flush()
     except (OSError, ValueError):
         pass
-
-
-def _read_escape(read, pending) -> str:
-    """Consumes one complete ESC-prefixed sequence and names it.
-
-    Every branch here consumes the sequence *in full* even when the answer
-    is "ignore this", which is the whole point: a partially-consumed mouse
-    report leaves its coordinate bytes in the input stream, where they are
-    then read as ordinary keys - the click-becomes-Enter/Ctrl+C failure
-    described at _MOUSE_OFF above. Returning UNKNOWN is how a menu says
-    "nothing happened"; it never falls through to type-to-filter."""
-    if not pending():
-        return ESC  # a real, bare Esc keypress - nothing followed it
-    second = read()
-    if second not in ("[", "O"):
-        return ESC  # Alt+key and friends: ignore the modifier, keep the Esc
-
-    params = ""
-    while True:
-        ch = read()
-        if ch == "":
-            return UNKNOWN  # stdin closed mid-sequence
-        if ch.isdigit() or ch == ";":
-            params += ch
-            continue
-        if ch == "<":
-            # SGR mouse report: "ESC [ < b ; x ; y (M|m)". Drain to its
-            # terminator and report nothing.
-            while True:
-                nxt = read()
-                if nxt == "" or nxt in ("M", "m"):
-                    return UNKNOWN
-        if ch == "M" and not params:
-            # X10 mouse report: exactly three raw bytes follow, and they are
-            # position data, not keystrokes. Eat them.
-            read(3)
-            return UNKNOWN
-        if ch == "~":
-            code = params.split(";")[0]
-            if code in ("200", "201"):
-                # Bracketed paste. ESC[200~ opens it: swallow everything up
-                # to the closing ESC[201~ so a middle-click paste can't
-                # replay its contents (Enter included) into this menu.
-                if code == "200":
-                    _swallow_paste(read)
-                return UNKNOWN
-            return _CSI_TILDE.get(code, UNKNOWN)
-        return _CSI_FINAL.get(ch, UNKNOWN)
-
-
-def _swallow_paste(read) -> None:
-    """Discards pasted text up to and including its ESC[201~ terminator.
-    Bounded so a pathological paste (or a terminal that never sends the
-    terminator) can't spin here forever - anything past the cap is left in
-    the buffer and, at worst, types into the filter."""
-    seen = ""
-    for _ in range(64 * 1024):
-        ch = read()
-        if ch == "":
-            return
-        seen = (seen + ch)[-6:]
-        if seen.endswith("\x1b[201~"):
-            return
-
-
-def _translate(ch: str) -> str:
-    """One printable/control character -> key name. Anything that isn't a
-    recognized control byte comes back as the character itself, which is
-    what makes type-to-filter work in every menu for free."""
-    if ch in ("\r", "\n"):
-        return ENTER
-    if ch == "\t":
-        return TAB
-    if ch == " ":
-        return SPACE
-    if ch in ("\x7f", "\b", "\x08"):
-        return BACKSPACE
-    if ch == "\x03":
-        return CTRL_C
-    if ch and ord(ch) < 32:
-        return f"ctrl-{chr(ord(ch) + 96)}"
-    return ch
 
 
 @contextmanager
