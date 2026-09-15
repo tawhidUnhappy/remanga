@@ -15,7 +15,12 @@ tab never reloads and the process never restarts, so the marks you just made
 are still one click away when you want to check them.
 
 MarkerState (marker_state.py) is untouched by any of this: it still knows
-about exactly one chapter, and knows nothing about being in a list."""
+about exactly one chapter, and knows nothing about being in a list.
+
+The session's other jobs each live in a module of their own, mixed into
+MarkerSession: the MAGI detection queue (session_detection.py), remarking,
+reordering and the save switches (session_edits.py), and the sidebar outline
+(session_outline.py)."""
 
 from __future__ import annotations
 
@@ -24,9 +29,12 @@ from pathlib import Path
 from typing import Any
 
 from remanga.console import console, escape as _esc
-from remanga.json_io import has_real_json_content, read_json, write_json
+from remanga.json_io import write_json
 from remanga.paths import get_chapter_dir, load_project_metadata
-from remanga.webui.marker_state import DECIDED_KEY, MarkerState
+from remanga.webui.marker_state import MarkerState
+from remanga.webui.session_detection import DetectionQueueMixin
+from remanga.webui.session_edits import MarkEditsMixin
+from remanga.webui.session_outline import SessionOutlineMixin
 
 
 def has_pages(project_name: str, chapter_num: str) -> bool:
@@ -39,7 +47,7 @@ def has_pages(project_name: str, chapter_num: str) -> bool:
     return pages_dir.is_dir() and any(p.is_file() for p in pages_dir.iterdir())
 
 
-class MarkerSession:
+class MarkerSession(DetectionQueueMixin, MarkEditsMixin, SessionOutlineMixin):
     """The chapters one browser tab will work through, and where it is.
 
     `finished` is the whole process's stop signal: the Flask server runs
@@ -140,6 +148,11 @@ class MarkerSession:
     def has_next(self) -> bool:
         return self.index + 1 < len(self.chapters)
 
+    @property
+    def reading_direction(self) -> str:
+        """How this manga is read - what "reading order" means for it."""
+        return load_project_metadata(self.project).get("reading_direction") or "right_to_left"
+
     def save_current(self) -> Path | None:
         """Writes the current chapter's crops.json and says so. Called on
         every chapter change, not only at the end: leaving a chapter is the
@@ -195,429 +208,3 @@ class MarkerSession:
                 self.save_current()
             self.index = index
         return True
-
-    # --- detection ------------------------------------------------------
-    #
-    # Everything MAGI does in a session goes through one queue and one worker
-    # thread. The alternative - each request spawning its own detection - is
-    # several model loads racing for one GPU, and a progress report that
-    # can't say what it is progressing through.
-
-    @property
-    def reading_direction(self) -> str:
-        """How this manga is read - what "reading order" means for it."""
-        return load_project_metadata(self.project).get("reading_direction") or "right_to_left"
-
-    def _begin_run_if_idle(self) -> None:
-        """Starts a fresh run count when nothing is queued or running. Caller
-        holds _jobs_lock."""
-        if self._active is None and not self._jobs:
-            self._run_total = self._run_done = 0
-            self._run_kinds = set()
-            self._run_chapters = set()
-
-    def _note_queued(self, kind: str, chapter: str) -> None:
-        self._run_total += 1
-        self._run_kinds.add(kind)
-        self._run_chapters.add(chapter)
-
-    def queue_detection(self, config, chapters: list[str], pages: list[str] | None = None,
-                        force: bool = False) -> list[str]:
-        """Adds work to the detection queue and makes sure the worker is
-        running. Returns the chapters actually queued. The only way detection
-        starts: nothing queues it on its own - see POST /api/detect.
-
-        Never in a read-only session: detection WRITES - it fills `marks` for
-        every untouched page - so a viewer opened to check what was actually
-        saved would fill up with AI guesses that are in nobody's crops.json.
-
-        A chapter whose pass already ran this session is skipped - `pages`
-        aside, which is the "just this page" request and is always honoured,
-        because asking for one page explicitly is asking for it again.
-        `force` travels with that request down to apply_detected, where it
-        lets a page recorded as having no panels be detected after all."""
-        if self.read_only or not config.magi_enabled:
-            return []
-        queued: list[str] = []
-        with self._jobs_lock:
-            self._begin_run_if_idle()
-            pending = {job["chapter"] for job in self._jobs if job["kind"] == "detect"}
-            for chapter in chapters:
-                if chapter not in self.chapters:
-                    continue
-                if pages is None:
-                    if chapter in pending or self.state_for(chapter).detect_started:
-                        continue
-                    self.state_for(chapter).detect_started = True
-                self._jobs.append({"kind": "detect", "chapter": chapter, "pages": pages, "force": force})
-                self._note_queued("detect", chapter)
-                queued.append(chapter)
-        if queued:
-            self._ensure_worker(config)
-        return queued
-
-    def queue_remark(self, config, chapters: list[str], pages: list[str] | None = None) -> list[str]:
-        """Queues Remark: MAGI detects the pages again and its marks REPLACE
-        what is on them, hand-drawn or not (MarkerState.replace_with_detected).
-        Returns the chapters queued.
-
-        Always honoured, unlike Detect: a chapter detected earlier this session
-        is exactly what someone remarks. Only a remark for the same chapter and
-        pages that is still waiting is not queued twice. The browser confirms
-        before asking for this - see remark_plan."""
-        if self.read_only or not config.magi_enabled:
-            return []
-        queued: list[str] = []
-        with self._jobs_lock:
-            self._begin_run_if_idle()
-            waiting = {(job["chapter"], tuple(job["pages"] or ())) for job in self._jobs if job["kind"] == "remark"}
-            for chapter in chapters:
-                if chapter not in self.chapters or (chapter, tuple(pages or ())) in waiting:
-                    continue
-                self._jobs.append({
-                    "kind": "remark", "chapter": chapter, "pages": pages, "force": False, "replace": True,
-                })
-                self._note_queued("remark", chapter)
-                queued.append(chapter)
-        if queued:
-            self._ensure_worker(config)
-        return queued
-
-    def queue_all(self, config) -> list[str]:
-        """Every chapter from the one on screen to the end, then the ones
-        before it. In that order because "all chapters" is nearly always
-        asked while looking at where you stopped - the chapters ahead are
-        the ones about to be needed, and the ones behind are usually already
-        done."""
-        ordered = self.chapters[self.index:] + self.chapters[:self.index]
-        return self.queue_detection(config, ordered)
-
-    def _ensure_worker(self, config) -> None:
-        with self._jobs_lock:
-            if self._worker_busy:
-                return
-            self._worker_busy = True
-        self._worker = threading.Thread(target=self._drain_jobs, args=(config,), daemon=True)
-        self._worker.start()
-
-    def _drain_jobs(self, config) -> None:
-        """The worker: one job at a time until the queue is empty.
-
-        A chapter that isn't the one on screen is saved as soon as its pass
-        finishes. That is the whole point of leaving this running - the marks
-        it produced are on disk whether or not the session ever gets that
-        far, so a power cut, a closed tab or an early Finish costs nothing
-        that was already computed."""
-        from remanga.webui.detection import run_detection
-
-        while not self.finished.is_set():
-            with self._jobs_lock:
-                if not self._jobs:
-                    self._active = None
-                    self._active_kind = None
-                    self._last_run = {
-                        "jobs": self._run_done,
-                        "kinds": sorted(self._run_kinds),
-                        "chapters": [c for c in self.chapters if c in self._run_chapters],
-                    }
-                    self._worker_busy = False
-                    return
-                job = self._jobs.pop(0)
-                self._active = job["chapter"]
-                self._active_kind = job["kind"]
-            chapter = job["chapter"]
-            try:
-                state = self.state_for(chapter)
-                # Counters belong to this job; stale numbers from an earlier
-                # pass on the same chapter are how "3/3 pages" showed up
-                # against a job that had not detected anything yet.
-                state.detect_done = state.detect_total = 0
-                run_detection(
-                    state, config, only_pages=job["pages"], force=job["force"],
-                    order_direction=self.reading_direction if self.auto_order else None,
-                    replace=job.get("replace", False),
-                )
-                if job["kind"] == "remark" and job["pages"] is None:
-                    # A whole chapter has now had a pass; a later Detect over it
-                    # has nothing left to fill in.
-                    state.detect_started = True
-                self.mark_dirty(chapter)
-                # The chapter on screen is saved when it's left, like any
-                # other; anything else is saved here so a background pass
-                # nobody watched still lands on disk.
-                if chapter != self.chapter_num and self.auto_save:
-                    self.save_chapter(chapter)
-            except Exception as e:  # a failed chapter must not end the queue
-                console.print(f"[bold red]Detection failed for chapter {_esc(chapter)}:[/] {_esc(str(e))}")
-            finally:
-                with self._jobs_lock:
-                    self._run_done += 1
-        with self._jobs_lock:
-            self._active = None
-            self._active_kind = None
-            self._worker_busy = False
-
-    # --- remarking ------------------------------------------------------
-
-    def chapter_is_narrated(self, chapter_num: str) -> bool:
-        return has_real_json_content(get_chapter_dir(self.project, chapter_num) / "narration.json")
-
-    def _page_marks_now(self, chapter_num: str) -> dict[str, tuple[int, int, bool]]:
-        """{filename: (marks, hand-made marks, emptied on purpose)} for every
-        page with something to lose - from the session if the chapter has been
-        opened, otherwise from its crops.json, without decoding a single image
-        (a plan over "all chapters" must not open every page of the project).
-        A panel saved before `src` was recorded counts as hand-made: the file
-        can't say otherwise, and overstating what a remark replaces is the
-        safe direction to be wrong in."""
-        state = self._states.get(chapter_num)
-        if state is not None:
-            with state.lock:
-                return {
-                    page["filename"]: (
-                        len(state.marks.get(page["filename"]) or []),
-                        sum(1 for m in state.marks.get(page["filename"]) or [] if m.get("src") != "ai"),
-                        page["filename"] in state.decided,
-                    )
-                    for page in state.pages
-                }
-        crops_path = get_chapter_dir(self.project, chapter_num) / "crops.json"
-        if not has_real_json_content(crops_path):
-            return {}
-        try:
-            entries = read_json(crops_path).get("pages", [])
-        except Exception:
-            return {}
-        facts = self._saved_page_facts(chapter_num)
-        out: dict[str, tuple[int, int, bool]] = {}
-        for entry in entries:
-            filename = entry.get("page_filename")
-            panels = entry.get("panels") or []
-            decided = facts.get(filename, (0, False))[1]
-            out[filename] = (len(panels), sum(1 for panel in panels if panel.get("src") != "ai"), decided)
-        return out
-
-    def remark_plan(self, chapters: list[str], pages: list[str] | None = None) -> dict[str, Any]:
-        """What a Remark over `chapters` (only `pages` of them, if given) would
-        replace, without doing any of it - the numbers the browser's confirm
-        states before anything is lost: how many pages, how many of those have
-        marks now and how many have marks someone drew or edited, how many were
-        emptied on purpose, and which chapters already have narration (their
-        panel ids can change under it)."""
-        wanted = set(chapters)
-        targets = [c for c in self.chapters if c in wanted]
-        total = marked = hand_made = emptied = 0
-        for chapter in targets:
-            names = pages if pages is not None else self.page_names(chapter)
-            facts = self._page_marks_now(chapter)
-            total += len(names)
-            for name in names:
-                count, manual, decided = facts.get(name, (0, 0, False))
-                marked += count > 0
-                hand_made += manual > 0
-                emptied += decided and count == 0
-        return {
-            "chapters": targets,
-            "pages": total,
-            "marked": marked,
-            "hand_made": hand_made,
-            "emptied": emptied,
-            "narrated": [c for c in targets if self.chapter_is_narrated(c)],
-        }
-
-    # --- reading order --------------------------------------------------
-
-    def reorder(self, chapters: list[str], pages: list[str] | None = None) -> dict[str, int]:
-        """Puts marks into reading order over `chapters` (only `pages` of them,
-        if given), right now, in the calling thread. Returns {chapter: pages
-        whose order changed}.
-
-        Not queued behind detection. Reorder needs no GPU and takes
-        milliseconds, but a Detect over all chapters can leave the queue hours
-        deep, and a Reorder that waited its turn behind that is a Reorder that
-        looks like it did nothing. Each chapter's lock keeps it from
-        interleaving with a detection pass on the same pages.
-
-        A chapter that isn't on screen is saved as soon as it changes (with
-        auto-save on), the same rule the detection worker follows."""
-        if self.read_only:
-            return {}
-        direction = self.reading_direction
-        result: dict[str, int] = {}
-        for chapter in chapters:
-            if chapter not in self.chapters:
-                continue
-            changed = self.state_for(chapter).reorder_pages(pages, direction)
-            if not changed:
-                continue
-            result[chapter] = changed
-            self.mark_dirty(chapter)
-            if chapter != self.chapter_num and self.auto_save:
-                self.save_chapter(chapter)
-        return result
-
-    def set_auto_order(self, enabled: bool) -> None:
-        """Turns auto-order on or off for this session.
-
-        On means every chapter stays in reading order, not just the pages
-        edited from now on - so turning it on reorders the chapter on screen
-        immediately (the browser reloads it from the response) and every other
-        chapter in the session on a background thread. From then on pages are
-        re-sorted on every save and detected pages arrive sorted.
-
-        Off changes nothing that exists; it stops the automatic sorting, which
-        is what lets a person set an order the algorithm would get wrong."""
-        self.auto_order = bool(enabled)
-        if not self.auto_order or self.read_only:
-            return
-        self.reorder([self.chapter_num])
-        others = [c for c in self.chapters if c != self.chapter_num]
-        if others:
-            threading.Thread(target=self.reorder, args=(others,), daemon=True).start()
-
-    def set_auto_save(self, enabled: bool) -> None:
-        """Turns automatic writing on or off. Turning it ON immediately
-        writes whatever is already unsaved - the switch means "keep this on
-        disk", and leaving the backlog in memory would make it mean that
-        only from now on."""
-        self.auto_save = bool(enabled)
-        if self.auto_save:
-            for chapter in sorted(self.dirty, key=lambda c: self.chapters.index(c)):
-                self.save_chapter(chapter)
-
-    def unsaved_chapters(self) -> list[str]:
-        """Chapters with marks that aren't on disk, in session order."""
-        return [c for c in self.chapters if c in self.dirty]
-
-    def detection_status(self) -> dict[str, Any]:
-        """What the assist card reports: the chapter being detected right
-        now, how far in it is, and what's still waiting."""
-        with self._jobs_lock:
-            queued = [job["chapter"] for job in self._jobs]
-            run_total, run_done, last_run = self._run_total, self._run_done, self._last_run
-            active, active_kind = self._active, self._active_kind
-        state = self._states.get(active) if active else None
-        return {
-            "auto_save": self.auto_save,
-            "auto_order": self.auto_order,
-            "unsaved": self.unsaved_chapters(),
-            "active": active,
-            "active_kind": active_kind,
-            "active_done": state.detect_done if state else 0,
-            "active_total": state.detect_total if state else 0,
-            "queued": queued,
-            # The run as a whole: jobs finished / jobs queued since the queue
-            # was last idle. The card's bar is this, not the active chapter's
-            # own pages - a per-chapter bar resets on every chapter, which in
-            # a range run reads as a bar that can't make up its mind.
-            "run_done": run_done,
-            "run_total": run_total,
-            # What the last finished run did, for the idle message. Without it
-            # the card had nothing to say once the queue emptied, and kept
-            # whatever it said last - "Detecting ch 4 · 2/3 pages", forever.
-            "last_run": last_run,
-        }
-
-    def page_names(self, chapter_num: str) -> list[str]:
-        """This chapter's page filenames, in order, WITHOUT opening any of
-        them. MarkerState reads every image's real size (it has to - marks
-        are in image pixels); the outline only needs names and counts, and
-        paying an image decode per page for every chapter in a project just
-        to draw a sidebar is how a hundred-chapter session would take a
-        minute to open."""
-        pages_dir = get_chapter_dir(self.project, chapter_num) / "pages"
-        if not pages_dir.is_dir():
-            return []
-        return sorted(p.name for p in pages_dir.iterdir() if p.is_file())
-
-    def _saved_page_facts(self, chapter_num: str) -> dict[str, tuple[int, bool]]:
-        """Per page of a chapter this session hasn't opened: how many panels
-        its crops.json records, and whether a person decided that. Empty for
-        a chapter with no crops.json, which reads correctly as "nothing here
-        and nobody has said otherwise"."""
-        crops_path = get_chapter_dir(self.project, chapter_num) / "crops.json"
-        if not has_real_json_content(crops_path):
-            return {}
-        try:
-            data = read_json(crops_path)
-        except Exception:
-            return {}
-        entries = data.get("pages", [])
-        # Same legacy rule as MarkerState._load_existing_crops: a file that
-        # never says who decided anything is read the old way, where every
-        # entry counted as a decision.
-        records_decisions = any(DECIDED_KEY in entry for entry in entries)
-        facts: dict[str, tuple[int, bool]] = {}
-        for page in entries:
-            filename = page.get("page_filename")
-            if not filename:
-                continue
-            panels = len(page.get("panels") or [])
-            decided = bool(page.get(DECIDED_KEY)) if records_decisions else True
-            facts[str(filename)] = (panels, decided)
-        return facts
-
-    def outline(self) -> list[dict[str, Any]]:
-        """Every chapter, every page, and how many panels each page has -
-        the whole session as one tree for the sidebar to draw.
-
-        Live for chapters already open in this session (their in-memory
-        marks, including edits not yet saved), and from crops.json for the
-        rest. That distinction is why each chapter says whether it's
-        `loaded`: a chapter read off disk is showing you the last saved
-        state, and a viewer built to double-check things should not blur
-        those two together."""
-        out: list[dict[str, Any]] = []
-        for index, chapter_num in enumerate(self.chapters):
-            state = self._states.get(chapter_num)
-            if state is not None:
-                pages = [
-                    {"index": page["index"], "filename": page["filename"],
-                     "panels": len(state.marks.get(page["filename"], [])),
-                     # An empty page somebody excluded on purpose is a
-                     # finished page; an empty page nobody has reached is
-                     # work left. The sidebar draws them differently because
-                     # telling them apart is most of what checking a
-                     # half-done chapter consists of.
-                     "decided": page["filename"] in state.decided}
-                    for page in state.pages
-                ]
-            else:
-                facts = self._saved_page_facts(chapter_num)
-                pages = [
-                    {"index": i, "filename": name,
-                     "panels": facts.get(name, (0, False))[0],
-                     "decided": facts.get(name, (0, False))[1]}
-                    for i, name in enumerate(self.page_names(chapter_num), start=1)
-                ]
-            out.append({
-                "chapter": chapter_num,
-                "index": index,
-                "loaded": state is not None,
-                "pages": pages,
-                "panels": sum(page["panels"] for page in pages),
-                "marked_pages": sum(1 for page in pages if page["panels"]),
-                # Pages with nothing on them that nobody has decided about -
-                # the work actually left in this chapter. A page MAGI has
-                # filled in is not "waiting" even though no person has
-                # confirmed it; the sidebar counts the same thing.
-                "undecided_pages": sum(1 for page in pages
-                                       if not page["decided"] and not page["panels"]),
-            })
-        return out
-
-    def describe(self) -> dict[str, Any]:
-        """What the browser needs to know about the session itself - which
-        chapter of how many, what the others are called, and whether there's
-        one after this. The chapter's own pages/marks come from the
-        MarkerState alongside this (see routes.py)."""
-        return {
-            "project": self.project,
-            "chapter": self.chapter_num,
-            "chapter_index": self.index,
-            "chapter_total": len(self.chapters),
-            "chapters": list(self.chapters),
-            "has_next": self.has_next,
-            "read_only": self.read_only,
-            "auto_save": self.auto_save,
-        }

@@ -12,16 +12,11 @@ from remanga.console import console
 
 
 def _chosen_chapters(params: dict[str, Any], otherwise: str) -> list[str]:
-    """--chapters when given, else every chapter the project has - empty, and
-    said so, when there are none."""
-    from remanga.commands.selection import split_chapters
-    from remanga.full_recap import discover_chapters
+    """--chapters when given, else every chapter the project has - the same
+    choice every whole-project command makes."""
+    from remanga.commands.handlers.common import chosen_chapters
 
-    project = params["project"]
-    chapters = split_chapters(params.get("chapters")) or discover_chapters(project)
-    if not chapters:
-        console.print(f"[yellow]Project '{project}' has no chapters yet - {otherwise}.[/]")
-    return chapters
+    return chosen_chapters(params, otherwise)
 
 
 def crop_grid(params: dict[str, Any], config: RemangaConfig) -> None:
