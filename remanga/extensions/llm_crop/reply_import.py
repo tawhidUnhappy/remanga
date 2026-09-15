@@ -62,7 +62,7 @@ def reply_document(raw: str) -> Any:
 def to_crops_json(doc: dict[str, Any], pages: list[ChapterPage], extents: dict[str, PageExtent],
                   chapter_num: str) -> dict[str, Any]:
     """A checked reply as crops.json, every box converted to its page."""
-    from remanga.webui.marker_state import DECIDED_KEY, FORMAT_KEY, MARKS_FORMAT
+    from remanga.webui.marks_file import DECIDED_KEY, FORMAT_KEY, MARKS_FORMAT
 
     entries = {entry["page"]: entry for entry in doc["pages"]}
     out_pages = []

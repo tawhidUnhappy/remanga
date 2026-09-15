@@ -111,7 +111,7 @@ before writing (2 tries, then raise). Footguns fixed on the way:
   `resolver.chapter_ids()` once and passes the map down.
 - `image_quality: "data-saver"` (as config.py documents) was a KeyError: the
   at-home JSON key is `dataSaver` but the URL path is `data-saver`
-  (`_QUALITY` in mangadex.py maps both spellings).
+  (`IMAGE_QUALITY` in downloader/pages.py maps both spellings).
 - Ranges: ONE parser, `full_recap/discovery.py:expand_chapter_selection`
   (was two copies). **A decimal chapter (1.1, 2.1, 5.1) is a chapter of its
   own, never a part of the whole-numbered one** - the user's explicit rule
@@ -125,7 +125,7 @@ before writing (2 tries, then raise). Footguns fixed on the way:
 after showing the listing) -> preview -> confirm -> `download_chapters`.
 
 `download-chapters` (`remanga/wizard/downloads.py`,
-`downloader/mangadex.py:list_chapters_with_status`/`download_chapters`) is
+`downloader/chapter_list.py:list_chapters_with_status`, `mangadex.py:download_chapters`) is
 new - the "which chapters do I actually have" screen:
 - `MangaDexResolver.list_chapters`'s feed fetch is cached per-project in
   `manifest.json["remote_chapters"]` (`paths/metadata.py:read_remote_chapter_cache`/
@@ -161,11 +161,14 @@ new - the "which chapters do I actually have" screen:
   chapters very possibly not downloaded yet) - the flag is `--select`
   instead.
 
-## Tool environments are a registry now (`remanga/tool_envs.py`, 2026-09-13)
+## Tool environments are a registry now (`remanga/tool_envs/`, 2026-09-13)
 
 Every `.tools/venv-<name>` (kokoro, chatterbox, magi, deepseek-ocr) is
-described in ONE place - a `TOOLS` tuple of `ToolSpec`s (name, display name,
-install steps). `bootstrap.sh` no longer hand-writes a shell block per tool;
+described in ONE place - `tool_envs/catalog.py`'s `TOOLS` tuple of `ToolSpec`s
+(name, display name, install steps; `spec.py` defines them, `install.py`
+provisions, `cli.py` is `python -m remanga.tool_envs`). `spec.REPO_ROOT` is
+three parents up now that it's a package - a copy of it one level shallower
+points at `remanga/` and every venv path goes wrong. `bootstrap.sh` no longer hand-writes a shell block per tool;
 it calls `python -m remanga.tool_envs install --torch-backend $X` and that's
 the whole "4. Virtual environments" section now. `remanga setup-tools`
 (new command) does the same thing on demand, and `remanga.venvs.
@@ -212,7 +215,7 @@ that name is an abstract-base-class shim with `PerthImplicitWatermarker`
 importing as `None`, so every worker dies on `'NoneType' object is not
 callable` with no hint why. `chatterbox-tts`'s own pyproject.toml already
 pins `resemble-perth @ git+https://github.com/resemble-ai/Perth.git@master`
-instead - `tool_envs.py` and `bootstrap.sh` install that same git ref. Also:
+instead - `tool_envs/catalog.py` (which `bootstrap.sh` provisions from) installs that same git ref. Also:
 `chatterbox-tts==0.1.7` pins `torch==2.6.0` exactly, unsatisfiable on cu129
 wheels (2.6 doesn't exist there) - installed `--no-deps` after its real deps
 go in against this machine's torch, same pattern as DeepSeek-OCR-2's pin.
@@ -913,7 +916,8 @@ keeps), reachable from the menu like everything else.
 
 ## Panel marker is a SESSION now (one tab, many chapters)
 
-`webui/marker_session.py:MarkerSession` owns the chapter list + cursor and one
+`webui/marker_session.py:MarkerSession` (with `session_detection.py`,
+`session_edits.py` and `session_outline.py` mixed in) owns the chapter list + cursor and one
 `MarkerState` per chapter (built lazily - never open every chapter's images up
 front). `launch_and_wait_all(project, [chapters], config)` is the entry point;
 `launch_and_wait(project, chapter, config)` is a one-item list, so `mark`, the
@@ -1303,6 +1307,34 @@ LLM crop is the first (and so far only) extension.
   flow (crop-grid -> llm-crop -> crop) hashed against a `git worktree` of the previous commit.
   Intended diffs only: module names, handler paths, `cropper.llm_crop` -> `extensions.llm_crop`,
   `mask_foreign` -> core `cropper.paint_out`, extension generated kinds now after the core kinds.
+
+## Module layout: small files, split by what they do (2026-09-16)
+
+No module over ~300 lines. A long one is split by concern, and every public name stays importable:
+- A class too big for one file becomes a core class plus mixins in sibling modules, methods moved
+  verbatim, so no caller changes: `webui/marker_session.py` + `session_detection.py` /
+  `session_edits.py` / `session_outline.py`; `webui/marker_state.py` + `marks_file.py` (crops.json
+  load/build, and DECIDED_KEY/FORMAT_KEY/MARKS_FORMAT/STRUCTURED_KEY live there);
+  `downloader/mangadex.py` + `chapter_list.py` (listing, CHAPTER_LIST_CACHE_TTL_SECONDS).
+- Stateless helpers become module functions: `full_recap/wipes.py`, `downloader/pages.py`,
+  `settings/field_prompts.py`, `settings/balance.py` (tuning.py -> tuning + levels + balance).
+- A module that grew several jobs becomes a package or a set of siblings with a re-exporting
+  front: `tool_envs/` (spec, catalog, install, cli; `python -m remanga.tool_envs`),
+  `commands/handlers/project.py` re-exporting project_downloads / project_batches / project_marker,
+  with `handlers/common.py:chosen_chapters` shared (the LLM crop extension uses it too).
+- A helper that crosses a module gets a public name (`_number` -> `ask_field_number`, `_Page` ->
+  `PageFile`, `_remove` -> `remove_paths`); no `from x import _private` across files.
+- `hardware.py` stays one file on purpose: bootstrap runs it by path on a bare interpreter
+  (`uv run --no-project remanga/hardware.py --shell`) before any environment exists, and
+  `tool_envs/install.py` falls back to importing it as a top-level `hardware` module.
+- How each split was verified: an AST comparison of every moved function/method/assignment
+  against `git show HEAD:<old file>` (renames applied, every remaining diff read), the behaviour
+  snapshot (CLI help, registries, module imports, status), and old-vs-new smoke runs with
+  PYTHONPATH at a `git worktree` of the previous commit - the marker session, an offline MangaDex
+  downloader behind a fake resolver (fresh/repair/force/dedupe/bad page/listing/data-saver), the
+  three full-recap wipes on a project copy, and tool_envs' registry/paths/CLI. Run such scripts
+  from the scratchpad, never with cwd = the repo: `python -c` puts cwd first on sys.path and
+  silently imports the repo instead of the worktree.
 
 ## LLM crop: Gemini plans crops from gridded pages (2026-09-16)
 

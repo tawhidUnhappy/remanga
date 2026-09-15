@@ -150,7 +150,7 @@ bash bootstrap.sh
 
 MAGI v3 pins `transformers<4.52`, DeepSeek-OCR-2 pins `==4.46.3`, and Chatterbox pins `==5.2.0` — separate environments mean none of them can ever silently break another. The main env only ever talks to them as subprocesses (see `remanga/venvs.py`); the storage trade-off buys permanent isolation instead of a pin that has to be babysat.
 
-What actually goes into each of these lives in **one place**, `remanga/tool_envs.py` - not hand-written per-tool blocks in this script. Adding or removing a tool is a change to that module's `TOOLS` list; bootstrap.sh, `remanga setup-tools`, and a tool's own first use all provision from the same list, so none of them can drift from the others. An environment also installs itself automatically the first time its engine actually runs (switching `tts.engine` in config.json is enough - no re-bootstrap needed), the same way its weights already download on first use; `remanga setup-tools` exists for provisioning ahead of time or repairing one by hand.
+What actually goes into each of these lives in **one place**, `remanga/tool_envs/catalog.py` - not hand-written per-tool blocks in this script. Adding or removing a tool is a change to that module's `TOOLS` list; bootstrap.sh, `remanga setup-tools`, and a tool's own first use all provision from the same list, so none of them can drift from the others. An environment also installs itself automatically the first time its engine actually runs (switching `tts.engine` in config.json is enough - no re-bootstrap needed), the same way its weights already download on first use; `remanga setup-tools` exists for provisioning ahead of time or repairing one by hand.
 3. Turbo-downloads official `hexgrad/Kokoro-82M` weights into `checkpoints/kokoro_82m` and `ragavsachdeva/magiv3` weights into `checkpoints/magiv3`. Chatterbox's and DeepSeek-OCR-2's weights lazy-fetch the first time their engine is actually used.
 5. Initializes default `config.json`.
 
@@ -880,7 +880,7 @@ It's written for reuse rather than for a fresh write-up every chapter: the descr
 
 ## The TTS Engine
 
-remanga can drive two engines, picked with `tts.engine` (`config.json`) or `--engine` for a single run - each in its own isolated `.tools/venv-<name>` environment, described in `remanga/tool_envs.py`.
+remanga can drive two engines, picked with `tts.engine` (`config.json`) or `--engine` for a single run - each in its own isolated `.tools/venv-<name>` environment, described in `remanga/tool_envs/catalog.py`.
 
 | | **Kokoro-82M** (default) | **Chatterbox Turbo** |
 |---|---|---|
@@ -1012,7 +1012,7 @@ In short: if a chapter's TTS run gets interrupted or a worker locks up, just re-
 remanga/
 ├── bin/                        # Isolated standalone binaries (uv, ffmpeg, ffprobe)
 ├── .venv/                      # Main env - remanga's own lightweight core, no ML libs
-├── .tools/                     # One env per ML tool - see remanga/tool_envs.py
+├── .tools/                     # One env per ML tool - see remanga/tool_envs/
 │   ├── venv-kokoro/            # Isolated env - PyTorch + Kokoro + misaki/spaCy G2P
 │   ├── venv-chatterbox/        # Isolated env - PyTorch + Chatterbox Turbo's own pins
 │   ├── venv-magi/              # Isolated env - PyTorch + MAGI v3's own pins
@@ -1068,25 +1068,29 @@ remanga/
 │   │                           # narration.py + review.py + uploads.py + handoff.py (LLM hand-offs)
 │   ├── settings/               # Everything that reads/writes config.json: assets.py (voice/BGM/transcript),
 │   │                           # vision.py (packaging checklist), presets.py, engine.py, video.py,
-│   │                           # sections.py (every setting as one list), wizard.py, paths_ui.py
+│   │                           # sections.py (every setting as one list), tuning.py + levels.py + balance.py
+│   │                           # (how it sounds and looks), field_prompts.py, wizard.py, paths_ui.py
 │   ├── audio/                  # tts.py + mix.py; synth/ = one module per engine over a shared worker base
 │   │   └── scripts/             # kokoro_worker.py, chatterbox_worker.py - each runs inside its own venv
-│   ├── tool_envs.py             # Single source of truth for every .tools/venv-<name> environment
+│   ├── tool_envs/              # Single source of truth for every .tools/venv-<name> environment:
+│   │                           # catalog.py (TOOLS), spec.py, install.py, cli.py (python -m remanga.tool_envs)
 │   ├── cropper/                # crop.py (coordinate cropper), structured.py + paint_out.py (multi-box
 │   │                           # crops with bubbles kept whole), sheets.py, gutter/ (edge snapping), ...
 │   ├── extensions/             # Pluggable features - one package each, declared in its extension.py:
 │   │   │                       # spec.py (what an extension can add), discovery.py (finding them)
 │   │   └── llm_crop/            # Crop with Gemini: grid, bundles, reply check/import, commands, settings
-│   ├── downloader/             # mangadex.py (MangaDex client) & resolve.py (id/title/language lookup)
+│   ├── downloader/             # mangadex.py (MangaDex client), pages.py (page files + checksums),
+│   │                           # chapter_list.py (listing + local status) & resolve.py (id/title/language lookup)
 │   ├── models/                 # weights.py (talks to the isolated venvs to fetch/verify weights)
 │   │   └── scripts/             # download_kokoro.py, download_chatterbox.py, download_deepseek_ocr.py
 │   ├── webui/                  # Panel Marker: server.py (entry point/lifecycle), routes.py (Flask app/API),
-│   │   │                       # marker_state.py (session state), detection.py + magi_assist.py (MAGI v3),
+│   │   │                       # marker_session.py (chapters + cursor; session_*.py mixins), marker_state.py
+│   │   │                       # (one chapter) + marks_file.py (its crops.json), detection.py + magi_assist.py (MAGI v3),
 │   │   │                       # settings_store.py (Shortcuts + assist persistence)
 │   │   ├── static/js/           # Frontend: render/drag-resize/draw/zoom-pan/shortcuts/magi/page-nav modules
 │   │   └── scripts/             # magi_worker.py, download_magi.py - run inside .tools/venv-magi
 │   ├── video/                  # compose.py (frame compositor) & render.py (GPU/CPU renderer)
-│   ├── full_recap/             # discovery.py, timeline.py (one continuous audio timeline), compiler.py
+│   ├── full_recap/             # discovery.py, timeline.py (one continuous audio timeline), compiler.py, wipes.py
 │   ├── verify/                 # models.py, panels.py, probe.py, runner.py, report.py
 │   ├── reset/                  # modes.py (restart presets), entries.py (what exists), actions.py (deletes)
 │   ├── status/                 # compute.py (what's on disk) & panel.py (the printed report)

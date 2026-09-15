@@ -1,5 +1,5 @@
 """Auto-heal helper for the isolated per-tool virtual environments
-remanga/tool_envs.py provisions: parses "missing package" errors out of a
+remanga/tool_envs/ provisions: parses "missing package" errors out of a
 worker subprocess's stderr so remanga/audio/synth/ and
 remanga/webui/magi_assist.py can pip-install the gap and retry, instead of
 just failing.

@@ -10,7 +10,9 @@ timeline.py) - the only thing the join encodes.
 The join itself needs an explicit --force to rebuild: detecting "did
 anything downstream change" across every chapter at once isn't worth the
 complexity for an occasional whole-manga operation, while each per-chapter
-step already resumes and re-renders on its own."""
+step already resumes and re-renders on its own.
+
+The deletes the rebuild modes start with are in wipes.py."""
 
 from __future__ import annotations
 
@@ -20,11 +22,12 @@ from pathlib import Path
 from remanga.audio.mix import AudioProcessor
 from remanga.audio.tts import TTSEngine
 from remanga.config import RemangaConfig
-from remanga.console import console, display_path, escape as _esc
+from remanga.console import console, escape as _esc
 from remanga.cropper import CoordinateCropper
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.full_recap.discovery import discover_chapters
 from remanga.full_recap.timeline import assemble_combined_audio
+from remanga.full_recap.wipes import wipe_derived_listed, wipe_generated_listed, wipe_to_sources_listed
 from remanga.humanize import fmt_duration
 from remanga.paths import (
     get_chapter_dir,
@@ -33,17 +36,7 @@ from remanga.paths import (
     get_full_recap_video_path,
     get_full_recap_work_dir,
 )
-from remanga.reset import (
-    KEEP_ON_SOURCES_REBUILD,
-    PROJECT_KEEP,
-    derived_wipe_candidates,
-    project_wipe_candidates,
-    reverify_chapter_downloads,
-    sources_wipe_candidates,
-    wipe_derived_audio_and_video,
-    wipe_project,
-    wipe_to_sources,
-)
+from remanga.reset import reverify_chapter_downloads
 from remanga.settings.project_prefs import cropper_config_for
 from remanga.video.compose import FrameCompositor
 from remanga.video.encoding import AUDIO_CODEC_ARGS, COLOR_TAG_ARGS, MUX_ARGS, picture_codec_args, stream_signature
@@ -64,128 +57,6 @@ class FullRecapCompiler:
         self._mixer = AudioProcessor(self.config.audio)
         self._compositor = FrameCompositor(self.config.video)
         self._renderer = VideoRenderer(self.config.system, self.config.video)
-
-    @staticmethod
-    def _describe_size(path: Path) -> str:
-        """"how big is this" for a delete listing, as a human reads it.
-
-        A path on its own does not tell anyone whether they are about to lose
-        four megabytes or an hour of synthesis. Walks the tree because these
-        are directories; errors are swallowed rather than raised because a
-        file vanishing mid-walk must not turn a listing into a crash."""
-        try:
-            if path.is_file():
-                total = path.stat().st_size
-            else:
-                total = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
-        except OSError:
-            return ""
-        for unit in ("B", "KB", "MB", "GB"):
-            if total < 1024 or unit == "GB":
-                return f"{total:.0f}{unit}" if unit == "B" else f"{total:.1f}{unit}"
-            total /= 1024
-        return ""
-
-    def _wipe_generated(self, project_name: str) -> None:
-        """The regenerate-all delete: every generated artifact in the
-        project, in one sweep, listed BEFORE it happens and counted after.
-
-        Listed first for the same reason remanga.reset.entries exists: this
-        deletes a whole project's worth of output, and "here is what went"
-        printed afterwards is not something anyone can object to in time.
-        The list is printed from project_wipe_candidates and the deletion
-        re-derives it, exactly as the interactive wipe commands do (see
-        commands/handlers/cleanup.py), so the two can't describe different
-        sets - and the count reported at the end is what was actually
-        removed, not what was predicted."""
-        candidates = project_wipe_candidates(project_name)
-        if not candidates:
-            console.print(
-                f"[dim]Nothing generated to delete for '{project_name}' - "
-                f"starting from an already-clean project.[/]"
-            )
-            return
-
-        console.print(
-            f"[bold red]Regenerating from scratch - permanently deleting every generated "
-            f"file in '{project_name}':[/]"
-        )
-        for item in candidates:
-            size = self._describe_size(item)
-            console.print(f"  [dim]- {display_path(item)}{f'  ({size})' if size else ''}[/]")
-        console.print(f"[dim]Kept: {', '.join(PROJECT_KEEP)}.[/]")
-        console.print(
-            "[dim]This re-runs text-to-speech on every panel - the slow part. "
-            "Use 'Sound and video' instead when only the sound or look is changing.[/]"
-        )
-
-        removed = wipe_project(project_name)
-        console.print(f"[bold green]✓ Deleted {len(removed)} item(s) - rebuilding from source.[/]")
-
-    def _wipe_derived(self, project_name: str) -> None:
-        """The regenerate-effects delete: everything made FROM the narration,
-        listed before it happens, with the narration itself untouched.
-
-        Same contract as _wipe_generated - print the candidates, then let the
-        action re-derive them - but a deliberately smaller set. `audio/` is
-        the expensive artifact (a TTS pass per panel); audio_modified/ and
-        video/ are derived from it and cost seconds. Keeping that distinction
-        on the delete side is what makes iterating on how a recap SOUNDS
-        affordable, rather than something that costs a full re-synthesis
-        every time a dB moves."""
-        candidates = derived_wipe_candidates(project_name)
-        if not candidates:
-            console.print(
-                f"[dim]No processed audio or video to delete for '{project_name}' - "
-                f"building them fresh.[/]"
-            )
-            return
-
-        console.print(
-            f"[bold yellow]Rebuilding effects and video for '{project_name}' - deleting:[/]"
-        )
-        for item in candidates:
-            size = self._describe_size(item)
-            console.print(f"  [dim]- {display_path(item)}{f'  ({size})' if size else ''}[/]")
-        console.print("[dim]Kept: the synthesized narration in audio/ - nothing is re-narrated.[/]")
-
-        removed = wipe_derived_audio_and_video(project_name)
-        console.print(
-            f"[bold green]✓ Deleted {len(removed)} item(s) - rebuilding from the existing narration.[/]"
-        )
-
-    def _wipe_to_sources(self, project_name: str) -> None:
-        """The deepest delete: everything remanga can rebuild, listed first.
-
-        Same contract as the other two wipes. What makes this one different
-        is that it reaches INSIDE chapters/ - taking panels/ as well - so the
-        listing spells out what survives, because at this depth "keeps
-        chapters/" would be actively misleading."""
-        candidates = sources_wipe_candidates(project_name)
-        if not candidates:
-            console.print(
-                f"[dim]Nothing to delete for '{project_name}' - already down to its source files.[/]"
-            )
-            return
-
-        console.print(
-            f"[bold red]Rebuilding '{project_name}' from source - permanently deleting:[/]"
-        )
-        for item in candidates:
-            size = self._describe_size(item)
-            console.print(f"  [dim]- {display_path(item)}{f'  ({size})' if size else ''}[/]")
-        console.print(
-            f"[dim]Kept, because remanga cannot rebuild them: "
-            f"{', '.join(sorted(KEEP_ON_SOURCES_REBUILD))} in every chapter, "
-            f"plus {', '.join(sorted(n for n in PROJECT_KEEP if n.endswith('.json')))}.[/]"
-        )
-        console.print(
-            "[dim]Pages are kept and re-verified per chapter - anything that does not belong is "
-            "removed and only missing images are re-fetched.[/]"
-        )
-
-        removed = wipe_to_sources(project_name)
-        console.print(f"[bold green]✓ Deleted {len(removed)} item(s) - rebuilding from source.[/]")
 
     def _ensure_chapter_video(
         self, project_name: str, chapter_num: str, force: bool, *,
@@ -219,12 +90,12 @@ class FullRecapCompiler:
         narration_path = chapter_dir / "narration.json"
 
         if regenerate_all:
-            # Nothing to delete here - _wipe_generated already took the whole
-            # project down to its source before the first chapter. Pages are
-            # re-verified (and anything missing re-fetched) first, then
-            # panels/ is re-cropped with force=True, which clears panels/
-            # itself before writing, so a panel dropped by a re-mark can't
-            # survive the re-crop that follows it.
+            # Nothing to delete here - wipes.wipe_generated_listed already
+            # took the whole project down to its source before the first
+            # chapter. Pages are re-verified (and anything missing re-fetched)
+            # first, then panels/ is re-cropped with force=True, which clears
+            # panels/ itself before writing, so a panel dropped by a re-mark
+            # can't survive the re-crop that follows it.
             reverify_chapter_downloads(project_name, chapter_num)
             CoordinateCropper(cropper_config_for(self.config, project_name)).crop_chapter_from_json(
                 project_name, chapter_num, force=True
@@ -262,11 +133,11 @@ class FullRecapCompiler:
         regenerate_all is the stronger, separate "start over from scratch"
         option, and the only genuinely DESTRUCTIVE one here. Before any
         chapter is touched, the WHOLE PROJECT is wiped down to
-        reset.PROJECT_KEEP in one sweep (see _wipe_generated): audio/,
-        video/, panels_zip/ and every other generated directory under
-        projects/{manga}/ go, including the join's own _work/ master WAV
-        and concat list, the previous full-recap MP4, and the artifacts of
-        chapters not even included in this run. Only chapters/ (pages,
+        reset.PROJECT_KEEP in one sweep (see wipes.wipe_generated_listed):
+        audio/, video/, panels_zip/ and every other generated directory
+        under projects/{manga}/ go, including the join's own _work/ master
+        WAV and concat list, the previous full-recap MP4, and the artifacts
+        of chapters not even included in this run. Only chapters/ (pages,
         crops.json, narration.json) and the project's metadata files
         survive. Then each chapter is rebuilt from that source: pages
         re-verified/re-fetched, panels re-cropped, voice re-synthesized,
@@ -309,11 +180,11 @@ class FullRecapCompiler:
         # above differs in how far it reached.
         deep = regenerate_all or regenerate_sources
         if regenerate_sources:
-            self._wipe_to_sources(project_name)
+            wipe_to_sources_listed(project_name)
         elif regenerate_all:
-            self._wipe_generated(project_name)
+            wipe_generated_listed(project_name)
         elif regenerate_effects:
-            self._wipe_derived(project_name)
+            wipe_derived_listed(project_name)
 
         final_video = get_full_recap_video_path(project_name, chapter_list[0], chapter_list[-1])
 
@@ -404,5 +275,3 @@ class FullRecapCompiler:
             f"{_esc(str(get_final_video_path(project_name, chapter_list[0]).parent.parent))}/*/"
         )
         return final_video
-
-

@@ -1,14 +1,13 @@
+"""MangaDexDownloader: a chapter's pages fetched from MangaDex@Home and checked
+page by page against the checksums MangaDex names them after (see
+download_chapter). A page file is described in pages.py, the chapter listing
+with local status is chapter_list.py, and resolving IDs, feeds and retries is
+resolve.py."""
+
 from __future__ import annotations
 
-import hashlib
-import re
-import shutil
 import time
-import zipfile
-from collections.abc import Iterable
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import requests
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn, TimeRemainingColumn
@@ -16,82 +15,24 @@ from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn, T
 from remanga.config import DownloaderConfig
 from remanga.console import console, escape as _esc
 from remanga.cropper.naming import page_stem
+from remanga.downloader.chapter_list import ChapterListMixin
+from remanga.downloader.pages import IMAGE_QUALITY, PageFile, create_pages_zip, remove_paths
 from remanga.downloader.resolve import BASE_URL, MangaDexResolver
-from remanga.full_recap.discovery import chapter_key, chapter_sort_key  # direct submodule import -
 
-# full_recap's own __init__ also pulls in compiler.py (audio/video stack),
-# which this module has no other reason to import
+# Straight from the submodule: full_recap's own __init__ also pulls in
+# compiler.py (the audio/video stack), which this module has no other reason
+# to import.
+from remanga.full_recap.discovery import chapter_key
 from remanga.paths import (
     get_chapter_dir,
-    get_pages_zip_path,
     load_project_metadata,
     read_manifest,
-    read_remote_chapter_cache,
     save_project_metadata,
     update_manifest_chapter,
-    write_remote_chapter_cache,
 )
 
-# How long a fetched MangaDex chapter feed is trusted before a plain
-# "download"/"open the list" re-checks it automatically - a manga getting a
-# new chapter mid-session is the normal case this guards against, while
-# still sparing the feed API call (list_chapters paginates the whole feed)
-# on every single menu open. Explicit refetch (force_refresh=True) always
-# bypasses this regardless of age.
-CHAPTER_LIST_CACHE_TTL_SECONDS = 24 * 60 * 60
 
-# MangaDex@Home names every page file after the SHA-256 of its own bytes
-# ("3-<64 hex digits>.png") - checked against real chapters at both image
-# qualities. That's what makes re-verifying a downloaded chapter a check of
-# each page's content rather than of its size.
-_PAGE_CHECKSUM = re.compile(r"-([0-9a-f]{64})\.\w+$")
-
-# config's image_quality -> (the at-home response's key for its file list,
-# the URL path segment the files are served under). The smaller images are
-# spelled differently in the two places, and config.py documents
-# "data-saver", so both spellings are accepted.
-_QUALITY = {
-    "data": ("data", "data"),
-    "data-saver": ("dataSaver", "data-saver"),
-    "dataSaver": ("dataSaver", "data-saver"),
-}
-
-
-@dataclass(frozen=True)
-class _Page:
-    """One page of a chapter: where it's saved, and MangaDex's filename for it."""
-
-    path: Path
-    source: str
-
-    @property
-    def checksum(self) -> str | None:
-        match = _PAGE_CHECKSUM.search(self.source)
-        return match.group(1) if match else None
-
-    def matches(self, content: bytes, trust_unchecked: bool = True) -> bool:
-        """Whether `content` is this page: non-empty, and equal to MangaDex's
-        checksum when it gave one (else `trust_unchecked` decides)."""
-        if not content:
-            return False
-        if self.checksum is None:
-            return trust_unchecked
-        return hashlib.sha256(content).hexdigest() == self.checksum
-
-    def valid_on_disk(self, trust_unchecked: bool) -> bool:
-        return self.path.is_file() and self.matches(self.path.read_bytes(), trust_unchecked)
-
-
-def _remove(paths: Iterable[Path]) -> None:
-    """Deletes files, links and folders alike."""
-    for path in list(paths):
-        if path.is_dir() and not path.is_symlink():
-            shutil.rmtree(path)
-        else:
-            path.unlink(missing_ok=True)
-
-
-class MangaDexDownloader:
+class MangaDexDownloader(ChapterListMixin):
     def __init__(self, config: DownloaderConfig | None = None):
         self.config = config or DownloaderConfig()
         self.session = requests.Session()
@@ -99,20 +40,6 @@ class MangaDexDownloader:
             "User-Agent": "remanga-recap-pipeline/2.0"
         })
         self.resolver = MangaDexResolver(self.config, self.session)
-
-    def _create_pages_zip(self, project_name: str, chapter_num: str, pages_dir: Path) -> Path:
-        """Package downloaded pages into a single ZIP archive for easy LLM uploading."""
-        zip_path = get_pages_zip_path(project_name, chapter_num)
-        if zip_path.exists():
-            zip_path.unlink()
-
-        pages = sorted(p for p in pages_dir.iterdir() if p.is_file())
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            for p in pages:
-                zf.write(p, arcname=p.name)
-
-        console.print(f"[bold green]✓ Created Pages ZIP archive:[/] {_esc(str(zip_path))}")
-        return zip_path
 
     def download_chapter(
         self, manga_id_or_url: str | None, chapter_num: str, project_name: str, force: bool = False,
@@ -137,7 +64,7 @@ class MangaDexDownloader:
         once per chapter."""
         dest_dir = get_chapter_dir(project_name, chapter_num) / "pages"
         if force and dest_dir.exists():
-            _remove(dest_dir.iterdir())
+            remove_paths(dest_dir.iterdir())
             console.print(
                 f"[yellow]Force reverify: cleared existing pages for chapter {chapter_num} before "
                 f"re-downloading.[/]"
@@ -181,9 +108,9 @@ class MangaDexDownloader:
         base_url = server_info["baseUrl"]
         chapter_data = server_info["chapter"]
         quality_key = self.config.image_quality
-        response_key, url_path = _QUALITY.get(quality_key, (quality_key, quality_key))
+        response_key, url_path = IMAGE_QUALITY.get(quality_key, (quality_key, quality_key))
         pages = [
-            _Page(dest_dir / f"{page_stem(chapter_num, idx)}{Path(fn).suffix or '.png'}", fn)
+            PageFile(dest_dir / f"{page_stem(chapter_num, idx)}{Path(fn).suffix or '.png'}", fn)
             for idx, fn in enumerate(chapter_data[response_key], start=1)
         ]
 
@@ -194,7 +121,7 @@ class MangaDexDownloader:
         strays = sorted(p for p in dest_dir.iterdir() if p.name not in expected)
         if strays:
             names = ", ".join(p.name + ("/" if p.is_dir() else "") for p in strays)
-            _remove(strays)
+            remove_paths(strays)
             console.print(
                 f"[yellow]Removed {len(strays)} item(s) from pages/ that aren't chapter {_esc(chapter_num)}'s "
                 f"pages:[/] [dim]{_esc(names)}[/]"
@@ -214,7 +141,7 @@ class MangaDexDownloader:
         )
         failed = [page for page in pages if page.path.exists() and not page.valid_on_disk(trust_unchecked)]
         if failed:
-            _remove(page.path for page in failed)
+            remove_paths(page.path for page in failed)
             console.print(
                 f"[yellow]{len(failed)} page(s) didn't match MangaDex's checksum - fetching them again.[/]"
             )
@@ -243,7 +170,7 @@ class MangaDexDownloader:
                 f"nothing to download.[/]"
             )
             if self.config.zip_pages_enabled:
-                self._create_pages_zip(project_name, chapter_num, dest_dir)
+                create_pages_zip(project_name, chapter_num, dest_dir)
             return dest_dir
 
         record_pages(False)
@@ -298,7 +225,7 @@ class MangaDexDownloader:
         )
 
         if self.config.zip_pages_enabled:
-            self._create_pages_zip(project_name, chapter_num, dest_dir)
+            create_pages_zip(project_name, chapter_num, dest_dir)
 
         return dest_dir
 
@@ -318,76 +245,6 @@ class MangaDexDownloader:
 
     def _resolve_manga_id(self, project_name: str, manga_id_or_url: str | None) -> str:
         return self.resolver.parse_manga_id(self._manga_source(project_name, manga_id_or_url))
-
-    def _local_chapter_status(self, project_name: str, chapter_num: str, expected_pages: int | None) -> str:
-        """One of "downloaded" (every expected page present and this
-        chapter's cached pages-record says verified), "partial" (some
-        pages on disk but not verified-complete for the current listing),
-        or "missing" (nothing downloaded here yet). Purely a local disk +
-        manifest check - no network call - so this is cheap enough to run
-        for every chapter in a whole-manga listing."""
-        pages_dir = get_chapter_dir(project_name, chapter_num) / "pages"
-        on_disk = sum(1 for p in pages_dir.iterdir() if p.is_file()) if pages_dir.exists() else 0
-        if on_disk == 0:
-            return "missing"
-        cached_meta = read_manifest(project_name).get("chapters", {}).get(str(chapter_num), {}).get("pages")
-        if cached_meta and cached_meta.get("verified") and (
-            expected_pages is None or cached_meta.get("total_pages") == expected_pages
-        ):
-            return "downloaded"
-        return "partial"
-
-    def list_chapters_with_status(
-        self, project_name: str, manga_id_or_url: str | None = None, force_refresh: bool = False,
-    ) -> list[dict[str, Any]]:
-        """Every chapter MangaDex has for this project's manga, in reading
-        order, each annotated with this project's own local download status
-        ("downloaded" / "partial" / "missing") - the one call a chapter-
-        picking menu needs to show "here's everything upstream, here's what
-        you already have" in one screen.
-
-        The MangaDex feed fetch itself (list_chapters, paginated) is cached
-        in this project's manifest.json for CHAPTER_LIST_CACHE_TTL_SECONDS
-        (24h) - a manga getting a new chapter is the only thing that ever
-        changes it, so re-fetching on every menu open would just be a slow,
-        rate-limited API call for almost always the same answer.
-        force_refresh=True (the interactive "refetch from MangaDex" action)
-        always bypasses the cache regardless of age. The local status
-        annotation is never cached - it's a cheap disk check, and it must
-        always reflect whatever was downloaded since the last fetch, cached
-        chapter list or not."""
-        manga_id = self._resolve_manga_id(project_name, manga_id_or_url)
-
-        cached = read_remote_chapter_cache(project_name)
-        cache_is_fresh = (
-            not force_refresh
-            and cached.get("manga_id") == manga_id
-            and (time.time() - cached.get("fetched_at", 0)) < CHAPTER_LIST_CACHE_TTL_SECONDS
-        )
-        if cache_is_fresh:
-            remote_chapters = cached["chapters"]
-        else:
-            # Deduplicated to one entry per chapter number, newest upload
-            # kept - the same choice find_chapter_id makes when it goes to
-            # fetch one, so what the picker lists and what a download
-            # actually pulls can't disagree.
-            raw_chapters = self.resolver.latest_versions(self.resolver.list_chapters(manga_id))
-            remote_chapters = [
-                {
-                    "chapter": str(ch.get("attributes", {}).get("chapter") or ""),
-                    "chapter_id": ch["id"],
-                    "pages": ch.get("attributes", {}).get("pages"),
-                    "title": ch.get("attributes", {}).get("title") or "",
-                }
-                for ch in raw_chapters
-                if ch.get("attributes", {}).get("chapter")  # skip the odd chapterless "oneshot" entry
-            ]
-            remote_chapters.sort(key=lambda c: chapter_sort_key(c["chapter"]))
-            write_remote_chapter_cache(project_name, manga_id, remote_chapters, time.time())
-
-        for entry in remote_chapters:
-            entry["status"] = self._local_chapter_status(project_name, entry["chapter"], entry.get("pages"))
-        return remote_chapters
 
     def download_chapters(
         self, project_name: str, chapter_nums: list[str], manga_id_or_url: str | None = None,

@@ -28,7 +28,7 @@ CACHE_DIR="$SCRIPT_DIR/.cache"
 TOOLS_DIR="$SCRIPT_DIR/.tools"
 VENV_DIR="$SCRIPT_DIR/.venv"
 # Individual tool venv paths (venv-kokoro, venv-chatterbox, ...) are no
-# longer named here - remanga/tool_envs.py's TOOLS list is the one place
+# longer named here - remanga/tool_envs/catalog.py's TOOLS list is the one place
 # that names them now. See "4. Virtual environments" below.
 
 WARNINGS=()
@@ -223,8 +223,8 @@ make_venv "$VENV_DIR" || die "could not create the main virtual environment"
 "$UV" pip install --python "$VENV_DIR" -e . || die "could not install remanga into the main environment"
 
 # Every OTHER environment - one per ML engine (Kokoro, Chatterbox, MAGI v3,
-# DeepSeek-OCR-2, ...) - is provisioned from ONE place: remanga/tool_envs.py's
-# TOOLS list, not a hand-written block per tool here. That module runs on the
+# DeepSeek-OCR-2, ...) - is provisioned from ONE place: the TOOLS list in
+# remanga/tool_envs/catalog.py, not a hand-written block per tool here. It runs on the
 # main env's own interpreter (just installed above) with no other remanga
 # machinery needed - same reason remanga/hardware.py runs on a bare
 # interpreter earlier in this script. Adding or removing a tool is now a

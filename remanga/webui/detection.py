@@ -42,7 +42,7 @@ def run_detection(state: MarkerState, config: MarkerConfig,
 
     # Pages already touched - crops.json was pre-loaded server-side (a
     # "remark" restart, or just reopening the marker on an already-marked
-    # chapter; see marker_state.py:_load_existing_crops) - never get MAGI's
+    # chapter; see marks_file.py:_load_existing_crops) - never get MAGI's
     # result applied anyway (apply_detected() refuses to overwrite a touched
     # page). Sending them to the worker regardless still pays for a full
     # model load onto the GPU and real per-page inference time for zero

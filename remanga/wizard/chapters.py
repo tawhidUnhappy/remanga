@@ -70,7 +70,7 @@ def _numbers_of(entries: Sequence[dict]) -> list[str]:
 def _remote_chapter_numbers(project_name: str) -> list[str]:
     """Every chapter number MangaDex lists for this project's manga, in
     reading order - from the same cached feed the download picker reads,
-    under the same 24h freshness rule (downloader/mangadex.py's
+    under the same 24h freshness rule (downloader/chapter_list.py's
     CHAPTER_LIST_CACHE_TTL_SECONDS, imported rather than restated so the two
     screens can never disagree about what upstream has).
 
@@ -89,7 +89,7 @@ def _remote_chapter_numbers(project_name: str) -> list[str]:
     # Deferred, like reset/actions.py's: importing the downloader at module
     # scope would drag config + requests into every wizard screen that only
     # wants to list chapter folders.
-    from remanga.downloader.mangadex import CHAPTER_LIST_CACHE_TTL_SECONDS
+    from remanga.downloader.chapter_list import CHAPTER_LIST_CACHE_TTL_SECONDS
     from remanga.paths import load_project_metadata, read_remote_chapter_cache
 
     cached = read_remote_chapter_cache(project_name)

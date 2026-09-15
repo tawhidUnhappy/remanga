@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from remanga.config import RemangaConfig
 from remanga.extensions import load_extensions, place
-from remanga.settings import engine, tuning, video
+from remanga.settings import engine, levels, tuning, video
 from remanga.settings.assets import ASSETS, asset_relevant, asset_status, run_asset_menu
 from remanga.settings.browser import run_all_settings
 from remanga.settings.presets import background_label, language_label, resolution_label
@@ -74,8 +74,8 @@ CORE_SECTIONS: tuple[Section, ...] = (
     ),
     Section(
         "levels", "Audio levels",
-        tuning.levels_summary,
-        tuning.configure_levels,
+        levels.levels_summary,
+        levels.configure_levels,
         detail="the voice and music volumes, the automatic balance between them, whether "
                "there is music at all, and whether the master is loudness-normalized",
     ),

@@ -40,7 +40,7 @@ SETUP_COMMANDS: list[Command] = [
     ),
     Command(
         "setup-tools",
-        "Install/update the isolated .tools/venv-<name> environments (see remanga/tool_envs.py)",
+        "Install/update the isolated .tools/venv-<name> environments (see remanga/tool_envs/catalog.py)",
         setup_handlers.setup_tools,
         [
             Param("tool", ["--tool"], type="choice", choices=list(TOOL_NAMES), required=False,

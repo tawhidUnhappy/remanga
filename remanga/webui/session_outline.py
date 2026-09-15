@@ -12,7 +12,7 @@ from typing import Any
 
 from remanga.json_io import has_real_json_content, read_json
 from remanga.paths import get_chapter_dir
-from remanga.webui.marker_state import DECIDED_KEY
+from remanga.webui.marks_file import DECIDED_KEY
 
 
 class SessionOutlineMixin:
