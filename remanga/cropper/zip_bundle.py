@@ -1,7 +1,8 @@
 """Generic size-capped zip-bundle builder, shared by every LLM-upload zip
 format that only differs in *which* images it packages and where -
-remanga.cropper.llm_zip (individual panel crops) and remanga.cropper.
-llm_sheets (2x2 contact sheet composites). One implementation of "shrink
+remanga.cropper.llm_zip (individual panel crops), remanga.cropper.
+llm_sheets (2x2 contact sheet composites) and remanga.cropper.grid_bundles
+(gridded pages for the LLM crop workflow). One implementation of "shrink
 losslessly, then pack into one file or split into size-capped parts" instead
 of a near-duplicate copy per format.
 """
@@ -11,6 +12,7 @@ from __future__ import annotations
 import json
 import zipfile
 from pathlib import Path
+from typing import Any
 
 from remanga.console import console, escape as _esc
 from remanga.cropper.image_codec import smallest_lossless_encoding
@@ -29,6 +31,7 @@ def build_zip_bundle(
     project_name: str,
     chapter_num: str,
     label: str,
+    extra_info: dict[str, Any] | None = None,
 ) -> list[Path]:
     """Builds `out_dir`/`file_prefix`_1.zip, `file_prefix`_2.zip, ... from
     `image_paths` (already-produced images - individual panels or sheet
@@ -42,7 +45,9 @@ def build_zip_bundle(
     smallest_lossless_encoding - no pixel ever altered), then packed into
     one single zip (the default) or split into `max_mb`-capped parts if
     `split_enabled` is on (size_pack.pack_by_size). `label` is only used for
-    the console summary line (e.g. "ZIP" or "SHEETS ZIP")."""
+    the console summary line (e.g. "ZIP" or "SHEETS ZIP"). `extra_info` is
+    added to every part's chapter_info.json (see manifest_info.
+    build_part_info)."""
     active = enabled or split_enabled
     if not active or not image_paths:
         if out_dir.exists():
@@ -72,7 +77,7 @@ def build_zip_bundle(
     for idx, part in enumerate(parts, start=1):
         zip_path = out_dir / f"{file_prefix}_{idx}.zip"
         part_ids = [item_id for item_id, _, _ in part]
-        info = build_part_info(identity, full_ids, part_ids, idx, total_parts)
+        info = build_part_info(identity, full_ids, part_ids, idx, total_parts, extra=extra_info)
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
             for _, arcname, data in part:
                 zf.writestr(arcname, data)

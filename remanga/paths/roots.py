@@ -34,6 +34,9 @@ TOOLS_DIR = REPO_ROOT / ".tools"
 CONFIG_PATH = Path("config.json")
 CONFIG_EXAMPLE_PATH = Path("config.example.json")
 
+# The LLM prompts a hand-off tells you to upload (narration.md, llm_crop.md, ...).
+PROMPTS_DIR = REPO_ROOT / "prompts"
+
 # Cross-project shared assets that aren't tied to any one manga: reference
 # BGM file and the narration-lessons
 # log (see remanga/paths/global_assets.py). Deliberately a SIBLING of

@@ -150,7 +150,7 @@ class PanelSheetGenerator:
         info["total_items"] = len(panel_paths)
         info["contents"] = [p.stem for p in panel_paths]
         info["full_manifest"] = info["contents"]
-        info_sheet_path = gen._render_info_sheet(info, output_dir)
+        info_sheet_path = gen.render_info_sheet(info, output_dir)
         generated_sheets.insert(0, info_sheet_path)
 
         console.print(
@@ -159,10 +159,11 @@ class PanelSheetGenerator:
         return generated_sheets
 
     @staticmethod
-    def _render_info_sheet(info: dict, output_dir: Path) -> Path:
+    def render_info_sheet(info: dict, output_dir: Path) -> Path:
         """Renders `info` (see manifest_info.info_to_text_lines) as a plain
         left-aligned text image - the sheets bundle's own leading info
-        sheet, the same role the PDF formats' leading text page plays."""
+        sheet, the same role the PDF formats' leading text page plays. Also
+        the grid_pages folder's 000_info image (remanga.cropper.grid_bundles)."""
         lines = info_to_text_lines(info)
 
         try:

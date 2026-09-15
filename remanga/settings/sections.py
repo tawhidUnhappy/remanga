@@ -18,7 +18,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from remanga.config import RemangaConfig
-from remanga.settings import engine, tuning, video
+from remanga.settings import engine, llm_crop, tuning, video
 from remanga.settings.assets import ASSETS, asset_relevant, asset_status, run_asset_menu
 from remanga.settings.browser import run_all_settings
 from remanga.settings.presets import background_label, language_label, resolution_label
@@ -93,6 +93,12 @@ SECTIONS: tuple[Section, ...] = (
             ("dedupe", c.cropper.dedupe_duplicate_panels)) if on) or "all passes off",
         tuning.configure_panel_detection,
         detail="which cleanup passes run between downloading a page and narrating it",
+    ),
+    Section(
+        "llm_crop", "LLM crop (Gemini)",
+        llm_crop.llm_crop_summary,
+        llm_crop.configure_llm_crop,
+        detail="what crop-grid builds for Gemini, how readily it groups panels, and how its crops are cut",
     ),
     Section(
         "framing", "Panel framing",

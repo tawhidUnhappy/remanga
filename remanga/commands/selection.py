@@ -16,7 +16,7 @@ from remanga.full_recap.discovery import expand_chapter_selection
 # LLM narration pass) survive a wipe by default; everything generated from
 # them (panels/, sheets/zips, audio, video) does not. Pass --keep explicitly
 # (a comma list, or "none" for an absolute full wipe) to override this.
-DEFAULT_WIPE_KEEP = {"pages", "crops.json", "narration.json"}
+DEFAULT_WIPE_KEEP = {"pages", "crops.json", "llm_crops.json", "narration.json"}
 
 
 def split_chapters(raw: str | None) -> list[str] | None:

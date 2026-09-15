@@ -252,6 +252,90 @@ def narration_init_all(params: dict[str, Any], config: RemangaConfig) -> None:
     )
 
 
+def crop_grid_all(params: dict[str, Any], config: RemangaConfig) -> None:
+    """Builds the grid uploads for every downloaded chapter - the
+    whole-project form of `crop-grid`, so a manga's zips can all go to
+    Gemini at once. Chapters with no pages yet are skipped and named; a
+    chapter that fails stops the run where it broke."""
+    from remanga.cropper.grid_bundles import build_grid_bundles, chapter_pages
+    from remanga.settings.project_prefs import cropper_config_for
+
+    project = params["project"]
+    chapters = _chosen_chapters(params, "nothing to build")
+    if not chapters:
+        return
+    ready = [c for c in chapters if chapter_pages(project, c)]
+    empty = [c for c in chapters if c not in ready]
+    if not ready:
+        console.print(f"[yellow]None of the {len(chapters)} chapter(s) have downloaded pages - nothing to build.[/]")
+        return
+
+    cropper = cropper_config_for(config, project)
+    for i, chapter in enumerate(ready, start=1):
+        console.print(f"[bold cyan]({i}/{len(ready)}) Chapter {chapter}[/]")
+        build_grid_bundles(cropper, project, chapter)
+    console.print(
+        f"[bold green]✓ Grid uploads built for {len(ready)} chapter(s)[/]"
+        + (f"\n[dim]No pages yet, skipped: {', '.join(empty)}[/]" if empty else "")
+        + "\n[dim]Upload each chapter's grid with prompts/llm_crop.md, paste each reply into that chapter's "
+          "llm_crops.json, then run `llm-crop-all`.[/]"
+    )
+
+
+def llm_crop_all(params: dict[str, Any], config: RemangaConfig) -> None:
+    """Imports Gemini's crops for every chapter whose llm_crops.json has a
+    reply pasted in - the whole-project form of `llm-crop`, without the
+    waiting: chapters still empty are named and left for later.
+
+    Replacing Panel Marker marks is one answer for every chapter that has
+    them (`--force`, or the confirmation this asks a real terminal). A reply
+    that doesn't check out doesn't stop the run - its fix request is written
+    and the chapter is named at the end, since the other chapters' replies
+    are no less good for it."""
+    from remanga.cropper.llm_reply import hand_marks_in, import_llm_crops
+    from remanga.json_io import has_real_json_content
+    from remanga.paths import get_chapter_dir, get_llm_crops_path
+    from remanga.settings.project_prefs import cropper_config_for
+    from remanga.tui import confirm, is_interactive
+
+    project = params["project"]
+    chapters = _chosen_chapters(params, "nothing to import")
+    if not chapters:
+        return
+    pasted = [c for c in chapters if has_real_json_content(get_llm_crops_path(project, c))]
+    waiting = [c for c in chapters if c not in pasted]
+    if not pasted:
+        console.print("[yellow]No chapter has a reply pasted into its llm_crops.json yet - nothing to import.[/] "
+                      "[dim]Run `crop-grid-all` for the uploads.[/]")
+        return
+
+    marked = [c for c in pasted if hand_marks_in(get_chapter_dir(project, c) / "crops.json")]
+    replace = bool(params.get("force"))
+    if marked and not replace:
+        console.print(f"[yellow]{len(marked)} chapter(s) have marks from the Panel Marker:[/] {', '.join(marked)}")
+        replace = is_interactive() and confirm(
+            f"Replace those {len(marked)} with Gemini's crops?", default=False,
+            note="crops.json is rewritten from llm_crops.json; the marks are not kept anywhere",
+        ) is True
+
+    cropper = cropper_config_for(config, project)
+    states: dict[str, str] = {}
+    for i, chapter in enumerate(pasted, start=1):
+        console.print(f"[bold cyan]({i}/{len(pasted)}) Chapter {chapter}[/]")
+        states[chapter] = import_llm_crops(cropper, project, chapter, replace_marks=replace).state
+
+    def named(state: str) -> list[str]:
+        return [c for c, s in states.items() if s == state]
+
+    console.print(
+        f"[bold green]✓ Gemini's crops imported for {len(named('imported'))} chapter(s)[/]"
+        + (f"\n[yellow]Replies with problems (fix requests written under llm_crop/):[/] "
+           f"{', '.join(named('invalid'))}" if named("invalid") else "")
+        + (f"\n[dim]Panel Marker marks kept: {', '.join(named('declined'))}[/]" if named("declined") else "")
+        + (f"\n[dim]No reply pasted yet: {', '.join(waiting)}[/]" if waiting else "")
+    )
+
+
 def crop_all(params: dict[str, Any], config: RemangaConfig) -> None:
     """Crops every marked chapter in the project - the whole-project form of
     `crop`.

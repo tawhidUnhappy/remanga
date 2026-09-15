@@ -17,6 +17,11 @@ Four independent switches (see PackageConfig), all coordinated here:
 
 Written to panels_pdf/ - never touches panels/ itself.
 
+The builder itself, `build_pdf_bundle`, takes those four switches as plain
+arguments, so the LLM crop workflow's grid_pdf formats (LLMCropConfig, the
+same four switches over gridded pages - see remanga.cropper.grid_bundles)
+are built by exactly this code too.
+
 See remanga.cropper.pdf_writer's module docstring for why this doesn't just
 use Pillow's own `Image.save(..., "PDF")` (short version: it's lossy for RGB
 images, with no way to turn that off short of quantizing to a 256-color
@@ -28,6 +33,7 @@ from __future__ import annotations
 import json
 import zipfile
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -47,8 +53,8 @@ from remanga.cropper.size_pack import pack_by_size
 from remanga.paths import chapter_identity_fields, get_panels_pdf_dir
 
 
-def _encode_panel(path: Path) -> ImagePage:
-    """Encodes one panel as a lossless PDF image page, verifying the round
+def _encode_image(path: Path) -> ImagePage:
+    """Encodes one image as a lossless PDF image page, verifying the round
     trip before returning anything. Tries TIFF-Predictor-2 first (usually
     ~15-20% smaller); if that somehow doesn't verify, falls back to plain
     raw+flate (no predictor - simpler, nothing left to get wrong beyond zlib
@@ -77,56 +83,62 @@ def _encode_panel(path: Path) -> ImagePage:
     raise ValueError(f"neither predictor2 nor raw flate round-tripped exactly for {path.name}")
 
 
-def build_llm_pdf_bundle(
-    config: CropperConfig,
+def _clear(out_dir: Path, file_prefix: str) -> None:
+    for stale in out_dir.glob(f"{file_prefix}_*.pdf"):
+        stale.unlink()
+    for stale in out_dir.glob(f"{file_prefix}_*.zip"):
+        stale.unlink()
+
+
+def build_pdf_bundle(
+    image_paths: list[Path],
+    out_dir: Path,
+    file_prefix: str,
+    single: bool,
+    split: bool,
+    zipped: bool,
+    zipped_split: bool,
+    max_mb: float,
     project_name: str,
     chapter_num: str,
-    panel_paths: list[Path],
+    label: str,
+    extra_info: dict[str, Any] | None = None,
 ) -> list[Path]:
-    """Builds panels_pdf/panels_1.pdf, panels_2.pdf, ... - see module
-    docstring. A no-op returning [] if disabled or there are no panels.
-    Clears out any stale parts from a previous run first. If any single panel
-    can't be losslessly encoded (see _encode_panel - practically never, but
-    never say never), the whole bundle is aborted rather than shipped
-    missing a panel: a partial PDF silently under-representing the chapter is
-    worse than no PDF at all, and the panels_zip/sheets_zip formats remain
-    available regardless."""
-    out_dir = get_panels_pdf_dir(project_name, chapter_num, create=False)
-    package = config.package
-    if not package.pdf_active or not panel_paths:
+    """Builds `out_dir`/`file_prefix`_1.pdf, _2.pdf, ... (and/or the zipped
+    .zip parts) from `image_paths`. The four switches mean what PackageConfig's
+    pdf/pdf_splite/pdf_zip/pdf_zip_splite mean. A no-op returning [] if none
+    is on or there are no images. Clears out any stale parts from a previous
+    run first. If any single image can't be losslessly encoded (see
+    _encode_image - practically never, but never say never), the whole
+    bundle is aborted rather than shipped missing an image: a partial PDF
+    silently under-representing the chapter is worse than no PDF at all.
+    `extra_info` is added to every part's info (see manifest_info.
+    build_part_info)."""
+    if not (single or split or zipped or zipped_split) or not image_paths:
         if out_dir.exists():
-            for stale in out_dir.glob("panels_*.pdf"):
-                stale.unlink()
-            for stale in out_dir.glob("panels_*.zip"):
-                stale.unlink()
+            _clear(out_dir, file_prefix)
         return []
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    for stale in out_dir.glob("panels_*.pdf"):
-        stale.unlink()
-    for stale in out_dir.glob("panels_*.zip"):
-        stale.unlink()
+    _clear(out_dir, file_prefix)
 
-    max_bytes = max(1, int(package.max_mb * 1024 * 1024))
+    max_bytes = max(1, int(max_mb * 1024 * 1024))
 
     encoded: list[tuple[str, ImagePage]] = []
-    for path in sorted(panel_paths):
+    for path in sorted(image_paths):
         try:
-            page = _encode_panel(path)
+            page = _encode_image(path)
         except Exception as e:
             console.print(
-                f"[bold red]✗ LLM PDF bundle aborted:[/] {path.name} couldn't be losslessly "
-                f"encoded ({e}) - the panels_zip/sheets_zip formats are unaffected."
+                f"[bold red]✗ LLM {label} bundle aborted:[/] {path.name} couldn't be losslessly "
+                f"encoded ({e}) - the other upload formats are unaffected."
             )
-            for partial in out_dir.glob("panels_*.pdf"):
-                partial.unlink()
-            for partial in out_dir.glob("panels_*.zip"):
-                partial.unlink()
+            _clear(out_dir, file_prefix)
             return []
         encoded.append((path.stem, page))
 
-    split = package.pdf_split
-    parts = pack_by_size(encoded, lambda item: len(item[1].flate_data), max_bytes, split)
+    split_parts = split or zipped_split
+    parts = pack_by_size(encoded, lambda item: len(item[1].flate_data), max_bytes, split_parts)
 
     total_parts = len(parts)
     identity = chapter_identity_fields(project_name, chapter_num)
@@ -134,19 +146,19 @@ def build_llm_pdf_bundle(
     written: list[Path] = []
     for idx, part in enumerate(parts, start=1):
         part_ids = [item_id for item_id, _ in part]
-        info = build_part_info(identity, full_ids, part_ids, idx, total_parts)
+        info = build_part_info(identity, full_ids, part_ids, idx, total_parts, extra=extra_info)
         info_lines = info_to_text_lines(info)
 
         pdf_bytes = build_pdf([page for _, page in part], info_lines)
-        pdf_name = f"panels_{idx}.pdf"
+        pdf_name = f"{file_prefix}_{idx}.pdf"
 
-        if package.pdf or package.pdf_splite:
+        if single or split:
             pdf_path = out_dir / pdf_name
             pdf_path.write_bytes(pdf_bytes)
             written.append(pdf_path)
 
-        if package.pdf_zip or package.pdf_zip_splite:
-            zip_path = out_dir / f"panels_{idx}.zip"
+        if zipped or zipped_split:
+            zip_path = out_dir / f"{file_prefix}_{idx}.zip"
             with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
                 zf.writestr(pdf_name, pdf_bytes)
                 zf.writestr("chapter_info.json", json.dumps(info, indent=2) + "\n")
@@ -154,12 +166,29 @@ def build_llm_pdf_bundle(
 
     # Unlike the zip bundle's PNG/WEBP re-encoding, embedding raw (Flate/
     # predictor-compressed) bitmaps in a PDF isn't reliably smaller than the
-    # source panel files - PDF has no dedicated image codec of its own, so
+    # source image files - PDF has no dedicated image codec of its own, so
     # this reports the resulting size plainly rather than claiming a "saved"
     # figure that would sometimes be negative.
     total_mb = sum(p.stat().st_size for p in written) / (1024 * 1024)
-    size_note = f"{total_parts} part(s), ≤{package.max_mb:g}MB each" if split else "1 part, splitting off"
+    size_note = f"{total_parts} part(s), ≤{max_mb:g}MB each" if split_parts else "1 part, splitting off"
     console.print(
-        f"[bold green]✓ Built LLM upload bundle - PDF ({size_note}, {total_mb:.1f}MB total) in:[/] {_esc(str(out_dir))}"
+        f"[bold green]✓ Built LLM upload bundle - {label} ({size_note}, {total_mb:.1f}MB total) in:[/] "
+        f"{_esc(str(out_dir))}"
     )
     return written
+
+
+def build_llm_pdf_bundle(
+    config: CropperConfig,
+    project_name: str,
+    chapter_num: str,
+    panel_paths: list[Path],
+) -> list[Path]:
+    """Builds panels_pdf/panels_1.pdf, panels_2.pdf, ... - see module
+    docstring."""
+    package = config.package
+    return build_pdf_bundle(
+        panel_paths, get_panels_pdf_dir(project_name, chapter_num, create=False), "panels",
+        package.pdf, package.pdf_splite, package.pdf_zip, package.pdf_zip_splite, package.max_mb,
+        project_name, chapter_num, "PDF",
+    )

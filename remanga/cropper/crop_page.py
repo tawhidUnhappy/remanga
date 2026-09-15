@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from PIL import Image, ImageOps
 
 from remanga.config import CropperConfig
@@ -15,6 +16,7 @@ from remanga.console import console, escape as _esc
 from remanga.cropper.dedupe import dedupe_panels
 from remanga.cropper.geometry import apply_padding
 from remanga.cropper.gutter import count_adjusted_edges, page_grayscale_array, sample_background_color
+from remanga.cropper.llm_boxes import CropPlan, has_llm_crops, paint_mask, plan_llm_crops
 from remanga.cropper.naming import panel_stem
 from remanga.cropper.page_locator import locate_page_file
 from remanga.cropper.panel_boxes import resolve_page_panel_boxes
@@ -31,6 +33,7 @@ class PageCropResult:
     gutter_edges_adjusted: int = 0
     duplicate_panels_dropped: int = 0
     panels_trimmed: int = 0
+    panels_painted: int = 0
 
 
 def crop_page(
@@ -50,13 +53,19 @@ def crop_page(
     own - whichever one wins is what every panel filename is actually
     numbered against (`{chapter}_{page}_{panel}`, see remanga.cropper.naming),
     so panel filenames match the downloaded page's own number whenever
-    that's known."""
+    that's known.
+
+    A page imported from Gemini (entries carrying `frames` - see
+    remanga/cropper/llm_reply.py) is planned by remanga.cropper.llm_boxes
+    instead: frames refined, its own text and art outside them added after,
+    and other crops' frames and bubbles painted out of each rectangle. Every
+    other page takes the marker's path below, unchanged."""
     is_story_page = page_entry.get("is_story_page", True)
     panels = page_entry.get("panels", [])
 
     if not is_story_page or not panels:
         page_desc = page_entry.get("page_filename") or f"page index {page_entry.get('page_index')}"
-        note_str = page_entry.get("notes", "non-story/duplicate")
+        note_str = page_entry.get("notes") or page_entry.get("skip_reason") or "non-story/duplicate"
         console.print(f"[dim yellow]Skipping non-story page ({page_desc}): {note_str}[/]")
         return None
 
@@ -91,37 +100,56 @@ def crop_page(
         console.print(f"[yellow]Warning: Could not locate page image for: {_esc(str(page_entry))}. Skipping...[/]")
         return None
 
+    llm_page = has_llm_crops(panels)
+    painting = llm_page and config.llm_crop.mask_foreign
+
     with Image.open(page_img_path) as img:
         img = ImageOps.exif_transpose(img)
         img = img.convert("RGB")
         img_w, img_h = img.size
 
         # Computed once per page (not per panel) and reused by panel box
-        # resolution below (remanga/cropper/panel_boxes.py) and by the final
-        # per-panel trim (remanga/cropper/trim.py).
-        needs_page_analysis = config.snap_to_gutters or config.trim_panel_whitespace
+        # resolution below (remanga/cropper/panel_boxes.py), by the final
+        # per-panel trim (remanga/cropper/trim.py), and as the paper colour
+        # an LLM crop's neighbours are painted over with.
+        needs_page_analysis = config.snap_to_gutters or config.trim_panel_whitespace or painting
         gray_arr = page_grayscale_array(img) if needs_page_analysis else None
         bg_level = (
             sample_background_color(gray_arr, config.gutter_background_sample_strip_pixels)
             if gray_arr is not None else None
         )
 
-        _valid_panels, original_boxes, panel_boxes = resolve_page_panel_boxes(
-            panels, img_w, img_h, gray_arr, bg_level, config
-        )
+        if llm_page:
+            plans = plan_llm_crops(panels, img_w, img_h, gray_arr, bg_level, config)
+        else:
+            _valid_panels, original_boxes, panel_boxes = resolve_page_panel_boxes(
+                panels, img_w, img_h, gray_arr, bg_level, config
+            )
+            plans = [CropPlan(marked=[original], frames=[refined])
+                     for original, refined in zip(original_boxes, panel_boxes, strict=True)]
 
         panel_number = 1  # resets every page - see panel_stem's docstring
-        for original_box, crop_box in zip(original_boxes, panel_boxes, strict=True):
+        for index, plan in enumerate(plans):
             if config.snap_to_gutters:
-                adjusted = count_adjusted_edges(original_box, crop_box)
+                adjusted = sum(count_adjusted_edges(original, refined)
+                               for original, refined in zip(plan.marked, plan.frames, strict=True))
                 if adjusted:
                     result.gutter_panels_adjusted += 1
                     result.gutter_edges_adjusted += adjusted
 
+            crop_box = plan.rect
             if config.margin_padding_pixels > 0:
                 crop_box = apply_padding(crop_box, img_w, img_h, config.margin_padding_pixels)
 
             cropped_img = img.crop(crop_box)
+
+            if painting and bg_level is not None:
+                paint = paint_mask(plans, index, crop_box)
+                if paint is not None:
+                    pixels = np.array(cropped_img)
+                    pixels[paint] = round(bg_level)
+                    cropped_img = Image.fromarray(pixels)
+                    result.panels_painted += 1
 
             # Last safety net: trim any leftover blank margin still baked into
             # the saved image (e.g. a panel with no neighbor to reconcile a

@@ -11,7 +11,7 @@ package needs to know it's a package now."""
 from __future__ import annotations
 
 from .audio import AudioConfig
-from .cropper import CropperConfig, PackageConfig
+from .cropper import CropperConfig, LLMCropConfig, PackageConfig
 from .downloader import DownloaderConfig
 from .marker import MarkerConfig, ShortcutsConfig
 from .ocr import OCRConfig
@@ -29,6 +29,7 @@ __all__ = [
     "CropperConfig",
     "DownloaderConfig",
     "KokoroConfig",
+    "LLMCropConfig",
     "MarkerConfig",
     "OCRConfig",
     "PackageConfig",

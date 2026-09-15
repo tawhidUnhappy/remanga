@@ -4,16 +4,19 @@ The narration step doesn't pick a format for you - it lists what's actually
 been built, in order of preference, and you upload any one group. This is
 the discovery half of that (which formats exist on disk right now), kept
 apart from the printing half so the "nothing was built at all" case can be
-detected and explained rather than printed as an empty list."""
+detected and explained rather than printed as an empty list. The LLM crop
+step asks the same question about the gridded pages (grid_upload_groups)."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
 
-from remanga.config import RemangaConfig
+from remanga.config import CropperConfig, RemangaConfig
 from remanga.paths import (
     get_chapter_dir,
+    get_grid_pdf_dir,
+    get_grid_zip_dir,
     get_panels_pdf_dir,
     get_panels_zip_dir,
     get_sheets_dir,
@@ -80,3 +83,22 @@ def upload_groups(project: str, chapter: str, config: RemangaConfig) -> list[Upl
         return [UploadGroup("panels (unzipped)", parts)]
 
     return []
+
+
+def grid_upload_groups(project: str, chapter: str, cropper: CropperConfig) -> list[UploadGroup]:
+    """The gridded-page archives this chapter has for the LLM crop step -
+    the grid zip, then the grid PDF. The grid_pages folder isn't a group
+    here: it is a directory of images, which the hand-off names as a folder
+    rather than listing file by file."""
+    llm = cropper.llm_crop
+    groups: list[UploadGroup] = []
+    if llm.zip_active:
+        parts = _files_in(get_grid_zip_dir(project, chapter, create=False), "grid_*.zip")
+        if parts:
+            groups.append(UploadGroup("grid zip", parts))
+    if llm.pdf_active:
+        pdf_dir = get_grid_pdf_dir(project, chapter, create=False)
+        parts = _files_in(pdf_dir, "grid_*.pdf") + _files_in(pdf_dir, "grid_*.zip")
+        if parts:
+            groups.append(UploadGroup("grid PDF", parts))
+    return groups

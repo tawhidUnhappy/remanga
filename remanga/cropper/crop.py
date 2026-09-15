@@ -61,7 +61,8 @@ class CoordinateCropper:
         if not has_real_json_content(crops_json_path):
             raise FileNotFoundError(
                 f"Missing or empty crop instructions file: {crops_json_path}\n"
-                f"Please mark this chapter's panels in the Panel Marker web UI first."
+                f"Mark this chapter's panels in the Panel Marker (`mark`), or import Gemini's crops "
+                f"(`llm-crop`), first."
             )
 
         if not pages_dir.exists() or not any(p.is_file() for p in pages_dir.iterdir()):
@@ -100,6 +101,7 @@ class CoordinateCropper:
         gutter_edges_adjusted = 0
         duplicate_panels_dropped = 0
         panels_trimmed = 0
+        panels_painted = 0
 
         for page_number, page_entry in enumerate(pages_list, start=1):
             result = crop_page(page_entry, pages_dir, panels_dir, chapter_num, page_number, self.config)
@@ -111,10 +113,12 @@ class CoordinateCropper:
             gutter_edges_adjusted += result.gutter_edges_adjusted
             duplicate_panels_dropped += result.duplicate_panels_dropped
             panels_trimmed += result.panels_trimmed
+            panels_painted += result.panels_painted
 
         write_manifest(project_name, chapter_num, output_panel_paths)
         print_crop_summary(
             panels_dir, len(output_panel_paths), self.config,
             gutter_panels_adjusted, gutter_edges_adjusted, panels_trimmed, duplicate_panels_dropped,
+            panels_painted,
         )
         return output_panel_paths

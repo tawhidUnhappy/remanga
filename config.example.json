@@ -33,6 +33,22 @@
       "panels_zip_splites": false,
       "max_mb": 50.0
     },
+    "llm_crop": {
+      "grid_pages": true,
+      "grid_zip": true,
+      "grid_zip_splites": false,
+      "grid_pdf": false,
+      "grid_pdf_splite": false,
+      "grid_pdf_zip": false,
+      "grid_pdf_zip_splite": false,
+      "max_mb": 50.0,
+      "grid_image_size": 1600,
+      "grid_line_step": 50,
+      "grid_label_step": 100,
+      "grouping": "balanced",
+      "mask_foreign": true,
+      "preview": true
+    },
     "snap_to_gutters": true,
     "gutter_search_radius_pixels": 60,
     "gutter_search_radius_fraction": 0.1,

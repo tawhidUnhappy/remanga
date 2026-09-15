@@ -582,6 +582,16 @@ Same outline, same navigation, same pages — no Draw/Adjust tools, no resize ha
 Read-only is **enforced by the server**, not hidden in the browser: `POST /api/marks` and `POST /api/detect` answer `403`, no `crops.json` is written when a chapter is left or when the session ends, and MAGI never runs — detection fills in marks nobody saved, which is exactly what a verification pass must not invent. Opening it is meant to be the cheap way to be sure, so looking has to be provably free of consequences.
 
 
+### 2c. Or Crop with Gemini (LLM crop)
+Instead of marking panels yourself, Gemini can plan the crops - which speech bubbles belong to which panel, when small panels should be one image, and which art breaks out of a border:
+```bash
+./run.sh crop-grid --project "my_manga" --chapter "1"   # gridded pages, a zip, and an empty llm_crops.json
+# upload grid_zip/chapter_1/grid_1.zip + prompts/llm_crop.md to Gemini,
+# then paste its reply into chapters/chapter_1/llm_crops.json
+./run.sh llm-crop --project "my_manga" --chapter "1"    # checks the reply, writes crops.json + previews
+```
+Every page is drawn on a square black canvas, top-left, under a green 0-1000 ruler grid - Gemini's own bounding-box units - and zipped with a `chapter_info.json` carrying the chapter, reading direction, grouping setting and each page's area. The grid upload comes in the same shapes as the panel uploads (folder, zip, PDF, single or split; Settings → **LLM crop (Gemini)**). A reply that doesn't check out gets a `fix_request.md` to paste back into the same chat. Once imported, `crop` cuts each crop with its bubbles kept whole and other panels' slivers painted out. `crop-grid-all` / `llm-crop-all` do whole projects, and `llm-crop` can replace `mark` in the pipeline. Full guide: [docs/llm_crop_guide.md](docs/llm_crop_guide.md).
+
 ### 3. Crop Panels
 ```bash
 ./run.sh crop --project "my_manga" --chapter "1"

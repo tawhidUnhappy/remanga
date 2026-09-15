@@ -48,7 +48,8 @@ def get_chapter_dir(project_name: str, chapter_num: str) -> Path:
 #      needing to know the shape of, the source folder next to them.
 GENERATED_KINDS = (
     "pages_zip", "sheets", "sheets_zip", "sheets_folders", "panels_zip",
-    "panels_pdf", "audio", "audio_modified", "video",
+    "panels_pdf", "grid_pages", "grid_zip", "grid_pdf", "llm_crop",
+    "audio", "audio_modified", "video",
 )
 
 
@@ -93,6 +94,32 @@ def get_panels_zip_dir(project_name: str, chapter_num: str, create: bool = True)
 
 def get_panels_pdf_dir(project_name: str, chapter_num: str, create: bool = True) -> Path:
     return get_generated_dir(project_name, "panels_pdf", chapter_num, create=create)
+
+
+def get_grid_pages_dir(project_name: str, chapter_num: str, create: bool = True) -> Path:
+    return get_generated_dir(project_name, "grid_pages", chapter_num, create=create)
+
+
+def get_grid_zip_dir(project_name: str, chapter_num: str, create: bool = True) -> Path:
+    return get_generated_dir(project_name, "grid_zip", chapter_num, create=create)
+
+
+def get_grid_pdf_dir(project_name: str, chapter_num: str, create: bool = True) -> Path:
+    return get_generated_dir(project_name, "grid_pdf", chapter_num, create=create)
+
+
+def get_llm_crop_dir(project_name: str, chapter_num: str, create: bool = True) -> Path:
+    """What importing Gemini's crops generates for a chapter: the preview
+    overlays, and the fix request written when a reply doesn't check out."""
+    return get_generated_dir(project_name, "llm_crop", chapter_num, create=create)
+
+
+def get_llm_crops_path(project_name: str, chapter_num: str) -> Path:
+    """Where Gemini's reply for a chapter is pasted. SOURCE, beside
+    crops.json: it's an LLM's work, not something remanga can rebuild, so
+    it lives in the chapter folder and survives every rebuild that keeps
+    crops.json."""
+    return get_chapter_dir(project_name, chapter_num) / "llm_crops.json"
 
 
 def get_audio_dir(project_name: str, chapter_num: str, create: bool = True) -> Path:

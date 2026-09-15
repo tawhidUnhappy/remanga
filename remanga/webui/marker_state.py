@@ -36,6 +36,15 @@ DECIDED_KEY = "user_decided"
 FORMAT_KEY = "marks_format"
 MARKS_FORMAT = 2
 
+# A crop imported from Gemini (remanga/cropper/llm_reply.py) is more than its
+# box: `src: "llm"` plus the frames, text and art the cropper builds it from.
+# Each such mark carries them under LLM_KEY, with the box it was loaded at,
+# and gets them written back for as long as nobody moves or resizes it - a
+# box that was changed by hand is a hand-drawn box from then on.
+LLM_SRC = "llm"
+LLM_KEY = "llm"
+LLM_FIELDS = ("kind", "frames", "text_outside", "art_outside")
+
 
 class MarkerState:
     """All in-memory state for one chapter's marking."""
@@ -160,7 +169,7 @@ class MarkerState:
                     box, page["width"], page["height"], is_1000=is_normalized
                 )
                 panel_id = panel.get("panel_id")
-                marks.append({
+                mark = {
                     "id": str(panel_id) if panel_id is not None else f"loaded-{i}",
                     "x": left, "y": top, "w": right - left, "h": bottom - top,
                     # Where the mark came from, as saved. This used to be
@@ -170,8 +179,15 @@ class MarkerState:
                     # reopened (and with background auto-save, that was
                     # every chapter). A file from before `src` was written
                     # can't say, so it reads as manual.
-                    "src": panel.get("src") if panel.get("src") in ("ai", "manual") else "manual",
-                })
+                    "src": panel.get("src") if panel.get("src") in ("ai", "manual", LLM_SRC) else "manual",
+                }
+                if panel.get("src") == LLM_SRC and panel.get("frames"):
+                    mark[LLM_KEY] = {
+                        "box_1000": list(box),
+                        "at": [left, top, right - left, bottom - top],
+                        **{key: panel.get(key) for key in LLM_FIELDS},
+                    }
+                marks.append(mark)
             if marks:
                 self.marks[filename] = marks
                 self.touched.add(filename)
@@ -308,6 +324,13 @@ class MarkerState:
         it, and _load_existing_crops for why writing only the outcome was
         not enough. The cropper ignores both this and the format marker;
         they exist for the next session of the marker."""
+        def unmoved(mark: dict[str, Any], at: list[float] | None) -> bool:
+            # Within half a pixel: the browser can send a loaded box back as floats.
+            return bool(at) and all(
+                abs(float(mark[key]) - float(value)) < 0.5
+                for key, value in zip(("x", "y", "w", "h"), at, strict=True)
+            )
+
         pages_out = []
         for page in self.pages:
             filename = page["filename"]
@@ -325,12 +348,21 @@ class MarkerState:
 
             panels_out = []
             for i, m in enumerate(page_marks, start=1):
+                llm = m.get(LLM_KEY)
+                if llm and unmoved(m, llm.get("at")):
+                    # Written back exactly as imported - see LLM_KEY.
+                    panels_out.append({"panel_id": i, "box_1000": llm["box_1000"], "src": LLM_SRC,
+                                       **{key: llm.get(key) for key in LLM_FIELDS}})
+                    continue
                 bounds = (m["x"], m["y"], m["x"] + m["w"], m["y"] + m["h"])
                 box_1000 = pixel_bounds_to_box_1000(bounds, page["width"], page["height"])
                 # `src` is for the next session of the marker (the cropper
                 # ignores it): without it an AI mark and a hand-drawn one
-                # are indistinguishable once written.
-                panels_out.append({"panel_id": i, "box_1000": box_1000, "src": m.get("src", "manual")})
+                # are indistinguishable once written. An LLM crop moved by
+                # hand is a hand-drawn box from here on.
+                src = m.get("src", "manual")
+                panels_out.append({"panel_id": i, "box_1000": box_1000,
+                                   "src": "manual" if src == LLM_SRC else src})
 
             pages_out.append({
                 "page_index": page["index"],

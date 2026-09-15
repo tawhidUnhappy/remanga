@@ -15,6 +15,10 @@ from remanga.paths import (
     get_audio_timing_path,
     get_chapter_dir,
     get_final_video_path,
+    get_grid_pages_dir,
+    get_grid_pdf_dir,
+    get_grid_zip_dir,
+    get_llm_crops_path,
     get_master_audio_path,
     get_narration_review_path,
     get_pages_zip_path,
@@ -35,6 +39,17 @@ def get_chapter_status(project_name: str, chapter_num: str) -> dict[str, Any]:
     pages_count = len([p for p in pages_dir.iterdir() if p.is_file()]) if pages_dir.exists() else 0
     pages_zip_exist = get_pages_zip_path(project_name, chapter_num, create=False).exists()
     crops_exist = has_real_json_content(chap_dir / "crops.json")
+
+    # The Gemini crop workflow: any grid upload on disk counts as built (which
+    # formats a project builds is config, and this module reads none), and a
+    # reply counts once it's more than the empty placeholder.
+    grid_pdf_dir = get_grid_pdf_dir(project_name, chapter_num, create=False)
+    crop_grid_built = (
+        any(get_grid_zip_dir(project_name, chapter_num, create=False).glob("grid_*.zip"))
+        or any(grid_pdf_dir.glob("grid_*.pdf")) or any(grid_pdf_dir.glob("grid_*.zip"))
+        or any(get_grid_pages_dir(project_name, chapter_num, create=False).glob("*.png"))
+    )
+    llm_reply_exist = has_real_json_content(get_llm_crops_path(project_name, chapter_num))
 
     panels_count = len([p for p in panels_dir.iterdir() if p.is_file()]) if panels_dir.exists() else 0
     sheets_count = len([p for p in sheets_dir.iterdir() if p.is_file()]) if sheets_dir.exists() else 0
@@ -83,6 +98,10 @@ def get_chapter_status(project_name: str, chapter_num: str) -> dict[str, Any]:
         summary = f"Cropped ({panels_count} panels)"
     elif crops_exist:
         summary = "Crops JSON Ready"
+    elif llm_reply_exist:
+        summary = "Gemini Crops Pasted (run llm-crop)"
+    elif crop_grid_built:
+        summary = "Crop Grid Ready (awaiting Gemini)"
     elif pages_count > 0:
         summary = f"Pages Ready ({pages_count} pages)"
     else:
@@ -95,6 +114,8 @@ def get_chapter_status(project_name: str, chapter_num: str) -> dict[str, Any]:
         "pages_count": pages_count,
         "pages_zip_exist": pages_zip_exist,
         "crops_exist": crops_exist,
+        "crop_grid_built": crop_grid_built,
+        "llm_reply_exist": llm_reply_exist,
         "panels_count": panels_count,
         "sheets_count": sheets_count,
         "panels_zip_built": panels_zip_built,
@@ -111,5 +132,3 @@ def get_chapter_status(project_name: str, chapter_num: str) -> dict[str, Any]:
         "video_path": final_video_path,
         "summary": summary,
     }
-
-

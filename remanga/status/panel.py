@@ -78,6 +78,8 @@ def render_status_panel(project: str, chapter: str) -> str:
 
    1. Pages Downloaded    : {counted(st['pages_count'], 'pages')}
    2. Pages ZIP Archive   : {done('Ready (pages.zip)') if st['pages_zip_exist'] else pending()}
+   2b. Gemini Crop Grid   : {done('Built (crop-grid)') if st['crop_grid_built'] else off('not built')}
+   2c. Gemini Crop Reply  : {done('Pasted (llm_crops.json)') if st['llm_reply_exist'] else off('not pasted')}
    3. Crop Instructions   : {done('Present (crops.json)') if st['crops_exist'] else absent()}
    4. Panels Cropped      : {counted(st['panels_count'], 'panels')}
    5. Panel Contact Sheets: {counted(st['sheets_count'], 'sheets', empty=pending())}

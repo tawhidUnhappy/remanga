@@ -3,6 +3,7 @@ every chapter a narration file), compile, status, verify and cleanup."""
 
 from __future__ import annotations
 
+from remanga.commands.catalog.llm_crop import LLM_CROP_PROJECT_COMMANDS
 from remanga.commands.handlers import (
     cleanup as cleanup_handlers,
     project as project_handlers,
@@ -113,6 +114,8 @@ PROJECT_COMMANDS: list[Command] = [
         category="Project-wide",
         detail="the double-check pass - read-only, enforced on the server, not just hidden",
     ),
+    # The Gemini alternative to `mark-all`, listed right after the marker's commands.
+    *LLM_CROP_PROJECT_COMMANDS,
     Command(
         "crop-all",
         "Crop panels for every marked chapter in the project at once, from each chapter's "

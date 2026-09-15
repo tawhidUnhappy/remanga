@@ -85,3 +85,11 @@ CROP_SETUP: tuple[SetupAction, ...] = (
     section_setup("detection", "which cleanup passes run over each page"),
     section_setup("vision", "what a cropped chapter gets packaged into for an LLM upload"),
 )
+
+# The LLM crop commands build what Gemini sees and cut what it sends back, so
+# both the workflow's own settings and the cleanup passes the cut runs belong
+# next to them.
+LLM_CROP_SETUP: tuple[SetupAction, ...] = (
+    section_setup("llm_crop", "what the grid uploads are, how readily Gemini groups panels, and paint-out"),
+    section_setup("detection", "which cleanup passes run when Gemini's crops are cut"),
+)

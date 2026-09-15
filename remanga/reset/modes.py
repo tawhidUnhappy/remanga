@@ -19,9 +19,12 @@ from dataclasses import dataclass
 # scans) is always kept - a restart never re-downloads unless
 # reverify_downloads finds something missing.
 KEEP_ON_RESTART = {"pages"}
-KEEP_ON_MARKS_ONLY_RESTART = KEEP_ON_RESTART | {"crops.json"}
+# llm_crops.json (Gemini's reply, see paths.get_llm_crops_path) is kept
+# wherever crops.json is: it's what an LLM-cropped chapter's crops.json was
+# made from, and not something remanga can make again.
+KEEP_ON_MARKS_ONLY_RESTART = KEEP_ON_RESTART | {"crops.json", "llm_crops.json"}
 KEEP_ON_SOFT_RESTART = KEEP_ON_RESTART | {
-    "crops.json", "panels", "narration.json", "narration_review.json", "narration_reviews",
+    "crops.json", "llm_crops.json", "panels", "narration.json", "narration_review.json", "narration_reviews",
 }
 
 _KEEP_SETS: dict[str, set] = {
@@ -88,17 +91,17 @@ RESTART_MODES: tuple[RestartMode, ...] = (
     ),
     RestartMode(
         "marks_only", "Marks-only restart",
-        "downloaded pages and crops.json (narration.json gets emptied, not kept)",
+        "downloaded pages, crops.json and llm_crops.json (narration.json gets emptied, not kept)",
         "keep the panel marks, redo everything after them",
     ),
     RestartMode(
         "remark", "Re-mark restart",
-        "downloaded pages and crops.json (narration.json gets emptied, not kept)",
+        "downloaded pages, crops.json and llm_crops.json (narration.json gets emptied, not kept)",
         "same as marks-only, then reopens the Panel Marker with those marks loaded",
         deletion_mode="marks_only", reopen_marker=True,
     ),
     RestartMode(
-        "soft", "Soft restart", "downloaded pages, crops.json, panels/, and narration.json",
+        "soft", "Soft restart", "downloaded pages, crops.json, llm_crops.json, panels/, and narration.json",
         "keep everything hand-made; wipe only generated audio/video/packaging",
     ),
 )
@@ -168,7 +171,7 @@ REBUILD_MODES: tuple[RebuildMode, ...] = (
     RebuildMode(
         "sources", "Down to the source files",
         deletes="every generated file, AND the cropped panels/",
-        keeps="only what remanga cannot rebuild: pages (re-verified), crops.json, "
+        keeps="only what remanga cannot rebuild: pages (re-verified), crops.json, llm_crops.json, "
               "narration.json, and the project's json files",
         cost="slowest - re-crops, re-narrates the audio, re-renders and re-joins",
         force=True, wipe="sources",
@@ -176,16 +179,18 @@ REBUILD_MODES: tuple[RebuildMode, ...] = (
 )
 
 # What a "down to the source files" rebuild keeps INSIDE chapters/. Exactly
-# the three things remanga cannot produce for itself:
+# the four things remanga cannot produce for itself:
 #   pages/          fetched from MangaDex (re-verified, not re-downloaded
 #                   wholesale - see reset.reverify_chapter_downloads)
-#   crops.json      panel boxes, hand-placed or hand-corrected in the Marker
+#   crops.json      panel boxes, hand-placed or hand-corrected in the Marker,
+#                   or imported from Gemini's reply
+#   llm_crops.json  that reply, as Gemini wrote it
 #   narration.json  written by an LLM against those panels, then reviewed
 # Everything else in there - panels/ above all - is a derivative of these
-# three and is rebuilt. panels/ is included in the delete precisely because
+# four and is rebuilt. panels/ is included in the delete precisely because
 # it is NOT source: it is the crop output, and keeping a stale one is how a
 # re-crop silently disagrees with narration.json's panel_ids.
-KEEP_ON_SOURCES_REBUILD = {"pages", "crops.json", "narration.json"}
+KEEP_ON_SOURCES_REBUILD = {"pages", "crops.json", "llm_crops.json", "narration.json"}
 
 REBUILD_MODE_NAMES = tuple(mode.name for mode in REBUILD_MODES)
 REBUILD_MODE_BY_NAME = {mode.name: mode for mode in REBUILD_MODES}

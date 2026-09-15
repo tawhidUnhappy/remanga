@@ -212,12 +212,28 @@ def _run_render(project: str, chapter: str, config: RemangaConfig) -> None:
     print_path(f"  {display_path(final_video, wrap=False)}")
 
 
+def _run_llm_crop(project: str, chapter: str, config: RemangaConfig) -> None:
+    """The Gemini alternative to `mark`. Like the mark step, a no-op for a
+    chapter whose crops.json already has marks in it: re-running a pipeline
+    must not re-import a reply, or offer to replace hand-made marks,
+    uninvited. The `llm-crop` command is the way to do either on purpose."""
+    if has_real_json_content(get_chapter_dir(project, chapter) / "crops.json"):
+        return
+    from remanga.wizard.llm_crop import run_llm_crop_step
+
+    console.print("\n[bold]Step — Cropping with Gemini[/]")
+    run_llm_crop_step(project, chapter, config)
+
+
 # Ordered, once - both STEP_REGISTRY (source of truth for what a step is/
-# does) and DEFAULT_STEPS (today's exact hardcoded wizard order, used as the
-# fallback whenever a project has never chosen) come from this one list.
+# does) and DEFAULT_STEPS (the default order, used as the fallback whenever a
+# project has never chosen) come from this one list.
 STEP_REGISTRY: list[Step] = [
     Step("download", "Download chapter pages from MangaDex", _run_download),
     Step("mark", "Mark panels via the Panel Marker web UI (writes crops.json)", _run_mark, needs=["download"]),
+    Step("llm-crop",
+         "Crop with Gemini instead of marking: gridded pages to upload, its pasted reply becomes crops.json",
+         _run_llm_crop, needs=["download"]),
     Step("crop", "Crop panels out of the marked pages", _run_crop, needs=["mark"]),
     Step("package", "Package the panels into the chosen upload formats (sheets/zips/PDF)",
          _run_package, needs=["crop"]),
@@ -236,7 +252,10 @@ STEP_REGISTRY: list[Step] = [
 ]
 
 _STEP_BY_NAME = {step.name: step for step in STEP_REGISTRY}
-DEFAULT_STEPS: list[str] = [step.name for step in STEP_REGISTRY]
+# Offered in the step checklist but left out of the default order: each is an
+# alternative to a default step, and running both would do that part twice.
+ALTERNATIVE_STEPS = frozenset({"llm-crop"})
+DEFAULT_STEPS: list[str] = [step.name for step in STEP_REGISTRY if step.name not in ALTERNATIVE_STEPS]
 
 
 def run_pipeline(project: str, chapter: str, config: RemangaConfig, steps: list[str] | None = None) -> None:

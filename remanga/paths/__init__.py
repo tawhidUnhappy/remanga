@@ -57,6 +57,11 @@ from .projects import (
     get_full_recap_video_path,
     get_full_recap_work_dir,
     get_generated_dir,
+    get_grid_pages_dir,
+    get_grid_pdf_dir,
+    get_grid_zip_dir,
+    get_llm_crop_dir,
+    get_llm_crops_path,
     get_master_audio_path,
     get_modified_audio_dir,
     get_modified_clip_path,
@@ -76,7 +81,16 @@ from .projects import (
     get_video_work_dir,
 )
 from .review import get_narration_review_history_dir, get_narration_review_path
-from .roots import BIN_DIR, CONFIG_EXAMPLE_PATH, CONFIG_PATH, GLOBAL_DIR, REPO_ROOT, TOOLS_DIR, UV_BIN
+from .roots import (
+    BIN_DIR,
+    CONFIG_EXAMPLE_PATH,
+    CONFIG_PATH,
+    GLOBAL_DIR,
+    PROMPTS_DIR,
+    REPO_ROOT,
+    TOOLS_DIR,
+    UV_BIN,
+)
 from .tools import get_scripts_dir, get_tool_python
 from .webui_static import MARKER_STATIC_DIR, REVIEWER_STATIC_DIR, WRITER_STATIC_DIR
 
@@ -88,6 +102,7 @@ __all__ = [
     "GLOBAL_DIR",
     # webui static
     "MARKER_STATIC_DIR",
+    "PROMPTS_DIR",
     # roots
     "REPO_ROOT",
     "REVIEWER_STATIC_DIR",
@@ -110,7 +125,12 @@ __all__ = [
     "get_generated_dir",
     # global assets
     "get_global_lessons_path",
+    "get_grid_pages_dir",
+    "get_grid_pdf_dir",
+    "get_grid_zip_dir",
     "get_hf_token_path",
+    "get_llm_crop_dir",
+    "get_llm_crops_path",
     "get_manifest_path",
     "get_master_audio_path",
     "get_memory_path",

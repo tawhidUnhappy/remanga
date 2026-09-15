@@ -84,8 +84,14 @@ def print_crop_summary(
     gutter_edges_adjusted: int,
     panels_trimmed: int,
     duplicate_panels_dropped: int,
+    panels_painted: int = 0,
 ) -> None:
     console.print(f"[bold green]✓ Cropped {total_panels} panels successfully into:[/] {_esc(str(panels_dir))}")
+    if panels_painted:
+        console.print(
+            f"[dim]  ↳ Painted other crops' panels and bubbles out of {panels_painted}/{total_panels} "
+            f"Gemini crop(s)[/]"
+        )
     if config.snap_to_gutters:
         console.print(
             f"[dim]  ↳ Gutter-snap refined {gutter_panels_adjusted}/{total_panels} panels "

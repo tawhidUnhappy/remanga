@@ -1275,6 +1275,41 @@ Symptom was "words run together, metallic/glitchy".
   catch a misspelled generation kwarg. Match extra kwargs against the real
   signature before passing them.
 
+## LLM crop: Gemini plans crops from gridded pages (2026-09-16)
+
+`crop-grid` -> upload `grid_zip/chapter_N/grid_1.zip` + `prompts/llm_crop.md` -> paste the reply
+into `chapters/chapter_N/llm_crops.json` (0-byte placeholder; SOURCE, kept wherever crops.json is)
+-> `llm-crop` -> crops.json (+ `llm_crop/chapter_N/preview/`, `fix_request.md` on a bad reply).
+User guide: docs/llm_crop_guide.md. The user has unlimited Gemini uploads, so it is one zip and one
+reply per chapter - a batched design was rejected; don't reintroduce batching.
+
+- Code: `cropper/{llm_grid,grid_bundles,llm_reply,llm_boxes,llm_mask,llm_preview}.py`,
+  `wizard/llm_crop.py`, `commands/catalog/llm_crop.py`, `settings/llm_crop.py`, config
+  `cropper.llm_crop` (LLMCropConfig).
+- **Reply coordinates are on the SQUARE, not the page.** The page sits top-left on a black square;
+  `PageExtent.to_page_box` divides by xmax/ymax (1000*w/long, 1000*h/long). Round trip checked
+  within 1 unit on Yandere ch2.
+- Grid formats mirror PackageConfig and reuse `build_zip_bundle`/`build_pdf_bundle` through an
+  `extra_info` param; `info_to_text_lines` renders dict values as indented lines. After that
+  refactor panels_zip/panels_pdf/sheets/sheets_zip were byte-identical (209 hashes, zip entries
+  compared by content - zipfile stamps the time), and marker-made chapters crop byte-identically
+  (134 panels) after crop_page gained the LLM branch.
+- **No seam reconciliation on LLM frames.** A borderless frame that starts exactly where a
+  bordered one ends has no gutter between them; the joint seam search found the gutter above
+  instead and cut 002_019's Beep panel to a 33px sliver. Gutter-snap only (`llm_boxes.py`).
+- Grid images are saved as plain PNG and the zip builder does the lossless shrink - encoding in
+  both places doubled build time (118s for 40 pages) for 0.0MB.
+- The marker keeps LLM crops: `_load_existing_crops` stores `mark["llm"]` with the geometry it was
+  loaded at; `build_crops_json` writes frames back while the mark is unmoved (within 0.5px - the
+  browser sends floats), else the box becomes `src: "manual"`. The browser round-trips unknown mark
+  keys untouched (it POSTs the server's objects back).
+- `llm-crop` is in STEP_REGISTRY but not DEFAULT_STEPS (`pipeline.ALTERNATIVE_STEPS`), or every
+  project that never chose a pipeline would run mark AND llm-crop. Like mark, the step is a no-op
+  when crops.json has content.
+- An order that differs from `mark_ops.reading_order` is a warning, never an error: Gemini orders
+  by story. The prompt's own 002_019 example triggers it on purpose.
+- Not measured yet: Gemini's actual crop accuracy. Oracle: a hand-marked chapter's crops.json.
+
 ## Maintenance rule (do this, don't just read this)
 
 Whenever a session on this repo hits a non-obvious bug, wrong assumption, or
