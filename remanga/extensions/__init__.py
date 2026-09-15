@@ -17,6 +17,7 @@ from remanga.extensions.discovery import (
     extension_generated_kinds,
     extension_named,
     extension_source_files,
+    extension_status_hooks,
     load_extensions,
 )
 from remanga.extensions.spec import Extension, Placed, StatusHooks, StatusRow, SummaryStage, place
@@ -30,6 +31,7 @@ __all__ = [
     "extension_generated_kinds",
     "extension_named",
     "extension_source_files",
+    "extension_status_hooks",
     "load_extensions",
     "place",
 ]

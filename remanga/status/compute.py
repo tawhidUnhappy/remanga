@@ -3,22 +3,22 @@
 Pure inspection - existence checks, directory counts and JSON reads, no
 ffprobe and no config - so it's cheap enough for the wizard to call once per
 row while drawing a chapter list. `verify` is the expensive counterpart that
-actually decodes media."""
+actually decodes media.
+
+Extensions add facts of their own and summary stages placed among the core
+ones (remanga.extensions.StatusHooks)."""
 
 from __future__ import annotations
 
 from typing import Any
 
+from remanga.extensions import Placed, SummaryStage, extension_status_hooks, place
 from remanga.json_io import has_real_json_content, read_json_or
 from remanga.paths import (
     get_audio_dir,
     get_audio_timing_path,
     get_chapter_dir,
     get_final_video_path,
-    get_grid_pages_dir,
-    get_grid_pdf_dir,
-    get_grid_zip_dir,
-    get_llm_crops_path,
     get_master_audio_path,
     get_narration_review_path,
     get_pages_zip_path,
@@ -29,106 +29,82 @@ from remanga.paths import (
 )
 
 
+def _tts_done(st: dict[str, Any]) -> bool:
+    return st["total_narration_entries"] > 0 and st["audio_clips_count"] >= st["total_narration_entries"]
+
+
+# A chapter's one-line summary: the first stage, from the most finished down,
+# that recognizes where the chapter is.
+CORE_SUMMARY_STAGES: tuple[SummaryStage, ...] = (
+    SummaryStage("video", lambda st: "Recap Ready" if st["video_exist"] else None),
+    SummaryStage("master_audio", lambda st: "Audio Ready (Pending Render)" if st["master_audio_exist"] else None),
+    SummaryStage("tts_done", lambda st: "TTS Ready (Pending Mix)" if _tts_done(st) else None),
+    SummaryStage("tts_progress", lambda st: (
+        f"TTS In-Progress ({st['audio_clips_count']}/{st['total_narration_entries']})"
+        if st["total_narration_entries"] > 0 and st["audio_clips_count"] > 0 else None)),
+    SummaryStage("review", lambda st: (
+        f"Narration Review Pending ({st['review_flagged_count']} flagged)"
+        if st["review_pending"] and st["review_flagged_count"] > 0 else None)),
+    SummaryStage("narration", lambda st: "Narration Script Ready" if st["narration_exist"] else None),
+    SummaryStage("cropped", lambda st: f"Cropped ({st['panels_count']} panels)" if st["panels_count"] > 0 else None),
+    SummaryStage("crops_json", lambda st: "Crops JSON Ready" if st["crops_exist"] else None),
+    SummaryStage("pages", lambda st: f"Pages Ready ({st['pages_count']} pages)" if st["pages_count"] > 0 else None),
+)
+
+
+def summary_stages() -> list[SummaryStage]:
+    return place(
+        CORE_SUMMARY_STAGES,
+        [Placed(stage, stage.after) for hooks in extension_status_hooks() for stage in hooks.summaries],
+        lambda stage: stage.name,
+    )
+
+
 def get_chapter_status(project_name: str, chapter_num: str) -> dict[str, Any]:
     chap_dir = get_chapter_dir(project_name, chapter_num)
     pages_dir = chap_dir / "pages"
     panels_dir = chap_dir / "panels"
     sheets_dir = get_sheets_dir(project_name, chapter_num, create=False)
     audio_dir = get_audio_dir(project_name, chapter_num, create=False)
-
-    pages_count = len([p for p in pages_dir.iterdir() if p.is_file()]) if pages_dir.exists() else 0
-    pages_zip_exist = get_pages_zip_path(project_name, chapter_num, create=False).exists()
-    crops_exist = has_real_json_content(chap_dir / "crops.json")
-
-    # The Gemini crop workflow: any grid upload on disk counts as built (which
-    # formats a project builds is config, and this module reads none), and a
-    # reply counts once it's more than the empty placeholder.
-    grid_pdf_dir = get_grid_pdf_dir(project_name, chapter_num, create=False)
-    crop_grid_built = (
-        any(get_grid_zip_dir(project_name, chapter_num, create=False).glob("grid_*.zip"))
-        or any(grid_pdf_dir.glob("grid_*.pdf")) or any(grid_pdf_dir.glob("grid_*.zip"))
-        or any(get_grid_pages_dir(project_name, chapter_num, create=False).glob("*.png"))
-    )
-    llm_reply_exist = has_real_json_content(get_llm_crops_path(project_name, chapter_num))
-
-    panels_count = len([p for p in panels_dir.iterdir() if p.is_file()]) if panels_dir.exists() else 0
-    sheets_count = len([p for p in sheets_dir.iterdir() if p.is_file()]) if sheets_dir.exists() else 0
-    # Any part of a package format existing counts as "built" - there's no
-    # single "the" archive to check for anymore (see PackageConfig).
-    panels_zip_built = any(get_panels_zip_dir(project_name, chapter_num, create=False).glob("panels_*.zip"))
     panels_pdf_dir = get_panels_pdf_dir(project_name, chapter_num, create=False)
-    panels_pdf_built = any(panels_pdf_dir.glob("panels_*.pdf")) or any(panels_pdf_dir.glob("panels_*.zip"))
-    sheets_zip_built = any(get_sheets_zip_dir(project_name, chapter_num, create=False).glob("sheets_*.zip"))
-
     narration_file = chap_dir / "narration.json"
-    narration_exist = has_real_json_content(narration_file)
-    total_narration_entries = 0
-    if narration_exist:
-        n_data = read_json_or(narration_file, {})
-        total_narration_entries = len(n_data.get("narration", []))
-
     review_path = get_narration_review_path(project_name, chapter_num)
-    review_pending = has_real_json_content(review_path)
-    review_flagged_count = 0
-    if review_pending:
-        review_flagged_count = read_json_or(review_path, {}).get("flagged_count", 0)
-
-    audio_clips_count = (
-        len([p for p in audio_dir.glob("*.wav") if not p.stem.endswith("_raw")]) if audio_dir.exists() else 0
-    )
-    timing_exist = get_audio_timing_path(project_name, chapter_num, create=False).exists()
-    master_audio_exist = get_master_audio_path(project_name, chapter_num, create=False).exists()
-
     final_video_path = get_final_video_path(project_name, chapter_num, create=False)
-    video_exist = final_video_path.exists() and final_video_path.stat().st_size > 1000
 
-    if video_exist:
-        summary = "Recap Ready"
-    elif master_audio_exist:
-        summary = "Audio Ready (Pending Render)"
-    elif total_narration_entries > 0 and audio_clips_count >= total_narration_entries:
-        summary = "TTS Ready (Pending Mix)"
-    elif total_narration_entries > 0 and audio_clips_count > 0:
-        summary = f"TTS In-Progress ({audio_clips_count}/{total_narration_entries})"
-    elif review_pending and review_flagged_count > 0:
-        summary = f"Narration Review Pending ({review_flagged_count} flagged)"
-    elif narration_exist:
-        summary = "Narration Script Ready"
-    elif panels_count > 0:
-        summary = f"Cropped ({panels_count} panels)"
-    elif crops_exist:
-        summary = "Crops JSON Ready"
-    elif llm_reply_exist:
-        summary = "Gemini Crops Pasted (run llm-crop)"
-    elif crop_grid_built:
-        summary = "Crop Grid Ready (awaiting Gemini)"
-    elif pages_count > 0:
-        summary = f"Pages Ready ({pages_count} pages)"
-    else:
-        summary = "Not Started"
-
-    return {
+    narration_exist = has_real_json_content(narration_file)
+    review_pending = has_real_json_content(review_path)
+    st: dict[str, Any] = {
         "project": project_name,
         "chapter": str(chapter_num),
         "chap_dir": chap_dir,
-        "pages_count": pages_count,
-        "pages_zip_exist": pages_zip_exist,
-        "crops_exist": crops_exist,
-        "crop_grid_built": crop_grid_built,
-        "llm_reply_exist": llm_reply_exist,
-        "panels_count": panels_count,
-        "sheets_count": sheets_count,
-        "panels_zip_built": panels_zip_built,
-        "panels_pdf_built": panels_pdf_built,
-        "sheets_zip_built": sheets_zip_built,
+        "pages_count": len([p for p in pages_dir.iterdir() if p.is_file()]) if pages_dir.exists() else 0,
+        "pages_zip_exist": get_pages_zip_path(project_name, chapter_num, create=False).exists(),
+        "crops_exist": has_real_json_content(chap_dir / "crops.json"),
+        "panels_count": len([p for p in panels_dir.iterdir() if p.is_file()]) if panels_dir.exists() else 0,
+        "sheets_count": len([p for p in sheets_dir.iterdir() if p.is_file()]) if sheets_dir.exists() else 0,
+        # Any part of a package format existing counts as "built" - there's
+        # no single "the" archive to check for anymore (see PackageConfig).
+        "panels_zip_built": any(get_panels_zip_dir(project_name, chapter_num, create=False).glob("panels_*.zip")),
+        "panels_pdf_built": any(panels_pdf_dir.glob("panels_*.pdf")) or any(panels_pdf_dir.glob("panels_*.zip")),
+        "sheets_zip_built": any(get_sheets_zip_dir(project_name, chapter_num, create=False).glob("sheets_*.zip")),
         "narration_exist": narration_exist,
-        "total_narration_entries": total_narration_entries,
+        "total_narration_entries": len(read_json_or(narration_file, {}).get("narration", []))
+        if narration_exist else 0,
         "review_pending": review_pending,
-        "review_flagged_count": review_flagged_count,
-        "audio_clips_count": audio_clips_count,
-        "timing_exist": timing_exist,
-        "master_audio_exist": master_audio_exist,
-        "video_exist": video_exist,
+        "review_flagged_count": read_json_or(review_path, {}).get("flagged_count", 0) if review_pending else 0,
+        "audio_clips_count": (
+            len([p for p in audio_dir.glob("*.wav") if not p.stem.endswith("_raw")]) if audio_dir.exists() else 0
+        ),
+        "timing_exist": get_audio_timing_path(project_name, chapter_num, create=False).exists(),
+        "master_audio_exist": get_master_audio_path(project_name, chapter_num, create=False).exists(),
+        "video_exist": final_video_path.exists() and final_video_path.stat().st_size > 1000,
         "video_path": final_video_path,
-        "summary": summary,
     }
+    for hooks in extension_status_hooks():
+        st.update(hooks.facts(project_name, chapter_num))
+
+    st["summary"] = next(
+        (text for stage in summary_stages() if (text := stage.describe(st)) is not None),
+        "Not Started",
+    )
+    return st

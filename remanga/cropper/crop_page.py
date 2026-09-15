@@ -16,10 +16,10 @@ from remanga.console import console, escape as _esc
 from remanga.cropper.dedupe import dedupe_panels
 from remanga.cropper.geometry import apply_padding
 from remanga.cropper.gutter import count_adjusted_edges, page_grayscale_array, sample_background_color
-from remanga.cropper.llm_boxes import CropPlan, has_llm_crops, paint_mask, plan_llm_crops
 from remanga.cropper.naming import panel_stem
 from remanga.cropper.page_locator import locate_page_file
 from remanga.cropper.panel_boxes import resolve_page_panel_boxes
+from remanga.cropper.structured import CropPlan, has_structured_crops, paint_mask, plan_structured_crops
 from remanga.cropper.trim import trim_panel_margins
 
 
@@ -55,11 +55,11 @@ def crop_page(
     so panel filenames match the downloaded page's own number whenever
     that's known.
 
-    A page imported from Gemini (entries carrying `frames` - see
-    remanga/cropper/llm_reply.py) is planned by remanga.cropper.llm_boxes
-    instead: frames refined, its own text and art outside them added after,
-    and other crops' frames and bubbles painted out of each rectangle. Every
-    other page takes the marker's path below, unchanged."""
+    A page of structured crops (entries carrying `frames` - see
+    remanga.cropper.structured) is planned there instead: frames refined,
+    each crop's own text and art outside them added after, and other crops'
+    frames and bubbles painted out of each rectangle. Every other page takes
+    the marker's path below, unchanged."""
     is_story_page = page_entry.get("is_story_page", True)
     panels = page_entry.get("panels", [])
 
@@ -100,8 +100,8 @@ def crop_page(
         console.print(f"[yellow]Warning: Could not locate page image for: {_esc(str(page_entry))}. Skipping...[/]")
         return None
 
-    llm_page = has_llm_crops(panels)
-    painting = llm_page and config.llm_crop.mask_foreign
+    structured = has_structured_crops(panels)
+    painting = structured and config.paint_out
 
     with Image.open(page_img_path) as img:
         img = ImageOps.exif_transpose(img)
@@ -111,7 +111,7 @@ def crop_page(
         # Computed once per page (not per panel) and reused by panel box
         # resolution below (remanga/cropper/panel_boxes.py), by the final
         # per-panel trim (remanga/cropper/trim.py), and as the paper colour
-        # an LLM crop's neighbours are painted over with.
+        # a structured crop's neighbours are painted over with.
         needs_page_analysis = config.snap_to_gutters or config.trim_panel_whitespace or painting
         gray_arr = page_grayscale_array(img) if needs_page_analysis else None
         bg_level = (
@@ -119,8 +119,8 @@ def crop_page(
             if gray_arr is not None else None
         )
 
-        if llm_page:
-            plans = plan_llm_crops(panels, img_w, img_h, gray_arr, bg_level, config)
+        if structured:
+            plans = plan_structured_crops(panels, img_w, img_h, gray_arr, bg_level, config)
         else:
             _valid_panels, original_boxes, panel_boxes = resolve_page_panel_boxes(
                 panels, img_w, img_h, gray_arr, bg_level, config

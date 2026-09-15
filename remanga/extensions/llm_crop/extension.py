@@ -9,16 +9,14 @@ from remanga.extensions.spec import Extension, Placed
 
 
 def _commands():
-    from remanga.commands.catalog.llm_crop import LLM_CROP_CHAPTER_COMMANDS, LLM_CROP_PROJECT_COMMANDS
+    from remanga.extensions.llm_crop.commands import CROP_GRID, CROP_GRID_ALL, LLM_CROP, LLM_CROP_ALL
 
-    crop_grid, llm_crop = LLM_CROP_CHAPTER_COMMANDS
-    crop_grid_all, llm_crop_all = LLM_CROP_PROJECT_COMMANDS
     return (
         # Right after the Panel Marker's commands, which these replace.
-        Placed(crop_grid, after="mark"),
-        Placed(llm_crop, after="crop-grid"),
-        Placed(crop_grid_all, after="view-marks"),
-        Placed(llm_crop_all, after="crop-grid-all"),
+        Placed(CROP_GRID, after="mark"),
+        Placed(LLM_CROP, after="crop-grid"),
+        Placed(CROP_GRID_ALL, after="view-marks"),
+        Placed(LLM_CROP_ALL, after="crop-grid-all"),
     )
 
 
@@ -29,7 +27,7 @@ def _steps():
 
 
 def _settings():
-    from remanga.settings.llm_crop import configure_llm_crop, llm_crop_summary
+    from remanga.extensions.llm_crop.settings import configure_llm_crop, llm_crop_summary
     from remanga.settings.section_spec import Section
 
     section = Section(
@@ -37,6 +35,18 @@ def _settings():
         detail="what crop-grid builds for Gemini, how readily it groups panels, and how its crops are cut",
     )
     return (Placed(section, after="detection"),)
+
+
+def _config_model():
+    from remanga.extensions.llm_crop.config import LLMCropConfig
+
+    return LLMCropConfig
+
+
+def _status():
+    from remanga.extensions.llm_crop.status import hooks
+
+    return hooks()
 
 
 EXTENSION = Extension(
@@ -47,6 +57,8 @@ EXTENSION = Extension(
     commands=_commands,
     steps=_steps,
     settings=_settings,
+    config_model=_config_model,
+    status=_status,
     generated_kinds=("grid_pages", "grid_zip", "grid_pdf", "llm_crop"),
     source_files=("llm_crops.json",),
     alternative_steps=("llm-crop",),

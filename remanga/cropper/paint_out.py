@@ -1,11 +1,11 @@
-"""What an LLM crop may show - the paint-out rule of prompts/llm_crop.md
-<craft> 1, as box arithmetic on one page.
+"""What a structured crop may show - the paint-out rule, as box arithmetic on
+one page (see remanga.cropper.structured for what a structured crop is).
 
-A crop from Gemini is its frames plus the text and art of its own that reach
-past them, cut as the rectangle around all of those. That rectangle
-routinely takes in a slice of a neighbour: the bottom of the panel above,
-because a bubble hangs down over it, or half a panel, for a group shaped like
-an L. So, inside the rectangle, paper colour goes over
+A structured crop is its frames plus the text and art of its own that reach
+past them, cut as the rectangle around all of those. That rectangle routinely
+takes in a slice of a neighbour: the bottom of the panel above, because a
+bubble hangs down over it, or half a panel, for a group shaped like an L. So,
+inside the rectangle, paper colour goes over
 
     other crops' frames, where they lie outside this crop's own frames,
     and other crops' text_outside, wherever it falls,

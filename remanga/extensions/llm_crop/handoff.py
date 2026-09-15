@@ -1,32 +1,65 @@
 """The LLM crop hand-off: gridded pages out to Gemini, its crops back in as
 crops.json.
 
-The same shape as the narration step (wizard/narration.py) - here are the
-files, there's the prompt, paste the reply into this path - printed by the
-same helpers. Then the reply is checked the moment Enter is pressed, and a
-reply that doesn't check out comes with a fix request to paste back into the
-same Gemini conversation, waiting again, rather than failing the step."""
+The same shape as the narration step (remanga/wizard/narration.py) - here
+are the files, there's the prompt, paste the reply into this path - printed
+by the same helpers. Then the reply is checked the moment Enter is pressed,
+and a reply that doesn't check out comes with a fix request to paste back
+into the same Gemini conversation, waiting again, rather than failing the
+step."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from remanga.config import RemangaConfig
 from remanga.console import console
-from remanga.cropper.grid_bundles import build_grid_bundles, ensure_reply_file, grid_built
-from remanga.cropper.llm_reply import import_llm_crops
+from remanga.extensions.llm_crop.bundles import build_grid_bundles, ensure_reply_file, grid_built
+from remanga.extensions.llm_crop.config import LLMCropConfig
+from remanga.extensions.llm_crop.paths import (
+    PROMPT_PATH,
+    get_grid_pages_dir,
+    get_grid_pdf_dir,
+    get_grid_zip_dir,
+    get_llm_crops_path,
+)
+from remanga.extensions.llm_crop.reply_import import import_llm_crops
 from remanga.json_io import has_real_json_content
-from remanga.paths import PROMPTS_DIR, get_grid_pages_dir, get_llm_crops_path
 from remanga.settings.project_prefs import cropper_config_for
 from remanga.tui import is_interactive
 from remanga.wizard.handoff import pause, print_paths, print_section, print_upload_groups
-from remanga.wizard.uploads import grid_upload_groups
+from remanga.wizard.uploads import UploadGroup
 
-PROMPT_PATH = PROMPTS_DIR / "llm_crop.md"
+
+def llm_config(config: RemangaConfig) -> LLMCropConfig:
+    """This extension's settings, as the (project-scoped) config holds them."""
+    return config.extensions.llm_crop
+
+
+def _files_in(directory: Path, pattern: str) -> list[Path]:
+    return sorted(directory.glob(pattern)) if directory.exists() else []
+
+
+def grid_upload_groups(project: str, chapter: str, llm: LLMCropConfig) -> list[UploadGroup]:
+    """The gridded-page archives this chapter has - the grid zip, then the
+    grid PDF. The grid_pages folder isn't a group: it is a directory of
+    images, which the hand-off names as a folder rather than file by file."""
+    groups: list[UploadGroup] = []
+    if llm.zip_active:
+        parts = _files_in(get_grid_zip_dir(project, chapter, create=False), "grid_*.zip")
+        if parts:
+            groups.append(UploadGroup("grid zip", parts))
+    if llm.pdf_active:
+        pdf_dir = get_grid_pdf_dir(project, chapter, create=False)
+        parts = _files_in(pdf_dir, "grid_*.pdf") + _files_in(pdf_dir, "grid_*.zip")
+        if parts:
+            groups.append(UploadGroup("grid PDF", parts))
+    return groups
 
 
 def print_llm_crop_handoff(project: str, chapter: str, config: RemangaConfig) -> None:
     """What to upload for this chapter, and where the reply goes."""
-    cropper = cropper_config_for(config, project)
-    llm = cropper.llm_crop
+    llm = llm_config(config)
     print_section(f"Crop chapter {chapter} with Gemini")
     console.print(
         "1. Upload the prompt and any one of the grid uploads below to Gemini.\n"
@@ -37,7 +70,7 @@ def print_llm_crop_handoff(project: str, chapter: str, config: RemangaConfig) ->
     console.print("[bold]Prompt:[/]")
     print_paths([(PROMPT_PATH, "")])
 
-    groups = grid_upload_groups(project, chapter, cropper)
+    groups = grid_upload_groups(project, chapter, llm)
     if groups:
         print_upload_groups(groups, llm.max_mb)
     pages_dir = get_grid_pages_dir(project, chapter, create=False)
@@ -58,12 +91,13 @@ def run_llm_crop_step(project: str, chapter: str, config: RemangaConfig, *,
     Away from a real terminal there is nobody to press Enter, so an empty or
     failing reply raises instead of waiting - with the path to paste into, or
     the fix request to send back."""
-    cropper = cropper_config_for(config, project)
-    if grid_built(cropper, project, chapter):
+    llm = llm_config(config)
+    if grid_built(llm, project, chapter):
         ensure_reply_file(project, chapter)
     else:
-        build_grid_bundles(cropper, project, chapter)
+        build_grid_bundles(llm, project, chapter)
     reply = get_llm_crops_path(project, chapter)
+    cropper = cropper_config_for(config, project)
 
     while True:
         if not has_real_json_content(reply):
@@ -76,7 +110,7 @@ def run_llm_crop_step(project: str, chapter: str, config: RemangaConfig, *,
             pause("Press Enter once Gemini's reply is saved in llm_crops.json")
             continue
 
-        outcome = import_llm_crops(cropper, project, chapter, replace_marks=replace_marks)
+        outcome = import_llm_crops(llm, cropper, project, chapter, replace_marks=replace_marks)
         if outcome.state == "imported":
             return True
         if outcome.state == "declined":

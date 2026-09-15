@@ -6,17 +6,20 @@ model is independent of every other one and only ever changes for its own
 reasons. This module re-exports the full flat surface every other file in
 the codebase already imports from `remanga.config` - `from remanga.config
 import X` keeps working unchanged for every X below; nothing outside this
-package needs to know it's a package now."""
+package needs to know it's a package now.
+
+An extension's settings model lives with the extension, and is reached as
+`config.extensions.<name>` (see root.py)."""
 
 from __future__ import annotations
 
 from .audio import AudioConfig
-from .cropper import CropperConfig, LLMCropConfig, PackageConfig
+from .cropper import CropperConfig, PackageConfig
 from .downloader import DownloaderConfig
 from .marker import MarkerConfig, ShortcutsConfig
 from .ocr import OCRConfig
 from .reviewer import ReviewerConfig
-from .root import RemangaConfig
+from .root import ExtensionsConfig, RemangaConfig
 from .system import SystemConfig
 from .tts import TTS_ENGINES, ChatterboxConfig, KokoroConfig, TTSConfig
 from .video import VideoConfig
@@ -28,8 +31,8 @@ __all__ = [
     "ChatterboxConfig",
     "CropperConfig",
     "DownloaderConfig",
+    "ExtensionsConfig",
     "KokoroConfig",
-    "LLMCropConfig",
     "MarkerConfig",
     "OCRConfig",
     "PackageConfig",

@@ -14,7 +14,7 @@ import sys
 from functools import cache
 from importlib.metadata import entry_points
 
-from remanga.extensions.spec import Extension
+from remanga.extensions.spec import Extension, StatusHooks
 
 ENTRY_POINT_GROUP = "remanga.extensions"
 MANIFEST_MODULE = "extension"
@@ -71,3 +71,10 @@ def extension_generated_kinds() -> tuple[str, ...]:
 def extension_source_files() -> set[str]:
     """Every extension's chapter source files - kept wherever crops.json is."""
     return {name for extension in load_extensions() for name in extension.source_files}
+
+
+@cache
+def extension_status_hooks() -> tuple[StatusHooks, ...]:
+    """Every extension's status hooks, built once - `status` and the chapter
+    lists ask for a chapter's status once per row."""
+    return tuple(extension.status() for extension in load_extensions() if extension.status is not None)

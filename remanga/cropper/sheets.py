@@ -163,7 +163,7 @@ class PanelSheetGenerator:
         """Renders `info` (see manifest_info.info_to_text_lines) as a plain
         left-aligned text image - the sheets bundle's own leading info
         sheet, the same role the PDF formats' leading text page plays. Also
-        the grid_pages folder's 000_info image (remanga.cropper.grid_bundles)."""
+        the grid_pages folder's 000_info image (remanga.extensions.llm_crop.bundles)."""
         lines = info_to_text_lines(info)
 
         try:

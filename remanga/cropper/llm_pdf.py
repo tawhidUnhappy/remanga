@@ -18,8 +18,8 @@ Four independent switches (see PackageConfig), all coordinated here:
 Written to panels_pdf/ - never touches panels/ itself.
 
 The builder itself, `build_pdf_bundle`, takes those four switches as plain
-arguments, so the LLM crop workflow's grid_pdf formats (LLMCropConfig, the
-same four switches over gridded pages - see remanga.cropper.grid_bundles)
+arguments, so the LLM crop extension's grid_pdf formats (the same four
+switches over gridded pages - see remanga.extensions.llm_crop.bundles)
 are built by exactly this code too.
 
 See remanga.cropper.pdf_writer's module docstring for why this doesn't just

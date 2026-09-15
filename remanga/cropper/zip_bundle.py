@@ -1,7 +1,7 @@
 """Generic size-capped zip-bundle builder, shared by every LLM-upload zip
 format that only differs in *which* images it packages and where -
 remanga.cropper.llm_zip (individual panel crops), remanga.cropper.
-llm_sheets (2x2 contact sheet composites) and remanga.cropper.grid_bundles
+llm_sheets (2x2 contact sheet composites) and remanga.extensions.llm_crop.bundles
 (gridded pages for the LLM crop workflow). One implementation of "shrink
 losslessly, then pack into one file or split into size-capped parts" instead
 of a near-duplicate copy per format.

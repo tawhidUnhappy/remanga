@@ -1072,7 +1072,11 @@ remanga/
 │   ├── audio/                  # tts.py + mix.py; synth/ = one module per engine over a shared worker base
 │   │   └── scripts/             # kokoro_worker.py, chatterbox_worker.py - each runs inside its own venv
 │   ├── tool_envs.py             # Single source of truth for every .tools/venv-<name> environment
-│   ├── cropper/                # crop.py (coordinate cropper), sheets.py, gutter/ (edge snapping), ...
+│   ├── cropper/                # crop.py (coordinate cropper), structured.py + paint_out.py (multi-box
+│   │                           # crops with bubbles kept whole), sheets.py, gutter/ (edge snapping), ...
+│   ├── extensions/             # Pluggable features - one package each, declared in its extension.py:
+│   │   │                       # spec.py (what an extension can add), discovery.py (finding them)
+│   │   └── llm_crop/            # Crop with Gemini: grid, bundles, reply check/import, commands, settings
 │   ├── downloader/             # mangadex.py (MangaDex client) & resolve.py (id/title/language lookup)
 │   ├── models/                 # weights.py (talks to the isolated venvs to fetch/verify weights)
 │   │   └── scripts/             # download_kokoro.py, download_chatterbox.py, download_deepseek_ocr.py
@@ -1092,7 +1096,8 @@ remanga/
 │   ├── console.py               # The one shared Rich Console every module prints through
 │   ├── json_io.py               # Shared JSON read/write helpers
 │   ├── ffmpeg_io.py             # Shared ffmpeg subprocess helper
-│   ├── pipeline.py              # The step registry and each project's saved step list
+│   ├── pipeline/               # spec.py (Step), steps.py (core steps), registry.py (with extensions'
+│   │                           # steps), runner.py (running a project's saved step list)
 │   └── cli.py                   # CLI command dispatcher
 ├── config.json                 # Active user production settings
 ├── bootstrap.sh                # Zero-dependency sandbox environment installer

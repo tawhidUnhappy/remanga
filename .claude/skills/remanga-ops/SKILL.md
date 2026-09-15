@@ -1275,6 +1275,35 @@ Symptom was "words run together, metallic/glitchy".
   catch a misspelled generation kwarg. Match extra kwargs against the real
   signature before passing them.
 
+## Extensions: a feature plugs in through one manifest (2026-09-16)
+
+`remanga/extensions/<name>/extension.py` defines `EXTENSION = Extension(...)` (`extensions/spec.py`):
+`commands` / `steps` / `settings` (lazy factories returning `Placed(item, after=<core name>)`),
+`config_model` (-> `config.extensions.<name>`, project-scoped like tts/audio/video/cropper),
+`status` (StatusHooks: facts, keyed rows, summary stages), `generated_kinds`, `source_files` (kept
+wherever crops.json is), `alternative_steps` (in the pipeline checklist, not in DEFAULT_STEPS).
+`extensions/discovery.py` imports every subpackage's extension.py, then the `remanga.extensions`
+entry-point group - a broken installed plugin is skipped with a warning, a broken built-in raises.
+LLM crop is the first (and so far only) extension.
+
+- **Manifests must stay import-light.** They are read while the registries are still importing:
+  commands/registry.py, pipeline/registry.py, settings/sections.py, paths/projects.py (GENERATED_KINDS),
+  reset/modes.py + commands/selection.py (keep sets), config/root.py (ExtensionsConfig via pydantic
+  `create_model`). A top-level import of a handler, screen or model in extension.py imports the
+  registry that is loading it. Factories import inside; `extensions/__init__.py` and each
+  extension package's `__init__.py` import nothing heavy.
+- The leaf spec modules exist for exactly that: `pipeline/spec.py` (Step - pipeline.py became a
+  package), `settings/section_spec.py` (Section), `commands/spec.py` (Command).
+- An extension's config model must not import `remanga.config` (that runs the package __init__
+  that is building the schema around it) - LLMCropConfig sets pydantic's ConfigDict itself.
+- A module an extension loads during a registry import imports that registry's package lazily,
+  e.g. llm_crop/settings.py imports `remanga.settings.fields` inside the function.
+- How the move was verified: a snapshot of every CLI help page, every registry, config defaults
+  and schema, module imports and the status panel, diffed before/after each step; plus the real
+  flow (crop-grid -> llm-crop -> crop) hashed against a `git worktree` of the previous commit.
+  Intended diffs only: module names, handler paths, `cropper.llm_crop` -> `extensions.llm_crop`,
+  `mask_foreign` -> core `cropper.paint_out`, extension generated kinds now after the core kinds.
+
 ## LLM crop: Gemini plans crops from gridded pages (2026-09-16)
 
 `crop-grid` -> upload `grid_zip/chapter_N/grid_1.zip` + `prompts/llm_crop.md` -> paste the reply
@@ -1283,9 +1312,11 @@ into `chapters/chapter_N/llm_crops.json` (0-byte placeholder; SOURCE, kept where
 User guide: docs/llm_crop_guide.md. The user has unlimited Gemini uploads, so it is one zip and one
 reply per chapter - a batched design was rejected; don't reintroduce batching.
 
-- Code: `cropper/{llm_grid,grid_bundles,llm_reply,llm_boxes,llm_mask,llm_preview}.py`,
-  `wizard/llm_crop.py`, `commands/catalog/llm_crop.py`, `settings/llm_crop.py`, config
-  `cropper.llm_crop` (LLMCropConfig).
+- Code: the whole workflow is the `remanga/extensions/llm_crop/` package (grid, bundles,
+  reply_check, reply_import, preview, handoff, commands, handlers, settings, status, steps,
+  config, paths, extension.py manifest); settings are `config.extensions.llm_crop`. Cutting
+  "structured crops" (frames + text_outside + art_outside, paint-out) is core:
+  `cropper/structured.py`, `cropper/paint_out.py`, `cropper.paint_out`.
 - **Reply coordinates are on the SQUARE, not the page.** The page sits top-left on a black square;
   `PageExtent.to_page_box` divides by xmax/ymax (1000*w/long, 1000*h/long). Round trip checked
   within 1 unit on Yandere ch2.
@@ -1293,10 +1324,10 @@ reply per chapter - a batched design was rejected; don't reintroduce batching.
   `extra_info` param; `info_to_text_lines` renders dict values as indented lines. After that
   refactor panels_zip/panels_pdf/sheets/sheets_zip were byte-identical (209 hashes, zip entries
   compared by content - zipfile stamps the time), and marker-made chapters crop byte-identically
-  (134 panels) after crop_page gained the LLM branch.
-- **No seam reconciliation on LLM frames.** A borderless frame that starts exactly where a
-  bordered one ends has no gutter between them; the joint seam search found the gutter above
-  instead and cut 002_019's Beep panel to a 33px sliver. Gutter-snap only (`llm_boxes.py`).
+  (134 panels) after crop_page gained the structured branch.
+- **No seam reconciliation on structured frames.** A borderless frame that starts exactly where
+  a bordered one ends has no gutter between them; the joint seam search found the gutter above
+  instead and cut 002_019's Beep panel to a 33px sliver. Gutter-snap only (`structured.py`).
 - Grid images are saved as plain PNG and the zip builder does the lossless shrink - encoding in
   both places doubled build time (118s for 40 pages) for 0.0MB.
 - The marker keeps LLM crops: `_load_existing_crops` stores `mark["llm"]` with the geometry it was

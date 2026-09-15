@@ -20,7 +20,9 @@ __all__ below. Never construct a path inline elsewhere in the codebase with
 Path(__file__)/Path("literal")/REPO_ROOT-style code - that's the exact
 duplication (config.json's path used to be defined separately in three
 different files) this package exists to rule out. If a call site needs a
-path this package doesn't have yet, add it here first."""
+path this package doesn't have yet, add it here first. An extension's own
+paths live in its package, built on these (e.g.
+remanga/extensions/llm_crop/paths.py)."""
 
 from __future__ import annotations
 
@@ -57,11 +59,6 @@ from .projects import (
     get_full_recap_video_path,
     get_full_recap_work_dir,
     get_generated_dir,
-    get_grid_pages_dir,
-    get_grid_pdf_dir,
-    get_grid_zip_dir,
-    get_llm_crop_dir,
-    get_llm_crops_path,
     get_master_audio_path,
     get_modified_audio_dir,
     get_modified_clip_path,
@@ -125,12 +122,7 @@ __all__ = [
     "get_generated_dir",
     # global assets
     "get_global_lessons_path",
-    "get_grid_pages_dir",
-    "get_grid_pdf_dir",
-    "get_grid_zip_dir",
     "get_hf_token_path",
-    "get_llm_crop_dir",
-    "get_llm_crops_path",
     "get_manifest_path",
     "get_master_audio_path",
     "get_memory_path",

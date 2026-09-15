@@ -93,7 +93,8 @@ details; a box you move becomes a plain hand-drawn box.
 ## Settings
 
 Settings → **LLM crop (Gemini)**, also offered from inside `crop-grid` and `llm-crop`. Per project,
-like every `cropper.*` setting. Stored under `cropper.llm_crop` in `config.json`.
+like every work setting. Stored under `extensions.llm_crop` in `config.json`, except paint-out,
+which is the cropper's own `cropper.paint_out`.
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -102,7 +103,7 @@ like every `cropper.*` setting. Stored under `cropper.llm_crop` in `config.json`
 | `grid_pdf` / `grid_pdf_splite` / `grid_pdf_zip` / `grid_pdf_zip_splite` | off | the PDF forms, same meaning as the panels PDF switches |
 | `max_mb` | 50 | size cap per part, for the split forms |
 | `grouping` | `balanced` | `none` / `balanced` / `generous` - how readily Gemini shows several frames as one crop |
-| `mask_foreign` | on | paint other crops' frames and bubbles out of each crop |
+| `cropper.paint_out` | on | paint other crops' frames and bubbles out of each crop |
 | `preview` | on | write preview images on import |
 | `grid_image_size` | 1600 | side of the square grid image, in pixels |
 | `grid_line_step` / `grid_label_step` | 50 / 100 | faint lines / labeled lines, in 0-1000 units |

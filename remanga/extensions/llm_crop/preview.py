@@ -16,9 +16,9 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from remanga.config import CropperConfig
 from remanga.console import console, display_path
-from remanga.cropper.grid_bundles import ChapterPage
-from remanga.cropper.llm_boxes import paint_mask, plan_llm_crops
-from remanga.paths import get_llm_crop_dir
+from remanga.cropper.structured import paint_mask, plan_structured_crops
+from remanga.extensions.llm_crop.bundles import ChapterPage
+from remanga.extensions.llm_crop.paths import get_llm_crop_dir
 
 PREVIEW_LONG_SIDE = 1400
 FRAME_COLOR = (0, 190, 0)
@@ -50,8 +50,8 @@ def write_previews(cropper: CropperConfig, project_name: str, chapter_num: str,
             img = img.resize((round(img.width * scale), round(img.height * scale)), Image.Resampling.LANCZOS)
         width, height = img.size
 
-        plans = plan_llm_crops(entry["panels"], width, height, None, None, cropper)
-        if cropper.llm_crop.mask_foreign:
+        plans = plan_structured_crops(entry["panels"], width, height, None, None, cropper)
+        if cropper.paint_out:
             tint = np.zeros((height, width), dtype=bool)
             for index, plan in enumerate(plans):
                 left, top, right, bottom = plan.rect

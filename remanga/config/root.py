@@ -8,22 +8,27 @@ different resolution than a school comedy, and answering that once per
 machine means re-answering it every time you switch projects.
 
 So the settings that describe *the work* rather than *the computer* -
-tts.*, audio.*, video.*, cropper.* - can be overridden per project, and
-those overrides live in that project's own project.json alongside everything
-else it remembers (its pipeline, its upload formats, its wipe keep-list).
-`for_project()` layers them over config.json; `save()` on the result writes
-each change back to whichever file owns it. Nothing else in the codebase has
-to know: a settings screen still just sets a field and saves, and where that
-lands depends only on which config object it was handed."""
+tts.*, audio.*, video.*, cropper.*, extensions.* - can be overridden per
+project, and those overrides live in that project's own project.json
+alongside everything else it remembers (its pipeline, its upload formats, its
+wipe keep-list). `for_project()` layers them over config.json; `save()` on the
+result writes each change back to whichever file owns it. Nothing else in the
+codebase has to know: a settings screen still just sets a field and saves,
+and where that lands depends only on which config object it was handed.
+
+Extensions (remanga.extensions) bring their own settings: every extension
+with a `config_model` gets `config.extensions.<its name>`, built into the
+schema here when remanga starts."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr, create_model
 
 from remanga.config.base import ConfigModel
+from remanga.extensions import load_extensions
 from remanga.json_io import read_json, write_json
 from remanga.paths import (
     CONFIG_EXAMPLE_PATH,
@@ -47,8 +52,9 @@ from .writer import WriterConfig
 PROJECT_SETTINGS_KEY = "settings"
 
 # What a manga is allowed to have its own answer for: the voice that reads it,
-# the music under it, the size and look of its video, how its pages are cut.
-PROJECT_SCOPED_PREFIXES = ("tts.", "audio.", "video.", "cropper.")
+# the music under it, the size and look of its video, how its pages are cut,
+# and how its extensions work.
+PROJECT_SCOPED_PREFIXES = ("tts.", "audio.", "video.", "cropper.", "extensions.")
 
 # ...except the packaging switches, which already have a per-project answer of
 # their own (project.json's "package_formats", written by `package --formats`
@@ -114,6 +120,21 @@ def _apply(model: BaseModel, dotted: str, value: Any) -> None:
         setattr(target, attr, value)
 
 
+def _extensions_config_model() -> type[ConfigModel]:
+    """`config.extensions`: one section per extension that has settings,
+    named after it. An extension that is removed simply stops having one - its
+    old section in config.json is ignored on load, like any retired key."""
+    fields: dict[str, Any] = {}
+    for extension in load_extensions():
+        if extension.config_model is not None:
+            model = extension.config_model()
+            fields[extension.name] = (model, Field(default_factory=model))
+    return create_model("ExtensionsConfig", __base__=ConfigModel, **fields)
+
+
+ExtensionsConfig = _extensions_config_model()
+
+
 class RemangaConfig(ConfigModel):
     system: SystemConfig = Field(default_factory=SystemConfig)
     downloader: DownloaderConfig = Field(default_factory=DownloaderConfig)
@@ -125,6 +146,7 @@ class RemangaConfig(ConfigModel):
     ocr: OCRConfig = Field(default_factory=OCRConfig)
     audio: AudioConfig = Field(default_factory=AudioConfig)
     video: VideoConfig = Field(default_factory=VideoConfig)
+    extensions: ExtensionsConfig = Field(default_factory=ExtensionsConfig)
 
     # The manga this instance is scoped to, if any. Set by for_project() and
     # read by save() - it's the whole difference between "change this setting"

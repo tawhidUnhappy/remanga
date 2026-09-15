@@ -1,24 +1,30 @@
-"""Per-page crop planning for LLM crops: turns crops.json entries that carry
-`frames` (written by remanga.cropper.llm_reply from Gemini's reply) into the
-rectangle to cut for each crop, and what to paint out of it.
+"""Structured crops: a crops.json panel entry that says more than its box.
+
+    {"panel_id": 1, "box_1000": [...], "src": "...", "kind": "group",
+     "frames": [[...], [...]], "text_outside": [[...]], "art_outside": []}
+
+`frames` are the panels the crop shows; `text_outside` its bubbles, captions
+and sound effects that reach past them; `art_outside` its art that breaks out
+of them. `box_1000` stays the rectangle around all of it, so anything that
+only reads boxes still sees the right crop. Any source can write these - the
+LLM crop extension does - and the cropper cuts them the same way regardless.
 
 Every frame is gutter-snapped exactly the way a marked box is, with every
 other frame on the page as the neighbours its search must not cross. What is
-not a frame - a bubble hanging past one, hair breaking out of one - is never
-snapped: it joins the rectangle afterwards, where Gemini measured it, so a
-gutter search can't pull a crop's edge back across the very bubble it reached
-that far for.
+not a frame is never snapped: it joins the rectangle afterwards, where it was
+measured, so a gutter search can't pull a crop's edge back across the very
+bubble it reached that far for. Other crops' frames and bubbles are then
+painted out of the rectangle (remanga.cropper.paint_out).
 
 Seam reconciliation (remanga.cropper.seams) is deliberately NOT run here. It
 re-derives the shared edge of two consecutive boxes from one joint gutter
 search, which assumes a gutter lies between them - true of marker boxes read
-in order, false of Gemini's frames, where a borderless figure's frame starts
+in order, false of structured frames, where a borderless figure's frame starts
 exactly where the bordered panel above it ends. Measured on Yandere 002_019:
 the search found the gutter ABOVE the "Beep" panel instead and moved its
 bottom edge up to it, cutting a 958x82 panel down to a 958x33 sliver - and
 the collapsed frame then left the rest of that panel unpainted in the
-neighbour's crop. Gemini is told to keep frames of different crops from
-overlapping, so there is no double-claimed strip for a seam pass to settle.
+neighbour's crop.
 
 A page where no entry has `frames` never gets here: crop_page keeps the
 marker's path for it, unchanged."""
@@ -35,8 +41,11 @@ from remanga.config import CropperConfig
 from remanga.console import console, escape as _esc
 from remanga.cropper.geometry import calculate_pixel_bounds
 from remanga.cropper.gutter import PixelBox, refine_box_to_gutters
-from remanga.cropper.llm_mask import bounding_box, foreign_mask
+from remanga.cropper.paint_out import bounding_box, foreign_mask
 from remanga.cropper.panel_boxes import adaptive_gutter_radius
+
+# The panel keys that make an entry structured, beyond panel_id/box_1000/src.
+STRUCTURED_KEYS = ("kind", "frames", "text_outside", "art_outside")
 
 
 @dataclass
@@ -57,7 +66,7 @@ class CropPlan:
         return bounding_box(self.frames + self.text + self.art)
 
 
-def has_llm_crops(panels: Sequence[dict[str, Any]]) -> bool:
+def has_structured_crops(panels: Sequence[dict[str, Any]]) -> bool:
     return any(panel.get("frames") for panel in panels)
 
 
@@ -66,7 +75,7 @@ def _is_box(value: Any) -> bool:
             and all(isinstance(v, (int, float)) for v in value))
 
 
-def plan_llm_crops(
+def plan_structured_crops(
     panels: Sequence[dict[str, Any]],
     img_w: int,
     img_h: int,
@@ -83,7 +92,7 @@ def plan_llm_crops(
     plans: list[CropPlan] = []
     for panel in panels:
         # An entry without frames on a page that has them is a box drawn or
-        # moved in the marker after the import: one frame, nothing outside.
+        # moved in the marker afterwards: one frame, nothing outside.
         marked = pixels(panel.get("frames") or [panel.get("box_1000")])
         if not marked:
             console.print(f"[yellow]Skipping a crop with no valid frame: {_esc(str(panel))}[/]")
@@ -119,7 +128,7 @@ def plan_llm_crops(
 
 def paint_mask(plans: Sequence[CropPlan], index: int, rect: PixelBox) -> np.ndarray | None:
     """What to paint over inside `rect` (the padded rectangle actually cut)
-    for plans[index] - see remanga.cropper.llm_mask for the rule."""
+    for plans[index] - see remanga.cropper.paint_out for the rule."""
     plan = plans[index]
     others = [other for i, other in enumerate(plans) if i != index]
     return foreign_mask(

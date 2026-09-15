@@ -16,7 +16,7 @@ def run_llm_crop(project: str, chapter: str, config: RemangaConfig) -> None:
     to do either on purpose."""
     if has_real_json_content(get_chapter_dir(project, chapter) / "crops.json"):
         return
-    from remanga.wizard.llm_crop import run_llm_crop_step
+    from remanga.extensions.llm_crop.handoff import run_llm_crop_step
 
     console.print("\n[bold]Step — Cropping with Gemini[/]")
     run_llm_crop_step(project, chapter, config)

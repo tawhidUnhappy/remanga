@@ -10,7 +10,7 @@ llm_pdf.build_pdf_bundle): lossless re-encoding, optional size-capped parts,
 and chapter_info.json - or the PDF's leading text page - with the chapter's
 identity, `contents` and `full_manifest`. On top of that, every format says
 what this workflow needs Gemini to know: the grouping setting, the grid's
-spec, and each page's area inside its square (see llm_grid.PageExtent)."""
+spec, and each page's area inside its square (see grid.PageExtent)."""
 
 from __future__ import annotations
 
@@ -23,21 +23,19 @@ from typing import Any
 
 from PIL import Image
 
-from remanga.config import CropperConfig, LLMCropConfig
 from remanga.console import console, escape as _esc
-from remanga.cropper.llm_grid import oriented_size, page_extent, render_grid_page
 from remanga.cropper.llm_pdf import build_pdf_bundle
 from remanga.cropper.sheets import PanelSheetGenerator
 from remanga.cropper.zip_bundle import build_zip_bundle
-from remanga.paths import (
-    chapter_identity_fields,
-    get_chapter_dir,
+from remanga.extensions.llm_crop.config import LLMCropConfig
+from remanga.extensions.llm_crop.grid import oriented_size, page_extent, render_grid_page
+from remanga.extensions.llm_crop.paths import (
     get_grid_pages_dir,
     get_grid_pdf_dir,
     get_grid_zip_dir,
     get_llm_crops_path,
-    load_project_metadata,
 )
+from remanga.paths import chapter_identity_fields, get_chapter_dir, load_project_metadata
 
 INFO_STEM = "000_info"
 
@@ -138,9 +136,8 @@ def generate_grid_pages(llm: LLMCropConfig, project_name: str, chapter_num: str,
     return images
 
 
-def build_grid_bundles(cropper: CropperConfig, project_name: str, chapter_num: str) -> GridBuild:
+def build_grid_bundles(llm: LLMCropConfig, project_name: str, chapter_num: str) -> GridBuild:
     """Builds every active grid format for one chapter, and its reply file."""
-    llm = cropper.llm_crop
     pages = chapter_pages(project_name, chapter_num)
     if not pages:
         raise FileNotFoundError(
@@ -174,10 +171,9 @@ def build_grid_bundles(cropper: CropperConfig, project_name: str, chapter_num: s
     return GridBuild(images=images, zips=zips, pdfs=pdfs, reply=ensure_reply_file(project_name, chapter_num))
 
 
-def grid_built(cropper: CropperConfig, project_name: str, chapter_num: str) -> bool:
+def grid_built(llm: LLMCropConfig, project_name: str, chapter_num: str) -> bool:
     """Whether every active grid format has something on disk - the same
     "is it up to date" question llm_bundles.is_up_to_date asks for panels."""
-    llm = cropper.llm_crop
     pages_dir = get_grid_pages_dir(project_name, chapter_num, create=False)
     pdf_dir = get_grid_pdf_dir(project_name, chapter_num, create=False)
     pages_ok = not llm.grid_pages or any(p.stem != INFO_STEM for p in pages_dir.glob("*.*"))

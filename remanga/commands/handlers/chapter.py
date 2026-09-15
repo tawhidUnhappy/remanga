@@ -106,30 +106,6 @@ def crop(params: dict[str, Any], config: RemangaConfig) -> None:
         console.print(f"[dim]Run `package` to build the upload formats ({formats}).[/]")
 
 
-def crop_grid(params: dict[str, Any], config: RemangaConfig) -> None:
-    """Builds the chapter's gridded pages for Gemini - every grid format
-    switched on (see LLMCropConfig) - and its empty llm_crops.json, then says
-    what to upload and where the reply goes."""
-    from remanga.cropper.grid_bundles import build_grid_bundles
-    from remanga.wizard.llm_crop import print_llm_crop_handoff
-
-    project, chapter = params["project"], params["chapter"]
-    build_grid_bundles(cropper_config_for(config, project), project, chapter)
-    print_llm_crop_handoff(project, chapter, config)
-    console.print("\n[dim]Once the reply is saved, run `llm-crop` to turn it into crops.json.[/]")
-
-
-def llm_crop(params: dict[str, Any], config: RemangaConfig) -> None:
-    """Gemini's crops into crops.json: builds the grid uploads first if they
-    aren't there, waits for the reply, checks it - see
-    remanga/wizard/llm_crop.py. `--force` replaces Panel Marker marks without
-    asking; otherwise a real terminal is asked and anything else keeps them."""
-    from remanga.wizard.llm_crop import run_llm_crop_step
-
-    run_llm_crop_step(params["project"], params["chapter"], config,
-                      replace_marks=True if params.get("force") else None)
-
-
 def package(params: dict[str, Any], config: RemangaConfig) -> None:
     """Builds the chosen upload formats from an already-cropped chapter's
     panels/ - the only thing that packages a chapter (`crop` cuts panels and

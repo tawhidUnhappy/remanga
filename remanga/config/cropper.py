@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import Field
 
 from remanga.config.base import ConfigModel
@@ -163,90 +161,6 @@ class PackageConfig(ConfigModel):
         return self.panels_zip or self.panels_zip_splites
 
 
-class LLMCropConfig(ConfigModel):
-    """The LLM crop workflow: what `crop-grid` builds for Gemini, and how
-    its reply is cut - see remanga/cropper/llm_grid.py, grid_bundles.py,
-    llm_reply.py and prompts/llm_crop.md.
-
-    The grid formats mirror PackageConfig's switches one for one - a folder
-    of images, a zip, a PDF, each single or split, sharing one size cap - and
-    are built by the same lossless zip and PDF builders, so a gridded chapter
-    uploads exactly the way a cropped one does. Their menu is generated from
-    the Field metadata below, like the packaging checklist's."""
-
-    grid_pages: bool = Field(
-        True, title="grid_pages",
-        description="Every page on a square black canvas with the ruler grid, plus a 000_info "
-                    "image - also what the zip and PDF formats are built from",
-        json_schema_extra={"produces": "grid_pages/002_001.___, 002_002.___, ...", "group": "pages"},
-    )
-    grid_zip: bool = Field(
-        True, title="grid_zip",
-        description="Those grid images and chapter_info.json in one zip",
-        json_schema_extra={"produces": "grid_zip/grid_1.zip", "group": "zip"},
-    )
-    grid_zip_splites: bool = Field(
-        False, title="grid_zip_splites", description="That same zip, split into size-capped parts",
-        json_schema_extra={"produces": "grid_zip/grid_1.zip, grid_2.zip, ...", "group": "zip"},
-    )
-    grid_pdf: bool = Field(
-        False, title="grid_pdf", description="The grid images, one per PDF page, as a single file",
-        json_schema_extra={"produces": "grid_pdf/grid_1.pdf", "group": "pdf"},
-    )
-    grid_pdf_splite: bool = Field(
-        False, title="grid_pdf_splite",
-        description="That same PDF split into size-capped raw .pdf files, not zipped",
-        json_schema_extra={"produces": "grid_pdf/grid_1.pdf, grid_2.pdf, ...", "group": "pdf"},
-    )
-    grid_pdf_zip: bool = Field(
-        False, title="grid_pdf_zip", description="The single grid PDF, wrapped in a zip",
-        json_schema_extra={"produces": "grid_pdf/grid_1.zip", "group": "pdf"},
-    )
-    grid_pdf_zip_splite: bool = Field(
-        False, title="grid_pdf_zip_splite", description="The grid PDF split into size-capped parts, each zipped",
-        json_schema_extra={"produces": "grid_pdf/grid_1.zip, grid_2.zip, ...", "group": "pdf"},
-    )
-    max_mb: float = Field(
-        50.0, gt=0, title="max_mb",
-        description="Size cap per part for the split grid formats above, in MB",
-        json_schema_extra={"group": "limits"},
-    )
-
-    # Side of every square grid image, in pixels. A page is scaled evenly to
-    # fit it, anchored top-left, and the rest of the square is black.
-    grid_image_size: int = Field(1600, ge=512, le=4096)
-    # Faint lines every grid_line_step units and labeled lines every
-    # grid_label_step, on the 0-1000 scale Gemini's boxes use - see
-    # remanga/cropper/llm_grid.py for why 50/100.
-    grid_line_step: int = Field(50, ge=10, le=500)
-    grid_label_step: int = Field(100, ge=10, le=500)
-    # How readily Gemini shows several frames as one crop (prompts/llm_crop.md
-    # <craft> 4). Written into chapter_info.json, so a change reaches Gemini
-    # with the next crop-grid.
-    grouping: Literal["none", "balanced", "generous"] = "balanced"
-    # Paint other crops' frames and bubbles out of each crop's rectangle
-    # (remanga/cropper/llm_mask.py).
-    mask_foreign: bool = True
-    # Draw every imported crop on its page, for checking by eye.
-    preview: bool = True
-
-    @property
-    def zip_active(self) -> bool:
-        return self.grid_zip or self.grid_zip_splites
-
-    @property
-    def pdf_active(self) -> bool:
-        return self.grid_pdf or self.grid_pdf_splite or self.grid_pdf_zip or self.grid_pdf_zip_splite
-
-    @property
-    def pdf_split(self) -> bool:
-        return self.grid_pdf_splite or self.grid_pdf_zip_splite
-
-    @property
-    def any_active(self) -> bool:
-        return self.grid_pages or self.zip_active or self.pdf_active
-
-
 class CropperConfig(ConfigModel):
     margin_padding_pixels: int = 8
     auto_contrast_clean: bool = False
@@ -263,9 +177,6 @@ class CropperConfig(ConfigModel):
     # concept - every zip a chapter gets, sheets or panels, goes through
     # `package` alone.
     package: PackageConfig = Field(default_factory=PackageConfig)
-
-    # The Gemini alternative to marking panels by hand - see LLMCropConfig.
-    llm_crop: LLMCropConfig = Field(default_factory=LLMCropConfig)
 
     # Gutter-snap refinement: treats the LLM's crops.json box as a best guess and
     # corrects each edge against real pixel evidence (see remanga/cropper/gutter/)
@@ -311,3 +222,10 @@ class CropperConfig(ConfigModel):
     # box. See remanga/cropper/dedupe.py.
     dedupe_duplicate_panels: bool = True
     duplicate_iou_threshold: float = 0.6  # intersection-over-union that counts as a duplicate
+
+    # Structured crops (remanga/cropper/structured.py - the LLM crop extension
+    # writes them): paint other crops' frames and bubbles out of each crop's
+    # rectangle, so no half bubble or sliver of the next panel rides along.
+    # What exactly goes is remanga/cropper/paint_out.py. Marker-made panels
+    # are never painted.
+    paint_out: bool = True

@@ -41,11 +41,13 @@ class Placed(Generic[T]):
 class StatusRow:
     """One line of the `status` report. `render` gets the chapter's status
     dict (core facts plus this extension's `facts`) and returns the value
-    shown after the label; the row goes right after the core row `after`."""
+    shown after the label; the row goes right after the row whose `key` is
+    `after` (the core rows' keys are in remanga.status.panel)."""
 
     label: str
     render: Callable[[dict[str, Any]], str]
     after: str | None = None
+    key: str = ""
 
 
 @dataclass(frozen=True)

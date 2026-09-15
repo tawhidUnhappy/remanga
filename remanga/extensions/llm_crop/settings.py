@@ -3,16 +3,22 @@ readily Gemini groups panels, and how its crops are cut.
 
 The format checklist is generated from LLMCropConfig's Field metadata, the
 way the packaging checklist is generated from PackageConfig's
-(settings/vision.py) - a new grid format is one field, not a field plus a
-menu row."""
+(remanga/settings/vision.py) - a new grid format is one field, not a field
+plus a menu row.
+
+set_field is imported where it is used: this module is loaded while the
+settings package is still building its section list (see
+remanga.extensions.spec), and importing the package's own modules at the top
+would ask it for itself."""
 
 from __future__ import annotations
 
-from remanga.config import LLMCropConfig, RemangaConfig
+from remanga.config import RemangaConfig
 from remanga.console import console
-from remanga.settings.fields import set_field
+from remanga.extensions.llm_crop.config import LLMCropConfig
 from remanga.tui import Choice, ask_number, confirm, is_cancel, multiselect, select
 
+FIELD_PREFIX = "extensions.llm_crop"
 _FORMAT_GROUPS = ("pages", "zip", "pdf")
 
 GROUPING_CHOICES: tuple[tuple[str, str], ...] = (
@@ -29,10 +35,10 @@ def grid_format_names() -> list[str]:
 
 
 def llm_crop_summary(config: RemangaConfig) -> str:
-    llm = config.cropper.llm_crop
+    llm = config.extensions.llm_crop
     formats = [name for name in grid_format_names() if getattr(llm, name)]
     return (f"{', '.join(formats) or 'no grid formats'} · {llm.grouping} grouping · "
-            f"paint-out {'on' if llm.mask_foreign else 'off'}")
+            f"paint-out {'on' if config.cropper.paint_out else 'off'}")
 
 
 def _format_rows(llm: LLMCropConfig) -> list[Choice]:
@@ -52,7 +58,9 @@ def _format_rows(llm: LLMCropConfig) -> list[Choice]:
 def configure_llm_crop(config: RemangaConfig) -> None:
     """Formats, then grouping, paint-out, previews and the grid image size.
     Every answer is saved as it is given, like every other settings screen."""
-    llm = config.cropper.llm_crop
+    from remanga.settings.fields import set_field
+
+    llm = config.extensions.llm_crop
     picked = multiselect(
         "What crop-grid builds for Gemini", _format_rows(llm),
         note="the grid images are drawn either way - these decide which uploads are made from them",
@@ -60,14 +68,14 @@ def configure_llm_crop(config: RemangaConfig) -> None:
     if is_cancel(picked):
         return
     for name in grid_format_names():
-        set_field(config, f"cropper.llm_crop.{name}", name in picked, save=False)
+        set_field(config, f"{FIELD_PREFIX}.{name}", name in picked, save=False)
     config.save()
     if llm.grid_zip_splites or llm.pdf_split:
         cap = ask_number("Size cap per grid part, in MB", default=llm.max_mb, minimum=1, maximum=2000,
                          note="each part is kept at or under this by splitting between pages")
         if is_cancel(cap):
             return
-        set_field(config, "cropper.llm_crop.max_mb", float(cap))
+        set_field(config, f"{FIELD_PREFIX}.max_mb", float(cap))
 
     grouping = select(
         "How readily should Gemini show several frames as one crop?",
@@ -78,23 +86,23 @@ def configure_llm_crop(config: RemangaConfig) -> None:
     )
     if is_cancel(grouping):
         return
-    set_field(config, "cropper.llm_crop.grouping", grouping)
+    set_field(config, f"{FIELD_PREFIX}.grouping", grouping)
 
-    paint = confirm("Paint other crops' panels and bubbles out of each crop?", default=llm.mask_foreign,
+    paint = confirm("Paint other crops' panels and bubbles out of each crop?", default=config.cropper.paint_out,
                     note="removes half-bubbles and slivers of the next panel that a crop's rectangle takes in")
     if is_cancel(paint):
         return
-    set_field(config, "cropper.llm_crop.mask_foreign", bool(paint))
+    set_field(config, "cropper.paint_out", bool(paint))
 
     preview = confirm("Draw preview images when importing Gemini's crops?", default=llm.preview)
     if is_cancel(preview):
         return
-    set_field(config, "cropper.llm_crop.preview", bool(preview))
+    set_field(config, f"{FIELD_PREFIX}.preview", bool(preview))
 
     size = ask_number("Grid image size, in pixels (each side of the square)", default=llm.grid_image_size,
                       minimum=512, maximum=4096, integer=True,
                       note="each page is scaled to fit on a black square this size, anchored top-left")
     if is_cancel(size):
         return
-    set_field(config, "cropper.llm_crop.grid_image_size", int(size))
+    set_field(config, f"{FIELD_PREFIX}.grid_image_size", int(size))
     console.print(f"[green]✓ LLM crop:[/] {llm_crop_summary(config)}")

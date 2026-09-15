@@ -1,5 +1,8 @@
 """The `status` command's printed report: one chapter's production state,
-plus the settings that will shape it when it's rendered."""
+plus the settings that will shape it when it's rendered.
+
+Its rows are keyed, so an extension's rows (remanga.extensions.StatusRow)
+land right after the row they name."""
 
 from __future__ import annotations
 
@@ -7,6 +10,7 @@ from pathlib import Path
 
 from remanga.config import RemangaConfig
 from remanga.console import display_path, escape as _esc, wrap_at_slashes
+from remanga.extensions import Placed, extension_status_hooks, place
 from remanga.paths import load_project_metadata
 from remanga.settings import package_summary
 from remanga.status.badges import absent, artifact, counted, done, flagged, missing, off, pending
@@ -46,15 +50,6 @@ def render_status_panel(project: str, chapter: str) -> str:
     # chapter get packaged into" reads identically wherever it's asked.
     package_str = package_summary(package)
 
-    # Items 2-9 below name only the filename, not the full path - the
-    # workspace directory they all live under is already stated once, in
-    # "Workspace Directory" above. Repeating the full absolute path on every
-    # line (the old behavior) made this panel wrap mid-directory-name on
-    # anything narrower than a very wide terminal; a bare filename never
-    # needs to wrap at all.
-    # Hoisted out of the template below rather than inlined like the
-    # shorter rows: inside a triple-quoted f-string there is nowhere to wrap
-    # a long expression - every newline would land in the printed report.
     review_status = (
         flagged(f"{st['review_flagged_count']} flagged, awaiting LLM fix pass")
         if st["review_pending"] else off("no pending review")
@@ -67,28 +62,38 @@ def render_status_panel(project: str, chapter: str) -> str:
         done(f"Ready ({_esc(st['video_path'].name)})") if st["video_exist"] else missing("Not rendered")
     )
 
-    status_str = f"""
-[bold]Project:[/] {project} | [bold]Chapter:[/] {chapter}
-[bold]Saved Manga Source:[/] {saved_url}
-[bold]Workspace Directory:[/] {display_path(st['chap_dir'])}
-[bold]Video Resolution:[/] {res_str}
-[bold]Vision outputs:[/] {package_str}
-[bold]Narrator Voice:[/] {voice_status}
-[bold]Background Music:[/] {bgm_status}
-
-   1. Pages Downloaded    : {counted(st['pages_count'], 'pages')}
-   2. Pages ZIP Archive   : {done('Ready (pages.zip)') if st['pages_zip_exist'] else pending()}
-   2b. Gemini Crop Grid   : {done('Built (crop-grid)') if st['crop_grid_built'] else off('not built')}
-   2c. Gemini Crop Reply  : {done('Pasted (llm_crops.json)') if st['llm_reply_exist'] else off('not pasted')}
-   3. Crop Instructions   : {done('Present (crops.json)') if st['crops_exist'] else absent()}
-   4. Panels Cropped      : {counted(st['panels_count'], 'panels')}
-   5. Panel Contact Sheets: {counted(st['sheets_count'], 'sheets', empty=pending())}
-   6. panels_zip          : {artifact(st['panels_zip_built'], package.panels_zip_active)}
-   7. pdf                 : {artifact(st['panels_pdf_built'], package.pdf_active)}
-   8. sheets_zip          : {artifact(st['sheets_zip_built'], package.sheets_zip_active)}
-   9. Narration Script    : {done('Present (narration.json)') if st['narration_exist'] else absent()}
-   9b. Narration Review   : {review_status}
-  10. Master Audio Track  : {audio_status}
-  11. Final Recap Video   : {video_status}
-"""
-    return status_str.strip()
+    header = [
+        f"[bold]Project:[/] {project} | [bold]Chapter:[/] {chapter}",
+        f"[bold]Saved Manga Source:[/] {saved_url}",
+        f"[bold]Workspace Directory:[/] {display_path(st['chap_dir'])}",
+        f"[bold]Video Resolution:[/] {res_str}",
+        f"[bold]Vision outputs:[/] {package_str}",
+        f"[bold]Narrator Voice:[/] {voice_status}",
+        f"[bold]Background Music:[/] {bgm_status}",
+    ]
+    # (key, label, value). Rows name only the file, not the full path - the
+    # workspace directory they all live under is stated once, above, so no
+    # row needs to wrap mid-directory-name on a narrow terminal.
+    core_rows = [
+        ("pages", "   1. Pages Downloaded    ", counted(st["pages_count"], "pages")),
+        ("pages_zip", "   2. Pages ZIP Archive   ", done("Ready (pages.zip)") if st["pages_zip_exist"] else pending()),
+        ("crops_json", "   3. Crop Instructions   ",
+         done("Present (crops.json)") if st["crops_exist"] else absent()),
+        ("panels", "   4. Panels Cropped      ", counted(st["panels_count"], "panels")),
+        ("sheets", "   5. Panel Contact Sheets", counted(st["sheets_count"], "sheets", empty=pending())),
+        ("panels_zip", "   6. panels_zip          ", artifact(st["panels_zip_built"], package.panels_zip_active)),
+        ("pdf", "   7. pdf                 ", artifact(st["panels_pdf_built"], package.pdf_active)),
+        ("sheets_zip", "   8. sheets_zip          ", artifact(st["sheets_zip_built"], package.sheets_zip_active)),
+        ("narration", "   9. Narration Script    ",
+         done("Present (narration.json)") if st["narration_exist"] else absent()),
+        ("review", "   9b. Narration Review   ", review_status),
+        ("master_audio", "  10. Master Audio Track  ", audio_status),
+        ("video", "  11. Final Recap Video   ", video_status),
+    ]
+    rows = place(
+        core_rows,
+        [Placed((row.key or row.label, row.label, row.render(st)), row.after)
+         for hooks in extension_status_hooks() for row in hooks.rows],
+        lambda row: row[0],
+    )
+    return "\n".join([*header, "", *(f"{label}: {value}" for _key, label, value in rows)])

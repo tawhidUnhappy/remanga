@@ -18,6 +18,7 @@ from typing import Any
 from PIL import Image
 
 from remanga.cropper.geometry import calculate_pixel_bounds, pixel_bounds_to_box_1000
+from remanga.cropper.structured import STRUCTURED_KEYS
 from remanga.json_io import has_real_json_content, read_json
 from remanga.webui.mark_ops import order_changed, reading_order
 
@@ -36,14 +37,13 @@ DECIDED_KEY = "user_decided"
 FORMAT_KEY = "marks_format"
 MARKS_FORMAT = 2
 
-# A crop imported from Gemini (remanga/cropper/llm_reply.py) is more than its
-# box: `src: "llm"` plus the frames, text and art the cropper builds it from.
-# Each such mark carries them under LLM_KEY, with the box it was loaded at,
-# and gets them written back for as long as nobody moves or resizes it - a
-# box that was changed by hand is a hand-drawn box from then on.
-LLM_SRC = "llm"
-LLM_KEY = "llm"
-LLM_FIELDS = ("kind", "frames", "text_outside", "art_outside")
+# A structured crop (remanga/cropper/structured.py - what the LLM crop
+# extension imports) is more than its box: the frames, text and art the
+# cropper builds it from, and whichever `src` wrote it. Each such mark carries
+# them under STRUCTURED_KEY, with the box it was loaded at, and gets them
+# written back for as long as nobody moves or resizes it - a box changed by
+# hand is a hand-drawn box from then on, whoever made it first.
+STRUCTURED_KEY = "structured"
 
 
 class MarkerState:
@@ -179,13 +179,13 @@ class MarkerState:
                     # reopened (and with background auto-save, that was
                     # every chapter). A file from before `src` was written
                     # can't say, so it reads as manual.
-                    "src": panel.get("src") if panel.get("src") in ("ai", "manual", LLM_SRC) else "manual",
+                    "src": panel.get("src") if isinstance(panel.get("src"), str) and panel.get("src") else "manual",
                 }
-                if panel.get("src") == LLM_SRC and panel.get("frames"):
-                    mark[LLM_KEY] = {
+                if panel.get("frames"):
+                    mark[STRUCTURED_KEY] = {
                         "box_1000": list(box),
                         "at": [left, top, right - left, bottom - top],
-                        **{key: panel.get(key) for key in LLM_FIELDS},
+                        **{key: panel.get(key) for key in STRUCTURED_KEYS},
                     }
                 marks.append(mark)
             if marks:
@@ -348,21 +348,21 @@ class MarkerState:
 
             panels_out = []
             for i, m in enumerate(page_marks, start=1):
-                llm = m.get(LLM_KEY)
-                if llm and unmoved(m, llm.get("at")):
-                    # Written back exactly as imported - see LLM_KEY.
-                    panels_out.append({"panel_id": i, "box_1000": llm["box_1000"], "src": LLM_SRC,
-                                       **{key: llm.get(key) for key in LLM_FIELDS}})
+                structured = m.get(STRUCTURED_KEY)
+                if structured and unmoved(m, structured.get("at")):
+                    # Written back exactly as loaded - see STRUCTURED_KEY.
+                    panels_out.append({"panel_id": i, "box_1000": structured["box_1000"],
+                                       "src": m.get("src", "manual"),
+                                       **{key: structured.get(key) for key in STRUCTURED_KEYS}})
                     continue
                 bounds = (m["x"], m["y"], m["x"] + m["w"], m["y"] + m["h"])
                 box_1000 = pixel_bounds_to_box_1000(bounds, page["width"], page["height"])
                 # `src` is for the next session of the marker (the cropper
                 # ignores it): without it an AI mark and a hand-drawn one
-                # are indistinguishable once written. An LLM crop moved by
-                # hand is a hand-drawn box from here on.
-                src = m.get("src", "manual")
-                panels_out.append({"panel_id": i, "box_1000": box_1000,
-                                   "src": "manual" if src == LLM_SRC else src})
+                # are indistinguishable once written. A structured crop
+                # moved by hand is a hand-drawn box from here on.
+                src = "manual" if structured else m.get("src", "manual")
+                panels_out.append({"panel_id": i, "box_1000": box_1000, "src": src})
 
             pages_out.append({
                 "page_index": page["index"],
