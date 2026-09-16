@@ -104,7 +104,7 @@ main { max-width: 900px; margin: 0 auto; padding: 20px; }
 
 /* Zero-height markers the virtual sliding window watches with
    IntersectionObserver to know when to load more panels (or unload the
-   far, off-screen end) - see app.js. Never actually visible. */
+   far, off-screen end) - see js/virtual-list.js. Never actually visible. */
 .scroll-sentinel { height: 1px; }
 
 /* Panel image on top, full card width, tall enough to actually read manga
@@ -281,6 +281,6 @@ footer {
   <img id="lightbox-img" alt="">
 </div>
 
-<script src="/static/app.js"></script>
+<script type="module" src="/static/js/main.js"></script>
 </body>
 </html>

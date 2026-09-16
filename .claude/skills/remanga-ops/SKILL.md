@@ -350,7 +350,7 @@ preferred: `device = "cuda" if torch.cuda.is_available() else "cpu"` in the
 worker, same pattern as `kokoro_worker.py`.
 
 Wired into the Narration Writer web UI: each panel card has a
-"🔎 OCR this panel" button (`app.js:runOcr()`) hitting
+"🔎 OCR this panel" button (`static_write/js/ocr.js:runOcr()`) hitting
 `POST /api/ocr/<panel_id>` (`writer_routes.py`) - fills an empty field
 directly, or offers Replace/Append/Dismiss if the field already has text
 (never silently overwrites). `launch_and_wait_writer` now takes an
@@ -1082,8 +1082,21 @@ Footguns hit while building it, all still live:
   `[hidden]{display:none}` - each needs its own explicit `[hidden]` rule or
   `el.hidden = true` does nothing.
 
-**How to actually TEST the web UIs from here** (worked out 2026-09-10;
-supersedes an earlier "there is no JS runtime" note):
+**Best check available: drive the real page in headless Firefox** (2026-09-16).
+`firefox` is on this box (snap). Serve the REAL Flask app, inject one script
+into its HTML from an `after_request` hook that hooks `window.onerror`,
+`unhandledrejection` and `console.error`, drives the UI (dispatch `input`,
+`click`, `change`), then `sendBeacon`s the errors plus a DOM/`fetch` probe to a
+test-only route. Run it against a `git worktree` of the previous commit and
+diff - that is how the JS split was verified end to end (typing autosaved to
+disk, OCR's Append merged text, Reorder's notice, the settings posts, the
+Options fold in localStorage). Gotchas: the snap can only read NON-hidden dirs
+under $HOME, so put `--profile` there (not /tmp); patch
+`persist_marker_settings` so the run cannot touch this machine's config.json;
+and stub `OCREngine.recognize` so no model loads.
+
+**Also available: node, for a syntax check or a DOM-stub boot**
+(worked out 2026-09-10; supersedes an earlier "there is no JS runtime" note):
 
 ```bash
 uv venv /tmp/jscheck && uv pip install --python /tmp/jscheck/bin/python nodejs-wheel-binaries

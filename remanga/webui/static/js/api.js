@@ -16,3 +16,12 @@ export async function api(path, opts) {
   }
   return res.json();
 }
+
+// A JSON POST - what almost every write from the action bar is.
+export function postJson(path, body) {
+  return api(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}

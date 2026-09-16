@@ -47,7 +47,8 @@ def create_writer_app(state: WriterState, config: WriterConfig, project_name: st
     def ocr_panel(panel_id: str):
         """Runs DeepSeek-OCR-2 on one panel's cropped image and hands back the
         recognized text - the frontend offers it as a starting draft to edit,
-        never auto-overwrites whatever's already typed (see app.js). First
+        never auto-overwrites whatever's already typed (see static_write/js/ocr.js).
+        First
         call in a session pays the model-load (and, if the weights aren't
         downloaded yet, the fetch) cost; every call after that is fast, same
         worker process for the whole session (see remanga/ocr/engine.py)."""

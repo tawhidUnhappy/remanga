@@ -1334,7 +1334,11 @@ remanga/
 │   │   │                       # marker_session.py (chapters + cursor; session_*.py mixins), marker_state.py
 │   │   │                       # (one chapter) + marks_file.py (its crops.json), detection.py + magi_assist.py (MAGI v3),
 │   │   │                       # settings_store.py (Shortcuts + assist persistence)
-│   │   ├── static/js/           # Frontend: render/drag-resize/draw/zoom-pan/shortcuts/magi/page-nav modules
+│   │   ├── static/js/           # Panel Marker frontend, one ES module per concern: render, draw,
+│   │   │                       # drag-resize, zoom-pan, shortcuts, page-nav, outline, and the action
+│   │   │                       # bar (magi.js wires assist-scope/-actions/-status/-settings.js)
+│   │   ├── static_write/js/     # Narration Writer frontend: state, api, card, ocr, virtual-list,
+│   │   │                       # nav, autosave, lightbox, counts, finish (main.js boots and wires)
 │   │   └── scripts/             # magi_worker.py, download_magi.py - run inside .tools/venv-magi
 │   ├── video/                  # compose.py (frame compositor), render.py (GPU/CPU renderer) & encoder_probe.py (which encoder works here)
 │   ├── full_recap/             # discovery.py, timeline.py (one continuous audio timeline), compiler.py, wipes.py
