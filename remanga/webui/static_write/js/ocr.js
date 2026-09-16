@@ -10,7 +10,7 @@
 // call after that reuses the loaded model and is fast.
 
 import { requestOcr } from "./api.js";
-import { escapeHtml } from "./dom.js";
+import { escapeHtml } from "/shared/js/dom.js";
 
 export function wireOcr(card, panelId, applyText) {
   card.querySelector('[data-action="ocr"]').addEventListener("click", () => runOcr(card, panelId, applyText));

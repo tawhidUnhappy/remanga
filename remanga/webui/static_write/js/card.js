@@ -3,8 +3,8 @@
 // the flag an autosave raises when it couldn't reach the server.
 
 import { flushSave, scheduleSave } from "./autosave.js";
-import { escapeHtml } from "./dom.js";
-import { openLightbox } from "./lightbox.js";
+import { escapeHtml } from "/shared/js/dom.js";
+import { openLightbox } from "/shared/js/lightbox.js";
 import { wireOcr } from "./ocr.js";
 import { setText, textOf } from "./state.js";
 

@@ -89,7 +89,12 @@ from .roots import (
     UV_BIN,
 )
 from .tools import get_scripts_dir
-from .webui_static import MARKER_STATIC_DIR, REVIEWER_STATIC_DIR, WRITER_STATIC_DIR
+from .webui_static import (
+    MARKER_STATIC_DIR,
+    REVIEWER_STATIC_DIR,
+    SHARED_STATIC_DIR,
+    WRITER_STATIC_DIR,
+)
 
 __all__ = [
     "BIN_DIR",
@@ -103,6 +108,7 @@ __all__ = [
     # roots
     "REPO_ROOT",
     "REVIEWER_STATIC_DIR",
+    "SHARED_STATIC_DIR",
     "TOOLS_DIR",
     "UV_BIN",
     "WRITER_STATIC_DIR",

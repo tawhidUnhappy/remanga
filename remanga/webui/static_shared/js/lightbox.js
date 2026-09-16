@@ -1,5 +1,9 @@
-// A panel's image at full size, over the page. Click anywhere (or Escape) to
-// close - there is nothing to interact with inside it.
+// A panel's image at full size, over the page. Click anywhere (or press
+// Escape) to close - there is nothing to interact with inside it.
+//
+// Shared by the Narration Writer and the Narration Reviewer, which show the
+// same panel images in the same list layout. Both pages carry the same
+// #lightbox / #lightbox-img markup.
 
 export function openLightbox(src, alt) {
   const img = document.getElementById("lightbox-img");

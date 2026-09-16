@@ -11,7 +11,7 @@ import { fetchNarration } from "./api.js";
 import { flushOnUnload } from "./autosave.js";
 import { updateCounts } from "./counts.js";
 import { wireFooter } from "./finish.js";
-import { wireLightbox } from "./lightbox.js";
+import { wireLightbox } from "/shared/js/lightbox.js";
 import { buildNav, setActiveNav, setNavWritten } from "./nav.js";
 import { chapter, loadChapter, onTextChanged, panels } from "./state.js";
 import { initVirtualList, jumpToPanel } from "./virtual-list.js";

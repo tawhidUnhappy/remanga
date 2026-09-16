@@ -875,7 +875,7 @@ keeps), reachable from the menu like everything else.
   `quoted_dialogue`, `register_break`, `disconnected`, `entry_length`,
   `too_explicit` replaced `flattened_dialogue`, `transcript_style`,
   `quoted_sfx`, `punctuation`, `word_budget` - the list lives in BOTH
-  narration_review.md and webui/static_review/app.js and must stay in sync.
+  narration_review.md and webui/static_review/js/tags.js and must stay in sync.
   Long panels are safe: KPipeline's chunks are concatenated in
   kokoro_worker.py, and a panel is held on screen for its own clip's length
   (audio_timing.json), never sped up to fit.
@@ -1385,6 +1385,10 @@ be duplicated, and where it lives now:
   `remanga.venvs.get_tool_python`, which also installs it). `paths/tools.py`'s second, locate-only
   `get_tool_python` is gone - `remanga.paths` no longer exports that name.
 - `wizard/uploads.py:files_in` is shared with the LLM crop extension's hand-off.
+- **Frontend**: `webui/static_shared/js/` (the lightbox, and escaping text into it) is
+  served at `/shared` by BOTH panel-list UIs - the Writer and the Reviewer import it as
+  `/shared/js/lightbox.js`. Each app serves it from its own `shared_asset` route, since
+  Flask gives an app one static folder. The Panel Marker has neither and shares nothing.
 
 Finding the next one: an AST duplicate scanner (scratchpad `dupes.py`) reporting identical
 function bodies, repeated statement runs, same-named functions with a high difflib ratio, and
