@@ -10,7 +10,7 @@ from remanga.audio.synth.base import BaseWorkerSynthesizer
 from remanga.config import AudioConfig, TTSConfig
 from remanga.config.tts import engine_spec
 from remanga.models import ModelManager
-from remanga.venvs import get_scripts_dir, get_tool_python
+from remanga.workers import spawn_script_worker
 
 # This engine's identity as config.json and every menu know it - see kokoro.py.
 SPEC = engine_spec("chatterbox")
@@ -47,13 +47,8 @@ class ChatterboxSynthesizer(BaseWorkerSynthesizer):
         ))
 
     def _spawn_worker(self, model_dir: Path) -> subprocess.Popen:
-        python = get_tool_python("chatterbox")
-        script = get_scripts_dir("audio") / "chatterbox_worker.py"
-        cmd: list[str] = [str(python), "-u", str(script), "--model_dir", str(model_dir.resolve())]
-        return subprocess.Popen(
-            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, bufsize=1,
-        )
+        return spawn_script_worker("chatterbox", "audio", "chatterbox_worker.py",
+                                   "--model_dir", str(model_dir.resolve()))
 
     def _synth_timeout_seconds(self) -> float:
         return self.tts_config.synth_timeout_seconds

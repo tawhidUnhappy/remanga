@@ -17,33 +17,20 @@ This module is just the entry points and process lifecycle - see
 marker_session.py for the chapter list and cursor, marker_state.py for one
 chapter's in-memory state, detection.py for the background MAGI thread,
 routes.py for the Flask app/API, and settings_store.py for how the Shortcuts
-menu's edits get saved.
+menu's edits get saved. Serving it and opening the browser is launch.py,
+shared with the other two web UIs.
 """
 
 from __future__ import annotations
 
-import logging
-import threading
-import webbrowser
 from pathlib import Path
-
-from werkzeug.serving import make_server
 
 from remanga.config import MarkerConfig
 from remanga.console import console
 from remanga.paths import get_chapter_dir
+from remanga.webui.launch import start_ui
 from remanga.webui.marker_session import MarkerSession
 from remanga.webui.routes import create_app
-
-# werkzeug's dev server logs every single request at INFO level by default
-# ("127.0.0.1 - - [...] "GET /api/detect/status HTTP/1.1" 200 -"). The
-# frontend polls a couple of status endpoints (page-nav.js) every ~1.2s for
-# as long as the marker UI or MAGI detection is running, so left alone this
-# floods the terminal with access-log lines - including right on top of the
-# "Loading MAGI v3..." spinner (magi_assist.py's console.status()), which is
-# what turned a clean progress spinner into a wall of spam. Only warnings/
-# errors (a real 500, a bad request) are worth surfacing here.
-logging.getLogger("werkzeug").setLevel(logging.WARNING)
 
 
 def launch_and_wait(project_name: str, chapter_num: str, config: MarkerConfig) -> Path:
@@ -72,31 +59,16 @@ def launch_and_wait_all(project_name: str, chapters: list[str], config: MarkerCo
             f"{', '.join(session.skipped)}"
         )
 
-    httpd = make_server(config.host, config.port, create_app(session, config))
-    server_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-
-    def shutdown_soon():
-        session.finished.wait()
-        httpd.shutdown()
-
-    threading.Thread(target=shutdown_soon, daemon=True).start()
-
-    url = f"http://{config.host}:{config.port}/"
-    server_thread.start()
-
-    title = "Panel Viewer" if read_only else "Panel Marker"
-    console.print(f"[bold cyan]{title} running at:[/] {url}")
+    notes = []
     if read_only:
-        console.print("[dim]Read-only: nothing you do in this tab can change a crops.json.[/]")
+        notes.append("[dim]Read-only: nothing you do in this tab can change a crops.json.[/]")
     if len(session.chapters) > 1:
-        console.print(
+        notes.append(
             f"[dim]{len(session.chapters)} chapter(s) in this session: "
             f"{', '.join(session.chapters)} — the browser moves between them, one tab.[/]"
         )
-    if config.auto_open_browser:
-        webbrowser.open(url)
-    else:
-        console.print("[dim]Open that URL in your browser to continue.[/]")
+    ui = start_ui(create_app(session, config), config, session.finished,
+                  title="Panel Viewer" if read_only else "Panel Marker", notes=notes)
 
     # The saved switches (config.json's marker section) are what this session
     # opens with: auto-save as it was left.
@@ -114,8 +86,6 @@ def launch_and_wait_all(project_name: str, chapters: list[str], config: MarkerCo
         waiting_for = "mark panels and save (Ctrl/Cmd+S in the browser)"
     else:
         waiting_for = "mark the chapters, then press Save in the browser (it saves every chapter and exits)"
-    console.print(f"[yellow]Waiting for you to {waiting_for}...[/]")
-    session.finished.wait()
-    server_thread.join(timeout=5)
+    ui.wait(waiting_for)
 
     return session.saved

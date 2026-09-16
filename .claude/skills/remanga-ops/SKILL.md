@@ -1336,6 +1336,41 @@ No module over ~300 lines. A long one is split by concern, and every public name
   from the scratchpad, never with cwd = the repo: `python -c` puts cwd first on sys.path and
   silently imports the repo instead of the worktree.
 
+## One source of truth: what is shared, and where (2026-09-16)
+
+Written twice is a bug waiting to drift - one copy gets fixed and the other doesn't. What used to
+be duplicated, and where it lives now:
+
+- **Isolated-venv workers** (`remanga/workers/`): `process.py:ToolWorker` owns the process (spawn,
+  ready handshake, stderr draining, bounded `_request`, kill-on-timeout, shutdown) and `heal.py`
+  owns starting it, including installing a package the engine's own install missed.
+  `spawn_script_worker(tool, package, script, *args)` builds every worker command line. TTS
+  (`audio/synth/base.py`), OCR (`ocr/engine.py`) and MAGI (`webui/magi_assist.py`) all use it -
+  OCR's copy of the lifecycle and MAGI's own auto-heal loop are gone. Engine-specific wording
+  stays a parameter: `starting_note`, `_on_ready`, and `_request`'s `action`/`on_timeout`/`advice`.
+- **The worker scripts themselves** (`*/scripts/*.py`) still repeat their tiny `send()` helper on
+  purpose: they run inside the tool's venv, where `remanga` is not installed, so they cannot
+  import any of this. Don't "fix" that.
+- **The three web UIs**: `webui/launch.py` (`start_ui` + `RunningUI.wait`) serves them, opens the
+  browser and blocks; `webui/panel_session.py:PanelPassState` is the Reviewer/Writer panel state
+  (panels dir, `finished`, `submitted`, `panel_image_filename`). The Panel Marker's own state is
+  page-shaped and stays separate.
+- **Master audio** (`audio/master.py`): `panel_segments`, `load_bgm`, `under_narration`,
+  `write_master` (loudnorm + fallback), shared by the chapter mix and the full recap. This FIXED a
+  real drift: the full recap resampled the music with pydub (imaging noise - the exact thing
+  `audio/resample.py` exists to avoid) while the chapter mix used `load_audio`. Full-recap master
+  bytes therefore change when the music's rate differs from the project's; everything else is
+  byte-identical.
+- **Which interpreter a tool runs**: only `tool_envs` (`ensure_tool`, re-exported as
+  `remanga.venvs.get_tool_python`, which also installs it). `paths/tools.py`'s second, locate-only
+  `get_tool_python` is gone - `remanga.paths` no longer exports that name.
+- `wizard/uploads.py:files_in` is shared with the LLM crop extension's hand-off.
+
+Finding the next one: an AST duplicate scanner (scratchpad `dupes.py`) reporting identical
+function bodies, repeated statement runs, same-named functions with a high difflib ratio, and
+constants defined in several modules. **The scratchpad is wiped between sessions** - rewrite it
+(and the smoke scripts) rather than looking for them.
+
 ## LLM crop: Gemini plans crops from gridded pages (2026-09-16)
 
 `crop-grid` -> upload `grid_zip/chapter_N/grid_1.zip` + `prompts/llm_crop.md` -> paste the reply

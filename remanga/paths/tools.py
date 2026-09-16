@@ -1,28 +1,19 @@
-"""Locates the isolated per-tool virtualenvs bootstrap.sh provisions
-(`.tools/venv-kokoro`, `.tools/venv-chatterbox`, `.tools/venv-magi`,
-`.tools/venv-deepseek-ocr`, ...) and their standalone worker scripts - one dependency-isolated environment per
-heavy ML engine so their conflicting library pins never have to share one
-Python process. See remanga/audio/synth/ and remanga/webui/magi_assist.py
-for the subprocess machinery that actually drives these."""
+"""Where the standalone worker scripts live, for the isolated per-tool
+virtualenvs bootstrap.sh provisions (`.tools/venv-kokoro`,
+`.tools/venv-chatterbox`, `.tools/venv-magi`, `.tools/venv-deepseek-ocr`,
+...) - one dependency-isolated environment per heavy ML engine so their
+conflicting library pins never have to share one Python process.
+
+Which interpreter a tool runs is remanga/tool_envs/ (`ensure_tool`, also
+re-exported as `remanga.venvs.get_tool_python`), which installs the
+environment if this is its first use - there is no second, locate-only copy
+of that lookup here. remanga/workers/ drives the subprocesses."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from .roots import REPO_ROOT, TOOLS_DIR
-
-
-def get_tool_python(tool_name: str) -> Path:
-    """Path to the python interpreter inside `.tools/venv-<tool_name>`."""
-    venv_dir = TOOLS_DIR / f"venv-{tool_name}"
-    candidates = [venv_dir / "bin" / "python3", venv_dir / "bin" / "python", venv_dir / "Scripts" / "python.exe"]
-    for c in candidates:
-        if c.exists():
-            return c
-    raise FileNotFoundError(
-        f"Isolated environment '.tools/venv-{tool_name}' not found at {venv_dir}.\n"
-        f"Run `bash bootstrap.sh` to provision it."
-    )
+from .roots import REPO_ROOT
 
 
 def get_scripts_dir(package_relpath: str) -> Path:

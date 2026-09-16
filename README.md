@@ -1070,10 +1070,13 @@ remanga/
 │   │                           # vision.py (packaging checklist), presets.py, engine.py, video.py,
 │   │                           # sections.py (every setting as one list), tuning.py + levels.py + balance.py
 │   │                           # (how it sounds and looks), field_prompts.py, wizard.py, paths_ui.py
-│   ├── audio/                  # tts.py + mix.py; synth/ = one module per engine over a shared worker base (base.py + worker_process.py)
+│   ├── audio/                  # tts.py + mix.py + master.py (narration track, music bed, loudness - shared
+│   │                           # with full_recap); synth/ = one module per engine over a shared base
 │   │   └── scripts/             # kokoro_worker.py, chatterbox_worker.py - each runs inside its own venv
 │   ├── tool_envs/              # Single source of truth for every .tools/venv-<name> environment:
 │   │                           # catalog.py (TOOLS), spec.py, install.py, cli.py (python -m remanga.tool_envs)
+│   ├── workers/               # One spawn + auto-heal + request lifecycle for every isolated-venv worker
+│   │                           # (TTS, OCR, MAGI): heal.py, process.py (ToolWorker)
 │   ├── cropper/                # crop.py (coordinate cropper), structured.py + paint_out.py (multi-box
 │   │                           # crops with bubbles kept whole), sheets.py, gutter/ (edge snapping), ...
 │   ├── extensions/             # Pluggable features - one package each, declared in its extension.py:
@@ -1083,7 +1086,8 @@ remanga/
 │   │                           # chapter_list.py (listing + local status) & resolve.py (id/title/language lookup)
 │   ├── models/                 # weights.py (talks to the isolated venvs to fetch/verify weights)
 │   │   └── scripts/             # download_kokoro.py, download_chatterbox.py, download_deepseek_ocr.py
-│   ├── webui/                  # Panel Marker: server.py (entry point/lifecycle), routes.py (Flask app/API),
+│   ├── webui/                  # Panel Marker: server.py (entry point/lifecycle), launch.py (serving all three
+│   │   │                       # UIs), panel_session.py (Reviewer/Writer panel state), routes.py (Flask app/API),
 │   │   │                       # marker_session.py (chapters + cursor; session_*.py mixins), marker_state.py
 │   │   │                       # (one chapter) + marks_file.py (its crops.json), detection.py + magi_assist.py (MAGI v3),
 │   │   │                       # settings_store.py (Shortcuts + assist persistence)

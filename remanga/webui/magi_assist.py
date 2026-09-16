@@ -30,10 +30,8 @@ from pathlib import Path
 from remanga.config import MarkerConfig
 from remanga.console import console, escape as _esc
 from remanga.hf_token import resolve_hf_token
-from remanga.paths import UV_BIN
-from remanga.venvs import extract_missing_packages, get_scripts_dir, get_tool_python
-
-_MAX_AUTO_HEAL_ATTEMPTS = 8
+from remanga.venvs import get_scripts_dir, get_tool_python
+from remanga.workers import spawn_script_worker, start_worker
 
 
 def is_gpu_available() -> bool:
@@ -53,78 +51,31 @@ def is_gpu_available() -> bool:
         return False
 
 
-def _pip_install_into_magi_env(packages: set[str]) -> bool:
-    """Installs `packages` into `.venv-magi`, preferring this repo's own
-    `bin/uv` (that isolated venv has no `pip` module at all)."""
-    names = sorted(packages)
-    console.print(f"[yellow]Installing missing dependency into .venv-magi: {' '.join(names)}...[/]")
-
-    uv_bin = UV_BIN
-    magi_python = get_tool_python("magi")
-    if uv_bin.exists():
-        cmd = [str(uv_bin), "pip", "install", "--python", str(magi_python), *names]
-    else:
-        cmd = [str(magi_python), "-m", "pip", "install", *names]
-
-    result = subprocess.run(cmd)
-    if result.returncode != 0:
-        console.print(f"[bold red]Failed to install {' '.join(names)} automatically.[/]")
-        return False
-    console.print(f"[bold green]✓ Installed {' '.join(names)}.[/]")
-    return True
-
-
 def _spawn_worker(config: MarkerConfig) -> subprocess.Popen:
-    python = get_tool_python("magi")
-    script = get_scripts_dir("webui") / "magi_worker.py"
-    cmd = [
-        str(python), "-u", str(script),
+    return spawn_script_worker(
+        "magi", "webui", "magi_worker.py",
         "--repo_id", config.magi_repo_id,
         "--model_dir", config.magi_model_dir,
         "--score_threshold", str(config.magi_panel_score_threshold),
-    ]
-    return subprocess.Popen(
-        cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1,
     )
 
 
 def _spawn_worker_with_auto_heal(config: MarkerConfig) -> subprocess.Popen:
-    """Spawns the MAGI worker, waits for its startup event, and - if it
-    reports a missing dependency (either transformers' own trust_remote_code
-    check, or a plain unlisted `import` MAGI's remote code just happens to
-    need - matplotlib and einops have both come up in practice) - installs the
-    package(s) into `.venv-magi` and retries, up to _MAX_AUTO_HEAL_ATTEMPTS
-    distinct packages, instead of raising mid-session over something one pip
-    install would have fixed."""
-    attempted: set[str] = set()
-
-    for _ in range(_MAX_AUTO_HEAL_ATTEMPTS + 1):
-        # refresh_per_second=4: see downloader/mangadex.py's Progress() note.
-        with console.status(
-            f"[bold cyan]Loading MAGI v3 ({config.magi_repo_id})...[/]", spinner="dots", refresh_per_second=4
-        ):
-            proc = _spawn_worker(config)
-            first_line = proc.stdout.readline()
-
-        if not first_line:
-            stderr = proc.stderr.read()
-            raise RuntimeError(f"MAGI v3 worker exited before starting up:\n{stderr}")
-
-        event = json.loads(first_line)
-        if event.get("event") == "ready":
-            return proc
-
-        error_text = event.get("error", "")
-        missing = extract_missing_packages(error_text) - attempted
-        if not missing:
-            raise RuntimeError(f"MAGI v3 worker failed to load: {error_text}")
-
-        attempted |= missing
-        if not _pip_install_into_magi_env(missing):
-            raise RuntimeError(f"MAGI v3 worker failed to load: {error_text}")
-        console.print("[dim]Retrying MAGI v3 load with the newly installed package(s)...[/]")
-
-    raise RuntimeError(f"MAGI v3 worker still fails to load after installing: {', '.join(sorted(attempted))}")
+    """Spawns the MAGI worker and waits for it to load, with the auto-heal
+    every engine shares (workers/heal.py): a missing dependency - either
+    transformers' own trust_remote_code check, or a plain unlisted `import`
+    MAGI's remote code just happens to need (matplotlib and einops have both
+    come up in practice) - is installed into `.tools/venv-magi` and the load
+    retried, instead of raising mid-session over something one pip install
+    would have fixed."""
+    # refresh_per_second=4: see downloader/mangadex.py's Progress() note.
+    proc, _event = start_worker(
+        lambda: _spawn_worker(config), display_name="MAGI v3", tool_name="magi",
+        loading=lambda: console.status(
+            f"[bold cyan]Loading MAGI v3 ({config.magi_repo_id})...[/]", spinner="dots", refresh_per_second=4,
+        ),
+    )
+    return proc
 
 
 def ensure_weights_downloaded(config: MarkerConfig) -> Path | None:

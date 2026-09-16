@@ -11,26 +11,20 @@ separate review file.
 
 from __future__ import annotations
 
-import threading
 from pathlib import Path
 from typing import Any
 
 from remanga.json_io import has_real_json_content, read_json_or
 from remanga.narration import PANEL_IMAGE_EXTS, narration_document
+from remanga.webui.panel_session import PanelPassState
 
 
-class WriterState:
+class WriterState(PanelPassState):
     """All in-memory state for one narration-writing session. One chapter at a time."""
 
     def __init__(self, chapter_dir: Path, chapter_num: str):
-        # Absolute: Flask's send_from_directory() resolves a relative directory
-        # against the app's root_path (remanga/webui/), not the process cwd.
-        self.chapter_dir = chapter_dir.resolve()
-        self.chapter_num = chapter_num
-        self.panels_dir = self.chapter_dir / "panels"
+        super().__init__(chapter_dir, chapter_num)
         self.narration_path = self.chapter_dir / "narration.json"
-        self.finished = threading.Event()
-        self.submitted = False
 
         if not self.panels_dir.is_dir() or not any(self.panels_dir.glob("*")):
             raise FileNotFoundError(
@@ -58,13 +52,6 @@ class WriterState:
         # closes the tab without submitting.
         if not has_real_json_content(self.narration_path):
             self.narration_path.write_text("", encoding="utf-8")
-
-    def panel_image_filename(self, panel_id: str) -> str | None:
-        for ext in PANEL_IMAGE_EXTS:
-            candidate = self.panels_dir / f"{panel_id}{ext}"
-            if candidate.exists():
-                return candidate.name
-        return None
 
     def to_payload(self) -> dict[str, Any]:
         panels = [

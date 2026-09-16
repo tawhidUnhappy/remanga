@@ -6,28 +6,22 @@ narration.json (see paths.py).
 
 This module is just the entry point (launch_and_wait_writer) and process
 lifecycle - see writer_state.py for the in-memory session state and
-writer_routes.py for the Flask app/API. Mirrors reviewer_server.py's shape;
-kept as a separate module since all three UIs serve different stages and
-can, in principle, be open at once on different ports.
+writer_routes.py for the Flask app/API, and launch.py for serving it.
+Mirrors reviewer_server.py's shape; kept as a separate module since all three
+UIs serve different stages and can, in principle, be open at once on
+different ports.
 """
 
 from __future__ import annotations
 
-import logging
-import threading
-import webbrowser
 from pathlib import Path
 
-from werkzeug.serving import make_server
-
 from remanga.config import OCRConfig, WriterConfig
-from remanga.console import console
 from remanga.ocr import OCREngine
 from remanga.paths import get_chapter_dir
+from remanga.webui.launch import start_ui
 from remanga.webui.writer_routes import create_writer_app
 from remanga.webui.writer_state import WriterState
-
-logging.getLogger("werkzeug").setLevel(logging.WARNING)
 
 
 def launch_and_wait_writer(project_name: str, chapter_num: str, config: WriterConfig, ocr_config: OCRConfig) -> Path:
@@ -41,27 +35,9 @@ def launch_and_wait_writer(project_name: str, chapter_num: str, config: WriterCo
     # happens on that first click, never just from opening this UI.
     ocr_engine = OCREngine(ocr_config)
 
-    httpd = make_server(config.host, config.port, create_writer_app(state, config, project_name, ocr_engine))
-    server_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-
-    def shutdown_soon():
-        state.finished.wait()
-        httpd.shutdown()
-
-    threading.Thread(target=shutdown_soon, daemon=True).start()
-
-    url = f"http://{config.host}:{config.port}/"
-    server_thread.start()
-
-    console.print(f"[bold cyan]Narration Writer running at:[/] {url}")
-    if config.auto_open_browser:
-        webbrowser.open(url)
-    else:
-        console.print("[dim]Open that URL in your browser to continue.[/]")
-
-    console.print("[yellow]Waiting for you to write the narration and save...[/]")
-    state.finished.wait()
-    server_thread.join(timeout=5)
+    ui = start_ui(create_writer_app(state, config, project_name, ocr_engine), config, state.finished,
+                  title="Narration Writer")
+    ui.wait("write the narration and save")
     # Frees the GPU/worker process promptly instead of leaving it idle until
     # the whole `remanga` process exits - this session might be one command
     # in a longer wizard loop (see remanga/wizard/'s nested menu), not the last

@@ -11,25 +11,19 @@ to track, just a flat list of panels the user marks ok/flagged and annotates
 
 from __future__ import annotations
 
-import threading
 from pathlib import Path
 from typing import Any
 
 from remanga.json_io import has_real_json_content, read_json, read_json_or
+from remanga.webui.panel_session import PanelPassState
 
 
-class ReviewerState:
-    """All in-memory state for one review session. One chapter at a time."""
+class ReviewerState(PanelPassState):
+    """All in-memory state for one review session. One chapter at a time.
+    `submitted` stays False if the user closes without approving."""
 
     def __init__(self, chapter_dir: Path, chapter_num: str):
-        # Absolute: Flask's send_from_directory() resolves a relative directory
-        # against the app's root_path (remanga/webui/), not the process cwd.
-        self.chapter_dir = chapter_dir.resolve()
-        self.chapter_num = chapter_num
-        self.panels_dir = self.chapter_dir / "panels"
-        self.finished = threading.Event()
-        self.submitted = False  # False if the user closes without flagging anything as "approved"
-
+        super().__init__(chapter_dir, chapter_num)
         narration_path = self.chapter_dir / "narration.json"
         if not has_real_json_content(narration_path):
             raise FileNotFoundError(
@@ -83,13 +77,6 @@ class ReviewerState:
             # may already be correct.
             if pid and current_text.get(pid) == entry.get("text_at_flag"):
                 self.flags[pid] = {"issue": entry.get("issue", ""), "tag": entry.get("tag", "")}
-
-    def panel_image_filename(self, panel_id: str) -> str | None:
-        for ext in (".png", ".jpg", ".jpeg", ".webp"):
-            candidate = self.panels_dir / f"{panel_id}{ext}"
-            if candidate.exists():
-                return candidate.name
-        return None
 
     def to_payload(self) -> dict[str, Any]:
         panels = []

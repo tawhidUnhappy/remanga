@@ -1,31 +1,31 @@
 """The synthesizer every TTS engine shares.
 
-BaseWorkerSynthesizer owns one isolated-venv worker (its lifecycle - spawn,
-ready handshake, auto-heal, bounded reads, stderr draining, shutdown - is
-worker_process.py) and turns synthesize() calls into requests to it,
-splitting text an engine can't take in one call. An engine subclass fills in
-only what actually differs between engines - the command line and the
-per-request payload - which is what keeps adding a third engine to a small
-file (see kokoro.py, under 80 lines) rather than a
-fourth copy of all of this."""
+BaseWorkerSynthesizer turns synthesize() calls into requests to one
+isolated-venv worker, splitting text an engine can't take in a single call.
+The worker itself - spawn, ready handshake, auto-heal, bounded reads, stderr
+draining, shutdown - is remanga/workers/, shared with OCR and MAGI. An engine
+subclass fills in only what actually differs between engines: the command
+line and the per-request payload, which is what keeps adding a third engine
+to a small file (see kokoro.py, under 80 lines) rather than a fourth copy of
+all of this."""
 
 from __future__ import annotations
 
-import atexit
-import collections
-import json
 import re
-import subprocess
-import threading
 from pathlib import Path
 from typing import Any
 
-from remanga.audio.synth.worker_process import STDERR_TAIL_LINES, WorkerProcessMixin
 from remanga.config import AudioConfig
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.models import ModelManager
+from remanga.workers import ToolWorker
 
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+# What synthesize() says about a panel that timed out: which panel it was,
+# and that a re-run costs only that panel.
+_TIMEOUT_ADVICE = (" Safe to just re-run; already-synthesized panels are cached and this "
+                   "one regenerates automatically.")
 
 
 def _split_text_into_chunks(text: str, max_chars: int) -> list[str]:
@@ -55,16 +55,13 @@ def _split_text_into_chunks(text: str, max_chars: int) -> list[str]:
     return chunks or [text]
 
 
-class BaseWorkerSynthesizer(WorkerProcessMixin):
+class BaseWorkerSynthesizer(ToolWorker):
     """Owns one long-lived isolated-venv worker subprocess and speaks to it
     over stdin/stdout for every synthesize() call, so the model loads onto
     the GPU once per production run instead of once per panel. Subclasses
     fill in: `tool_name` (selects `.tools/venv-<tool_name>`), `display_name`
     (for console messages), `_spawn_worker()` (the process command line),
     and `_build_request()` (the per-call JSON payload)."""
-
-    tool_name: str = ""
-    display_name: str = ""
 
     # Subclasses opt in when their engine has a fixed per-call generation
     # budget that silently truncates the audio - no error, it just stops
@@ -77,15 +74,9 @@ class BaseWorkerSynthesizer(WorkerProcessMixin):
     def __init__(self, audio_config: AudioConfig, model_manager: ModelManager):
         self.audio_config = audio_config
         self.model_manager = model_manager
-        self._proc: subprocess.Popen | None = None
-        self._stderr_tail: collections.deque = collections.deque(maxlen=STDERR_TAIL_LINES)
-        self._stderr_thread: threading.Thread | None = None
-        atexit.register(self.shutdown)
+        self._init_worker_state()
 
     # --- subclass hooks -----------------------------------------------
-    def _spawn_worker(self, model_dir: Path) -> subprocess.Popen:
-        raise NotImplementedError
-
     def _build_request(self, text: str, voice: str, output_wav: Path) -> dict[str, Any]:
         """One synthesize request. `voice` is whatever identifies the
         narrator to this engine - a name for an engine with fixed voices, a
@@ -142,33 +133,11 @@ class BaseWorkerSynthesizer(WorkerProcessMixin):
         """One bounded worker call, start to finish - what synthesize() used
         to do inline before chunking existed. Also what each individual
         chunk goes through in the chunked path below."""
-        proc = self._ensure_worker()
         request = self._build_request(text, voice, output_wav)
-
-        try:
-            proc.stdin.write(json.dumps(request) + "\n")
-            proc.stdin.flush()
-            response_line = self._read_response_line(proc, self._synth_timeout_seconds())
-        except TimeoutError as e:
-            stderr = self._stderr_snapshot()
-            self._kill_stuck_worker(proc)
-            raise RuntimeError(
-                f"{self.display_name} worker {e} on panel text {text[:80]!r} - killed it so the next attempt "
-                f"gets a fresh one. Safe to just re-run; already-synthesized panels are cached and this "
-                f"one regenerates automatically.\n{stderr}"
-            ) from e
-        except (BrokenPipeError, OSError) as e:
-            stderr = self._stderr_snapshot()
-            raise RuntimeError(f"{self.display_name} worker died mid-synthesis: {e}\n{stderr}") from e
-
-        if not response_line:
-            stderr = self._stderr_snapshot()
-            raise RuntimeError(f"{self.display_name} worker closed its output unexpectedly:\n{stderr}")
-
-        response = json.loads(response_line)
-        if not response.get("ok"):
-            raise RuntimeError(f"{self.display_name} synthesis failed: {response.get('error')}")
-
+        self._request(
+            request, self._synth_timeout_seconds(), action="synthesis",
+            on_timeout=f" on panel text {text[:80]!r}", advice=_TIMEOUT_ADVICE,
+        )
         self._post_synthesize(output_wav, request)
 
     def _synthesize_chunks(self, chunks: list[str], voice: str, output_wav: Path) -> None:

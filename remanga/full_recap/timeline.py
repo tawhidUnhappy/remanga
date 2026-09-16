@@ -25,9 +25,9 @@ from rich.progress import BarColumn, Progress, TextColumn
 
 from remanga import settings
 from remanga.audio.join import join_segments
+from remanga.audio.master import load_bgm, panel_segments, under_narration, write_master
 from remanga.config import RemangaConfig
 from remanga.console import console, escape as _esc
-from remanga.ffmpeg_io import run_ffmpeg
 from remanga.json_io import read_json
 from remanga.paths import get_audio_dir, get_audio_timing_path, get_full_recap_master_audio_path
 
@@ -82,15 +82,8 @@ def assemble_combined_audio(
             audio_dir = get_audio_dir(project_name, chapter_num)
 
             for p in panels:
-                clip_file = audio_dir / p["audio_file"]
-                if clip_file.exists():
-                    add(AudioSegment.from_file(clip_file))
-                else:
-                    add(AudioSegment.silent(duration=p["duration_ms"], frame_rate=sample_rate))
-
-                pause_ms = p.get("pause_after_ms", 0)
-                if pause_ms > 0:
-                    add(AudioSegment.silent(duration=pause_ms, frame_rate=sample_rate))
+                for segment in panel_segments(audio_dir, p, sample_rate):
+                    add(segment)
                 progress.update(task, advance=1)
 
             if chapter_lengths_sec is not None:
@@ -107,19 +100,10 @@ def assemble_combined_audio(
         console.print(
             f"[cyan]Overlaying one continuous background music track (no per-chapter restarts):[/] {_esc(valid_bgm)}"
         )
-        bgm_track = AudioSegment.from_file(valid_bgm)
-        bgm_track = bgm_track.set_channels(2).set_frame_rate(sample_rate)
-        bgm_track = bgm_track + audio_config.bgm_volume_db
-
-        total_duration_ms = len(master_audio)
-        loop_count = (total_duration_ms // max(1, len(bgm_track))) + 1
-        bgm_loop = (bgm_track * loop_count)[:total_duration_ms]
-        # Exactly one fade-in and one fade-out for the WHOLE manga - not
-        # per chapter - so the music never visibly/audibly restarts at a
-        # chapter join.
-        bgm_loop = bgm_loop.fade_in(1500).fade_out(2000)
-
-        master_audio = bgm_loop.overlay(master_audio)
+        # under_narration fades the bed in and out exactly once for the
+        # WHOLE manga - not per chapter - so the music never audibly
+        # restarts at a chapter join.
+        master_audio = under_narration(master_audio, load_bgm(valid_bgm, sample_rate), audio_config.bgm_volume_db)
     elif audio_config.bgm_enabled:
         console.print("[yellow]BGM is enabled in config, but no valid BGM file was found. Continuing without BGM.[/]")
 
@@ -127,27 +111,9 @@ def assemble_combined_audio(
     raw_path = final_path.with_name(final_path.stem + "_raw.wav")
     master_audio.export(raw_path, format="wav")
 
-    if audio_config.enable_loudnorm:
-        console.print("[cyan]Applying a single EBU R128 normalization pass over the full-manga track...[/]")
-        cmd = [
-            "ffmpeg", "-y",
-            "-i", str(raw_path),
-            "-af", "loudnorm=I=-16:LRA=11:TP=-1.5",
-            "-ar", str(sample_rate),
-            str(final_path),
-        ]
-        try:
-            run_ffmpeg(cmd, check=True, capture=True, show_progress=True,
-                       total_seconds=len(master_audio) / 1000.0,
-                       description="Normalizing full-manga audio")
-            raw_path.unlink(missing_ok=True)
-        except Exception as e:
-            console.print(
-                f"[yellow]Loudnorm filter warning: {_esc(str(e))}. Falling back to the un-normalized full-manga "
-                f"track.[/]"
-            )
-            raw_path.rename(final_path)
-    else:
-        raw_path.rename(final_path)
+    write_master(raw_path, final_path, sample_rate, normalize=audio_config.enable_loudnorm,
+                 announcement="Applying a single EBU R128 normalization pass over the full-manga track...",
+                 on_failure="the un-normalized full-manga track",
+                 progress=("Normalizing full-manga audio", len(master_audio) / 1000.0))
 
     return final_path

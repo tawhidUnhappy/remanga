@@ -10,8 +10,6 @@ step."""
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from remanga.config import RemangaConfig
 from remanga.console import console
 from remanga.extensions.llm_crop.bundles import build_grid_bundles, ensure_reply_file, grid_built
@@ -28,16 +26,12 @@ from remanga.json_io import has_real_json_content
 from remanga.settings.project_prefs import cropper_config_for
 from remanga.tui import is_interactive
 from remanga.wizard.handoff import pause, print_paths, print_section, print_upload_groups
-from remanga.wizard.uploads import UploadGroup
+from remanga.wizard.uploads import UploadGroup, files_in
 
 
 def llm_config(config: RemangaConfig) -> LLMCropConfig:
     """This extension's settings, as the (project-scoped) config holds them."""
     return config.extensions.llm_crop
-
-
-def _files_in(directory: Path, pattern: str) -> list[Path]:
-    return sorted(directory.glob(pattern)) if directory.exists() else []
 
 
 def grid_upload_groups(project: str, chapter: str, llm: LLMCropConfig) -> list[UploadGroup]:
@@ -46,12 +40,12 @@ def grid_upload_groups(project: str, chapter: str, llm: LLMCropConfig) -> list[U
     images, which the hand-off names as a folder rather than file by file."""
     groups: list[UploadGroup] = []
     if llm.zip_active:
-        parts = _files_in(get_grid_zip_dir(project, chapter, create=False), "grid_*.zip")
+        parts = files_in(get_grid_zip_dir(project, chapter, create=False), "grid_*.zip")
         if parts:
             groups.append(UploadGroup("grid zip", parts))
     if llm.pdf_active:
         pdf_dir = get_grid_pdf_dir(project, chapter, create=False)
-        parts = _files_in(pdf_dir, "grid_*.pdf") + _files_in(pdf_dir, "grid_*.zip")
+        parts = files_in(pdf_dir, "grid_*.pdf") + files_in(pdf_dir, "grid_*.zip")
         if parts:
             groups.append(UploadGroup("grid PDF", parts))
     return groups

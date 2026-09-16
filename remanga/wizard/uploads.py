@@ -35,7 +35,9 @@ class UploadGroup:
         return len(self.parts) > 1
 
 
-def _files_in(directory: Path, pattern: str) -> list[Path]:
+def files_in(directory: Path, pattern: str) -> list[Path]:
+    """The files of one kind in a directory, in order - empty when the
+    directory was never built. Every upload group is assembled from this."""
     return sorted(directory.glob(pattern)) if directory.exists() else []
 
 
@@ -53,17 +55,17 @@ def upload_groups(project: str, chapter: str, config: RemangaConfig) -> list[Upl
 
     if package.pdf_active:
         pdf_dir = get_panels_pdf_dir(project, chapter, create=False)
-        parts = _files_in(pdf_dir, "panels_*.pdf") + _files_in(pdf_dir, "panels_*.zip")
+        parts = files_in(pdf_dir, "panels_*.pdf") + files_in(pdf_dir, "panels_*.zip")
         if parts:
             groups.append(UploadGroup("PDF bundle", parts))
 
     if package.panels_zip_active:
-        parts = _files_in(get_panels_zip_dir(project, chapter, create=False), "panels_*.zip")
+        parts = files_in(get_panels_zip_dir(project, chapter, create=False), "panels_*.zip")
         if parts:
             groups.append(UploadGroup("zip bundle", parts))
 
     if package.sheets_zip_active:
-        parts = _files_in(get_sheets_zip_dir(project, chapter, create=False), "sheets_*.zip")
+        parts = files_in(get_sheets_zip_dir(project, chapter, create=False), "sheets_*.zip")
         if parts:
             groups.append(UploadGroup("sheets zip bundle", parts))
 
@@ -71,11 +73,11 @@ def upload_groups(project: str, chapter: str, config: RemangaConfig) -> list[Upl
         return groups
 
     if package.sheets:
-        parts = [p for p in _files_in(get_sheets_dir(project, chapter, create=False), "*") if p.is_file()]
+        parts = [p for p in files_in(get_sheets_dir(project, chapter, create=False), "*") if p.is_file()]
         if parts:
             return [UploadGroup("sheets (unzipped)", parts)]
 
-    parts = [p for p in _files_in(get_chapter_dir(project, chapter) / "panels", "*") if p.is_file()]
+    parts = [p for p in files_in(get_chapter_dir(project, chapter) / "panels", "*") if p.is_file()]
     if parts:
         return [UploadGroup("panels (unzipped)", parts)]
 

@@ -88,7 +88,7 @@ from .roots import (
     TOOLS_DIR,
     UV_BIN,
 )
-from .tools import get_scripts_dir, get_tool_python
+from .tools import get_scripts_dir
 from .webui_static import MARKER_STATIC_DIR, REVIEWER_STATIC_DIR, WRITER_STATIC_DIR
 
 __all__ = [
@@ -146,7 +146,6 @@ __all__ = [
     "get_sheets_folders_dir",
     "get_sheets_zip_dir",
     # tools
-    "get_tool_python",
     "get_video_concat_path",
     "get_video_dir",
     "get_video_frames_dir",

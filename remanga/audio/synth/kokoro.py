@@ -10,7 +10,7 @@ from remanga.audio.synth.base import BaseWorkerSynthesizer
 from remanga.config import AudioConfig, TTSConfig
 from remanga.config.tts import engine_spec
 from remanga.models import ModelManager
-from remanga.venvs import get_scripts_dir, get_tool_python
+from remanga.workers import spawn_script_worker
 
 # This engine's identity as config.json and every menu know it - taken from
 # the spec rather than repeated here, so the name shown while a chapter
@@ -38,24 +38,16 @@ class KokoroSynthesizer(BaseWorkerSynthesizer):
         ))
 
     def _spawn_worker(self, model_dir: Path) -> subprocess.Popen:
-        python = get_tool_python("kokoro")
-        script = get_scripts_dir("audio") / "kokoro_worker.py"
-
         # lang_code is derived from the voice rather than configured: Kokoro
         # takes the accent separately from the voice name, and a mismatch
         # makes a voice speak through the wrong accent's phonemes instead of
         # raising anything. See KokoroConfig.lang_code.
-        cmd: list[str] = [
-            str(python), "-u", str(script),
+        return spawn_script_worker(
+            "kokoro", "audio", "kokoro_worker.py",
             "--model_dir", str(model_dir.resolve()),
             "--lang_code", self.engine_config.lang_code,
             "--repo_id", self.engine_config.hf_repo_id,
             "--sample_rate", str(self.engine_config.sample_rate),
-        ]
-
-        return subprocess.Popen(
-            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, bufsize=1,
         )
 
     def _synth_timeout_seconds(self) -> float:

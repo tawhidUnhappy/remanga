@@ -7,11 +7,10 @@ from pydub import AudioSegment
 
 from remanga import settings
 from remanga.audio.join import join_segments
+from remanga.audio.master import load_bgm, panel_segments, under_narration, write_master
 from remanga.audio.recipe import mix_fingerprint, write_recipe
-from remanga.audio.resample import load_audio
 from remanga.config import AudioConfig, RemangaConfig
 from remanga.console import console, escape as _esc
-from remanga.ffmpeg_io import run_ffmpeg
 from remanga.json_io import read_json, read_json_or, write_json
 from remanga.paths import (
     get_audio_dir,
@@ -117,16 +116,7 @@ class AudioProcessor:
         # only the mixed master now.
         segments: list[AudioSegment] = []
         for p in panels:
-            clip_file = audio_dir / p["audio_file"]
-            if clip_file.exists():
-                segments.append(AudioSegment.from_file(clip_file))
-            else:
-                segments.append(AudioSegment.silent(duration=p["duration_ms"], frame_rate=self.config.sample_rate))
-
-            # Append inter-panel silence pause
-            pause_ms = p.get("pause_after_ms", 0)
-            if pause_ms > 0:
-                segments.append(AudioSegment.silent(duration=pause_ms, frame_rate=self.config.sample_rate))
+            segments.extend(panel_segments(audio_dir, p, self.config.sample_rate))
 
         # One join rather than `+=` per clip, which re-copied the whole track
         # so far on every append - see audio/join.py.
@@ -138,24 +128,9 @@ class AudioProcessor:
         # 2. Mix Background Music (BGM) if enabled
         if self.config.bgm_enabled and self.config.bgm_path and Path(self.config.bgm_path).exists():
             console.print(f"[cyan]Overlaying background music:[/] {_esc(str(self.config.bgm_path))}")
-            # Through resample.load_audio for the same reason the narration
-            # clips are (see audio/resample.py): BGM is rarely already at the
-            # project rate - the bundled track is 48 kHz against a 44.1 kHz
-            # project - and pydub's resampler would fold imaging noise across
-            # the whole music bed on the way down.
-            bgm_track = load_audio(Path(self.config.bgm_path), self.config.sample_rate, channels=2)
-            bgm_track = bgm_track + self.config.bgm_volume_db  # Adjust volume gain
-
-            # Loop BGM to match voice track length + tail
-            total_duration_ms = len(master_audio)
-            loop_count = (total_duration_ms // max(1, len(bgm_track))) + 1
-            bgm_loop = (bgm_track * loop_count)[:total_duration_ms]
-
-            # Smooth BGM entry & exit fades
-            bgm_loop = bgm_loop.fade_in(1500).fade_out(2000)
-
-            # Overlay voice over BGM
-            master_audio = bgm_loop.overlay(master_audio)
+            master_audio = under_narration(
+                master_audio, load_bgm(self.config.bgm_path, self.config.sample_rate), self.config.bgm_volume_db,
+            )
         elif self.config.bgm_enabled:
             console.print(
                 f"[yellow]BGM is enabled in config, but file was not found at: {_esc(str(self.config.bgm_path))}. "
@@ -166,26 +141,10 @@ class AudioProcessor:
         master_audio.export(master_raw_path, format="wav")
 
         # 4. Loudness Normalization via FFmpeg (EBU R128)
-        if self.config.enable_loudnorm:
-            console.print("[cyan]Applying EBU R128 audio normalization...[/]")
-            cmd = [
-                "ffmpeg", "-y",
-                "-i", str(master_raw_path),
-                "-af", "loudnorm=I=-16:LRA=11:TP=-1.5",
-                "-ar", str(self.config.sample_rate),
-                str(master_final_path)
-            ]
-            try:
-                run_ffmpeg(cmd, check=True, capture=True)
-                if master_raw_path.exists():
-                    master_raw_path.unlink()
-            except Exception as e:
-                console.print(
-                    f"[yellow]Loudnorm filter warning: {_esc(str(e))}. Falling back to standard raw master audio.[/]"
-                )
-                master_raw_path.rename(master_final_path)
-        else:
-            master_raw_path.rename(master_final_path)
+        write_master(master_raw_path, master_final_path, self.config.sample_rate,
+                     normalize=self.config.enable_loudnorm,
+                     announcement="Applying EBU R128 audio normalization...",
+                     on_failure="standard raw master audio")
 
         # Recomputed rather than reusing the pre-mix `fingerprint` above:
         # timing_path's mtime could theoretically be touched again by a
