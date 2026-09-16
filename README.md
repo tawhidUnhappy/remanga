@@ -1,18 +1,29 @@
 # remanga
 
-**remanga** is a 100% self-contained, modular manga recap video production engine. Powered by **Kokoro-82M**, it automates manga downloading, MAGI v3-assisted panel marking via a local web UI, LLM-guided narration writing, vision packaging, naturally expressive vocal synthesis, audio mastering with EBU R128 normalization, and GPU-accelerated video rendering.
+**remanga turns a manga chapter into a narrated recap video, on your own machine.** It downloads the
+pages, helps you mark where the panels are, crops them, hands you a prompt to write the narration
+with, speaks that narration in one steady voice, mixes it over music, and renders the video - a
+chapter at a time, or a whole manga joined into one continuous recap.
 
-Built with strict environment isolation, `remanga` provisions its own tools, manages its own runtimes, and leaves zero files or modifications outside its root workspace directory.
+It is a workshop, not a button. The judgements that make a recap good - which panels matter, what
+the narration actually says - stay yours. Everything that is bookkeeping is automated, resumable
+and safe to interrupt. Nothing is installed outside this folder, nothing leaves your machine
+except what you choose to hand an LLM, and every stage leaves plain files on disk that you can
+open, fix, or throw away and redo.
 
 ---
 
 ## Table of Contents
+- [What it is for](#what-it-is-for)
+- [Why it exists](#why-it-exists)
+- [How it works](#how-it-works)
+- [What it uses, and why](#what-it-uses-and-why)
+- [Why you would use it](#why-you-would-use-it)
 - [Key Features](#key-features)
 - [System Requirements](#system-requirements)
 - [Fresh PC Installation & Setup](#fresh-pc-installation--setup)
 - [Quick Start: Master Interactive Wizard](#quick-start-master-interactive-wizard)
 - [Configuration & Settings Wizard](#configuration--settings-wizard)
-- [Switching TTS Engines](#switching-tts-engines)
 - [Step-by-Step CLI Production Workflow](#step-by-step-cli-production-workflow)
 - [Resetting/Restarting a Chapter](#resettingrestarting-a-chapter)
 - [Whole-Manga Video & Remixing BGM](#whole-manga-video--remixing-bgm)
@@ -21,12 +32,243 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
   - [Panel Marker Web UI](#panel-marker-web-ui)
   - [Temporal Horizon Prompting (Zero Spoilers)](#temporal-horizon-prompting-zero-spoilers)
   - [YouTube Upload Text](#youtube-upload-text-promptsyoutubemd)
+- [The TTS Engine](#the-tts-engine)
 - [Narration Voice & Delivery](#narration-voice--delivery)
 - [Reliability: Crashes, Interrupts & Resuming](#reliability-crashes-interrupts--resuming)
 - [CLI Command Reference](#cli-command-reference)
 - [Workspace Directory Structure](#workspace-directory-structure)
+- [Extending remanga](#extending-remanga)
 - [Troubleshooting & FAQ](#troubleshooting--faq)
 - [License](#license)
+
+---
+
+## What it is for
+
+A manga recap video is a chapter retold: each panel on screen while a narrator says what happens in
+it, music underneath, cut together in reading order. Made by hand that is hours of cropping,
+writing, recording, levelling and encoding per chapter - almost all of it clerical, and all of it
+to be repeated for the next chapter, in the same voice, at the same loudness, with the same look.
+
+remanga automates the clerical part and keeps the editorial part. One chapter through the pipeline
+leaves you with:
+
+| On disk | What it is |
+|---|---|
+| `pages/` | the chapter as downloaded, every page checked against MangaDex's own checksum |
+| `crops.json` | where the panels are - the one file that says what a "panel" is for this chapter |
+| `panels/` | each panel cropped out, full quality, in reading order |
+| `sheets/`, `panels_zip/`, `panels_pdf/` | the same panels packaged for uploading to an LLM (optional, losslessly) |
+| `narration.json` | one line of narration per panel, plus `memory.json`, the running series memory |
+| `audio/` | one synthesized clip per panel, plus `audio_timing.json` - the timeline everything downstream lays itself out from |
+| `audio_modified/master_audio.wav` | narration, music and a single EBU R128 loudness pass |
+| `video/` | the chapter's picture stream and its finished MP4 |
+| `full_recap/` | every chapter joined into one video, with one continuous music bed |
+
+**Who it is for.** Someone making recap or summary videos for a channel, regularly, who wants the
+tenth chapter to look and sound exactly like the first. Someone archiving a series they have read.
+Someone who wants the tedious half automated without handing an entire creative pipeline to a
+service they cannot inspect.
+
+**What it deliberately does not do.** It does not translate, typeset or scanlate. It does not
+upload anything anywhere - rendering finishes with an MP4 in a folder. It does not write the
+narration by itself: a prompt is provided, you run it through whichever LLM you already use, and
+you paste the answer back. And it will not quietly produce a worse video than you asked for - it
+stops instead (see [Why it exists](#why-it-exists)).
+
+---
+
+## Why it exists
+
+Every design decision here comes from a small number of positions. They are worth stating plainly,
+because they explain the things that would otherwise look like extra work.
+
+**1. Everything lives in this folder, and deleting it leaves nothing behind.**
+Its own `uv`, its own `ffmpeg`/`ffprobe`, its own Python 3.11, five isolated virtual environments,
+and every model cache pinned inside `.cache/`. No system packages, no global pip installs, no
+`~/.cache` surprises. A tool that reshapes your machine to run is a tool you cannot try.
+
+**2. Your machine is where the work happens.**
+Panel detection, speech synthesis, OCR, mixing and encoding all run locally, from weights on your
+disk. No account, no API key, no per-minute cost. The only things that ever leave are the pages you
+download from MangaDex, and whatever you personally choose to paste into an LLM.
+
+**3. Files on disk are the interface between stages.**
+Not an in-memory pipeline, not a database - a chapter is a folder, and each stage reads plain files
+and writes plain files. That is what makes every stage separately runnable, inspectable and
+resumable: you can crop today, narrate next week, and re-render in a year, and you can open any
+intermediate file with the tools you already have.
+
+**4. Nothing silently degrades.**
+A cropped panel with no narration line, or a narration line with no panel, stops text-to-speech,
+the mix and the render - instead of producing a video with a silent panel in it that nobody notices
+until it is published. Downloaded pages are verified against MangaDex's checksums, not their file
+size. Package formats are re-encoded and then decoded again and compared pixel for pixel; anything
+that does not round-trip exactly is discarded. `verify` re-checks a finished chapter end to end.
+
+**5. Interrupting is normal, so it is safe.**
+Ctrl+C during synthesis shuts the worker down cleanly; clips are written to a temp file and renamed
+into place, so a kill cannot leave a truncated clip that looks finished; a resume re-synthesizes the
+panel that was interrupted and the two before it rather than trusting them; a worker that stops
+answering is killed and replaced instead of hanging the run.
+
+**6. Changing your mind should be cheap.**
+Raising the narration gain re-uses the clips already on disk and applies only the difference.
+Changing the music re-mixes and re-muxes, but re-encodes no video, because the picture is cached
+apart from the sound. Each manga can disagree with your machine-wide settings, so a dark fantasy
+series does not have to sound like last month's school comedy. And a restart has four depths, from
+"keep everything but the video" down to "keep only the downloaded pages".
+
+**7. Do not ask what can be looked up.**
+The wizard offers the chapters you actually have, pre-fills the next chapter MangaDex lists that you
+do not, reads the reading direction from the manga's own language, remembers what you packaged last
+time, and states the voice and music rather than asking again. Questions are for judgement, not for
+facts already on disk.
+
+**8. One source of truth, everywhere.**
+Commands, pipeline steps and settings screens are registries, so the CLI, the wizard and `--help`
+cannot describe the same thing differently. Every isolated environment is described in one catalog
+that bootstrap, `setup-tools` and first use all provision from. Shared behaviour is shared code -
+one worker lifecycle for TTS/OCR/MAGI, one launcher for the three web UIs, one master-audio module
+for the chapter mix and the whole-manga mix.
+
+**9. Say what happened.**
+What was skipped and why, what is about to be deleted before it is deleted, which panels clipped,
+which chapters were not marked, what a fallback fell back to. A run that looks like it worked but
+did not is the failure this project is most afraid of.
+
+---
+
+## How it works
+
+The pipeline is eleven steps, and each one is also a command you can run on its own. `run` executes
+the list this project has saved; the wizard walks the same list.
+
+```
+download → mark (or llm-crop) → crop → package → init-narration → pause
+        → narration → review → tts → mix → render
+```
+
+**1. `download` - the chapter arrives.** MangaDex's API gives the chapter's page list and a
+MangaDex@Home node to fetch them from. Every page file is named after the SHA-256 of its own bytes,
+so re-running a download is a real verification: anything in `pages/` that is not one of this
+chapter's pages is removed, every page is checked byte for byte, and only what fails is fetched
+again. The chapter feed is cached per project for a day, since the only thing that changes it is a
+new chapter being published.
+
+**2. `mark` - where are the panels?** This is the first place a person decides. The Panel Marker is
+a local web UI: draw boxes over the page, drag them, reorder them, and save. MAGI v3 (a manga
+vision model) can propose the panels first so you are correcting rather than drawing - it never runs
+unasked, and never overwrites a page you have touched. One browser tab can cover a whole manga,
+saving each chapter as you leave it. What it writes is `crops.json`.
+
+**2b. `llm-crop` - or let Gemini do it.** The alternative route, shipped as an extension: each page
+is placed on a 1:1 black square with a green coordinate grid drawn over it, the chapter is zipped,
+and you upload that zip with `prompts/llm_crop.md` to Gemini. Its reply - panels, and which speech
+bubbles and stray art belong to each - is pasted into the chapter's `llm_crops.json` and becomes the
+same `crops.json`, with the extra structure the cropper uses to keep a bubble whole and paint out a
+neighbouring panel's frame. Marks made either way are interchangeable - the full walkthrough is
+[`docs/llm_crop_guide.md`](docs/llm_crop_guide.md).
+
+**3. `crop` - panels out of pages.** Boxes are snapped to the page's real gutters, leftover white
+margin is trimmed, duplicate panels are dropped, and each panel is written full quality into
+`panels/` under a name that says which chapter, page and panel it is.
+
+**4. `package` - what the LLM will see.** Optional: contact sheets, zips, PDFs, split into
+size-capped parts if you want. Everything is lossless and verified as such, and every part carries a
+manifest of what it contains so nothing can go missing without it being obvious.
+
+**5-7. `init-narration`, `pause`, `narration` - what does it say?** The second place a person
+decides. An empty `narration.json` is created (zero bytes - the whole codebase reads that as "not
+written yet"), the pipeline can pause for you, and then you upload the packaged panels with
+`prompts/narration.md` to whichever LLM you use. That prompt is the opinionated part: one flat
+narrator, present tense, no spoilers beyond the panel on screen, characters described rather than
+named until the chapter names them, every speech bubble reported rather than quoted. You paste back
+`narration.json` (a line per panel) and `memory.json` (what the series has established so far, for
+the next chapter's prompt).
+
+**8. `review` - is it right?** The third place a person decides. The Narration Reviewer shows each
+panel with its line and lets you flag the wrong ones with a note; it writes
+`narration_review.json`, which goes back to the LLM with `prompts/narration_review.md` for a fix
+pass. Prefer to write it yourself? The Narration Writer UI does that instead, with per-panel OCR
+(DeepSeek-OCR-2) to save retyping what the bubbles say.
+
+**9. `tts` - the voice.** One clip per panel, synthesized by Kokoro-82M (or Chatterbox Turbo) in an
+isolated environment, edge-faded to kill clicks, gain baked in, written atomically.
+`audio_timing.json` records what was synthesized, in which voice, at which gain, and how long each
+panel's slot is.
+
+**10. `mix` - the master.** The clips end to end with the configured pause between them, the music
+bed looped underneath at a measured level and faded in and out exactly once, then a single EBU R128
+pass to -16 LUFS. The mix is skipped entirely when nothing that affects it has changed.
+
+**11. `render` - the video.** Each panel is composited onto the frame - padded, bordered, over a
+blurred version of itself or black - and encoded with NVENC if this machine's driver actually
+supports it, else libx264. The picture is encoded and cached separately from the sound, so changing
+the music costs one audio encode and a mux, not a re-render. Panel changes are snapped into the
+silent pause before their line.
+
+**Whole manga.** `full-recap` does all of that per chapter, then joins the chapters by
+stream-copying their pictures and rebuilding one continuous soundtrack - so the music never restarts
+and the loudness never jumps at a chapter boundary.
+
+**Staleness is a chain, not a flag.** `audio_timing.json` is rewritten only when its content
+changes; the mix watches that file's timestamp; the render watches the master audio's. So turning a
+knob at the front propagates exactly as far as it has to, and a re-run that changes nothing costs
+nothing.
+
+---
+
+## What it uses, and why
+
+| Tool | Used for | Why this one |
+|---|---|---|
+| **uv** (bundled in `bin/`) | every environment and install | Fast, and it can install a Python interpreter, so nothing depends on what your system Python happens to be. |
+| **ffmpeg / ffprobe** (bundled, pinned build) | decoding, resampling, loudness, encoding, muxing | The pinned build is deliberate: the newest ffmpeg needs the newest NVIDIA driver, and a "just use latest" policy breaks GPU encoding on machines that were fine yesterday. macOS uses your own ffmpeg - there is no static build to fetch. |
+| **MangaDex API** | chapter feeds and page downloads | Public API with per-page SHA-256 names, which is what makes verification honest rather than a size check. |
+| **Pillow** | cropping, contact sheets, frame compositing | Pure-Python imaging with no GPU requirement; compositing runs one process per core. |
+| **MAGI v3** (`ragavsachdeva/magiv3`) | proposing panel boxes in the Panel Marker | A manga-specific vision model from Oxford that localizes panels directly. Optional, GPU-only, and its licence is personal/research/non-commercial - which is why it assists your marking rather than being the only way to mark. |
+| **Gemini** (your own account, via the LLM crop extension) | reading a whole gridded chapter and returning panel geometry | Handles context a detector cannot: which bubble belongs to which panel, when two frames are one beat, when art breaks its own border. You upload and paste; remanga never holds a key. |
+| **An LLM of your choice** (copy/paste, `prompts/`) | writing the narration, the review fix pass, YouTube text | Deliberately not automated: no key to store, no per-run cost, no vendor lock - and the prompt, which is where the quality actually lives, stays a file you can edit. |
+| **Kokoro-82M** | speech, by default | 327MB, Apache-2.0, 28 graded English voices built in, ~48x faster than real time on an RTX 3060, and no reference clip to get wrong - which was the single largest source of bad narration in the engines it replaced. |
+| **Chatterbox Turbo** | speech, when you want a cloned voice | MIT, clones a narrator from a recording you supply, for when no built-in voice fits. Slower, and the recording's room and accent come with it - so it is the alternative, not the default. |
+| **DeepSeek-OCR-2** | per-panel OCR in the Narration Writer | Lets you write narration from what the bubbles actually say without retyping them. Loads on first use only. |
+| **pydub** | assembling clips, pauses, fades and the music bed | Simple segment arithmetic over ffmpeg; the resampling that matters goes through ffmpeg directly, because pydub's own resampler folds noise into a music bed. |
+| **Flask + vanilla JS** | the three local web UIs | No build step, no framework, no node_modules - they are served from localhost for as long as you have them open, and stop when you are done. |
+| **Rich + a custom key reader** | the terminal wizard | Arrow-key menus that restore your terminal exactly as they found it, and fall back to numbered prompts when stdin is not a terminal. |
+| **Pydantic** | `config.json`, per-project overrides, the settings screens | One schema describes the settings, validates them, and generates the screens - so a setting cannot exist in the file but be missing from the UI. |
+
+**Five environments, on purpose.** MAGI v3 needs `transformers<4.52`, DeepSeek-OCR-2 pins
+`==4.46.3`, Chatterbox pins `==5.2.0`. One environment for all of them is a permanent maintenance
+problem; five means none can break another, and the main environment carries no ML libraries at all -
+it only ever talks to them as subprocesses. The cost is disk, which is the cheapest thing to spend.
+
+---
+
+## Why you would use it
+
+- **The boring 90% is gone, the important 10% is still yours.** Downloading, verifying, cropping,
+  naming, packaging, synthesizing, levelling, encoding and joining are handled. Which panels matter
+  and what the narration says are not taken away from you.
+- **Chapter 40 sounds like chapter 1.** Same voice, same pacing, same loudness target, same framing
+  - because they come from settings, not from whatever you did that day.
+- **It is safe to stop.** Close the laptop mid-chapter. Re-run the same command tomorrow; it picks
+  up, and it distrusts exactly the clips it should.
+- **It is cheap to change your mind.** New music for the whole manga is a re-mix, not a re-render.
+  A louder narrator does not re-synthesize anything. A different resolution for this series only is
+  one row in a menu.
+- **You can see everything it did.** Every stage is a file you can open, and every destructive
+  action lists what it will delete first.
+- **It runs offline, on your hardware, and uninstalls by `rm -rf`.**
+
+**What it costs you.** About 20-35 GB of disk. A GPU if you want synthesis and rendering to be fast
+(neither requires one). Marking panels, or a round trip through Gemini for it. A copy/paste round
+trip through an LLM for the narration, and a real editorial pass on what comes back - a recap is
+only as good as its script, and no part of this pretends otherwise.
+
+**Please be a good citizen with it.** The manga you download belongs to the people who made it, the
+MAGI weights are licensed for personal/research/non-commercial use, and a recap you publish is your
+responsibility, not this tool's.
 
 ---
 
@@ -44,7 +286,7 @@ Built with strict environment isolation, `remanga` provisions its own tools, man
 - **Fast, Consistent Vocal Synthesis (Kokoro-82M):**
   - One even narrator register for the whole recap — the delivery is cloned from the reference clip and stays consistent panel to panel, instead of lurching between emotional registers while it describes what happens.
   - **48x faster than real time** on an RTX 3060 (measured): a 450-panel recap synthesizes in under a minute instead of 58.
-  - 54 built-in studio voices, graded A–F by the model's authors and shown with their grades in the picker — no reference clip, no cloning, no transcript.
+  - 28 built-in English studio voices, graded A–F by the model's authors and shown with their grades in the picker — no reference clip, no cloning, no transcript.
   - Apache-2.0 weights, 327MB, ~2-3GB VRAM — see [The TTS Engine](#the-tts-engine).
 - **Strict Temporal Horizon Prompting (Anti-Spoiler & Anti-Hallucination):**
   - Forbids unintroduced character names, future plot reveals, motives, or hallucinated actions.
@@ -141,7 +383,7 @@ bash bootstrap.sh
    decided at any time with `./run.sh hardware`. It never aborts on an
    optional step: anything skipped is listed as a warning in its summary.
 1. Downloads and provisions static `bin/uv`, `bin/ffmpeg`, and `bin/ffprobe` for this platform (macOS uses the system ffmpeg) — `ffmpeg` is pinned to a specific tested build rather than always the newest one, so its NVENC GPU encoder keeps working across a wide range of NVIDIA driver versions instead of silently requiring whatever driver was newest the day it was compiled (see [Troubleshooting #3](#troubleshooting--faq)).
-2. Provisions **six** isolated Python 3.11 virtual environments instead of one, each installed from the wheel index this machine needs:
+2. Provisions **five** isolated Python 3.11 virtual environments instead of one, each installed from the wheel index this machine needs:
    - `.venv/` — remanga's own lightweight core (Pillow, Pydantic, requests, rich, pydub, Flask). No ML libraries at all.
    - `.tools/venv-kokoro/` — PyTorch + Kokoro and its misaki/spaCy G2P stack.
    - `.tools/venv-chatterbox/` — PyTorch + Chatterbox Turbo's own pinned dependencies.
@@ -885,7 +1127,7 @@ remanga can drive two engines, picked with `tts.engine` (`config.json`) or `--en
 | | **Kokoro-82M** (default) | **Chatterbox Turbo** |
 |---|---|---|
 | `tts.engine` | `"kokoro"` | `"chatterbox"` |
-| voice | 54 fixed built-in voices | clones whoever is speaking in a recording you supply |
+| voice | 28 fixed built-in English voices | clones whoever is speaking in a recording you supply |
 | voice field | `tts.kokoro.voice` — a NAME | `tts.chatterbox.voice` — a PATH |
 | languages | English only | English only |
 | weights | 327MB, Apache-2.0 | ~2.9GB, MIT |
@@ -1116,6 +1358,51 @@ remanga/
 
 ---
 
+## Extending remanga
+
+**A feature plugs in through one manifest.** `remanga/extensions/<name>/extension.py` defines a
+single `EXTENSION = Extension(...)` that can add commands, pipeline steps, a settings section, its
+own config block (`config.extensions.<name>`, per-project overridable like everything else), status
+rows, generated directories it owns, and source files a reset should keep. Discovery picks up every
+built-in extension package plus anything installed that advertises the `remanga.extensions` entry
+point. **LLM crop is the first one** - grid building, the reply checker, the importer, its commands
+and its settings are all inside `remanga/extensions/llm_crop/`, and core code has no idea it exists.
+
+```python
+EXTENSION = Extension(
+    name="llm_crop", title="LLM crop",
+    commands=lambda: [Placed(CROP_GRID, after="mark"), Placed(LLM_CROP, after="crop-grid")],
+    steps=lambda: [Placed(LLM_CROP_STEP, after="mark")],
+    settings=lambda: [Placed(SECTION, after="detection")],
+    config_model=lambda: LLMCropConfig,
+    generated_kinds=("grid_pages", "grid_zip", "grid_pdf", "llm_crop"),
+    source_files=("llm_crops.json",),
+    alternative_steps=("llm-crop",),
+)
+```
+
+Everything a manifest returns is a lazy factory, because manifests are read while the registries are
+still importing - a top-level import of a handler would import the registry that is loading it.
+
+**Adding a model or tool environment** is one `ToolSpec` in `remanga/tool_envs/catalog.py`: its
+name, what to install, and whether those installs need this machine's torch wheel index. bootstrap,
+`setup-tools` and the tool's own first use all provision from that list, and a changed entry
+re-syncs that one environment (a fingerprint per venv) without touching the others.
+
+**Adding a command or a pipeline step** is an entry in the matching registry - `remanga/commands/`
+and `remanga/pipeline/`. The CLI, `--help`, and the wizard's menus are all generated from them, so
+there is nowhere else to remember to update.
+
+**House rules for the code.** No module over ~300 lines; when one grows past that it is split by
+concern, keeping its public names importable (a big class becomes a core class plus mixins in
+sibling modules; stateless helpers become module functions; a module that grew several jobs becomes
+a package that re-exports). Anything shared lives in exactly one place - `remanga/workers/` for
+isolated-venv worker processes, `remanga/webui/launch.py` for serving the web UIs,
+`remanga/audio/master.py` for building a master track - and a helper that crosses a module boundary
+gets a public name. `ruff check remanga` is the lint gate (line length 120).
+
+---
+
 ## Troubleshooting & FAQ
 
 ### 1. `CUDA out of memory` during TTS synthesis
@@ -1126,7 +1413,7 @@ remanga/
 Every panel is read in the same voice and the same register (see [Narration Voice & Delivery](#narration-voice--delivery)), so an odd-sounding line almost always traces back to what's written for that panel rather than to synthesis:
 - Check whether that panel's `narration.json` text over-punctuates — a line stacking multiple `!`/`?`/`...` reads as more dramatic than intended. `prompts/narration.md` asks the LLM to reserve emphatic punctuation for panels that genuinely call for it; if it slipped through anyway, trim the line's punctuation back to plain prose and re-run.
 - Check the line against the "Writing for the voice" section of `prompts/narration.md` — ALL-CAPS shouting, markdown, emoji, a letter glued to a hyphen (`W-what`) or an unhyphenated `A rank` all come out wrong. The LLM writes the text ready to speak and nothing rewrites it afterwards, so fix that panel's line by hand, or flag it in `review` for the next fix pass.
-- If the *whole* recap sounds wrong rather than one line, that's the voice, not the text: try a different `tts.kokoro.voice` (grades are shown in the picker; several of the 54 are graded D or F and are genuinely worse).
+- If the *whole* recap sounds wrong rather than one line, that's the voice, not the text: try a different `tts.kokoro.voice` (grades are shown in the picker; several of the 28 are graded D or F and are genuinely worse).
 
 ### 3. NVENC GPU encoder error during video rendering
 `bootstrap.sh` pins the bundled `bin/ffmpeg` to a specific, tested BtbN build (not the "latest" rolling one) precisely so NVENC works out of the box for a wide range of NVIDIA driver versions — a too-new build otherwise requires a driver version yours may not have yet, and it reports as a generic-looking failure. If GPU encoding still doesn't work:
