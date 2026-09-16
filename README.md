@@ -1087,7 +1087,8 @@ remanga/
 │   ├── models/                 # weights.py (talks to the isolated venvs to fetch/verify weights)
 │   │   └── scripts/             # download_kokoro.py, download_chatterbox.py, download_deepseek_ocr.py
 │   ├── webui/                  # Panel Marker: server.py (entry point/lifecycle), launch.py (serving all three
-│   │   │                       # UIs), panel_session.py (Reviewer/Writer panel state), routes.py (Flask app/API),
+│   │   │                       # UIs), routes.py + routes_detect.py + routes_settings.py (Flask API),
+│   │   │                       # panel_session.py (Reviewer/Writer panel state),
 │   │   │                       # marker_session.py (chapters + cursor; session_*.py mixins), marker_state.py
 │   │   │                       # (one chapter) + marks_file.py (its crops.json), detection.py + magi_assist.py (MAGI v3),
 │   │   │                       # settings_store.py (Shortcuts + assist persistence)

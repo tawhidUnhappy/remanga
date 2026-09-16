@@ -8,31 +8,17 @@ from rich.progress import BarColumn, Progress, TextColumn
 
 from remanga import settings
 from remanga.audio.clips import apply_edge_fades, apply_gain, atomic_export, clamp_boost, is_audible_gain
+from remanga.audio.narration_voice import narration_voice_identity, voice_changed_from
 from remanga.audio.resample import load_audio
+from remanga.audio.resume import clip_is_complete, clips_to_redo
 from remanga.audio.synth import create_synthesizer
+from remanga.audio.timing import panel_timing, write_timing
 from remanga.config import AudioConfig, RemangaConfig, TTSConfig
-from remanga.config.tts import engine_spec
 from remanga.console import console, escape
-from remanga.json_io import read_json, read_json_or, write_json
+from remanga.json_io import read_json, read_json_or
 from remanga.paths import get_audio_dir, get_audio_timing_path, get_chapter_dir
 from remanga.settings.fields import set_field
 from remanga.verify import ensure_panels_match_narration
-
-
-def narration_voice_identity(engine: str, voice: str) -> dict[str, Any]:
-    """The voice a chapter's clips are in, as audio_timing.json records it.
-
-    A recording is identified by its size and modification time as well as
-    its path - the way the mix fingerprint identifies the BGM file - because
-    re-exporting a cleaner take of the clip under the same name makes a
-    different narrator, and the chapter should be re-voiced with it."""
-    identity: dict[str, Any] = {"engine": engine, "voice": voice}
-    if engine_spec(engine).clones_voice:
-        clip = Path(voice).expanduser()
-        if clip.is_file():
-            stat = clip.stat()
-            identity.update(voice=str(clip.resolve()), clip_bytes=stat.st_size, clip_mtime_ns=stat.st_mtime_ns)
-    return identity
 
 
 class TTSEngine:
@@ -82,7 +68,7 @@ class TTSEngine:
 
         # Debris from an atomic_export() that was itself interrupted before its
         # rename-into-place (a kill exactly mid-write) - harmless leftovers, never
-        # mistaken for a finished clip since is_cached_complete() only looks at the
+        # mistaken for a finished clip since resume.clip_is_complete() only looks at the
         # real ".wav" path, but worth sweeping so they don't just accumulate.
         for stray_tmp in audio_dir.glob("*.wav.tmp"):
             stray_tmp.unlink(missing_ok=True)
@@ -112,19 +98,10 @@ class TTSEngine:
         # Which voice the clips already on disk are in. Resume reuses any clip
         # that is there, so without this, switching the engine or the narrator
         # and re-running a chapter would "resume" every panel in the old voice
-        # and change nothing at all. Manifests written before this was
-        # recorded all came from Kokoro, so for those only the engine can be
-        # compared.
+        # and change nothing at all.
         voice_identity = narration_voice_identity(self.tts_config.spec.name, voice)
-        previous_voice = previous_timing.get("voice") or {"engine": "kokoro"}
-        if "voice" in previous_voice:
-            voice_changed = previous_voice != voice_identity
-        else:
-            voice_changed = previous_voice.get("engine") != voice_identity["engine"]
-        if previous_timing and voice_changed and not force:
-            was = engine_spec(str(previous_voice.get("engine", ""))).display_name
-            if previous_voice.get("voice"):
-                was += f", {Path(str(previous_voice['voice'])).name}"
+        was = voice_changed_from(previous_timing, voice_identity)
+        if was and not force:
             console.print(
                 f"[yellow]This chapter's existing clips are in another voice[/] "
                 f"[dim]({escape(was)}) - synthesizing every panel again.[/]"
@@ -173,34 +150,21 @@ class TTSEngine:
                 clipped_panels.append(panel_id)
             return boosted
 
-        def is_cached_complete(panel_id: str) -> bool:
-            clip = audio_dir / f"{panel_id}.wav"
-            return clip.exists() and clip.stat().st_size > 1000
-
         panel_ids = [entry.get("panel_id") or f"panel_{i:03d}" for i, entry in enumerate(narration_entries, start=1)]
 
-        # Where the previous run actually left off: the first panel, in sequence,
-        # with no complete cached clip. Exports are atomic now (see atomic_export
-        # below) so a kill mid-write can no longer leave a truncated file sitting
-        # at the final path looking "done" - but a clip written by an *older* run,
-        # from before that fix, still could be. Rather than trust the last couple
-        # of clips right at the resume point, force them (and the actual resume
-        # point itself) to regenerate - the two panels either side of a Ctrl+C are
-        # exactly the ones a corrupt-but-present WAV would hide in.
-        force_regen_ids: set = set()
-        if not force:
-            resume_at = next((i for i, pid in enumerate(panel_ids) if not is_cached_complete(pid)), len(panel_ids))
-            if 0 < resume_at < len(panel_ids):
-                force_regen_ids = set(panel_ids[max(0, resume_at - 2):resume_at + 1])
-                console.print(
-                    f"[dim cyan](Resuming - re-generating the {len(force_regen_ids)} panel(s) around the previous "
-                    f"run's stopping point instead of trusting them, in case that run was interrupted mid-write: "
-                    f"{', '.join(sorted(force_regen_ids))})[/]"
-                )
+        # The clips around where the previous run stopped are regenerated
+        # rather than trusted - see resume.py for why.
+        force_regen_ids = set() if force else clips_to_redo(audio_dir, panel_ids)
+        if force_regen_ids:
+            console.print(
+                f"[dim cyan](Resuming - re-generating the {len(force_regen_ids)} panel(s) around the previous "
+                f"run's stopping point instead of trusting them, in case that run was interrupted mid-write: "
+                f"{', '.join(sorted(force_regen_ids))})[/]"
+            )
 
         def is_resumable(panel_id: str) -> bool:
             """True if a clean WAV from a previous run can be reused for this panel."""
-            return not force and panel_id not in force_regen_ids and is_cached_complete(panel_id)
+            return not force and panel_id not in force_regen_ids and clip_is_complete(audio_dir, panel_id)
 
         timing_data: list[dict[str, Any]] = []
         current_timeline_ms = 0
@@ -297,60 +261,21 @@ class TTSEngine:
                         silence = AudioSegment.silent(duration=duration_ms, frame_rate=self.audio_config.sample_rate)
                         atomic_export(silence, processed_clip_path)
 
-                start_ms = current_timeline_ms
-                end_ms = start_ms + duration_ms
-                total_panel_slot_ms = duration_ms + pause_after_ms
-
-                timing_data.append({
-                    "index": idx,
-                    "panel_id": panel_id,
-                    "text": text,
-                    "audio_file": processed_clip_path.name,
-                    "start_time_ms": start_ms,
-                    "end_time_ms": end_ms,
-                    "duration_ms": duration_ms,
-                    "pause_after_ms": pause_after_ms,
-                    "total_slot_ms": total_panel_slot_ms,
-                    "start_time_sec": round(start_ms / 1000.0, 3),
-                    "end_time_sec": round(end_ms / 1000.0, 3),
-                    "total_slot_sec": round(total_panel_slot_ms / 1000.0, 3),
-                })
-
-                current_timeline_ms += total_panel_slot_ms
+                timing_data.append(panel_timing(
+                    idx, panel_id, text, processed_clip_path.name, start_ms=current_timeline_ms,
+                    duration_ms=duration_ms, pause_after_ms=pause_after_ms,
+                ))
+                current_timeline_ms += duration_ms + pause_after_ms
                 progress.advance(task)
 
-        # Idempotent write: skip touching the file at all if the content is
-        # identical to what's already there. This isn't just tidiness -
-        # audio/mix.py treats this file's mtime as "did the synthesized
-        # audio actually change" to decide whether it needs to re-mix (and
-        # video/render.py, in turn, treats master_audio.wav's mtime the same
-        # way to decide whether to re-encode). Rewriting this file on every
-        # single TTS call - even a fully-resumed one where nothing was
-        # regenerated - would make that staleness check permanently useless:
-        # every downstream step would think something changed every time,
-        # forever re-mixing and re-encoding chapters that are actually
-        # already done.
-        new_timing = {
-            "chapter": str(chapter_num),
-            # What is actually baked into the clips this file describes - read
-            # back at the top of the next run to work out the difference. It
-            # also earns its keep in the staleness chain described below: a
-            # changed boost changes this file, so mix and render both notice
-            # and redo themselves, which is what makes turning the knob
-            # reach the finished video without any extra flag.
-            "volume_boost_db": boost_db,
-            "total_timeline_ms": current_timeline_ms,
-            "total_timeline_sec": round(current_timeline_ms / 1000.0, 3),
-            "panels": timing_data
-        }
-        # The voice the clips are in (see voice_changed above) - recorded once
-        # this run synthesized something, or the file already carried it. Adding
-        # it to an untouched older manifest would change the file for nothing,
-        # and mix and render would take that as new audio and redo themselves.
-        if needs_synthesis or "voice" in previous_timing:
-            new_timing["voice"] = voice_identity
-        if read_json_or(timing_manifest_path, None) != new_timing:
-            write_json(timing_manifest_path, new_timing)
+        # Written only when something actually changed - see timing.py, and
+        # what depends on this file's mtime. The voice is recorded once this
+        # run synthesized something, or the file already carried it.
+        write_timing(
+            timing_manifest_path, chapter_num, timing_data, boost_db=boost_db,
+            total_ms=current_timeline_ms,
+            voice=voice_identity if (needs_synthesis or "voice" in previous_timing) else None,
+        )
 
         if clipped_panels:
             shown = ", ".join(clipped_panels[:5]) + (" ..." if len(clipped_panels) > 5 else "")

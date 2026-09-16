@@ -1317,7 +1317,14 @@ No module over ~300 lines. A long one is split by concern, and every public name
   load/build, and DECIDED_KEY/FORMAT_KEY/MARKS_FORMAT/STRUCTURED_KEY live there);
   `downloader/mangadex.py` + `chapter_list.py` (listing, CHAPTER_LIST_CACHE_TTL_SECONDS).
 - Stateless helpers become module functions: `full_recap/wipes.py`, `downloader/pages.py`,
-  `settings/field_prompts.py`, `settings/balance.py` (tuning.py -> tuning + levels + balance).
+  `settings/field_prompts.py`, `settings/balance.py` (tuning.py -> tuning + levels + balance),
+  `audio/narration_voice.py` + `audio/timing.py` + `audio/resume.py` (what a 300-line
+  `generate_narration_audio` was carrying: which voice the clips are in, the audio_timing.json
+  record, and which clips a killed run left untrustworthy).
+- A Flask app factory splits by route group, each mounted with a `register_*_routes(app, ...)`
+  call so endpoint names and the URL map stay identical: `webui/routes.py` +
+  `routes_detect.py` (detect/remark/reorder/status, and the scope resolution all three share)
+  + `routes_settings.py`.
 - A module that grew several jobs becomes a package or a set of siblings with a re-exporting
   front: `tool_envs/` (spec, catalog, install, cli; `python -m remanga.tool_envs`),
   `commands/handlers/project.py` re-exporting project_downloads / project_batches / project_marker,
