@@ -1408,6 +1408,16 @@ reply per chapter - a batched design was rejected; don't reintroduce batching.
   config, paths, extension.py manifest); settings are `config.extensions.llm_crop`. Cutting
   "structured crops" (frames + text_outside + art_outside, paint-out) is core:
   `cropper/structured.py`, `cropper/paint_out.py`, `cropper.paint_out`.
+- **The grid is a RULER, and its three weights are the point** (2026-09-16, after crops came back
+  a few units out): labeled lines every 100 (heaviest, numbered on all four edges), half lines
+  every 50 (lighter, numbered in small tags along top/left), and **ticks every `grid_tick_step`
+  (10)** along the four edges and across every labeled line. Ticks, not a 10-unit mesh: lines that
+  fine cross nearly every bubble and turn screentone into noise (25 already did). Default square is
+  2048px so the ticks still separate after Gemini scales the image down. Whatever changes here,
+  `grid.py`, `prompts/llm_crop.md` `<grid>` and `docs/llm_crop_guide.md` must keep saying the same
+  thing - the prompt is what tells the model how to read the drawing, and `chapter_info.json`
+  carries `grid.tick_step` along with the steps. Existing chapters keep their old images until
+  `crop-grid` is run again.
 - **Reply coordinates are on the SQUARE, not the page.** The page sits top-left on a black square;
   `PageExtent.to_page_box` divides by xmax/ymax (1000*w/long, 1000*h/long). Round trip checked
   within 1 unit on Yandere ch2.

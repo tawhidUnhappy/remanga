@@ -25,9 +25,13 @@ from 0 to 1000, measured on the whole square. `[0, 0]` is the square's top-left 
 its right edge and y = 1000 its bottom edge. Because the image is square, one unit is the same
 distance across as down.
 
-- **Brighter green lines every 100 units**, labeled with their value on all four edges: x values
-  along the top and bottom, y values along the left and right.
-- **Fainter green lines halfway between them**, every 50 units, without labels.
+- **Heavy green lines every 100 units**, labeled with their value on all four edges: x values along
+  the top and bottom, y values along the left and right.
+- **Lighter green lines halfway between them**, every 50 units, labeled in smaller tags along the
+  top and the left edge, so every line you can see carries its own number.
+- **Ticks every 10 units**: short marks along all four edges, and short dashes crossing every heavy
+  line. They are the ruler's fine scale: four ticks sit between a heavy line and the lighter line
+  beside it, dividing that 50-unit gap into five steps of 10.
 - **The page's area.** `page_areas` in the chapter info (`<inputs>`) gives each page's area as
   `[0, 0, ymax, xmax]`: `[0, 0, 1000, 696]` is a tall page whose right edge is at x 696, and
   `[0, 0, 718, 1000]` a wide spread whose bottom edge is at y 718. Every box you write lies inside
@@ -35,11 +39,11 @@ distance across as down.
 - **A page ID stamp**, such as `002_019`, in the black padding - or over the top of the page when
   there is no padding to spare. It is the page's name and matches its file name.
 
-To place an edge, find the labeled lines on either side of it, use the faint line between them to
-tell which half it falls in, and estimate its position inside that 50-unit cell - a quarter of a
-cell is about 12 units. Aim to be within about 5 units. Write the number where the edge actually
-is: borders rarely fall exactly on a grid line, so a page where most values end in 0 or 50 has
-been rounded to the grid rather than measured.
+To place an edge: read the nearest labeled line, then count ticks from it toward the edge - each
+tick is 10 units - and judge the last part of the way between two ticks. Aim to be within about 3
+units. Write the number where the edge actually is, not the tick nearest to it: borders rarely fall
+exactly on a tick, so a page whose values all end in 0 has been snapped to the ruler rather than
+measured against it.
 
 The grid lines, their labels, the stamp and the black padding are there for measuring only. They
 are not artwork, not panel borders and not text, so leave them out of every decision about what a
@@ -175,7 +179,7 @@ The chapter info looks like this:
   "chapter": "2",
   "reading_direction": "right_to_left",
   "grouping": "balanced",
-  "grid": {"image_size": 1600, "line_step": 50, "label_step": 100},
+  "grid": {"image_size": 2048, "line_step": 50, "label_step": 100, "tick_step": 10},
   "page_areas": {"002_001": [0, 0, 700, 1000], "002_002": [0, 0, 1000, 696], "...": "..."},
   "part_index": 1,
   "total_parts": 1,

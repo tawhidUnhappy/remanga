@@ -14,11 +14,23 @@ no offset to subtract (see PageExtent). And nothing is drawn outside the
 square, so the image edge IS the ruler's 0 and 1000: Gemini's own box frame
 and the labels it reads can never disagree.
 
-The spacing (faint lines every 50 units, labeled lines every 100) was chosen
-by rendering real pages from this repo and shrinking them to roughly the size
-a model sees: lines every 25 turned screentone into noise and crossed nearly
-every bubble, and lines only every 100 left too few cells to estimate
-inside."""
+What is drawn, and why it is drawn that way - worked out by rendering real
+pages from this repo and shrinking them to roughly the size a model sees:
+
+- **Labeled lines every 100 units**, the heaviest, with their value on all
+  four edges.
+- **Half lines every 50**, clearly lighter than a labeled line and labeled in
+  a smaller tag along the top and left, so "which line is this" never has to
+  be counted from the nearest hundred.
+- **Ticks every 10 units** - along all four edges, and across each labeled
+  line - rather than a full 10-unit mesh. Lines that fine turn screentone
+  into noise and cross nearly every bubble (25 already did), but an edge
+  falling between two lines still has to be estimated, and ticks give that
+  estimate something to count against without covering any art.
+
+A cell between two drawn lines is 50 units, so before the ticks an edge
+inside one could only be guessed to within about a tenth of it. The ticks
+make the same reading a count."""
 
 from __future__ import annotations
 
@@ -30,10 +42,12 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 GRID_GREEN = (0, 230, 0)
 LABEL_INK = (0, 105, 0)
 PADDING_COLOR = (0, 0, 0)
-# Line opacity. The faint lines still read when a 1600px square is shrunk to
-# ~768px, without hiding the art underneath them at full size.
-LABELED_ALPHA = 175
-FAINT_ALPHA = 95
+# Line opacity, and the gap between the three weights matters as much as the
+# values: at the size a model sees, a labeled line and a half line drawn alike
+# are the same line to it, and then even the coarse reading is a guess.
+LABELED_ALPHA = 210
+FAINT_ALPHA = 105
+TICK_ALPHA = 165
 LABEL_TAG_ALPHA = 220
 
 # EXIF orientations that turn the stored image a quarter turn, swapping width
@@ -112,27 +126,55 @@ def _stamp(draw: ImageDraw.ImageDraw, text: str, size: int, width: int, height: 
         _tag(draw, (size / 2, 2 * margin), text, font, "mt")
 
 
-def render_grid_page(page: Image.Image, page_id: str, size: int = 1600,
-                     line_step: int = 50, label_step: int = 100) -> Image.Image:
-    """`page` on its black square, with the grid and its page ID stamp."""
-    page = ImageOps.exif_transpose(page).convert("RGB")
-    scale = size / max(page.size)
-    width, height = max(1, round(page.width * scale)), max(1, round(page.height * scale))
-    canvas = Image.new("RGB", (size, size), PADDING_COLOR)
-    canvas.paste(page.resize((width, height), Image.Resampling.LANCZOS), (0, 0))
-
-    overlay = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
-    labeled_width, faint_width = max(2, round(size / 530)), max(1, round(size / 800))
+def _draw_lines(draw: ImageDraw.ImageDraw, size: int, line_step: int, label_step: int) -> None:
+    """The two line weights: labeled lines, and the lighter ones between."""
+    labeled_width, faint_width = max(3, round(size / 480)), max(1, round(size / 950))
     for value in sorted(set(range(0, 1001, line_step)) | set(range(0, 1001, label_step))):
         labeled = value % label_step == 0
         at = _pixel(value, size)
         fill = (*GRID_GREEN, LABELED_ALPHA if labeled else FAINT_ALPHA)
-        line_width = labeled_width if labeled else faint_width
-        draw.line([(at, 0), (at, size)], fill=fill, width=line_width)
-        draw.line([(0, at), (size, at)], fill=fill, width=line_width)
+        width = labeled_width if labeled else faint_width
+        draw.line([(at, 0), (at, size)], fill=fill, width=width)
+        draw.line([(0, at), (size, at)], fill=fill, width=width)
 
+
+def _draw_ticks(draw: ImageDraw.ImageDraw, size: int, tick_step: int, line_step: int, label_step: int) -> None:
+    """Ticks every `tick_step` units, along all four edges and across every
+    labeled line - so an edge that falls between two lines is counted rather
+    than guessed at. Deliberately not a full mesh: at this spacing, lines
+    across the whole square would cross nearly every bubble and turn
+    screentone into noise, while ticks touch no artwork away from a line."""
+    if tick_step <= 0:
+        return
+    edge, edge_half = max(4, round(size / 75)), max(6, round(size / 48))
+    cross = max(3, round(size / 150))
+    width = max(1, round(size / 1000))
+    fill = (*GRID_GREEN, TICK_ALPHA)
+    labeled_at = [_pixel(value, size) for value in range(0, 1001, label_step)]
+
+    for value in range(0, 1001, tick_step):
+        if value % label_step == 0:
+            continue  # the labeled line is already there
+        at = _pixel(value, size)
+        reach = edge_half if value % line_step == 0 else edge
+        draw.line([(at, 0), (at, reach)], fill=fill, width=width)
+        draw.line([(at, size - reach), (at, size)], fill=fill, width=width)
+        draw.line([(0, at), (reach, at)], fill=fill, width=width)
+        draw.line([(size - reach, at), (size, at)], fill=fill, width=width)
+        # And the same count carried into the middle of the square, as short
+        # dashes across each labeled line.
+        for line_at in labeled_at:
+            draw.line([(line_at - cross, at), (line_at + cross, at)], fill=fill, width=width)
+            draw.line([(at, line_at - cross), (at, line_at + cross)], fill=fill, width=width)
+
+
+def _draw_labels(draw: ImageDraw.ImageDraw, size: int, line_step: int, label_step: int) -> None:
+    """Every labeled line's value on all four edges, and every half line's
+    value in a smaller tag along the top and left - so which line a reading
+    sits against is read off, never counted from the nearest hundred."""
     font = ImageFont.load_default(size=max(12, round(size / 73)))
+    half_font = ImageFont.load_default(size=max(10, round(size / 108)))
+
     for value in range(0, 1001, label_step):
         at = _pixel(value, size)
         # Anchors keep the 0 and 1000 labels inside the image.
@@ -143,5 +185,30 @@ def render_grid_page(page: Image.Image, page_id: str, size: int = 1600,
         _tag(draw, (3, at), str(value), font, "l" + down)
         _tag(draw, (size - 3, at), str(value), font, "r" + down)
 
+    if line_step >= label_step:
+        return
+    for value in range(0, 1001, line_step):
+        if value % label_step == 0:
+            continue
+        at = _pixel(value, size)
+        _tag(draw, (at, 3), str(value), half_font, "mt")
+        _tag(draw, (3, at), str(value), half_font, "lm")
+
+
+def render_grid_page(page: Image.Image, page_id: str, size: int = 2048,
+                     line_step: int = 50, label_step: int = 100, tick_step: int = 10) -> Image.Image:
+    """`page` on its black square, with the grid, its ticks and its page ID
+    stamp."""
+    page = ImageOps.exif_transpose(page).convert("RGB")
+    scale = size / max(page.size)
+    width, height = max(1, round(page.width * scale)), max(1, round(page.height * scale))
+    canvas = Image.new("RGB", (size, size), PADDING_COLOR)
+    canvas.paste(page.resize((width, height), Image.Resampling.LANCZOS), (0, 0))
+
+    overlay = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    _draw_lines(draw, size, line_step, label_step)
+    _draw_ticks(draw, size, tick_step, line_step, label_step)
+    _draw_labels(draw, size, line_step, label_step)
     _stamp(draw, page_id, size, width, height)
     return Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")

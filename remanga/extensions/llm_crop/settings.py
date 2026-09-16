@@ -37,8 +37,10 @@ def grid_format_names() -> list[str]:
 def llm_crop_summary(config: RemangaConfig) -> str:
     llm = config.extensions.llm_crop
     formats = [name for name in grid_format_names() if getattr(llm, name)]
+    ruler = f"{llm.grid_image_size}px grid" + (f", ticks every {llm.grid_tick_step}"
+                                                if llm.grid_tick_step else ", no ticks")
     return (f"{', '.join(formats) or 'no grid formats'} · {llm.grouping} grouping · "
-            f"paint-out {'on' if config.cropper.paint_out else 'off'}")
+            f"paint-out {'on' if config.cropper.paint_out else 'off'} · {ruler}")
 
 
 def _format_rows(llm: LLMCropConfig) -> list[Choice]:
@@ -101,8 +103,17 @@ def configure_llm_crop(config: RemangaConfig) -> None:
 
     size = ask_number("Grid image size, in pixels (each side of the square)", default=llm.grid_image_size,
                       minimum=512, maximum=4096, integer=True,
-                      note="each page is scaled to fit on a black square this size, anchored top-left")
+                      note="each page is scaled to fit on a black square this size, anchored top-left · "
+                           "bigger keeps the ruler's ticks apart once Gemini scales the image down")
     if is_cancel(size):
         return
     set_field(config, f"{FIELD_PREFIX}.grid_image_size", int(size))
+
+    ticks = ask_number("Ruler ticks every N units (0 for none)", default=llm.grid_tick_step,
+                       minimum=0, maximum=100, integer=True,
+                       note="along the four edges and across every labeled line, so an edge between two "
+                            "lines is counted rather than estimated · finer than 10 needs a bigger square")
+    if is_cancel(ticks):
+        return
+    set_field(config, f"{FIELD_PREFIX}.grid_tick_step", int(ticks))
     console.print(f"[green]✓ LLM crop:[/] {llm_crop_summary(config)}")

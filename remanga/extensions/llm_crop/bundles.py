@@ -76,6 +76,7 @@ def grid_info(llm: LLMCropConfig, pages: list[ChapterPage]) -> dict[str, Any]:
             "image_size": llm.grid_image_size,
             "line_step": llm.grid_line_step,
             "label_step": llm.grid_label_step,
+            "tick_step": llm.grid_tick_step,
         },
         "page_areas": {page.stem: page_extent(*oriented_size(page.path)).box for page in pages},
     }
@@ -98,7 +99,8 @@ def _render_one(page: ChapterPage, out_dir: Path, llm: LLMCropConfig) -> Path:
     it packs, and doing it twice doubled the time of a chapter's build for
     nothing (measured: 118s for 40 pages, the zip saving 0.0MB over it)."""
     with Image.open(page.path) as img:
-        grid = render_grid_page(img, page.stem, llm.grid_image_size, llm.grid_line_step, llm.grid_label_step)
+        grid = render_grid_page(img, page.stem, llm.grid_image_size, llm.grid_line_step,
+                                llm.grid_label_step, llm.grid_tick_step)
     path = out_dir / f"{page.stem}.png"
     grid.save(path, "PNG", compress_level=6)
     return path
@@ -119,7 +121,8 @@ def generate_grid_pages(llm: LLMCropConfig, project_name: str, chapter_num: str,
 
     console.print(
         f"[cyan]Drawing {len(pages)} gridded page(s) ({llm.grid_image_size}px squares, "
-        f"lines every {llm.grid_line_step}, labeled every {llm.grid_label_step})...[/]"
+        f"lines every {llm.grid_line_step}, labeled every {llm.grid_label_step}"
+        + (f", ticks every {llm.grid_tick_step}" if llm.grid_tick_step else "") + ")...[/]"
     )
     # Threads, not processes: Pillow releases the GIL while resizing and
     # encoding, which is where the time goes.
