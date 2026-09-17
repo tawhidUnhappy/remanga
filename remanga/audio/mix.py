@@ -38,7 +38,7 @@ def _bgm_file(config: AudioConfig) -> Path | None:
 
 
 # The gain used when a loudness can't be measured: a typical modern track
-# (about -10 LUFS) against Kokoro's narration (about -26 LUFS).
+# (about -10 LUFS) against the narration (about -27 LUFS, which Chatterbox normalizes its output to).
 FALLBACK_MUSIC_GAIN_DB = -30.0
 
 

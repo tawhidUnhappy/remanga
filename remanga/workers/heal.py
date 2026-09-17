@@ -8,7 +8,7 @@ to need  - that package is
 installed into the tool's environment and the worker started again, rather
 than a session failing over something one pip install fixes.
 
-Used by the Kokoro synthesizer (audio/synth/)."""
+Used by the Chatterbox synthesizer (audio/synth/)."""
 
 from __future__ import annotations
 

@@ -60,17 +60,20 @@ def _flatten(model: BaseModel, prefix: str = "") -> dict[str, Any]:
 
 def _migrate_override_key(dotted: str) -> tuple[str, ...]:
     """The dotted path an override written by an older version applies to
-    today: Kokoro's settings moved from `tts.kokoro.*` to `tts.*`; other
-    engines' settings no longer exist."""
+    today. Narration is Chatterbox now: Kokoro's settings no longer exist."""
     renamed = {"audio.pause_between_panels_ms": "audio.pause_between_pages_ms",
                "video.panel_padding_percent": "video.page_padding_percent",
                "video.panel_border_width": "video.page_border_width",
                "video.panel_border_color": "video.page_border_color"}
     if dotted in renamed:
         return (renamed[dotted],)
-    if dotted.startswith("tts.kokoro."):
-        return ("tts." + dotted[len("tts.kokoro."):],)
-    if dotted.startswith("tts.") and dotted.count(".") > 1:
+    if dotted == "tts.chatterbox.voice":
+        return ("tts.voice",)
+    # Kokoro's settings (voice names, speed, gain, its model) mean nothing to
+    # Chatterbox; tts.voice itself falls back to the default when it names no
+    # recording (see config/tts.py).
+    if dotted.startswith("tts.") and (dotted.count(".") > 1 or dotted in (
+            "tts.speed", "tts.volume_boost_db", "tts.hf_repo_id", "tts.model_dir", "tts.sample_rate")):
         return ()
     return (dotted,)
 

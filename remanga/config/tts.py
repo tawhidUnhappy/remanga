@@ -1,65 +1,65 @@
-"""Kokoro-82M narration settings - see remanga/audio/synth/kokoro.py.
+"""Narration settings - Chatterbox Turbo, see remanga/audio/synth/chatterbox.py.
 
-hexgrad/Kokoro-82M runs in its own isolated `.tools/venv-kokoro`. It has fixed,
-named voices (config/kokoro_voices.py) - no reference recording."""
+ResembleAI/chatterbox-turbo (350M, MIT) runs in its own isolated
+`.tools/venv-chatterbox`. It has no built-in voices: it clones whoever speaks
+in `voice`, a recording. It runs at the model's own defaults - no speed
+change, no gain, no post-processing of the clips (user request)."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 
 from remanga.config.base import ConfigModel
-from remanga.config.kokoro_voices import DEFAULT_VOICE, KokoroVoice, lang_code_for, voice_spec
+from remanga.paths import REPO_ROOT
 
-DISPLAY_NAME = "Kokoro-82M"
+DISPLAY_NAME = "Chatterbox Turbo"
+DEFAULT_VOICE = "global/voice/animextv.wav"
+VOICE_EXTS = (".wav", ".mp3", ".flac", ".m4a", ".ogg", ".opus")
 
 
 class TTSConfig(ConfigModel):
-    # Which of Kokoro's built-in voices narrates.
+    # The recording to clone: one speaker, no music, longer than 5 seconds
+    # (Turbo refuses shorter). Its first 10-15 seconds are what the delivery is
+    # imitated from. Relative paths are from the remanga folder.
     voice: str = DEFAULT_VOICE
-    # Speaking rate, applied by the model itself (1.0 = normal).
-    speed: float = 1.0
-    # Gain on every synthesized clip, in dB. With background music and the
-    # master's loudness normalization this mostly sets how far the music sits
-    # under the voice. Changing it re-applies only the difference to clips
-    # already synthesized - see audio/tts.py.
-    volume_boost_db: float = 0.0
     # How long one synthesize call may take before the worker is treated as hung.
     synth_timeout_seconds: int = 180
-    hf_repo_id: str = "hexgrad/Kokoro-82M"
-    model_dir: str = "checkpoints/kokoro_82m"
-    # Kokoro's native output rate; the pipeline resamples from here.
-    sample_rate: int = 24000
+    hf_repo_id: str = "ResembleAI/chatterbox-turbo"
+    model_dir: str = "checkpoints/chatterbox_turbo"
 
     @model_validator(mode="before")
     @classmethod
-    def _from_engine_blocks(cls, data: Any) -> Any:
-        """A config.json from the multi-engine version kept Kokoro's settings
-        in a `kokoro` block beside the other engines' - lifted up here, the
-        rest dropped."""
+    def _from_older_versions(cls, data: Any) -> Any:
+        """Kokoro's settings (a voice NAME, speed, gain, its model) mean nothing
+        to Chatterbox and are dropped; a `chatterbox` block from the
+        multi-engine version is lifted up."""
         if not isinstance(data, dict):
             return data
-        lifted = {key: value for key, value in data.items() if key in cls.model_fields}
-        block = data.get("kokoro")
-        if isinstance(block, dict):
-            lifted.update({key: value for key, value in block.items() if key in cls.model_fields})
-        return lifted
+        kept = {key: value for key, value in data.items() if key in ("voice", "synth_timeout_seconds")}
+        block = data.get("chatterbox")
+        if isinstance(block, dict) and block.get("voice"):
+            kept["voice"] = block["voice"]
+        return kept
+
+    @field_validator("voice")
+    @classmethod
+    def _voice_is_a_recording(cls, value: str) -> str:
+        """A Kokoro voice name ("af_heart") left in an older config is not a
+        recording - fall back to the default clip rather than fail later."""
+        return value if Path(str(value)).suffix.lower() in VOICE_EXTS else DEFAULT_VOICE
 
     @property
-    def spec(self) -> KokoroVoice:
-        return voice_spec(self.voice)
+    def voice_path(self) -> Path:
+        path = Path(self.voice).expanduser()
+        return path if path.is_absolute() else REPO_ROOT / path
 
     @property
     def voice_label(self) -> str:
-        return self.spec.label
+        return Path(self.voice).name
 
     @property
     def voice_detail(self) -> str:
-        return f"{self.spec.label} ({self.spec.name}, grade {self.spec.grade})"
-
-    @property
-    def lang_code(self) -> str:
-        """Kokoro's accent code for the voice - derived, since a mismatch makes a
-        voice speak through the wrong accent's phonemes without any error."""
-        return lang_code_for(self.voice)
+        return f"clone of {self.voice}"

@@ -63,8 +63,8 @@ class ModelManager:
         # actually reaching this process, so the console looks completely
         # stalled ("Downloading..." and then nothing) even though the
         # download is progressing fine underneath. Same reasoning every
-        # worker subprocess spawn elsewhere already applies (kokoro_worker/
-        # kokoro_worker/deepseek_ocr_worker's own -u flag).
+        # worker subprocess spawn elsewhere already applies (chatterbox_worker's
+        # own -u flag).
         cmd = [str(python), "-u", str(script), str(self.model_dir.resolve()), self.repo_id]
         if token:
             cmd.append(token)

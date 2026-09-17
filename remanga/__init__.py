@@ -1,5 +1,5 @@
 """
-remanga: manga pages to recap video - download, PDF for an LLM to narrate, Kokoro-82M narration, video.
+remanga: manga pages to recap video - download, PDF for an LLM to narrate, Chatterbox voice-cloned narration, video.
 """
 
 __version__ = "0.3.0"

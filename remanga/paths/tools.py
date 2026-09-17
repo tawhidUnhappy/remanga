@@ -1,5 +1,5 @@
 """Where the standalone worker scripts live, run by the isolated tool
-virtualenv (`.tools/venv-kokoro`) - see remanga/tool_envs/ and remanga/workers/."""
+virtualenv (`.tools/venv-chatterbox`) - see remanga/tool_envs/ and remanga/workers/."""
 
 from __future__ import annotations
 
