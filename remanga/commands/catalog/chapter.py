@@ -1,4 +1,5 @@
-"""The Chapter Production category: one chapter, download to rendered video."""
+"""The one-chapter commands, download to rendered video. Each shows in the
+menu group of its stage (its `category`)."""
 
 from __future__ import annotations
 
@@ -33,7 +34,8 @@ CHAPTER_COMMANDS: list[Command] = [
             chapter_param("Chapter number (e.g. 1 or 01)"),
             url_param(),
         ],
-        category="Chapter Production",
+        category="Get pages",
+        short="Download one chapter",
         detail="reuses the manga source saved in project.json - only asks when there isn't one",
     ),
     Command(
@@ -70,7 +72,8 @@ CHAPTER_COMMANDS: list[Command] = [
                        "(cached for 24h)",
                   prompt="Refetch the chapter list from MangaDex instead of using the 24h cache?"),
         ],
-        category="Chapter Production",
+        category="Get pages",
+        short="Pick chapters to download, seeing which ones you already have",
         detail="the normal (non-force) path always just verifies and fills in whatever's missing - "
                "picking an already-downloaded chapter again is never wasted work",
     ),
@@ -79,17 +82,9 @@ CHAPTER_COMMANDS: list[Command] = [
         "Launch the Panel Marker web UI to mark panels (writes crops.json)",
         chapter_handlers.mark,
         [project_param(), chapter_param()],
-        category="Chapter Production",
+        category="Crop panels",
+        short="Mark one chapter's panels by hand in the browser",
         detail="Draw panels, or press Detect for MAGI v3 to find them; you adjust and save",
-    ),
-    Command(
-        "review",
-        "Launch the Narration Reviewer web UI to flag narration issues (writes "
-        "narration_review.json), looping for as many rounds as you want before continuing to "
-        "voice synthesis",
-        chapter_handlers.review,
-        [project_param(), chapter_param()],
-        category="Chapter Production",
     ),
     Command(
         "narration-init",
@@ -110,7 +105,8 @@ CHAPTER_COMMANDS: list[Command] = [
             ),
             force_param("Replace an existing narration.json that already has content"),
         ],
-        category="Chapter Production",
+        category="Narration",
+        short="Create one chapter's narration.json, as a template or empty",
         detail="a starting point to fill in by hand, or to hand an LLM as the exact structure",
     ),
     Command(
@@ -121,7 +117,18 @@ CHAPTER_COMMANDS: list[Command] = [
         "you type as you save",
         chapter_handlers.write,
         [project_param(), chapter_param()],
-        category="Chapter Production",
+        category="Narration",
+        short="Write one chapter's narration yourself in the browser",
+    ),
+    Command(
+        "review",
+        "Launch the Narration Reviewer web UI to flag narration issues (writes "
+        "narration_review.json), looping for as many rounds as you want before continuing to "
+        "voice synthesis",
+        chapter_handlers.review,
+        [project_param(), chapter_param()],
+        category="Narration",
+        short="Review one chapter's narration in the browser and flag problems",
     ),
     Command(
         "crop",
@@ -132,7 +139,8 @@ CHAPTER_COMMANDS: list[Command] = [
             project_param(), chapter_param(),
             force_param("Force re-cropping even if panels exist"),
         ],
-        category="Chapter Production",
+        category="Crop panels",
+        short="Cut one chapter's panels out of its pages",
         setup=CROP_SETUP,
     ),
     Command(
@@ -144,7 +152,8 @@ CHAPTER_COMMANDS: list[Command] = [
             project_param(), chapter_param(),
             formats_param("What to build for this chapter"),
         ],
-        category="Chapter Production",
+        category="Package for the LLM",
+        short="Build one chapter's LLM upload: sheets, zips and/or PDFs",
         detail="pick the upload formats for this chapter; the choice sticks for the project",
     ),
     Command(
@@ -172,7 +181,8 @@ CHAPTER_COMMANDS: list[Command] = [
                   prompt="Narrator voice"),
             force_param("Force re-synthesis of all panels"),
         ],
-        category="Chapter Production",
+        category="Audio & video",
+        short="Voice one chapter's narration (text to speech)",
         detail="uses the configured voice and engine unless you pick otherwise",
         setup=TTS_SETUP,
     ),
@@ -187,7 +197,8 @@ CHAPTER_COMMANDS: list[Command] = [
                        "used otherwise - change it permanently with `remanga paths`)",
                   prompt="Background music"),
         ],
-        category="Chapter Production",
+        category="Audio & video",
+        short="Mix one chapter's voice with music, fades and loudness",
         detail="uses the configured background music unless you pick otherwise",
         setup=BGM_SETUP,
     ),
@@ -199,7 +210,8 @@ CHAPTER_COMMANDS: list[Command] = [
             project_param(), chapter_param(),
             force_param("Force re-rendering video"),
         ],
-        category="Chapter Production",
+        category="Audio & video",
+        short="Render one chapter's video",
         detail="renders at the resolution, background and encoder set below",
         setup=VIDEO_SETUP,
     ),
@@ -218,7 +230,8 @@ CHAPTER_COMMANDS: list[Command] = [
                        f"has never chosen one ({STEP_NAMES}).",
                   prompt="Steps to run, in order"),
         ],
-        category="Chapter Production",
+        category="Run & check",
+        short="Run this project's pipeline for one chapter",
         detail="the whole pipeline, or any subset of it, in any order",
     ),
     Command(
@@ -226,7 +239,7 @@ CHAPTER_COMMANDS: list[Command] = [
         "Wipe everything for a chapter (source files and generated sheets/zips/audio/video) except "
         "whatever you choose to keep - unlike restart's fixed modes, any combination can be kept. "
         "Downloaded pages are always re-verified/re-fetched afterward. See wipe-chapters "
-        "(Project-wide) for multiple chapters at once.",
+        "for multiple chapters at once.",
         cleanup_handlers.wipe,
         [
             project_param(), chapter_param(),
@@ -241,6 +254,7 @@ CHAPTER_COMMANDS: list[Command] = [
             ),
             force_param(),
         ],
-        category="Chapter Production",
+        category="Clean up",
+        short="Delete one chapter's files, keeping what you pick",
     ),
 ]

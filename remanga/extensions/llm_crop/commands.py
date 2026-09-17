@@ -57,7 +57,8 @@ CROP_GRID = Command(
     "pasted into",
     handlers.crop_grid,
     [project_param(), chapter_param(), _formats_param("What to build for Gemini")],
-    category="Chapter Production",
+    category="Crop panels",
+    short="Build one chapter's grid upload for Gemini to crop",
     detail="upload it with prompts/llm_crop.md, paste the reply into llm_crops.json, then run llm-crop",
     setup=LLM_CROP_SETUP,
 )
@@ -71,7 +72,8 @@ LLM_CROP = Command(
     [project_param(), chapter_param(),
      _formats_param("What to build for Gemini, if the grid isn't built yet", skip_when_replied=True),
      _replace_marks_param()],
-    category="Chapter Production",
+    category="Crop panels",
+    short="Import Gemini's crops for one chapter (builds the grid if needed)",
     detail="bubbles kept whole with their panel, groups of panels, neighbours painted out",
     setup=LLM_CROP_SETUP,
 )
@@ -86,7 +88,8 @@ CROP_GRID_ALL = Command(
         chapters_param("build crop grids for", "Chapters with no downloaded pages are skipped."),
         _formats_param("What to build for Gemini, for every chapter"),
     ],
-    category="Project-wide",
+    category="Crop panels",
+    short="Build the Gemini grid upload for every chapter",
     detail="every chapter's upload ready to send to Gemini in one go",
     setup=LLM_CROP_SETUP,
 )
@@ -102,7 +105,8 @@ LLM_CROP_ALL = Command(
         chapters_param("import Gemini's crops for", "Chapters whose llm_crops.json is still empty are skipped."),
         _replace_marks_param(),
     ],
-    category="Project-wide",
+    category="Crop panels",
+    short="Import Gemini's crops for every chapter with a reply pasted in",
     detail="the whole-project form of llm-crop - no waiting, just whatever has been pasted",
     setup=LLM_CROP_SETUP,
 )

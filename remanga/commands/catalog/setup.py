@@ -1,4 +1,4 @@
-"""The Setup category: settings, shared assets, and model weights."""
+"""The Setup commands: settings, shared assets, model weights and tools."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ SETUP_COMMANDS: list[Command] = [
         "Walkthrough configuration setup (engine, voice, BGM, resolution, vision format, blur)",
         setup_handlers.setup_config,
         category="Setup",
+        short="Settings walkthrough: TTS engine, voice, music, video, upload formats",
         detail="every setting, each showing its current value - change one or walk through them all",
     ),
     Command(
@@ -22,6 +23,7 @@ SETUP_COMMANDS: list[Command] = [
         "place, without the full setup-config walkthrough",
         setup_handlers.paths,
         category="Setup",
+        short="Set the shared files: reference voice, background music, transcript",
         detail="picks from the audio files already in global/ instead of asking you to type a path",
     ),
     Command(
@@ -29,6 +31,7 @@ SETUP_COMMANDS: list[Command] = [
         "Show the detected GPU/CPU, the PyTorch wheels chosen for it, and the video encoder in use",
         setup_handlers.hardware,
         category="Setup",
+        short="Show the GPU/CPU found, its PyTorch build and the video encoder",
         detail="the same detection bootstrap.sh used - check here if a machine didn't get the GPU build",
     ),
     Command(
@@ -36,6 +39,7 @@ SETUP_COMMANDS: list[Command] = [
         "Verify and download model weights with SHA-256 verification",
         setup_handlers.setup_models,
         category="Setup",
+        short="Download model weights and verify their checksums",
         detail="fetches only what the current configuration actually uses",
     ),
     Command(
@@ -51,6 +55,7 @@ SETUP_COMMANDS: list[Command] = [
                   cli_only=True),
         ],
         category="Setup",
+        short="Install or update the tools' own Python environments",
         detail="normally not needed - each environment installs itself the first time its engine runs",
     ),
 ]

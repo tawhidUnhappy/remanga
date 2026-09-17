@@ -34,6 +34,16 @@ def commands_by_category() -> dict[Category, list[Command]]:
     groups: dict[str, list[Command]] = {}
     for cmd in COMMAND_REGISTRY:
         groups.setdefault(cmd.category, []).append(cmd)
+    # Each command next to its other forms (Command.family_name) - `mark`,
+    # `mark-all`, `view-marks`, then `crop-grid`, `crop-grid-all` - in the
+    # order the family first appears in the registry. The catalog is filed
+    # by scope (one chapter, whole project), so without this every
+    # whole-project form would trail after all the one-chapter ones.
+    for name, cmds in groups.items():
+        first: dict[str, int] = {}
+        for index, cmd in enumerate(cmds):
+            first.setdefault(cmd.family_name, index)
+        groups[name] = sorted(cmds, key=lambda cmd: first[cmd.family_name])
 
     known = {category.name: category for category in CATEGORIES}
     ordered: dict[Category, list[Command]] = {}

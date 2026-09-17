@@ -411,6 +411,8 @@ The easiest way to produce a recap video is through the interactive terminal wiz
 
 Every screen is an arrow-key menu — **↑/↓** to move, **Enter** or **→** to pick, **type to filter**, **Esc** or **←** to back out one level, **Ctrl+Q** (or the **Exit remanga** row) to quit outright from wherever you are, however deep. Checklists add **Space** to toggle (**Ctrl+A** all, **Ctrl+R** none), and confirmations take **y**/**n** as well as Enter. Whatever is currently configured is pre-highlighted, so Enter alone is always "leave it as it is". Nothing has to be typed from memory: the wizard lists what's actually there. The few places you do type — a project name, a chapter number, a range — are full readline lines: ←/→ move the cursor, Home/End jump, Ctrl+A/Ctrl+E/Ctrl+W and friends work, and ↑/↓ walk that prompt's history.
 
+**The menu follows a chapter's way to a video.** Pipeline runs every step in one go; the five step groups below it are those steps one at a time, in order, and the last three are for any time. Inside a group, each command sits right above its whole-project form — `crop`, then `crop-all` — and every row says in plain words what it does and whether to one chapter or all of them. `remanga --help` lists the commands in the same groups.
+
 **Type a command's name on the main menu to jump straight to it** — `crop-all` then Enter runs it, without going through its category first. The categories are there for browsing, not a path you have to walk.
 
 **Menus remember where you were.** Coming back to a menu puts the cursor on what you last picked in it, and a chapter picker opens on the chapter you last chose — so `mark`, `crop`, `package` on the same chapter is Enter, Enter, Enter.
@@ -420,10 +422,15 @@ Every screen is an arrow-key menu — **↑/↓** to move, **Enter** or **→** 
 ```
 ? remanga — MyProject
   type a command's name to jump straight to it
-❯ Setup                settings, shared assets, and model weights
-  Chapter Production   one chapter, from download to rendered video
-  Project-wide         set the whole manga up, compile it, check it, clean it up
-  Pipeline             download → mark → crop → narration → review → tts → mix → render
+❯ Pipeline             download → mark → crop → package → narration → review → tts → mix → render
+  Get pages            step 1 · download chapters from MangaDex
+  Crop panels          step 2 · mark panels by hand or with Gemini, then cut them out
+  Package for the LLM  step 3 · sheets, zips and PDFs of the cut panels, to upload
+  Narration            step 4 · create the script, write it yourself, review it
+  Audio & video        step 5 · voice, mix and render, for one chapter or the whole manga
+  Run & check          run the pipeline, see how far chapters have got, verify outputs
+  Clean up             delete a chapter's files, or reset it to its pages
+  Setup                settings, shared files, model weights and tools
   Switch project       currently: MyProject
   Quit
   ↑↓ move · enter/→ select · esc/← back · type to filter · ctrl+q exit
@@ -692,7 +699,7 @@ Pass a title query, title URL, chapter URL, or UUID:
 ```
 *Creates:* `projects/my_manga/chapters/chapter_1/pages/` (plus `pages.zip` if `downloader.zip_pages_enabled` is enabled — off by default)
 
-**The whole manga in one go** — `download-all` (Project-wide in the wizard) takes every chapter MangaDex lists for this project, with no picker and no selection to make:
+**The whole manga in one go** — `download-all` (under Get pages in the wizard) takes every chapter MangaDex lists for this project, with no picker and no selection to make:
 ```bash
 ./run.sh download-all --project "my_manga"
 ```
@@ -700,7 +707,7 @@ It fetches the feed in the configured translation language (`downloader.language
 
 It prints how many chapters exist and how many you already have, then asks once before starting. Chapters already downloaded are *verified*, not re-fetched, so re-running it after a new chapter drops costs a check per chapter and downloads only what's actually missing. `--force` re-fetches every chapter clean instead.
 
-**A range of chapters** — `download-range` (Project-wide in the wizard) downloads chapters by number:
+**A range of chapters** — `download-range` (under Get pages in the wizard) downloads chapters by number:
 ```bash
 ./run.sh download-range --project "my_manga" --range 1-5
 ./run.sh download-range --project "my_manga" --range 1-5,8,10-12
@@ -721,7 +728,7 @@ Launches the **Panel Marker** web UI: draw panel boxes yourself, or press **Dete
 ```
 *Creates:* `projects/my_manga/chapters/chapter_1/crops.json` — see [Panel Marker Web UI](#panel-marker-web-ui) below.
 
-**Every chapter in one tab** — `mark-all` (Project-wide in the wizard) hands the marker the whole project instead of one chapter:
+**Every chapter in one tab** — `mark-all` (under Crop panels in the wizard) hands the marker the whole project instead of one chapter:
 ```bash
 ./run.sh mark-all --project "my_manga"
 ./run.sh mark-all --project "my_manga" --chapters 4,5,6
@@ -815,7 +822,7 @@ Nothing below an open chapter is built until it's open — collapsed chapters ar
 
 ### 2b. Check Every Chapter's Marks Without Touching Them
 
-`view-marks` (Project-wide) opens the same one-tab session with every edit taken away:
+`view-marks` (under Crop panels) opens the same one-tab session with every edit taken away:
 ```bash
 ./run.sh view-marks --project "my_manga"
 ```
@@ -840,7 +847,7 @@ Every page is drawn on a square black canvas, top-left, under a green 0-1000 rul
 ```
 *Creates:* `chapters/chapter_<num>/panels/` (source) and this chapter's `panels` entry in the project's shared `manifest.json`. **That's all it creates** — cropping cuts panels and stops. Building the LLM upload formats is step 3b, its own command, so a 30MB zip never appears as a side effect of a command you ran to cut panels.
 
-**Every chapter at once** — `crop-all` (Project-wide in the wizard) crops every marked chapter in the project in one run:
+**Every chapter at once** — `crop-all` (under Crop panels in the wizard) crops every marked chapter in the project in one run:
 ```bash
 ./run.sh crop-all --project "my_manga"
 ./run.sh crop-all --project "my_manga" --chapters 4,5,6
@@ -855,7 +862,7 @@ It's the same cropping `crop` does, with the same panel-detection settings (offe
 
 Whatever you pass is **remembered for that project** (in its `project.json`), so the next chapter builds the same set without being asked. Leave `--formats` off to use that remembered choice, falling back to `config.json`'s `cropper.package` switches for a project that has never chosen. `--formats none` builds nothing. In the wizard this is a checklist rather than a flag, opened on what the project currently builds. Re-run it any time — after changing the size cap, or when you want a different format from an already-cropped chapter — it works straight from `panels/`, no re-crop.
 
-**Every chapter at once** — `package-all` (Project-wide in the wizard) packages every cropped chapter in the project with one answer, instead of running `package` chapter by chapter:
+**Every chapter at once** — `package-all` (under Package for the LLM in the wizard) packages every cropped chapter in the project with one answer, instead of running `package` chapter by chapter:
 ```bash
 ./run.sh package-all --project "my_manga"
 ./run.sh package-all --project "my_manga" --chapters 3,4,5 --formats sheets_zip
@@ -873,7 +880,7 @@ Not using the LLM copy/paste flow for this chapter? `narration-init` creates the
 
 It won't overwrite a narration.json that already has content unless you pass `--force` (the wizard asks). A blank file isn't content, so going blank → template needs no flag.
 
-**Every chapter at once** — `narration-init-all` (Project-wide in the wizard) gives every chapter in the project the blank, zero-byte file, so a manga you're going to narrate yourself is set up in one command rather than one per chapter:
+**Every chapter at once** — `narration-init-all` (under Narration in the wizard) gives every chapter in the project the blank, zero-byte file, so a manga you're going to narrate yourself is set up in one command rather than one per chapter:
 ```bash
 ./run.sh narration-init-all --project "my_manga"
 ./run.sh narration-init-all --project "my_manga" --chapters 12,13,14

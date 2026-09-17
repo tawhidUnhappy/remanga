@@ -51,7 +51,7 @@ class MenuState:
         # that make it fast (see remanga.tui.confirm).
         self.filterable = filterable
         # Whether Space types a space into the filter. True for single-select
-        # menus, where filtering "Chapter Production" is impossible without
+        # menus, where filtering "Package for the LLM" is impossible without
         # it; False for checklists, where Space is the toggle key.
         self.space_filters = space_filters
         self._page_size = page_size
@@ -243,7 +243,7 @@ def run_menu(
     # transient Live is open scrolls the live region rather than replacing
     # it, leaving the menu's last frame stranded above the answer.
     #
-    # Backing out leaves no line at all - "✓ Project-wide  Back" reads like
+    # Backing out leaves no line at all - "✓ Clean up  Back" reads like
     # a decision that was made, when in fact nothing happened.
     if echo is not None and not is_cancel(value):
         console.print(answer_line(title, echo(value)))

@@ -1,5 +1,7 @@
-"""The Project-wide category: whole-project setup (fetch every chapter, give
-every chapter a narration file), compile, status, verify and cleanup."""
+"""The whole-project commands: every chapter at once (fetch, mark, crop,
+package, give each a narration file), compile, status, verify and cleanup.
+Each shows in the menu group of its stage (its `category`), next to its
+one-chapter form."""
 
 from __future__ import annotations
 
@@ -52,7 +54,8 @@ PROJECT_COMMANDS: list[Command] = [
                   help="Refetch the chapter list from MangaDex instead of the 24h cached listing",
                   prompt="Refetch the chapter list from MangaDex?"),
         ],
-        category="Project-wide",
+        category="Get pages",
+        short="Download every chapter MangaDex lists",
         detail="the whole manga in one go - re-runnable, and only downloads what's actually missing",
     ),
     Command(
@@ -81,7 +84,8 @@ PROJECT_COMMANDS: list[Command] = [
                        "download all of them again, even pages that verify",
                   prompt="Re-fetch every selected chapter clean?"),
         ],
-        category="Project-wide",
+        category="Get pages",
+        short="Download a range of chapters by number, e.g. 1-5",
         detail="a run of chapters by number - shows what the range covers before downloading, "
                "and re-verifies anything already here",
     ),
@@ -96,7 +100,8 @@ PROJECT_COMMANDS: list[Command] = [
             project_param(),
             chapters_param("mark", "Chapters with no downloaded pages are skipped."),
         ],
-        category="Project-wide",
+        category="Crop panels",
+        short="Mark every chapter's panels in one browser tab",
         detail="one tab, one server, one MAGI load per chapter - the whole manga in one session",
     ),
     Command(
@@ -110,7 +115,9 @@ PROJECT_COMMANDS: list[Command] = [
             project_param(),
             chapters_param("look through", "Chapters with no downloaded pages are skipped."),
         ],
-        category="Project-wide",
+        category="Crop panels",
+        short="Look through every chapter's marks, read-only",
+        family="mark",
         detail="the double-check pass - read-only, enforced on the server, not just hidden",
     ),
     Command(
@@ -132,7 +139,8 @@ PROJECT_COMMANDS: list[Command] = [
                        "cuts them again from crops.json",
                   prompt="Re-crop chapters that are already cropped too?"),
         ],
-        category="Project-wide",
+        category="Crop panels",
+        short="Cut the panels out of every marked chapter",
         detail="the whole-project form of `crop` - every marked chapter cut into panels in one go",
         setup=CROP_SETUP,
     ),
@@ -148,7 +156,8 @@ PROJECT_COMMANDS: list[Command] = [
             chapters_param("package", "Chapters with no cropped panels are skipped."),
             formats_param("What to build for every chapter"),
         ],
-        category="Project-wide",
+        category="Package for the LLM",
+        short="Build the LLM upload for every cropped chapter",
         detail="the whole-project form of `package` - one formats answer covers every chapter, "
                "and sticks for the project",
     ),
@@ -170,7 +179,8 @@ PROJECT_COMMANDS: list[Command] = [
                   help="Blank chapters that already have a written narration.json too",
                   prompt="Blank chapters that already have a written narration.json too?"),
         ],
-        category="Project-wide",
+        category="Narration",
+        short="Create an empty narration.json for every chapter",
         detail="the whole-project form of the pipeline's init-narration step - one answer covers "
                "every chapter",
     ),
@@ -200,7 +210,8 @@ PROJECT_COMMANDS: list[Command] = [
                 },
             ),
         ],
-        category="Project-wide",
+        category="Audio & video",
+        short="Join every chapter into one continuous recap video",
         detail="one BGM pass and one render for the whole manga - both configured below",
         setup=BGM_SETUP + VIDEO_SETUP,
     ),
@@ -218,7 +229,8 @@ PROJECT_COMMANDS: list[Command] = [
                   help="Don't recompile the full-recap video even if one exists",
                   prompt="Skip recompiling the full-recap video?"),
         ],
-        category="Project-wide",
+        category="Audio & video",
+        short="Re-mix and re-render videos after a music or volume change",
         detail="change the music or the video settings here, then re-mix and re-render with them",
         setup=BGM_SETUP + VIDEO_SETUP,
     ),
@@ -227,7 +239,8 @@ PROJECT_COMMANDS: list[Command] = [
         "Inspect chapter production status",
         project_handlers.status,
         [project_param(), chapter_param()],
-        category="Project-wide",
+        category="Run & check",
+        short="Show how far each chapter has got",
     ),
     Command(
         "verify",
@@ -242,7 +255,8 @@ PROJECT_COMMANDS: list[Command] = [
                   help="Skip verifying rendered videos, audio only (faster)",
                   prompt="Skip verifying rendered videos (audio only)?"),
         ],
-        category="Project-wide",
+        category="Run & check",
+        short="Check every chapter's audio and video decode all the way through",
     ),
     Command(
         "restart",
@@ -263,7 +277,8 @@ PROJECT_COMMANDS: list[Command] = [
                   help="Skip re-checking/re-fetching downloaded pages afterward",
                   prompt="Skip re-checking downloaded pages afterward?"),
         ],
-        category="Project-wide",
+        category="Clean up",
+        short="Reset one chapter to just its downloaded pages",
     ),
     Command(
         "wipe-chapters",
@@ -288,6 +303,7 @@ PROJECT_COMMANDS: list[Command] = [
             ),
             force_param(),
         ],
-        category="Project-wide",
+        category="Clean up",
+        short="Delete several chapters' files at once",
     ),
 ]

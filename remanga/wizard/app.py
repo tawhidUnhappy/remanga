@@ -97,20 +97,23 @@ def run_category_menu(category, commands: list[Command], session: Session) -> No
 
 
 def main_menu(session: Session) -> Any:
-    """The categories, the Pipeline row and Switch project - plus every
+    """The Pipeline row, the categories and Switch project - plus every
     command as a hidden row, so typing a command's name finds it from here."""
     from remanga.pipeline import load_pipeline
 
     groups = commands_by_category()
-    rows = [
+    # The pipeline first: it is every step below in one go, so it's where a
+    # chapter usually starts. The numbered groups after it are those steps
+    # one at a time, in the same order.
+    rows = [Choice(label="Pipeline", hint=describe_pipeline(load_pipeline(session.project)),
+                   detail="set up the steps this project runs and in what order, look at them, "
+                          "then run them",
+                   value=_PIPELINE)]
+    rows += [
         Choice(label=category.name, hint=category.description,
                detail=", ".join(cmd.name for cmd in cmds), value=category)
         for category, cmds in groups.items()
     ]
-    rows.append(Choice(label="Pipeline", hint=describe_pipeline(load_pipeline(session.project)),
-                       detail="set up the steps this project runs and in what order, look at them, "
-                              "then run them",
-                       value=_PIPELINE))
     rows.append(Choice(label="Switch project", hint=f"currently: {session.project}", value=_SWITCH_PROJECT))
     rows += [
         _command_row(cmd, hint=f"{category.name} · {cmd.summary}", hidden=True)

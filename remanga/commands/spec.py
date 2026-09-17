@@ -109,12 +109,32 @@ class Command:
     # `setup-config`), so it can't make the CLI and the wizard disagree about
     # what the *command* does.
     setup: tuple[SetupAction, ...] = ()
+    # The one line a menu row and the grouped `remanga --help` listing show -
+    # plain words on what it does and to how much (one chapter, every
+    # chapter), since `help` is written for a command's own --help and its
+    # first sentence often isn't. Left empty, that first sentence is used.
+    short: str = ""
+    # The command this one is a form of, so a category lists them side by
+    # side - `crop` then `crop-all`. Left empty, it is the name without a
+    # trailing -all, -chapters or -range (see family_name).
+    family: str = ""
+
+    @property
+    def family_name(self) -> str:
+        if self.family:
+            return self.family
+        for suffix in ("-all", "-chapters", "-range"):
+            if self.name.endswith(suffix):
+                return self.name[: -len(suffix)]
+        return self.name
 
     @property
     def summary(self) -> str:
-        """The first sentence of `help`, cut to one line - what a menu row
-        and the grouped `remanga --help` listing show, with the full text
-        kept for the highlighted row and `remanga <command> --help`."""
+        """`short`, else the first sentence of `help`, cut to one line - what
+        a menu row and the grouped `remanga --help` listing show, with the
+        full text kept for the highlighted row and `remanga <command> --help`."""
+        if self.short:
+            return self.short
         first = self.help.split(" - ")[0].split(". ")[0].strip()
         return first if len(first) <= SUMMARY_LIMIT else first[:SUMMARY_LIMIT - 1] + "…"
 
