@@ -23,7 +23,8 @@ The size cap: no PDF file (and no zip holding one) is ever written above
 `max_mb`, split or not - many chat interfaces refuse a bigger PDF outright.
 Every page starts lossless, in the smallest of two verified lossless
 encodings (see _lossless_page), and pure-grayscale pages are stored as one
-channel instead of three. What happens when that doesn't fit:
+channel instead of three. A JPEG source is embedded as its own bytes - the
+source exactly, and far smaller than any re-encoding of its pixels. What happens when that doesn't fit:
 
 - Split formats start a new part - more files, no quality touched. Only a
   page too big to fit in a part on its own gives up exactness, as below.
@@ -119,6 +120,21 @@ def _png_page(stream: PngStream, lossless: bool) -> ImagePage:
                      palette=stream.palette, bits=stream.bits, lossless=lossless)
 
 
+def _jpeg_passthrough(path: Path) -> ImagePage | None:
+    """The file itself as a DCTDecode page, when it is a grayscale or RGB
+    JPEG with no EXIF rotation (which a PDF reader would not apply)."""
+    try:
+        with Image.open(path) as img:
+            if img.format != "JPEG" or img.mode not in ("L", "RGB"):
+                return None
+            if img.getexif().get(0x0112, 1) != 1:
+                return None
+            width, height, colors = img.width, img.height, 1 if img.mode == "L" else 3
+    except OSError:
+        return None
+    return ImagePage(width, height, path.read_bytes(), colors=colors, predictor=None, filter="DCTDecode")
+
+
 def _lossless_page(path: Path) -> ImagePage:
     """The smallest lossless PDF page for this image, verified before it is
     trusted: PNG's per-row filters (taken from a PNG Pillow wrote, which it
@@ -127,6 +143,13 @@ def _lossless_page(path: Path) -> ImagePage:
     img, arr = _load_array(path)
     colors = 1 if arr.ndim == 2 else 3
     candidates: list[ImagePage] = []
+
+    # A JPEG source goes in as its own bytes: the page then holds exactly the
+    # file it came from, where re-encoding its decoded pixels losslessly would
+    # be several times the size (a downloaded chapter's pages, typically).
+    source = _jpeg_passthrough(path)
+    if source is not None:
+        candidates.append(source)
 
     buf = io.BytesIO()
     img.save(buf, "PNG", optimize=True)

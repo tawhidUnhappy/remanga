@@ -9,6 +9,13 @@ Repo: github.com/tawhidUnhappy/remanga · push straight to `main`, no PR flow.
 Entry points: `./bootstrap.sh` (idempotent env setup) · `./pipeline.sh`
 (interactive wizard) · `./run.sh <cli-args>` (`remanga.cli` directly).
 
+**User rule: your job is the CODE, not the user's manga.** When a chapter comes
+out wrong (bad crops, a split caption, a misleading preview), find and fix the
+cause in the code or the prompt so every chapter benefits - never hand-patch
+that chapter's data, and don't just tell the user to fix it in `mark`. Test on
+their chapters in scratch dirs or throwaway `projects/zz*` copies, then remove
+the copy. Record what you learned here.
+
 **User habit: after making code/repo changes here, commit and push to
 `origin/main` without needing to be asked separately each time** - this has
 been requested after nearly every change this repo has seen. Still hold off
@@ -121,7 +128,7 @@ before writing (2 tries, then raise). Footguns fixed on the way:
   listing spells them ("02" -> "2", else a stray `chapter_02/` folder);
   `strict=True` refuses chapters not listed. `chapter_key` is the one "same
   chapter number" equivalence (feed dedupe, lookup, selection).
-`download-range` (Project-wide) = fresh listing -> ask range (cli_only, asked
+`download-range` (Get pages) = fresh listing -> ask range (cli_only, asked
 after showing the listing) -> preview -> confirm -> `download_chapters`.
 
 `download-chapters` (`remanga/wizard/downloads.py`,
@@ -687,9 +694,18 @@ that field, only the bundles' chapter_info.json does.
 `remanga/commands/registry.py`'s `COMMAND_REGISTRY` is the single source of
 truth for every remanga command - both `cli.py`'s argparse subcommands and
 the wizard's menus are built from it. The wizard has no curated combo modes:
-main menu = each `Category` (`CATEGORIES` in that module, ordered and
-described) via `commands_by_category()`, plus a "Pipeline" row (the step
-editor) and "Switch project"; picking a category opens its command submenu,
+main menu = a "Pipeline" row first, then each `Category`
+(`commands/categories.py`, workflow stages: Get pages, Crop panels, Package for
+the LLM, Narration, Audio & video - "step N ·" in the description, NOT the name,
+so typing filters and the numbered fallback doesn't read "2. 1 · ..." - then
+Run & check, Clean up, Setup) via `commands_by_category()`, plus "Switch
+project". The catalog files are filed by SCOPE (setup/chapter/project), the
+menu by `category`; `commands_by_category` sorts each category by
+`Command.family_name` (name minus -all/-chapters/-range, or explicit `family`,
+e.g. view-marks -> mark) so `crop` sits above `crop-all`. Every command has a
+`short` summary (<=72 chars, plain words, says one chapter vs every chapter) -
+`status` needs --chapter, so its summary says "one chapter"; check params
+before writing a summary; picking a category opens its command submenu,
 which stays open after running one (chaining mark → crop → write is picking
 them one after another). Adding a command is one `Command` entry with a
 `category`; nothing under `remanga/wizard/` changes. Adding a *category*
@@ -714,7 +730,14 @@ project.json has a manga source) and `engine`/`voice`/`bgm`, all three set
 once and kept for months, so the CLI flags cover the rare one-off and the
 settings screens cover a permanent change. Rule when adding a parameter: if
 remanga can find the answer, don't ask for it - and if the answer changes
-about once a year, state it instead of asking.
+about once a year, state it instead of asking. An EXTENSION's param can't be in
+`_SPECIAL` (core can't name it): give it `Param.prompter` (checked first).
+Upload-format checklists for extensions: `settings/format_switches.py`
+`FormatSwitches` (names/rows/parse/apply/param) - used by llm_crop's
+`GRID_FORMATS` and page_narration's `PAGE_FORMATS`; the choice is saved with
+set_field on the project-scoped config (project.json "settings"), so the
+pipeline step reuses it. `grid_zip` defaults OFF - the user explicitly didn't
+want a zip made unasked.
 
 `tts --engine` is a CLI-only per-run override - it deep-copies TTSConfig and
 sets `engine` there, never writing config.json: "try the other model on this
@@ -813,7 +836,7 @@ keeps), reachable from the menu like everything else.
 
 ## New commands/checks added post-writeup (keep COMMAND_REGISTRY the source of truth, this is just a pointer)
 
-- `narration-init` (Chapter Production): creates narration.json either as a
+- `narration-init` (Narration): creates narration.json either as a
   full per-panel template or as a genuinely empty (0-byte) file. The
   document shape lives in `remanga/narration.py:narration_document` and
   WriterState builds through it too, so a hand-started template and a
@@ -879,10 +902,10 @@ keeps), reachable from the menu like everything else.
   Long panels are safe: KPipeline's chunks are concatenated in
   kokoro_worker.py, and a panel is held on screen for its own clip's length
   (audio_timing.json), never sped up to fit.
-- `package` (Chapter Production): (re)builds sheets/zips/pdf from an
+- `package` (Package for the LLM): (re)builds sheets/zips/pdf from an
   already-cropped chapter's panels/, standalone from `crop` - previously
   only happened as a side effect of crop's resume-check top-up.
-  `package-all` (Project-wide) loops `package_chapter` over cropped chapters;
+  `package-all` (Package for the LLM) loops `package_chapter` over cropped chapters;
   its formats are remembered in a `finally` once any chapter built, so a run
   that stops part-way still remembers them.
 - Per-project choices (`settings/project_prefs.py`, stored in that project's
@@ -893,8 +916,8 @@ keeps), reachable from the menu like everything else.
   `cropper_config_for`, which returns a *copy* of CropperConfig - never
   mutate the shared one), so a project's chosen upload formats apply to
   every chapter without re-asking.
-- `wipe` (Chapter Production, single chapter) / `wipe-chapters`
-  (Project-wide, comma list and/or 'N-M' ranges): fully dynamic counterpart
+- `wipe` (Clean up, single chapter) / `wipe-chapters`
+  (Clean up, comma list and/or 'N-M' ranges): fully dynamic counterpart
   to `restart`'s 3 fixed modes - keeps whatever `--keep` names, default
   (unset) keeps `pages,crops.json,narration.json` (`DEFAULT_WIPE_KEEP` in
   `commands/selection.py`), `--keep none` for an absolute full wipe. Always
@@ -931,7 +954,7 @@ past a chapter's last/first page it `gotoChapter`s the neighbour (landing on
 its first/LAST page) via a DYNAMIC import of chapter-nav, with a `crossing`
 guard so a held arrow key switches once. Frontend split: `page-nav.js` = pages,
 `chapter-nav.js` = chapters/save/init, one-way import (page-nav must never
-import chapter-nav). Command: `mark-all` (Project-wide).
+import chapter-nav). Command: `mark-all` (Crop panels).
 
 `view-marks` is the same session with `MarkerSession(read_only=True)`: the
 server 403s `/api/marks` and `/api/detect`, `save_current()` no-ops, and
@@ -1397,7 +1420,7 @@ constants defined in several modules. **The scratchpad is wiped between sessions
 
 ## LLM crop: Gemini plans crops from gridded pages (2026-09-16)
 
-`crop-grid` -> upload `grid_zip/chapter_N/grid_1.zip` + `prompts/llm_crop.md` -> paste the reply
+`crop-grid` (formats picked per project: `--formats` / checklist) -> upload one grid upload + `prompts/llm_crop.md` -> paste the reply
 into `chapters/chapter_N/llm_crops.json` (0-byte placeholder; SOURCE, kept wherever crops.json is)
 -> `llm-crop` -> crops.json (+ `llm_crop/chapter_N/preview/`, `fix_request.md` on a bad reply).
 User guide: docs/llm_crop_guide.md. The user has unlimited Gemini uploads, so it is one zip and one
@@ -1408,16 +1431,13 @@ reply per chapter - a batched design was rejected; don't reintroduce batching.
   config, paths, extension.py manifest); settings are `config.extensions.llm_crop`. Cutting
   "structured crops" (frames + text_outside + art_outside, paint-out) is core:
   `cropper/structured.py`, `cropper/paint_out.py`, `cropper.paint_out`.
-- **The grid is a RULER, and its three weights are the point** (2026-09-16, after crops came back
-  a few units out): labeled lines every 100 (heaviest, numbered on all four edges), half lines
-  every 50 (lighter, numbered in small tags along top/left), and **ticks every `grid_tick_step`
-  (10)** along the four edges and across every labeled line. Ticks, not a 10-unit mesh: lines that
-  fine cross nearly every bubble and turn screentone into noise (25 already did). Default square is
-  2048px so the ticks still separate after Gemini scales the image down. Whatever changes here,
-  `grid.py`, `prompts/llm_crop.md` `<grid>` and `docs/llm_crop_guide.md` must keep saying the same
-  thing - the prompt is what tells the model how to read the drawing, and `chapter_info.json`
-  carries `grid.tick_step` along with the steps. Existing chapters keep their old images until
-  `crop-grid` is run again.
+- **The grid is a RULER, and its three weights are the point**: heavy labeled lines every 100,
+  lighter labeled lines every 25, and ticks every `grid_tick_step` (5) along the four edges and
+  across every heavy line. Ticks, not a fine mesh: lines that fine cross nearly every bubble and
+  turn screentone into noise. Default square is 2048px so 5-unit ticks (10px) still separate when
+  Gemini reads the page closely. Whatever changes here, `grid.py`, `prompts/llm_crop.md` `<grid>`
+  and `docs/llm_crop_guide.md` must keep saying the same thing; `chapter_info.json` carries the
+  steps. Existing chapters keep their old images until `crop-grid` is run again.
 - **Reply coordinates are on the SQUARE, not the page.** The page sits top-left on a black square;
   `PageExtent.to_page_box` divides by xmax/ymax (1000*w/long, 1000*h/long). Round trip checked
   within 1 unit on Yandere ch2.
@@ -1440,7 +1460,54 @@ reply per chapter - a batched design was rejected; don't reintroduce batching.
   when crops.json has content.
 - An order that differs from `mark_ops.reading_order` is a warning, never an error: Gemini orders
   by story. The prompt's own 002_019 example triggers it on purpose.
-- Not measured yet: Gemini's actual crop accuracy. Oracle: a hand-marked chapter's crops.json.
+- **Measured on RebornTwentyYearsLater ch1 (2026-09-17):** Gemini's frames were mostly right after
+  gutter-snap, but it (a) left a place caption spanning the gutter between two panels out of both
+  crops' text_outside -> each crop showed half, (b) half-cut a publisher blurb, (c) rounded
+  coordinates to 5s on some pages. Fix for (a): the reply now has a page-level `text` list
+  (`{"crop": n, "box": [...]}` for EVERY bubble/caption/SFX) and `text_inventory.py` derives
+  text_outside (piece reaches past owner's frames, or overlaps another crop's frame; 3-unit
+  tolerance). Models attribute text well and forget geometry rules - give them the inventory job,
+  keep the geometry in code. Old replies with text_outside still import; prompt examples derive
+  exactly the text_outside they used to hand-write.
+- **Previews used to mislead:** one page-wide red tint for everyone's paint-out made a crop look
+  like its own dialogue was erased (the paint belonged to a NEIGHBOUR whose rectangle overlaps).
+  Previews now put the real crops beside the page, cut by `cropper/crop_page.py:cut_crops` - the
+  one function `crop` saves from (factored out; 274 panels byte-identical before/after). Judge the
+  right half. Before blaming paint-out, cut the crops and look.
+- **Tried and dropped:** detecting unclaimed text crossing a gutter from pixels (ink in the gap
+  between snapped frames). Where frames touch, the strip lands on border lines (ink every row);
+  the real split caption never scored. Don't retry a naive version.
+- Pasted-reply parsing (fence/BOM/stray prose) is core: `json_io.json_from_reply`.
+
+## PDF uploads: never over max_mb, lossless first (2026-09-17)
+
+`cropper/llm_pdf.py:build_pdf_bundle` (panels, grid and pages PDFs). Every file - single or split,
+raw or zipped - is MEASURED after building and kept <= max_mb; nothing over is ever written.
+- Lossless page = smallest of PNG-IDAT (Pillow PNG's IDAT *is* a /FlateDecode /Predictor 15
+  stream; `pdf_writer.png_idat_stream`, incl. palette PLTE + 4-bit) and TIFF predictor 2; pure-gray
+  RGB stored as 1 channel; a JPEG source (L/RGB, no EXIF rotation) embedded as its own bytes
+  (DCTDecode) - re-encoding a downloaded chapter's JPEG pages "losslessly" is ~8x bigger.
+- Split formats add parts (no quality touched). Single formats step pages down biggest-saving
+  first through PSNR floors 45/42/39/36 dB, each page taking the smallest of no-dither palette
+  (256..16 colors) or 4:4:4 JPEG (95..80) that meets the floor. Palette beat JPEG on B&W manga +
+  green grid (1.6MB @47dB vs 2.5MB @42.8dB). Below 36 dB: refuse to build, say "split or raise cap".
+- Zip wrapper stores the PDF (ZIP_STORED) - deflating compressed streams only cost time.
+- **Verify with `pdfimages -png/-all`, not `pdftoppm`**: rendering at 72dpi isn't 1:1 (21 dB on
+  lossless pages); pdfimages decoded lossless pages exactly and palette/JPEG at the reported PSNR.
+- The size question is asked whenever a PDF format is on, not only split ones.
+
+## Page mode: narrate whole pages (2026-09-17)
+
+`remanga/extensions/page_narration/` + `prompts/page_narration.md` (defers to narration.md's
+<craft>/<writing_for_the_voice>; user uploads BOTH prompts). Guide: docs/page_narration_guide.md.
+`page-upload` -> pages PDF (`page_upload/chapter_N/pages_1.pdf`, info has `mode: pages`) + empty
+`page_narration.json` -> reply `{"pages": [{"page", "story", "skip", "panels": [notes], "text"}]}`
++ memory.json -> `page-narration` checks (errors -> `page_upload/chapter_N/fix_request.md`;
+warnings: <12 words per listed panel, quotes/?/!/.../contractions) and writes panels/ as one copy
+per story page named `<page>_01` + narration.json. So tts/mix/render/review/verify/gate need NO
+page-mode code - keep it that way. Pipeline: alternative step `page-narration` (no-op when
+narration.json has content). Verified end to end on 4 pages through real Chatterbox tts, mix and
+render (h264_nvenc).
 
 ## Maintenance rule (do this, don't just read this)
 

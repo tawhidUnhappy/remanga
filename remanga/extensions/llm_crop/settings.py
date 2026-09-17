@@ -1,10 +1,10 @@
 """The LLM crop settings screen: which grid uploads `crop-grid` builds, how
 readily Gemini groups panels, and how its crops are cut.
 
-The format checklist is generated from LLMCropConfig's Field metadata, the
-way the packaging checklist is generated from PackageConfig's
-(remanga/settings/vision.py) - a new grid format is one field, not a field
-plus a menu row.
+The format checklist is generated from LLMCropConfig's Field metadata
+(remanga.settings.format_switches, shared with page narration), the way the
+packaging checklist is generated from PackageConfig's - a new grid format is
+one field, not a field plus a menu row.
 
 set_field is imported where it is used: this module is loaded while the
 settings package is still building its section list (see
@@ -16,10 +16,10 @@ from __future__ import annotations
 from remanga.config import RemangaConfig
 from remanga.console import console
 from remanga.extensions.llm_crop.config import LLMCropConfig
+from remanga.settings.format_switches import FormatSwitches
 from remanga.tui import Choice, ask_number, confirm, is_cancel, multiselect, select
 
 FIELD_PREFIX = "extensions.llm_crop"
-_FORMAT_GROUPS = ("pages", "zip", "pdf")
 
 GROUPING_CHOICES: tuple[tuple[str, str], ...] = (
     ("balanced", "groups only frames too slight to narrate alone - silent inserts, small reaction shots"),
@@ -28,82 +28,17 @@ GROUPING_CHOICES: tuple[tuple[str, str], ...] = (
 )
 
 
-def grid_format_names() -> list[str]:
-    """Every grid format switch, in model order."""
-    return [name for name, field in LLMCropConfig.model_fields.items()
-            if (field.json_schema_extra or {}).get("group") in _FORMAT_GROUPS]
+GRID_FORMATS = FormatSwitches(LLMCropConfig, FIELD_PREFIX, ("pages", "zip", "pdf"), "grid",
+                              "Settings → LLM crop")
 
 
 def llm_crop_summary(config: RemangaConfig) -> str:
     llm = config.extensions.llm_crop
-    formats = [name for name in grid_format_names() if getattr(llm, name)]
+    formats = GRID_FORMATS.active(llm)
     ruler = f"{llm.grid_image_size}px grid" + (f", ticks every {llm.grid_tick_step}"
                                                 if llm.grid_tick_step else ", no ticks")
     return (f"{', '.join(formats) or 'no grid formats'} · {llm.grouping} grouping · "
             f"paint-out {'on' if config.cropper.paint_out else 'off'} · {ruler}")
-
-
-def _format_rows(llm: LLMCropConfig) -> list[Choice]:
-    rows = []
-    for name in grid_format_names():
-        field = LLMCropConfig.model_fields[name]
-        rows.append(Choice(
-            label=field.title or name,
-            hint=str((field.json_schema_extra or {}).get("produces", "")),
-            detail=field.description or "",
-            value=name,
-            checked=bool(getattr(llm, name)),
-        ))
-    return rows
-
-
-def parse_grid_formats(raw: str | None) -> list[str] | None:
-    """`--formats` (or the commands' checklist) as a validated list of grid
-    format names. None stays None - "not answered this run", so the
-    project's current switches are used as they are."""
-    if raw is None:
-        return None
-    valid = grid_format_names()
-    names = list(dict.fromkeys(token.strip() for token in raw.split(",") if token.strip()))
-    unknown = [name for name in names if name not in valid]
-    if unknown:
-        raise ValueError(f"Unknown grid format(s): {', '.join(unknown)}. Valid formats: {', '.join(valid)}.")
-    if not names:
-        raise ValueError(f"Pick at least one grid format: {', '.join(valid)}.")
-    return names
-
-
-def apply_grid_formats(config: RemangaConfig, formats: list[str] | None) -> None:
-    """Switches exactly `formats` on and saves - to the project's
-    project.json when `config` is scoped to one, the same place Settings →
-    LLM crop saves them - so the next chapter and the pipeline's llm-crop
-    step build the same set without asking. None changes nothing."""
-    if formats is None:
-        return
-    from remanga.settings.fields import set_field
-
-    llm = config.extensions.llm_crop
-    if [name for name in grid_format_names() if getattr(llm, name)] == formats:
-        return
-    for name in grid_format_names():
-        set_field(config, f"{FIELD_PREFIX}.{name}", name in formats, save=False)
-    config.save()
-    console.print(f"[dim]Grid formats: {', '.join(formats)} - remembered for this project.[/]")
-
-
-def prompt_grid_formats(param, session, values) -> object:
-    """The wizard's screen for `--formats` on the grid commands: the format
-    checklist, opened on what this project builds now. Nothing is built
-    unless it is ticked - the zip included."""
-    llm = session.config.extensions.llm_crop
-    picked = multiselect(
-        param.label, _format_rows(llm), allow_empty=False,
-        note=f"remembered for this project · PDFs and split parts are capped at {llm.max_mb:g}MB "
-             f"(change it in Settings → LLM crop)",
-    )
-    if is_cancel(picked):
-        return picked
-    return ",".join(picked)
 
 
 def configure_llm_crop(config: RemangaConfig) -> None:
@@ -113,12 +48,12 @@ def configure_llm_crop(config: RemangaConfig) -> None:
 
     llm = config.extensions.llm_crop
     picked = multiselect(
-        "What crop-grid builds for Gemini", _format_rows(llm),
+        "What crop-grid builds for Gemini", GRID_FORMATS.rows(llm),
         note="the grid images are drawn either way - these decide which uploads are made from them",
     )
     if is_cancel(picked):
         return
-    for name in grid_format_names():
+    for name in GRID_FORMATS.names():
         set_field(config, f"{FIELD_PREFIX}.{name}", name in picked, save=False)
     config.save()
     if llm.grid_zip_splites or llm.pdf_active:

@@ -24,29 +24,22 @@ def _replace_marks_param() -> Param:
                  prompt="Replace Panel Marker marks without asking?")
 
 
+def _reply_pasted(session, values) -> bool:
+    # llm-crop only builds the grid when the reply isn't pasted yet; with a
+    # reply waiting to import, which uploads to build is no question.
+    from remanga.extensions.llm_crop.paths import get_llm_crops_path
+    from remanga.json_io import has_real_json_content
+
+    return values.get("chapter") is not None and has_real_json_content(
+        get_llm_crops_path(session.project, values["chapter"]))
+
+
 def _formats_param(prompt: str, *, skip_when_replied: bool = False) -> Param:
     """Which grid uploads to build - a checklist in the wizard, a
     comma-separated list on the CLI, saved to the project either way."""
-    from remanga.extensions.llm_crop.settings import grid_format_names, prompt_grid_formats
+    from remanga.extensions.llm_crop.settings import GRID_FORMATS
 
-    def prompter(param, session, values):
-        # llm-crop only builds the grid when the reply isn't pasted yet; with
-        # a reply waiting to import, which uploads to build is no question.
-        if skip_when_replied and values.get("chapter") is not None:
-            from remanga.extensions.llm_crop.paths import get_llm_crops_path
-            from remanga.json_io import has_real_json_content
-
-            if has_real_json_content(get_llm_crops_path(session.project, values["chapter"])):
-                return None
-        return prompt_grid_formats(param, session, values)
-
-    return Param(
-        "formats", ["--formats"], required=False, default=None, prompt=prompt, prompter=prompter,
-        help="Comma-separated grid formats to build - any of: "
-             f"{', '.join(grid_format_names())}. The wizard offers this as a checklist. Whatever you "
-             "pick is saved for the project, so later runs (and the pipeline's llm-crop step) build "
-             "the same thing. Left unset: what the project builds now (Settings → LLM crop).",
-    )
+    return GRID_FORMATS.param(prompt, skip=_reply_pasted if skip_when_replied else None, step="llm-crop")
 
 
 CROP_GRID = Command(

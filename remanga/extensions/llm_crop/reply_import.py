@@ -11,7 +11,6 @@ structured crop (remanga.cropper.structured) with `src: "llm"`."""
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -24,7 +23,7 @@ from remanga.extensions.llm_crop.grid import PageExtent, oriented_size, page_ext
 from remanga.extensions.llm_crop.paths import get_llm_crop_dir, get_llm_crops_path
 from remanga.extensions.llm_crop.reply_check import BOX_KEYS, ReplyCheck, box_bounds, check_reply
 from remanga.extensions.llm_crop.text_inventory import text_outside_from_inventory
-from remanga.json_io import has_real_json_content, read_json_or, write_json
+from remanga.json_io import has_real_json_content, json_from_reply, read_json_or, write_json
 from remanga.paths import get_chapter_dir, load_project_metadata
 
 LLM_SRC = "llm"
@@ -43,21 +42,6 @@ class ImportOutcome:
     state: str
     check: ReplyCheck | None = None
     fix_path: Path | None = None
-
-
-def reply_document(raw: str) -> Any:
-    """The JSON document inside a pasted reply. Gemini is asked for exactly
-    one fenced block and nothing else, but a paste can still bring the fence
-    along, a stray sentence around it, or a byte-order mark."""
-    text = raw.lstrip("﻿").strip()
-    fenced = re.search(r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n[ \t]*```", text, re.DOTALL)
-    if fenced:
-        text = fenced.group(1)
-    elif not text.startswith("{"):
-        start, end = text.find("{"), text.rfind("}")
-        if start != -1 and end > start:
-            text = text[start:end + 1]
-    return json.loads(text)
 
 
 def to_crops_json(doc: dict[str, Any], pages: list[ChapterPage], extents: dict[str, PageExtent],
@@ -154,7 +138,7 @@ def import_llm_crops(llm: LLMCropConfig, cropper: CropperConfig, project_name: s
 
     fix_path = get_llm_crop_dir(project_name, chapter_num) / FIX_REQUEST_NAME
     try:
-        doc = reply_document(reply.read_text(encoding="utf-8"))
+        doc = json_from_reply(reply.read_text(encoding="utf-8"))
         check = check_reply(doc, pages, extents, chapter_num, direction,
                             snap_step=llm.grid_tick_step or llm.grid_line_step)
     except json.JSONDecodeError as error:

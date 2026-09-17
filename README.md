@@ -841,6 +841,16 @@ Instead of marking panels yourself, Gemini can plan the crops - which speech bub
 ```
 Every page is drawn on a square black canvas, top-left, under a green 0-1000 ruler grid - Gemini's own bounding-box units - and zipped with a `chapter_info.json` carrying the chapter, reading direction, grouping setting and each page's area. The grid upload comes in the same shapes as the panel uploads (folder, zip, PDF, single or split), and like `package` you choose which: a checklist in the wizard or `--formats` on the CLI, saved for the project - nothing is zipped unless you pick it. A reply that doesn't check out gets a `fix_request.md` to paste back into the same chat. Once imported, `crop` cuts each crop with its bubbles kept whole and other panels' slivers painted out. `crop-grid-all` / `llm-crop-all` do whole projects, and `llm-crop` can replace `mark` in the pipeline. Full guide: [docs/llm_crop_guide.md](docs/llm_crop_guide.md).
 
+### 2d. Or Skip Cropping: Page Mode
+
+Page mode narrates whole pages instead of panels: no marking, cropping or packaging. `page-upload` builds a PDF of the chapter's pages (JPEG pages embedded byte for byte, never over the size cap), you upload it with `prompts/page_narration.md` and `prompts/narration.md`, and paste the reply into `page_narration.json`. `page-narration` checks it - every page present, every story page listing its panels and narrating each of them - and turns it into `panels/` (one image per story page) and `narration.json` (one entry per page), so `tts`, `mix` and `render` run unchanged and the video shows each page whole. In the pipeline, pick `page-narration` in place of `mark`, `crop`, `package` and `narration`. Full guide: [docs/page_narration_guide.md](docs/page_narration_guide.md).
+
+```bash
+./run.sh page-upload -p my_manga -c 1 --formats pages_pdf
+# upload pages_1.pdf + prompts/page_narration.md + prompts/narration.md, paste the reply
+./run.sh page-narration -p my_manga -c 1
+```
+
 ### 3. Crop Panels
 ```bash
 ./run.sh crop --project "my_manga" --chapter "1"
