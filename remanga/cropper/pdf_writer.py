@@ -10,9 +10,16 @@ real quality loss, not acceptable for what remanga.cropper.llm_pdf needs.
 
 So this builds the PDF bytes directly instead, using PDF's own native
 lossless raster path: each image is embedded as a `/FlateDecode`-compressed
-raw bitmap (optionally TIFF-Predictor-2-filtered first for better ratio,
-`encode_predictor2`/`decode_predictor2` below) - the same class of lossless
-compression a PNG uses internally, just packaged the way PDF expects it.
+raw bitmap, filtered first for a better ratio - either TIFF Predictor 2
+(`encode_predictor2`/`decode_predictor2` below) or PNG's own per-row filters,
+taken straight out of a PNG file (`png_idat_stream`): a PNG's IDAT data *is*
+a PDF FlateDecode stream with /Predictor 15, byte for byte.
+
+The lossy options are a caller's explicit choice, never a default: a page can
+instead carry a palette image (a quantized PNG's IDAT and PLTE, as an
+/Indexed color space) or a baseline JPEG as-is (`/DCTDecode`), which is how
+remanga.cropper.llm_pdf keeps a PDF under its size cap when lossless pages
+alone would not fit.
 
 Deliberately narrow: this only ever needs to do exactly two kinds of page - a
 full-page raster image, and a page of left-aligned lines of plain text in one
@@ -43,21 +50,72 @@ _LINES_PER_TEXT_PAGE = (_TEXT_PAGE_SIZE[1] - 2 * _TEXT_MARGIN) // _TEXT_LEADING
 
 @dataclass
 class ImagePage:
-    """One full-page raster image. `flate_data` must already be the final
-    stream payload - zlib-compressed raw top-to-bottom RGB/grayscale bytes,
-    optionally TIFF-Predictor-2-filtered first (see encode_predictor2) if
-    `predictor` is 2. `colors` is 3 for RGB, 1 for grayscale."""
+    """One full-page raster image. `data` must already be the final stream
+    payload. With `filter` "FlateDecode" that is zlib-compressed raw
+    top-to-bottom RGB/grayscale bytes, filtered first as `predictor` says (2:
+    encode_predictor2; 15: PNG row filters, see png_idat_stream; None: none).
+    With "DCTDecode" it is a whole JPEG file, and `predictor` is ignored.
+    `colors` is 3 for RGB, 1 for grayscale or palette indices. `palette`, when
+    set, is the RGB triples those indices point into, and `bits` their width.
+    `lossless` is the caller's word for whether the pixels are the source's."""
     width: int
     height: int
-    flate_data: bytes
+    data: bytes
     colors: int = 3
     predictor: int | None = 2
+    filter: str = "FlateDecode"
+    palette: bytes | None = None
+    bits: int = 8
+    lossless: bool = True
+
+
+@dataclass
+class PngStream:
+    width: int
+    height: int
+    colors: int
+    bits: int
+    palette: bytes | None
+    data: bytes
+
+
+def png_idat_stream(png: bytes) -> PngStream:
+    """The image data of a non-interlaced 8-bit grayscale or RGB PNG, or a
+    palette PNG of any bit depth: its IDAT chunks joined, which PDF reads as
+    FlateDecode with /Predictor 15 (PNG filters, chosen per row) - the same
+    trick img2pdf uses - plus the palette. Raises ValueError for any other
+    kind of PNG."""
+    if png[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("not a PNG")
+    pos, idat, header, palette = 8, bytearray(), None, None
+    while pos < len(png):
+        length = int.from_bytes(png[pos:pos + 4], "big")
+        kind = png[pos + 4:pos + 8]
+        body = png[pos + 8:pos + 8 + length]
+        if kind == b"IHDR":
+            header = body
+        elif kind == b"IDAT":
+            idat += body
+        elif kind == b"PLTE":
+            palette = bytes(body)
+        elif kind == b"IEND":
+            break
+        pos += 12 + length
+    if header is None or not idat:
+        raise ValueError("PNG has no IHDR or IDAT")
+    width, height = int.from_bytes(header[0:4], "big"), int.from_bytes(header[4:8], "big")
+    depth, color_type, interlace = header[8], header[9], header[12]
+    colors = {0: 1, 2: 3, 3: 1}.get(color_type)
+    indexed = color_type == 3
+    if colors is None or interlace != 0 or (depth != 8 and not indexed) or (indexed and not palette):
+        raise ValueError(f"unsupported PNG (depth {depth}, color type {color_type}, interlace {interlace})")
+    return PngStream(width, height, colors, depth, palette if indexed else None, bytes(idat))
 
 
 def encode_predictor2(arr: np.ndarray) -> bytes:
     """TIFF Predictor 2 (per-row, per-component horizontal differencing,
     matching the PDF/TIFF6 spec exactly) then zlib - PDF's own native
-    lossless image representation, and what `ImagePage.flate_data` should
+    lossless image representation, and what `ImagePage.data` should
     hold when `predictor=2`. `arr` is (H, W, colors) uint8. Any standards-
     compliant PDF reader decodes this back exactly; `decode_predictor2`
     (below) implements the same inverse purely so a caller can self-verify a
@@ -147,20 +205,25 @@ def build_pdf(image_pages: Sequence[ImagePage], info_lines: Sequence[str]) -> by
 
     for img in image_pages:
         colorspace = b"/DeviceRGB" if img.colors == 3 else b"/DeviceGray"
+        if img.palette is not None:
+            colorspace = (b"[/Indexed /DeviceRGB " + str(len(img.palette) // 3 - 1).encode("ascii") +
+                          b" <" + img.palette.hex().encode("ascii") + b">]")
         decode_parms = b""
-        if img.predictor is not None:
+        if img.filter == "FlateDecode" and img.predictor is not None:
             decode_parms = (
                 b" /DecodeParms << /Predictor " + str(img.predictor).encode("ascii") +
                 b" /Colors " + str(img.colors).encode("ascii") +
-                b" /BitsPerComponent 8 /Columns " + str(img.width).encode("ascii") + b" >>"
+                b" /BitsPerComponent " + str(img.bits).encode("ascii") +
+                b" /Columns " + str(img.width).encode("ascii") + b" >>"
             )
         image_id = add_object(
             b"<< /Type /XObject /Subtype /Image /Width " + str(img.width).encode("ascii") +
             b" /Height " + str(img.height).encode("ascii") +
             b" /ColorSpace " + colorspace +
-            b" /BitsPerComponent 8 /Filter /FlateDecode" + decode_parms +
-            b" /Length " + str(len(img.flate_data)).encode("ascii") + b" >>\nstream\n" +
-            img.flate_data + b"\nendstream"
+            b" /BitsPerComponent " + str(img.bits).encode("ascii") +
+            b" /Filter /" + img.filter.encode("ascii") + decode_parms +
+            b" /Length " + str(len(img.data)).encode("ascii") + b" >>\nstream\n" +
+            img.data + b"\nendstream"
         )
         img_content = f"q {img.width} 0 0 {img.height} 0 0 cm /Im0 Do Q".encode("ascii")
         img_content_id = add_object(

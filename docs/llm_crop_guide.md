@@ -106,7 +106,7 @@ which is the cropper's own `cropper.paint_out`.
 | `grid_pages` | on | the folder of grid images |
 | `grid_zip` / `grid_zip_splites` | off | the zip, single or split into parts |
 | `grid_pdf` / `grid_pdf_splite` / `grid_pdf_zip` / `grid_pdf_zip_splite` | off | the PDF forms, same meaning as the panels PDF switches |
-| `max_mb` | 50 | size cap per part, for the split forms |
+| `max_mb` | 50 | size cap for every grid PDF and each split-zip part - see the panels PDF note in the README |
 | `grouping` | `balanced` | `none` / `balanced` / `generous` - how readily Gemini shows several frames as one crop |
 | `cropper.paint_out` | on | paint other crops' frames and bubbles out of each crop |
 | `preview` | on | write preview images on import |

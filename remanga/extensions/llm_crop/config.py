@@ -55,7 +55,7 @@ class LLMCropConfig(BaseModel):
     )
     max_mb: float = Field(
         50.0, gt=0, title="max_mb",
-        description="Size cap per part for the split grid formats above, in MB",
+        description="Size cap in MB for every grid PDF file, and for each part of a split grid zip",
         json_schema_extra={"group": "limits"},
     )
 

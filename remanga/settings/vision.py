@@ -68,8 +68,8 @@ def package_summary(package: PackageConfig) -> str:
     if not active:
         return "panels only"
     line = ", ".join(active)
-    if any(is_split_switch(name) for name in active):
-        line += f" (split at {package.max_mb:g}MB)"
+    if any(is_split_switch(name) or name.startswith("pdf") for name in active):
+        line += f" (capped at {package.max_mb:g}MB)"
     return line
 
 
@@ -90,10 +90,11 @@ def configure_vision_outputs(config: RemangaConfig) -> None:
     for name in package_switch_names():
         setattr(package, name, name in picked)
 
-    if any(is_split_switch(name) for name in picked):
+    if any(is_split_switch(name) or name.startswith("pdf") for name in picked):
         package.max_mb = ask_number(
-            "Size cap per part, in MB", default=package.max_mb, minimum=1, maximum=2000,
-            note="each part is kept at or under this by splitting on image/page boundaries",
+            "Size cap per file, in MB", default=package.max_mb, minimum=1, maximum=2000,
+            note="no PDF goes over this - pages stay lossless when they fit, near-lossless when they don't "
+                 "· split zips are cut into parts under it",
         )
 
     config.save()

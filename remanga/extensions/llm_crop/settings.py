@@ -98,7 +98,7 @@ def prompt_grid_formats(param, session, values) -> object:
     llm = session.config.extensions.llm_crop
     picked = multiselect(
         param.label, _format_rows(llm), allow_empty=False,
-        note=f"remembered for this project · split parts are capped at {llm.max_mb:g}MB "
+        note=f"remembered for this project · PDFs and split parts are capped at {llm.max_mb:g}MB "
              f"(change it in Settings → LLM crop)",
     )
     if is_cancel(picked):
@@ -121,9 +121,10 @@ def configure_llm_crop(config: RemangaConfig) -> None:
     for name in grid_format_names():
         set_field(config, f"{FIELD_PREFIX}.{name}", name in picked, save=False)
     config.save()
-    if llm.grid_zip_splites or llm.pdf_split:
-        cap = ask_number("Size cap per grid part, in MB", default=llm.max_mb, minimum=1, maximum=2000,
-                         note="each part is kept at or under this by splitting between pages")
+    if llm.grid_zip_splites or llm.pdf_active:
+        cap = ask_number("Size cap per grid file, in MB", default=llm.max_mb, minimum=1, maximum=2000,
+                         note="no grid PDF goes over this - pages stay lossless when they fit, near-lossless "
+                              "when they don't · split zips are cut into parts under it")
         if is_cancel(cap):
             return
         set_field(config, f"{FIELD_PREFIX}.max_mb", float(cap))

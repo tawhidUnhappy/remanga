@@ -122,14 +122,14 @@ class PackageConfig(ConfigModel):
         False, title="panels_zip_splites", description="That same panels zip, split into size-capped parts",
         json_schema_extra={"produces": "panels_zip/panels_1.zip, panels_2.zip, ...", "group": "panels"},
     )
-    # Only consulted when a `_zip_splite`/`_splites` switch above is on: each
-    # part is kept at or under this size by splitting on image/page
-    # boundaries. A single image larger than this on its own still gets its
-    # own (oversized) part rather than being split or dropped. Shared by
-    # every format.
+    # The cap on every PDF file (split or not - see remanga.cropper.llm_pdf,
+    # which keeps pages lossless when they fit and near-lossless only when
+    # they don't) and on every part of a split zip, which is kept at or
+    # under it by splitting on image boundaries (a single image larger than
+    # this on its own still gets its own part there). Shared by every format.
     max_mb: float = Field(
-        50.0, title="max_mb",
-        description="Size cap per part for every split format above, in MB",
+        50.0, gt=0, title="max_mb",
+        description="Size cap in MB for every PDF file, and for each part of a split zip",
         json_schema_extra={"group": "limits"},
     )
 
