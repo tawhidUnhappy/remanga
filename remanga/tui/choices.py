@@ -61,7 +61,7 @@ class Choice:
 
 
 def exit_row(label: str) -> Choice:
-    """The quit row every menu ends with (ctrl+q does the same). Plain, so
+    """The quit row at the top of every menu (ctrl+q does the same). Plain, so
     it's never numbered or checkable; menus turn picking it into PromptExit."""
     return Choice(label=label, hint="quit from here", value=EXIT, plain=True)
 

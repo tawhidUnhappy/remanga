@@ -32,13 +32,13 @@ _EXIT_ROW = _ExitRow()
 
 def _print_choices(title: str, choices: Sequence[Choice], back_label: str | None) -> None:
     console.print(f"\n[bold]{_safe(title)}[/]")
+    if back_label:
+        console.print(f"  [dim]0.[/] {_safe(back_label)}")
     for i, choice in enumerate(choices, start=1):
         badge = f"[yellow]\\[{_safe(choice.badge)}][/] " if choice.badge else ""
         hint = f" [dim]— {_safe(choice.hint)}[/]" if choice.hint else ""
         state = "[dim](unavailable)[/] " if choice.disabled else ""
         console.print(f"  [bold]{i}.[/] {state}{badge}{_safe(choice.label)}{hint}")
-    if back_label:
-        console.print(f"  [dim]0.[/] {_safe(back_label)}")
 
 
 def _safe(text: str) -> str:

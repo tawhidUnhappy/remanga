@@ -40,7 +40,7 @@ def select(
     `default` pre-highlights whichever row carries that value - the "you are
     here" that makes Enter alone the right answer whenever the current
     setting is already correct. `back_label` adds an explicit last row for
-    backing out (None removes it, for a question that must be answered);
+    backing out, shown at the top (None removes it, for a question that must be answered);
     Esc does the same thing, after first clearing an active filter.
 
     `exit_label` adds the always-present quit row (ctrl+q does the same),
@@ -64,18 +64,23 @@ def select(
         return CANCEL
 
     start = index_of_value(rows, default, fallback=default_index) if default is not None else default_index
-    # `plain` keeps the two action rows out of the numbering (see
-    # frame.numbered_rows); it has no other effect on a single-select menu.
+    # Back and Exit go at the TOP, so leaving a long list (a manga's chapters)
+    # never means scrolling to its end. The cursor still starts on the default
+    # row below them. `plain` keeps the two action rows out of the numbering
+    # (see frame.numbered_rows), so the items stay 1., 2., 3.
+    actions = []
     if back_label:
-        rows = [*rows, Choice(label=back_label, value=CANCEL, hint="", plain=True)]
+        actions.append(Choice(label=back_label, value=CANCEL, hint="", plain=True))
     if exit_label:
-        rows = [*rows, exit_row(exit_label)]
+        actions.append(exit_row(exit_label))
+    rows = [*actions, *rows]
+    start += len(actions)
 
     if footer is None:
         footer = NUMBERED_FOOTER.format(count=min(len(choices), 9)) if numbered else FOOTER
 
     if not keys.is_interactive():
-        return fallback.select(title, choices, default_index=start, back_label=back_label,
+        return fallback.select(title, choices, default_index=start - len(actions), back_label=back_label,
                                exit_label=exit_label)
 
     def on_key(state: MenuState, key: str):

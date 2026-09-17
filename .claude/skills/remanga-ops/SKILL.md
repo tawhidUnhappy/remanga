@@ -90,6 +90,11 @@ call these), `cli.py`, `wizard.py` (menus), `settings.py` (voice/music/video/pdf
   any command run in the session (last one 18:37), and no remanga code can delete it. Test anything
   that writes under `projects/` from a scratch cwd (`cd scratch; PYTHONPATH=repo python -m
   remanga.cli ...` with a copied config.json) - `get_projects_dir()` even mkdirs `projects/` in cwd.
+- **Menus put Back and Exit at the TOP** (user request: long chapter lists). `select` shifts the
+  default cursor by the prepended rows - and the non-tty fallback must get the UNshifted index (it
+  printed a default 2 too high once). Checklists start the cursor on the first real row: with Exit
+  first, a Space pressed straight away quit remanga. Test real menus in a pty with TERM set
+  (without TERM, `is_interactive()` is false and you only see the numbered fallback).
 - Decimal chapters are chapters of their own: `1-5` takes 4.5, not 5.1 (`chapters.expand_chapter_selection`).
 - MangaDex chapter list is cached 24h in manifest.json.
 

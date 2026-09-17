@@ -52,18 +52,24 @@ def multiselect(
     if not keys.is_interactive():
         return fallback.multiselect(title, rows, back_label=back_label, ordered=ordered)
 
-    # The quit row rides along as an ordinary row so it's visible and
-    # reachable with the arrow keys, but it is never checkable: Space and
-    # Enter on it quit, ctrl+a skips it, and it can't end up in the result.
+    # Back and the quit row sit at the top, reachable with the arrow keys
+    # without scrolling past a long list, but they are never checkable: Space
+    # or Enter on them backs out or quits, ctrl+a skips them, and they can't
+    # end up in the result. The cursor starts on the first real row, so a
+    # Space pressed straight away ticks an item rather than quitting.
+    actions = []
+    if back_label:
+        actions.append(Choice(label=back_label, value=CANCEL, plain=True))
     if exit_label:
-        rows = [*rows, exit_row(exit_label)]
+        actions.append(exit_row(exit_label))
+    rows = [*actions, *rows]
 
     # Check order, which is the run order in `ordered` mode. Seeded from
     # whatever arrived pre-checked so an existing order is kept.
     order: list[Any] = [c.value for c in rows if c.checked]
 
     def toggle(choice: Choice) -> None:
-        if choice.disabled or choice.value is EXIT:
+        if choice.disabled or choice.plain:
             return
         choice.checked = not choice.checked
         if choice.checked:
@@ -75,7 +81,7 @@ def multiselect(
     def set_all(checked: bool) -> None:
         order.clear()
         for choice in rows:
-            if choice.disabled or choice.value is EXIT:
+            if choice.disabled or choice.plain:
                 continue
             choice.checked = checked
             if checked:
@@ -90,12 +96,14 @@ def multiselect(
     def result() -> list[Any]:
         if ordered:
             return list(order)
-        return [c.value for c in rows if c.checked and c.value is not EXIT]
+        return [c.value for c in rows if c.checked and not c.plain]
 
     def on_key(menu: MenuState, key: str):
         current = menu.current
         if current is not None and current.value is EXIT and key in (keys.ENTER, keys.SPACE, keys.RIGHT):
             raise PromptExit
+        if current is not None and current.value is CANCEL and key in (keys.ENTER, keys.SPACE, keys.LEFT):
+            return (CANCEL,)
         if key == keys.SPACE and current is not None:
             toggle(current)
             return None
@@ -120,7 +128,7 @@ def multiselect(
             return menu.escape(bool(back_label))
         return None
 
-    state = MenuState(rows)
+    state = MenuState(rows, cursor=min(len(actions), len(rows) - 1))
     return run_menu(
         state, title=title, footer=footer or (ORDERED_FOOTER if ordered else FOOTER),
         note=note, checkable=True, order_of=order_of if ordered else None,
