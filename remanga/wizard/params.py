@@ -65,6 +65,8 @@ def collect_params(cmd: Command, session: Session) -> dict[str, Any] | None:
 
 
 def prompt_param(param: Param, session: Session, values: dict[str, Any]) -> Any:
+    if param.prompter is not None:
+        return param.prompter(param, session, values)
     special = _SPECIAL.get(param.name)
     if special is not None:
         return special(param, session, values)

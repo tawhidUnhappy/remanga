@@ -57,6 +57,11 @@ class Param:
     # handler does NOT re-ask interactively: the wizard would then silently
     # run with the default and there'd be no way to change it from the menu.
     cli_only: bool = False
+    # The wizard's own screen for this param, when a generic prompt can't ask
+    # it well - (param, session, values so far) -> the answer. For a param an
+    # extension owns: the core wizard's name-keyed prompts
+    # (remanga/wizard/params.py) can't know about it, and shouldn't.
+    prompter: Callable[[Param, Any, dict[str, Any]], Any] | None = None
 
     @property
     def label(self) -> str:

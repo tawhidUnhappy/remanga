@@ -25,8 +25,10 @@ def crop_grid(params: dict[str, Any], config: RemangaConfig) -> None:
     where the reply goes."""
     from remanga.extensions.llm_crop.bundles import build_grid_bundles
     from remanga.extensions.llm_crop.handoff import llm_config, print_llm_crop_handoff
+    from remanga.extensions.llm_crop.settings import apply_grid_formats, parse_grid_formats
 
     project, chapter = params["project"], params["chapter"]
+    apply_grid_formats(config, parse_grid_formats(params.get("formats")))
     build_grid_bundles(llm_config(config), project, chapter)
     print_llm_crop_handoff(project, chapter, config)
     console.print("\n[dim]Once the reply is saved, run `llm-crop` to turn it into crops.json.[/]")
@@ -38,20 +40,24 @@ def llm_crop(params: dict[str, Any], config: RemangaConfig) -> None:
     replaces Panel Marker marks without asking; otherwise a real terminal is
     asked and anything else keeps them."""
     from remanga.extensions.llm_crop.handoff import run_llm_crop_step
+    from remanga.extensions.llm_crop.settings import apply_grid_formats, parse_grid_formats
 
+    apply_grid_formats(config, parse_grid_formats(params.get("formats")))
     run_llm_crop_step(params["project"], params["chapter"], config,
                       replace_marks=True if params.get("force") else None)
 
 
 def crop_grid_all(params: dict[str, Any], config: RemangaConfig) -> None:
     """Builds the grid uploads for every downloaded chapter - the
-    whole-project form of `crop-grid`, so a manga's zips can all go to
+    whole-project form of `crop-grid`, so a manga's uploads can all go to
     Gemini at once. Chapters with no pages yet are skipped and named; a
     chapter that fails stops the run where it broke."""
     from remanga.extensions.llm_crop.bundles import build_grid_bundles, chapter_pages
     from remanga.extensions.llm_crop.handoff import llm_config
+    from remanga.extensions.llm_crop.settings import apply_grid_formats, parse_grid_formats
 
     project = params["project"]
+    formats = parse_grid_formats(params.get("formats"))
     chapters = _chosen_chapters(params, "nothing to build")
     if not chapters:
         return
@@ -61,6 +67,7 @@ def crop_grid_all(params: dict[str, Any], config: RemangaConfig) -> None:
         console.print(f"[yellow]None of the {len(chapters)} chapter(s) have downloaded pages - nothing to build.[/]")
         return
 
+    apply_grid_formats(config, formats)
     for i, chapter in enumerate(ready, start=1):
         console.print(f"[bold cyan]({i}/{len(ready)}) Chapter {chapter}[/]")
         build_grid_bundles(llm_config(config), project, chapter)

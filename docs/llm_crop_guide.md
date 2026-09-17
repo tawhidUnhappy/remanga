@@ -28,15 +28,19 @@ Everything after `crops.json` is unchanged: `crop` → `package` → `narration`
 
 ### 2. Build the grid upload
 ```bash
-./run.sh crop-grid -p my_manga -c 2
+./run.sh crop-grid -p my_manga -c 2 --formats grid_zip
 ```
-It creates:
+You pick what it builds, the way `package` does: a checklist in the wizard, `--formats` on the CLI
+(any of `grid_pages`, `grid_zip`, `grid_zip_splites`, `grid_pdf`, `grid_pdf_splite`, `grid_pdf_zip`,
+`grid_pdf_zip_splite`). The choice is saved for the project, so the next chapter, `crop-grid-all`
+and the pipeline's `llm-crop` step build the same set. Nothing is zipped unless you pick a zip.
+With `grid_zip` it creates:
 
 | Path | What |
 |---|---|
 | `projects/my_manga/grid_pages/chapter_2/` | every page as a gridded square image, plus a `000_info` image |
 | `projects/my_manga/grid_zip/chapter_2/grid_1.zip` | those images + `chapter_info.json` - **the file you upload** |
-| `projects/my_manga/grid_pdf/chapter_2/grid_1.pdf` | the same as a PDF (off by default) |
+| `projects/my_manga/grid_pdf/chapter_2/grid_1.pdf` | the same as a PDF, with `grid_pdf` |
 | `projects/my_manga/chapters/chapter_2/llm_crops.json` | **empty (0 bytes)** - where Gemini's reply goes |
 
 It then prints exactly what to upload and where to paste. An existing `llm_crops.json` is never
@@ -92,14 +96,15 @@ details; a box you move becomes a plain hand-drawn box.
 
 ## Settings
 
-Settings → **LLM crop (Gemini)**, also offered from inside `crop-grid` and `llm-crop`. Per project,
+Settings → **LLM crop (Gemini)**, also offered from inside `crop-grid` and `llm-crop` (whose
+format checklist sets the same switches). Per project,
 like every work setting. Stored under `extensions.llm_crop` in `config.json`, except paint-out,
 which is the cropper's own `cropper.paint_out`.
 
 | Setting | Default | Meaning |
 |---|---|---|
 | `grid_pages` | on | the folder of grid images |
-| `grid_zip` / `grid_zip_splites` | on / off | the zip, single or split into parts |
+| `grid_zip` / `grid_zip_splites` | off | the zip, single or split into parts |
 | `grid_pdf` / `grid_pdf_splite` / `grid_pdf_zip` / `grid_pdf_zip_splite` | off | the PDF forms, same meaning as the panels PDF switches |
 | `max_mb` | 50 | size cap per part, for the split forms |
 | `grouping` | `balanced` | `none` / `balanced` / `generous` - how readily Gemini shows several frames as one crop |

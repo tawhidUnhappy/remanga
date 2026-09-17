@@ -152,7 +152,7 @@
   "extensions": {
     "llm_crop": {
       "grid_pages": true,
-      "grid_zip": true,
+      "grid_zip": false,
       "grid_zip_splites": false,
       "grid_pdf": false,
       "grid_pdf_splite": false,

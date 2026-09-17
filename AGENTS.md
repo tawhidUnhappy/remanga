@@ -128,7 +128,7 @@ explains what the program does with the reply.
 ### 3.1 Build the grid
 
 ```bash
-./run.sh crop-grid -p P -c N </dev/null
+./run.sh crop-grid -p P -c N --formats grid_pages,grid_zip </dev/null
 ```
 
 Creates:

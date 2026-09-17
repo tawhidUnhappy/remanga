@@ -57,6 +57,55 @@ def _format_rows(llm: LLMCropConfig) -> list[Choice]:
     return rows
 
 
+def parse_grid_formats(raw: str | None) -> list[str] | None:
+    """`--formats` (or the commands' checklist) as a validated list of grid
+    format names. None stays None - "not answered this run", so the
+    project's current switches are used as they are."""
+    if raw is None:
+        return None
+    valid = grid_format_names()
+    names = list(dict.fromkeys(token.strip() for token in raw.split(",") if token.strip()))
+    unknown = [name for name in names if name not in valid]
+    if unknown:
+        raise ValueError(f"Unknown grid format(s): {', '.join(unknown)}. Valid formats: {', '.join(valid)}.")
+    if not names:
+        raise ValueError(f"Pick at least one grid format: {', '.join(valid)}.")
+    return names
+
+
+def apply_grid_formats(config: RemangaConfig, formats: list[str] | None) -> None:
+    """Switches exactly `formats` on and saves - to the project's
+    project.json when `config` is scoped to one, the same place Settings →
+    LLM crop saves them - so the next chapter and the pipeline's llm-crop
+    step build the same set without asking. None changes nothing."""
+    if formats is None:
+        return
+    from remanga.settings.fields import set_field
+
+    llm = config.extensions.llm_crop
+    if [name for name in grid_format_names() if getattr(llm, name)] == formats:
+        return
+    for name in grid_format_names():
+        set_field(config, f"{FIELD_PREFIX}.{name}", name in formats, save=False)
+    config.save()
+    console.print(f"[dim]Grid formats: {', '.join(formats)} - remembered for this project.[/]")
+
+
+def prompt_grid_formats(param, session, values) -> object:
+    """The wizard's screen for `--formats` on the grid commands: the format
+    checklist, opened on what this project builds now. Nothing is built
+    unless it is ticked - the zip included."""
+    llm = session.config.extensions.llm_crop
+    picked = multiselect(
+        param.label, _format_rows(llm), allow_empty=False,
+        note=f"remembered for this project · split parts are capped at {llm.max_mb:g}MB "
+             f"(change it in Settings → LLM crop)",
+    )
+    if is_cancel(picked):
+        return picked
+    return ",".join(picked)
+
+
 def configure_llm_crop(config: RemangaConfig) -> None:
     """Formats, then grouping, paint-out, previews and the grid image size.
     Every answer is saved as it is given, like every other settings screen."""

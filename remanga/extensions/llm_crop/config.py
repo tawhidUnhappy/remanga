@@ -28,7 +28,7 @@ class LLMCropConfig(BaseModel):
         json_schema_extra={"produces": "grid_pages/002_001.png, 002_002.png, ...", "group": "pages"},
     )
     grid_zip: bool = Field(
-        True, title="grid_zip",
+        False, title="grid_zip",
         description="Those grid images and chapter_info.json in one zip",
         json_schema_extra={"produces": "grid_zip/grid_1.zip", "group": "zip"},
     )
