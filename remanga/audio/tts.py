@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from pydub import AudioSegment
-from rich.progress import BarColumn, Progress, TextColumn
 
+from remanga import activity
 from remanga.audio.clips import apply_edge_fades, apply_gain, atomic_export, clamp_boost, is_audible_gain
 from remanga.audio.narration_voice import narration_voice_identity, voice_changed_from
 from remanga.audio.resample import load_audio
@@ -82,9 +82,7 @@ class TTSEngine:
         pause_ms = self.audio_config.pause_between_pages_ms
         timeline_ms, reused = 0, 0
         timing: list[dict[str, Any]] = []
-        with Progress(TextColumn("[progress.description]{task.description}"), BarColumn(),
-                      TextColumn("{task.completed}/{task.total} pages"), refresh_per_second=4) as progress:
-            task = progress.add_task("[yellow]Narrating pages...", total=len(pages))
+        with activity.progress("Narrating pages", total=len(pages), unit="pages") as bar:
             for index, page in enumerate(pages, start=1):
                 clip = audio_dir / f"{page.page_id}.wav"
                 if reusable(page.page_id):
@@ -106,7 +104,7 @@ class TTSEngine:
                 timing.append(page_timing(index, page.page_id, page.text, clip.name, start_ms=timeline_ms,
                                           duration_ms=len(segment), pause_after_ms=pause_ms))
                 timeline_ms += len(segment) + pause_ms
-                progress.advance(task)
+                bar.advance()
 
         write_timing(timing_path, chapter_num, timing, boost_db=boost_db, total_ms=timeline_ms, voice=voice_identity)
 

@@ -9,9 +9,7 @@ import contextlib
 import subprocess
 import threading
 
-from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn
-
-from remanga.console import console
+from remanga import activity
 from remanga.humanize import fmt_duration
 
 # Injected in front of every progress-tracked run. Together these stop ffmpeg
@@ -78,21 +76,9 @@ def _run_with_progress(
     stderr_thread.start()
 
     total = float(total_seconds) if total_seconds and total_seconds > 0 else None
-    columns = [TextColumn("[progress.description]{task.description}"), BarColumn()]
-    if total:
-        columns.append(TextColumn("{task.fields[position]} / {task.fields[length]}"))
-    else:
-        columns.append(TextColumn("{task.fields[position]} encoded"))
-    columns += [TextColumn("{task.fields[speed]}"), TimeElapsedColumn()]
-
-    # refresh_per_second=4: ffmpeg reports about twice a second, and a bar
-    # redrawing faster than its data changes just writes to the terminal for
-    # no reason (see the same note in downloader/mangadex.py).
-    with Progress(*columns, console=console, refresh_per_second=4) as progress:
-        task = progress.add_task(
-            f"[yellow]{description}...", total=total,
-            position=fmt_duration(0), length=fmt_duration(total or 0), speed="",
-        )
+    length = f" / {fmt_duration(total)}" if total else ""
+    with activity.progress(description, total=total) as bar:
+        speed = ""
         try:
             for line in proc.stdout:
                 key, _, value = line.strip().partition("=")
@@ -105,13 +91,12 @@ def _run_with_progress(
                         seconds = int(value) / 1_000_000
                     except ValueError:
                         continue
-                    progress.update(task, completed=min(seconds, total) if total else None,
-                                    position=fmt_duration(seconds))
+                    bar.update(completed=min(seconds, total) if total else seconds,
+                               detail=f"{fmt_duration(seconds)}{length} {speed}".strip())
                 elif key == "speed" and value not in ("", "N/A"):
-                    progress.update(task, speed=f"[dim]{value}[/]")
-                elif key == "progress" and value == "end":
-                    if total:
-                        progress.update(task, completed=total, position=fmt_duration(total))
+                    speed = value
+                elif key == "progress" and value == "end" and total:
+                    bar.update(completed=total, detail=f"{fmt_duration(total)}{length}")
         except (ValueError, OSError):
             pass  # pipe closed under us - the returncode below is what matters
 

@@ -7,8 +7,8 @@ import time
 from typing import Any
 
 import requests
-from rich.progress import BarColumn, Progress, TextColumn
 
+from remanga import activity
 from remanga.chapters import chapter_key
 from remanga.config import DownloaderConfig
 from remanga.console import console, escape as _esc
@@ -103,7 +103,7 @@ class MangaDexResolver:
         regardless of which form the user originally gave it in.
 
         `original_language` ("ja", "ko", "zh", ...) is what the reading
-        direction is derived from (see remanga/wizard.py): native
+        direction is derived from (see remanga/workflow.py): native
         Japanese manga reads right-to-left, Korean/Chinese webtoons
         left-to-right. It's already in this response, so asking a user which
         way their manga reads - when MangaDex has just told us - is a
@@ -128,15 +128,7 @@ class MangaDexResolver:
         limit = 100
         offset = 0
 
-        # refresh_per_second=4: see the note on the same param in
-        # downloader/mangadex.py's Progress() - a long-running spinner/bar
-        # redrawing at Rich's ~10-12.5Hz default is what a stuck-terminal-
-        # after-screen-lock report traced back to; 4Hz is still smooth and
-        # writes a lot less while nothing's actually draining the terminal.
-        with Progress(
-            TextColumn("[progress.description]{task.description}"), BarColumn(), refresh_per_second=4
-        ) as progress:
-            task = progress.add_task("[cyan]Fetching chapter feed...", total=None)
+        with activity.progress("Fetching the chapter list from MangaDex") as bar:
             while True:
                 res = self.request_with_retry(
                     "GET",
@@ -153,11 +145,12 @@ class MangaDexResolver:
                 if not data:
                     break
                 chapters.extend(data)
+                bar.update(detail=f"{len(chapters)} chapters")
                 offset += limit
                 if offset >= res_data.get("total", 0):
                     break
                 time.sleep(0.2)
-            progress.update(task, completed=100, total=100)
+            bar.update(completed=1, total=1)
 
         return chapters
 

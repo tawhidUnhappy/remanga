@@ -8,6 +8,7 @@
       audio/chapter_N/                  narration clips + audio_timing.json
       audio_modified/chapter_N/         the mixed master track
       video/chapter_N/<manga>_chN_recap.mp4, _work/
+      logs/chapter_N.log                what the menus' work printed
 
 A chapter's folder holds only what can't be rebuilt (pages, narration);
 everything generated lives one level up, per kind."""
@@ -105,6 +106,15 @@ def get_video_picture_path(project_name: str, chapter_num: str, create: bool = T
     """The encoded picture stream alone, so a sound-only change remuxes it
     instead of re-encoding every frame."""
     return get_video_work_dir(project_name, chapter_num, create=create) / "picture.mp4"
+
+
+def get_log_path(project_name: str, chapter_num: str | None = None) -> Path:
+    """What the menus' work printed, one file per chapter (or project.log for
+    project-wide work) - kept out of the screen, one key away."""
+    name = f"chapter_{_clean_chapter(chapter_num)}.log" if chapter_num is not None else "project.log"
+    path = get_project_dir(project_name) / "logs" / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def get_final_video_path(project_name: str, chapter_num: str, create: bool = True) -> Path:

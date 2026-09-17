@@ -5,8 +5,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from PIL import Image, ImageColor, ImageDraw, ImageEnhance, ImageFilter, ImageOps
-from rich.progress import BarColumn, Progress, TextColumn
 
+from remanga import activity
 from remanga.config import VideoConfig
 from remanga.console import console
 from remanga.paths import get_pages_dir, get_video_frames_dir
@@ -182,13 +182,11 @@ class FrameCompositor:
             # work that makes up a frame.
             pool = ThreadPoolExecutor(max_workers=min(len(to_composite), os.cpu_count() or 1))
             try:
-                with Progress(TextColumn("[progress.description]{task.description}"), BarColumn(),
-                              TextColumn("{task.completed}/{task.total} pages"), refresh_per_second=4) as progress:
-                    task = progress.add_task("[yellow]Composing frames...", total=len(to_composite))
+                with activity.progress("Composing page frames", total=len(to_composite), unit="pages") as bar:
                     futures = [pool.submit(self.fit_image_on_canvas, page, out) for page, out in to_composite]
                     for future in as_completed(futures):
                         future.result()
-                        progress.update(task, advance=1)
+                        bar.advance()
             finally:
                 pool.shutdown(wait=True, cancel_futures=True)
 

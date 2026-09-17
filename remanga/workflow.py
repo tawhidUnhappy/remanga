@@ -11,6 +11,7 @@ two can't do a step differently."""
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 from remanga.chapters import chapter_sort_key, discover_chapters, expand_chapter_selection
@@ -219,11 +220,26 @@ def settle_reading_direction(project: str) -> str:
 # --- PDF --------------------------------------------------------------------
 
 
-def make_pdf(project: str, chapter: str, config: RemangaConfig) -> list[Path]:
+@dataclass
+class PdfResult:
+    parts: list[Path]
+    prompt: Path
+    narration: Path
+    story_from: str | None
+    missing_before: list[str]
+
+    def warnings(self) -> list[str]:
+        if not self.missing_before:
+            return []
+        return [f"Chapter(s) {', '.join(self.missing_before)} before this one have no narration yet - the story "
+                f"so far in this PDF " + (f"stops at chapter {self.story_from}." if self.story_from else "is empty.")]
+
+
+def make_pdf(project: str, chapter: str, config: RemangaConfig) -> PdfResult:
     """The chapter's pages as PDF parts, with the chapter's identity and the
-    story so far on each part's first page, then what to upload and where the
-    reply goes. The story so far comes from the previous chapter's pasted
-    narration. An empty narration.json is put in place to paste into."""
+    story so far on each part's first page. The story so far comes from the
+    previous chapter's pasted narration. An empty narration.json is put in
+    place to paste into."""
     pages = page_files(project, chapter)
     if not pages:
         raise FileNotFoundError(f"Chapter {chapter} has no downloaded pages - download it first.")
@@ -240,46 +256,61 @@ def make_pdf(project: str, chapter: str, config: RemangaConfig) -> list[Path]:
     missing = [c for c in local_chapters(project)
                if chapter_sort_key(c) < chapter_sort_key(str(chapter))
                and (source is None or chapter_sort_key(c) > chapter_sort_key(source))]
-    if missing:
-        console.print(f"[yellow]Chapter(s) {', '.join(missing)} before this one have no narration with a memory "
-                      f"section yet[/] [dim]- the story so far in this PDF "
-                      + (f"stops at chapter {source}" if source else "is empty") + ".[/]")
     parts = build_pages_pdf(pages, get_pdf_dir(project, chapter), config.pdf.max_mb, info)
 
     narration = get_narration_path(project, chapter)
     if not narration.exists():
         narration.write_text("", encoding="utf-8")
-    print_handoff(project, chapter, parts)
-    return parts
+    return PdfResult(parts, PROMPT_PATH, narration, source, missing)
 
 
-def print_handoff(project: str, chapter: str, parts: list[Path]) -> None:
-    console.print(f"\n[bold]Chapter {chapter}: give these to the LLM[/]")
-    console.print(f"  {display_path(PROMPT_PATH, wrap=False)}  [dim](the instructions)[/]")
-    for part in parts:
+def print_handoff(result: PdfResult) -> None:
+    for warning in result.warnings():
+        console.print(f"[yellow]{_esc(warning)}[/]")
+    console.print("\n[bold]Give these to the LLM[/]")
+    console.print(f"  {display_path(result.prompt, wrap=False)}  [dim](the instructions)[/]")
+    for part in result.parts:
         console.print(f"  {display_path(part, wrap=False)}")
     console.print("[bold]Paste its reply into[/]")
-    console.print(f"  {display_path(get_narration_path(project, chapter), wrap=False)}")
+    console.print(f"  {display_path(result.narration, wrap=False)}")
     console.print("[dim]Then make the video.[/]")
 
 
 # --- video ------------------------------------------------------------------
+# Four steps, each reusing what is already done and still current. The menus
+# run them one by one to show each; make_video runs them in a row.
+
+
+def check_narration(project: str, chapter: str) -> tuple[list, list[str]]:
+    """The story pages to narrate and the check's warnings; raises
+    NarrationError (after writing the fix request) when it doesn't check out."""
+    pages, check = load_narration(project, chapter)
+    return pages, check.warnings
+
+
+def narrate(project: str, chapter: str, pages: list, config: RemangaConfig, force: bool = False) -> Path:
+    from remanga.audio import TTSEngine
+
+    return TTSEngine(config.tts, config.audio).generate_narration_audio(project, chapter, pages, force=force)
+
+
+def mix(project: str, chapter: str, config: RemangaConfig, force: bool = False) -> Path:
+    from remanga.audio import mix_master_audio
+
+    return mix_master_audio(project, chapter, config.audio, force=force)
+
+
+def render(project: str, chapter: str, config: RemangaConfig, force: bool = False) -> Path:
+    from remanga.video import VideoRenderer
+
+    return VideoRenderer(config.system, config.video).render_video(project, chapter, force=force)
 
 
 def make_video(project: str, chapter: str, config: RemangaConfig, force: bool = False) -> Path:
-    """Checks the pasted narration, narrates each story page with Kokoro,
-    mixes in the background music, and renders the pages. Every stage reuses
-    what is already done and still current."""
-    from remanga.audio import TTSEngine, mix_master_audio
-    from remanga.video import VideoRenderer
-
-    pages, check = load_narration(project, chapter)
+    pages, warnings = check_narration(project, chapter)
     console.print(f"[bold]Chapter {chapter}:[/] narration checked - {len(pages)} page(s) to narrate")
-    if check.warnings:
-        console.print(f"[yellow]{len(check.warnings)} thing(s) worth a look in the narration:[/]")
-        for warning in check.warnings:
-            console.print(f"  [yellow]- {_esc(warning)}[/]")
-
-    TTSEngine(config.tts, config.audio).generate_narration_audio(project, chapter, pages, force=force)
-    mix_master_audio(project, chapter, config.audio, force=force)
-    return VideoRenderer(config.system, config.video).render_video(project, chapter, force=force)
+    for warning in warnings:
+        console.print(f"  [yellow]- {_esc(warning)}[/]")
+    narrate(project, chapter, pages, config, force)
+    mix(project, chapter, config, force)
+    return render(project, chapter, config, force)

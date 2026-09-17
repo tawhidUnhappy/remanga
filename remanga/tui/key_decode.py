@@ -32,7 +32,7 @@ _CSI_FINAL = {"A": UP, "B": DOWN, "C": RIGHT, "D": LEFT, "H": HOME, "F": END}
 _CSI_TILDE = {"1": HOME, "3": DELETE, "4": END, "5": PAGE_UP, "6": PAGE_DOWN, "7": HOME, "8": END}
 
 
-def read_escape(read, pending) -> str:
+def read_escape(read, pending, capture_paste: bool = False) -> str:
     """Consumes one complete ESC-prefixed sequence and names it.
 
     Every branch here consumes the sequence *in full* even when the answer
@@ -74,10 +74,31 @@ def read_escape(read, pending) -> str:
                 # to the closing ESC[201~ so a middle-click paste can't
                 # replay its contents (Enter included) into this menu.
                 if code == "200":
+                    if capture_paste:
+                        return PASTE_PREFIX + read_paste(read)
                     swallow_paste(read)
                 return UNKNOWN
             return _CSI_TILDE.get(code, UNKNOWN)
         return _CSI_FINAL.get(ch, UNKNOWN)
+
+
+# A paste read while a text box wants one comes back as this prefix plus
+# the pasted text, newlines removed.
+PASTE_PREFIX = "paste:"
+
+
+def read_paste(read) -> str:
+    """The pasted text up to its ESC[201~ terminator, bounded like swallow_paste."""
+    text = ""
+    for _ in range(64 * 1024):
+        ch = read()
+        if ch == "":
+            break
+        text += ch
+        if text.endswith("\x1b[201~"):
+            text = text[:-6]
+            break
+    return text.replace("\r", "").replace("\n", "")
 
 
 def swallow_paste(read) -> None:

@@ -10,8 +10,8 @@ import time
 from pathlib import Path
 
 import requests
-from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn, TimeRemainingColumn
 
+from remanga import activity
 from remanga.chapters import chapter_key, page_stem
 from remanga.config import DownloaderConfig
 from remanga.console import console, escape as _esc
@@ -169,25 +169,8 @@ class MangaDexDownloader(ChapterListMixin):
             f"[green]Downloading {len(todo)} of {len(pages)} page(s) politely to:[/] {_esc(str(dest_dir))}"
         )
 
-        # refresh_per_second=4 (Rich's default is ~10): a long-lived Progress
-        # bar redraws itself that many times a second regardless of whether
-        # anything is actually reading the terminal's output - if the
-        # terminal emulator stops draining its side while the screen is
-        # locked for a while, the OS pty buffer fills at whatever rate this
-        # writes, and once it's full the next write blocks until something
-        # drains it, which reads as the whole pipeline "getting stuck" until
-        # unlock. 4Hz is still smooth to watch and cuts that write volume by
-        # more than half; it doesn't make the buffer un-fillable, just a lot
-        # slower to fill for the same locked duration.
-        with Progress(
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            MofNCompleteColumn(),
-            TimeRemainingColumn(),
-            refresh_per_second=4,
-        ) as progress:
-            dl_task = progress.add_task("[yellow]Downloading pages...", total=len(pages),
-                                        completed=len(pages) - len(todo))
+        with activity.progress(f"Downloading chapter {chapter_num}", total=len(pages),
+                               completed=len(pages) - len(todo), unit="pages") as bar:
             for page in todo:
                 url = f"{base_url}/{url_path}/{chapter_data['hash']}/{page.source}"
                 # Checked before it's written: a page that arrives damaged
@@ -206,7 +189,7 @@ class MangaDexDownloader(ChapterListMixin):
 
                 if self.config.request_delay_seconds > 0:
                     time.sleep(self.config.request_delay_seconds)
-                progress.advance(dl_task)
+                bar.advance()
 
         record_pages(True)
 

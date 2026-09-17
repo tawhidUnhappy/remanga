@@ -138,6 +138,9 @@ class _PosixReader:
         # report's coordinate bytes aren't valid UTF-8 at all - those get
         # replaced rather than raising, and are discarded by the caller.
         self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        # Set while a text box is focused: a paste is then returned as text
+        # (key_decode.PASTE_PREFIX) instead of being dropped.
+        self.capture_paste = False
 
     def __enter__(self) -> _PosixReader:
         self._saved = termios.tcgetattr(self._fd)
@@ -193,8 +196,12 @@ class _PosixReader:
     def read_key(self) -> str:
         ch = self._read()
         if ch == "\x1b":
-            return read_escape(self._read, self._pending)
+            return read_escape(self._read, self._pending, self.capture_paste)
         return translate(ch)
+
+    def key_waiting(self, timeout: float) -> bool:
+        """Whether a key can be read without blocking, waiting up to `timeout`."""
+        return self._pending(timeout)
 
 
 class _WindowsReader:  # pragma: no cover - exercised only on Windows
@@ -202,8 +209,20 @@ class _WindowsReader:  # pragma: no cover - exercised only on Windows
     and special keys arrive as a two-byte (prefix, code) pair rather than an
     ANSI escape sequence."""
 
+    capture_paste = False
+
     def __enter__(self) -> _WindowsReader:
         return self
+
+    def key_waiting(self, timeout: float) -> bool:
+        import time
+
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            if msvcrt.kbhit():
+                return True
+            time.sleep(0.02)
+        return msvcrt.kbhit()
 
     def __exit__(self, *exc) -> None:
         return None

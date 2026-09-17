@@ -27,16 +27,20 @@ Silicon or CPU. Run `./run.sh setup` later to repair the Kokoro install.
 ./pipeline.sh
 ```
 
-Pick a project, or **New project…** and paste the manga's MangaDex URL (or ID, or a title to
-search): the project is named after the manga's English title, and its reading direction comes from
-the manga's original language. A manga you already have opens its existing project.
+remanga takes over the terminal while it runs and leaves nothing behind when you quit. Every screen
+has the same layout: where you are at the top, the list or dialog in the middle, and the keys you
+can press at the bottom. Nothing is highlighted until you press an arrow key, so an Enter pressed
+too early does nothing. `q` quits from anywhere; `Esc` goes back.
 
-| Menu | What it does |
+| Screen | What it does |
 |---|---|
-| **Chapters** | The chapter list, fetched fresh from MangaDex each time: every chapter marked ✓ downloaded, ◐ partial or + new, with its title, page count and where it is (PDF ready, narration pasted, video done). **Download all new chapters** or **Pick several…** at the top; pick one chapter to download it, check its pages (fixes missing or corrupt ones), re-download it from scratch, reset it (deletes its PDF, narration, audio and video, keeps the pages) or delete it. Reset and delete ask first. |
-| **Make PDF** | Builds `projects/<name>/pdf/chapter_N/pages_1.pdf` and tells you what to upload and where to paste. |
-| **Make video** | Checks the pasted narration, narrates it, mixes the music and renders `projects/<name>/video/chapter_N/<name>_chN_recap.mp4`. |
-| **Settings** | Narrator voice and speed, background music and volume, video size, PDF size cap. |
+| **Projects** | Your projects. `Enter` opens one, `n` starts a new one: paste the manga's MangaDex URL (or ID, or a title to search). The project is named after the manga's English title, and its reading direction comes from the manga's original language. |
+| **Chapters** | The chapter list, fetched fresh from MangaDex each time, as a table: status (✓ downloaded, ◐ partial, + new), pages, what comes next (PDF ready, narration pasted, video done) and title. `Enter` opens a chapter's actions: download, make PDF, make video, check pages, re-download, reset (deletes the PDF, narration, audio and video, keeps the pages) or delete. `space` picks several chapters to act on together, `a` downloads every new chapter. Reset and delete ask first. |
+| **Work** | Downloads, PDFs and videos run in a task view: the steps, a progress bar and the last few lines of output. `Ctrl+C` stops. When the work ends you get a result: what was made and what to do next (for a PDF: which files to upload, where to paste the reply), or what went wrong. `l` opens the full log. |
+| **Settings** (`s`) | Narrator voice and speed, background music and volume, video size, PDF size cap - for the open project, or the defaults from the projects screen. |
+
+Logs are kept in `projects/<name>/logs/`: `chapter_N.log` for a chapter's PDF and video,
+`project.log` for downloads.
 
 ## Or with commands
 

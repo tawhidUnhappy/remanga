@@ -15,7 +15,6 @@ import argparse
 import sys
 
 from remanga.console import console, err_console, escape as _esc
-from remanga.tui import PromptExit
 
 EXIT_INTERRUPTED = 130
 
@@ -56,9 +55,9 @@ def _run(args: argparse.Namespace) -> None:
     from remanga.config import RemangaConfig
 
     if args.command in (None, "interactive"):
-        from remanga.wizard import run_wizard
+        from remanga.ui import run
 
-        run_wizard()
+        run()
         return
     if args.command == "setup":
         setup()
@@ -69,9 +68,11 @@ def _run(args: argparse.Namespace) -> None:
 
     config = RemangaConfig.load().for_project(args.project)
     if args.command == "chapters":
-        from remanga.wizard import show_chapters
-
-        show_chapters(args.project)
+        chapters = workflow.local_chapters(args.project)
+        if not chapters:
+            console.print("[yellow]No chapters downloaded yet.[/]")
+        for chapter in chapters:
+            console.print(f"  chapter {chapter:>6}  {workflow.chapter_state(args.project, chapter)}")
         return
     if args.command == "download":
         listing = workflow.mangadex_chapters(args.project, config, args.url)
@@ -95,7 +96,7 @@ def _run(args: argparse.Namespace) -> None:
     for chapter in chapters:
         console.print(f"\n[bold cyan]Chapter {chapter}[/]")
         if args.command == "pdf":
-            workflow.make_pdf(args.project, chapter, config)
+            workflow.print_handoff(workflow.make_pdf(args.project, chapter, config))
         else:
             workflow.make_video(args.project, chapter, config, force=args.force)
 
@@ -117,8 +118,6 @@ def main() -> None:
     args = build_parser().parse_args()
     try:
         _run(args)
-    except PromptExit:
-        console.print("\n[dim]Bye.[/]")
     except KeyboardInterrupt:
         err_console.print("\n[yellow]Stopped. Run it again to carry on where it left off.[/]")
         sys.exit(EXIT_INTERRUPTED)
