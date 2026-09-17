@@ -4,7 +4,8 @@ request to paste back when it doesn't check out.
 
 The reply's boxes are measured on the square grid images, so each one is
 converted to the page's own 0-1000 box (grid.PageExtent.to_page_box) before
-it goes anywhere near crops.json. crops.json stays the one file the cropper,
+it goes anywhere near crops.json - unless the reply says `"units": "page"`,
+in which case they already are page boxes and convert as themselves. crops.json stays the one file the cropper,
 the marker, `status` and `restart` read: each Gemini crop becomes a
 structured crop (remanga.cropper.structured) with `src: "llm"`."""
 
@@ -22,7 +23,7 @@ from remanga.extensions.llm_crop.bundles import ChapterPage, chapter_pages
 from remanga.extensions.llm_crop.config import LLMCropConfig
 from remanga.extensions.llm_crop.grid import PageExtent, oriented_size, page_extent
 from remanga.extensions.llm_crop.paths import get_llm_crop_dir, get_llm_crops_path
-from remanga.extensions.llm_crop.reply_check import BOX_KEYS, ReplyCheck, box_bounds, check_reply
+from remanga.extensions.llm_crop.reply_check import BOX_KEYS, ReplyCheck, box_bounds, box_extents, check_reply
 from remanga.json_io import has_real_json_content, read_json_or, write_json
 from remanga.paths import get_chapter_dir, load_project_metadata
 
@@ -179,7 +180,7 @@ def import_llm_crops(llm: LLMCropConfig, cropper: CropperConfig, project_name: s
                           f"[dim](pass --force to replace them with Gemini's crops)[/]")
             return ImportOutcome("declined", check=check)
 
-    crops = to_crops_json(doc, pages, extents, chapter_num)
+    crops = to_crops_json(doc, pages, box_extents(doc, extents), chapter_num)
     write_json(crops_path, crops)
     _summarize(chapter_num, crops, len(pages), check)
 
