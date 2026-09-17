@@ -48,7 +48,7 @@ One JSON block, two sections (user request - NOT two blocks):
 - `narration.load_narration` errors -> nothing synthesized, `pdf/chapter_N/fix_request.md` written.
   Warnings only: <12 words per listed panel; quotes/?/!/.../contractions (the user's narration style:
   reported speech, complete content, no quote marks, no ?/!, no contractions, one steady narrator).
-- No memory.json any more: `make_pdf` reads the memory section of the nearest EARLIER chapter's
+- The story so far lives only in narration.json: `make_pdf` reads the memory section of the nearest EARLIER chapter's
   narration.json (`narration.story_so_far`) and prints it on the text page, warning when earlier
   chapters have no narration yet. The user uploads only the prompt + PDF.
 
@@ -108,7 +108,7 @@ One JSON block, two sections (user request - NOT two blocks):
 
 `download -c 1 --url ...` (40 pages, checksums) -> `pdf` (29.6MB, all lossless, text page ok) ->
 bad reply refused with fix request -> good reply -> Kokoro (af_heart) -> mix with BGM -> h264_nvenc
-render; frame checked; rerun reused clips/mix/video; next chapter's PDF carried memory.json; menus
+render; frame checked; rerun reused clips/mix/video; next chapter's PDF carried the previous chapter's memory section; menus
 walked in non-tty fallback; `setup` recognizes the installed Kokoro env.
 
 ## Maintenance rule (do this, don't just read this)
