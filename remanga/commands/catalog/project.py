@@ -240,7 +240,7 @@ PROJECT_COMMANDS: list[Command] = [
         project_handlers.status,
         [project_param(), chapter_param()],
         category="Run & check",
-        short="Show how far each chapter has got",
+        short="Show one chapter's production status, step by step",
     ),
     Command(
         "verify",

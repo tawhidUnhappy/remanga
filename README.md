@@ -428,7 +428,7 @@ Every screen is an arrow-key menu — **↑/↓** to move, **Enter** or **→** 
   Package for the LLM  step 3 · sheets, zips and PDFs of the cut panels, to upload
   Narration            step 4 · create the script, write it yourself, review it
   Audio & video        step 5 · voice, mix and render, for one chapter or the whole manga
-  Run & check          run the pipeline, see how far chapters have got, verify outputs
+  Run & check          run the pipeline, see a chapter's status, verify outputs
   Clean up             delete a chapter's files, or reset it to its pages
   Setup                settings, shared files, model weights and tools
   Switch project       currently: MyProject
