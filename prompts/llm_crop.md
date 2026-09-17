@@ -37,6 +37,13 @@ distance across as down.
   `[0, 0, ymax, xmax]`: `[0, 0, 1000, 696]` is a tall page whose right edge is at x 696, and
   `[0, 0, 718, 1000]` a wide spread whose bottom edge is at y 718. Every box you write lies inside
   its page's area.
+- **Detected panels**, outlined in **orange** with a solid orange label in their top-left corner:
+  `P1`, `P2`, ... numbered in reading order on each page. A detector found them by their borders, so
+  their outlines are precise - far more precise than any box measured by eye. `detected_panels` in
+  the chapter info (`<inputs>`) lists each label's box. They are usually right, but not always: a
+  detector can miss a panel (often borderless art or a small inset), merge two neighbouring panels
+  into one outline, or outline something that is not a panel. A page with no orange outlines was
+  not detected, and every frame on it is measured.
 - **A page ID stamp**, such as `002_019`, in the black padding - or over the top of the page when
   there is no padding to spare. It is the page's name and matches its file name.
 
@@ -49,9 +56,9 @@ end in 0 or 5 has been snapped to the ruler rather than measured against it.
 The chapter info's `grid` gives the spacing this upload was drawn with. If it differs from the
 numbers above, measure with the values it gives.
 
-The grid lines, their labels, the stamp and the black padding are there for measuring only. They
-are not artwork, not panel borders and not text, so leave them out of every decision about what a
-crop contains.
+The grid lines, their labels, the orange outlines and labels, the stamp and the black padding are
+drawn for you and are not part of the page. They are not artwork, not panel borders and not text,
+so leave them out of every decision about what a crop contains.
 </grid>
 
 <craft>
@@ -62,7 +69,11 @@ Each principle says why it matters, so you can apply it to layouts no example co
 ### 1. A crop is its frames, plus what belongs to it outside them
 A crop is described by two lists of boxes:
 
-- **`frames`** - the panel or panels the crop shows. For a bordered panel, the box runs along the
+- **`frames`** - the panel or panels the crop shows. **Give a frame as its orange label, such as
+  `"P3"`, whenever an orange outline matches that panel** - the program uses the detected box, which
+  is exact. Measure a box only for a frame no outline matches: a panel the detector missed, one
+  panel of two it merged into a single outline (then measure both), or an outline that is wrong. A
+  measured frame follows these rules: for a bordered panel, the box runs along the
   outer edge of its border line, on all four sides - including a side where the art bleeds off the
   edge of the page, where the frame runs to the page's edge. For artwork drawn without a border,
   the box covers the region that art occupies and stops where a bordered panel begins. For a panel
@@ -199,6 +210,7 @@ The chapter info looks like this:
   "grouping": "balanced",
   "grid": {"image_size": 2048, "line_step": 25, "label_step": 100, "tick_step": 5},
   "page_areas": {"002_001": [0, 0, 700, 1000], "002_002": [0, 0, 1000, 696], "...": "..."},
+  "detected_panels": {"002_002": {"P1": [48, 42, 470, 654], "P2": [492, 362, 690, 654], "...": "..."}},
   "part_index": 1,
   "total_parts": 1,
   "total_items": 36,
@@ -209,8 +221,8 @@ The chapter info looks like this:
 
 - `full_manifest` lists every page of the chapter, in order, and is your checklist: the reply has
   one entry for each. `contents` lists the pages in this particular part.
-- `reading_direction` and `grouping` are explained in `<craft>` 5 and 4, and `page_areas` in
-  `<grid>`.
+- `reading_direction` and `grouping` are explained in `<craft>` 5 and 4, and `page_areas` and
+  `detected_panels` in `<grid>`. `detected_panels` is absent when detection did not run.
 - The info itself - `chapter_info.json`, the PDF's text pages, the `000_info` image - is not a page
   of the story and gets no entry.
 
@@ -233,7 +245,8 @@ speaking and which moment a frame belongs to.
    4. Decide the crops - which frames stand alone and which form groups - following the chapter's
       `grouping` value (`<craft>` 4).
    5. Number the crops in reading order (`<craft>` 5).
-   6. Measure each frame against the grid (`<grid>`), one border at a time: find the border line in
+   6. Give each frame its orange label when an outline matches the panel. Measure only the frames no
+      outline matches, against the grid (`<grid>`), one border at a time: find the border line in
       the image, read the nearest labeled line, count the ticks to the border. Then measure each
       crop's `art_outside`, and each piece of text.
 3. **Check each page as a critical editor**, looking for what is wrong rather than confirming what
@@ -242,8 +255,10 @@ speaking and which moment a frame belongs to.
      once - look again at the gutters and the page margins for captions and lettering you passed
      over - and names the crop it belongs to;
    - every piece of art that breaks out of a frame is in its crop's `art_outside`;
-   - every frame box reaches its panel's border on all four sides: nothing of the panel is left
-     outside the box, and no strip of the neighbouring panel is inside it;
+   - every panel with a matching orange outline is given by its label, and every panel of the page is
+     in exactly one crop - check for panels the detector missed and outlines that merge two panels;
+   - every measured frame box reaches its panel's border on all four sides: nothing of the panel is
+     left outside the box, and no strip of the neighbouring panel is inside it;
    - no frame is split or appears in two crops, and frames of different crops do not overlap, apart
      from insets and slanted borders;
    - no group's rectangle takes in a frame that is not a member, and no group is much taller than
@@ -259,7 +274,8 @@ speaking and which moment a frame belongs to.
 ## Examples
 
 Each example shows the entry for one page from inside `pages`. A full reply wraps the entries as
-`<output_format>` shows.
+`<output_format>` shows. The first two examples are pages without detected panels, so every frame
+is measured; the reply format in `<output_format>` shows frames given by their labels.
 
 <example>
 ### Silent inserts, a caption past its border, and borderless art
@@ -423,19 +439,19 @@ standard JSON: double-quoted keys and strings, no trailing commas, no comments.
         {
           "order": 1,
           "kind": "panel",
-          "frames": [[48, 42, 470, 654]],
+          "frames": ["P1"],
           "art_outside": []
         },
         {
           "order": 2,
           "kind": "group",
-          "frames": [[492, 362, 690, 654], [492, 42, 690, 352]],
+          "frames": ["P2", [492, 42, 690, 352]],
           "art_outside": []
         },
         {
           "order": 3,
           "kind": "panel",
-          "frames": [[705, 42, 955, 654]],
+          "frames": ["P4"],
           "art_outside": []
         }
       ],
@@ -462,8 +478,10 @@ standard JSON: double-quoted keys and strings, no trailing commas, no comments.
 - Each crop has exactly four keys: `order`, `kind`, `frames` and `art_outside`.
   - `kind` is `panel` (one frame), `group` (two or more frames shown together) or `splash` (one
     frame covering all or most of the page, such as a cover or a full-page shot).
-  - `frames` holds one box for a `panel` or `splash`, and two or more boxes, in reading order, for a
-    `group`.
+  - `frames` holds one frame for a `panel` or `splash`, and two or more, in reading order, for a
+    `group`. Each frame is an orange label from its page, such as `"P2"`, or a measured box when no
+    outline matches the panel (in the example, the second frame of crop 2 was missed by the
+    detector, and `P3` was an outline around lettering, not a panel).
   - `art_outside` is a list of boxes, `[]` when empty.
 - `text` has one entry for every piece of story text on the page, each with exactly two keys:
   `crop`, the `order` of the crop it belongs to, and `box`. `[]` when the page has none.

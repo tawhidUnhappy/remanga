@@ -44,6 +44,9 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 GRID_GREEN = (0, 230, 0)
 LABEL_INK = (0, 105, 0)
 PADDING_COLOR = (0, 0, 0)
+# Detected panel outlines and their labels (detection.py): orange, so they
+# can't be mistaken for the green ruler.
+PANEL_INK = (255, 110, 0)
 # Line opacity, and the gap between the three weights matters as much as the
 # values: at the size a model sees, a labeled line and a light line drawn alike
 # are the same line to it, and then even the coarse reading is a guess.
@@ -197,10 +200,26 @@ def _draw_labels(draw: ImageDraw.ImageDraw, size: int, line_step: int, label_ste
         _tag(draw, (3, at), str(value), half_font, "lm")
 
 
+def _draw_panels(draw: ImageDraw.ImageDraw, size: int, panels: dict[str, list[int]]) -> None:
+    """Each detected panel's outline, with its label in a solid tag just
+    inside its top-left corner."""
+    width = max(3, round(size / 600))
+    font = ImageFont.load_default(size=max(16, round(size / 42)))
+    for name, (ymin, xmin, ymax, xmax) in panels.items():
+        box = [_pixel(xmin, size), _pixel(ymin, size), _pixel(xmax, size), _pixel(ymax, size)]
+        draw.rectangle(box, outline=(*PANEL_INK, 235), width=width)
+        xy = (box[0] + 3 * width, box[1] + 3 * width)
+        left, top, right, bottom = draw.textbbox(xy, name, font=font)
+        draw.rectangle([left - 5, top - 4, right + 5, bottom + 4], fill=(*PANEL_INK, 255))
+        draw.text(xy, name, font=font, fill=(255, 255, 255, 255))
+
+
 def render_grid_page(page: Image.Image, page_id: str, size: int = 2048,
-                     line_step: int = 25, label_step: int = 100, tick_step: int = 5) -> Image.Image:
-    """`page` on its black square, with the grid, its ticks and its page ID
-    stamp."""
+                     line_step: int = 25, label_step: int = 100, tick_step: int = 5,
+                     panels: dict[str, list[int]] | None = None) -> Image.Image:
+    """`page` on its black square, with the grid, its ticks, its page ID
+    stamp, and its detected panels (`{"P1": box}`, square units) outlined
+    and labeled."""
     page = ImageOps.exif_transpose(page).convert("RGB")
     scale = size / max(page.size)
     width, height = max(1, round(page.width * scale)), max(1, round(page.height * scale))
@@ -212,5 +231,7 @@ def render_grid_page(page: Image.Image, page_id: str, size: int = 2048,
     _draw_lines(draw, size, line_step, label_step)
     _draw_ticks(draw, size, tick_step, line_step, label_step)
     _draw_labels(draw, size, line_step, label_step)
+    if panels:
+        _draw_panels(draw, size, panels)
     _stamp(draw, page_id, size, width, height)
     return Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")

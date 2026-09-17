@@ -19,6 +19,7 @@ from remanga.config import CropperConfig
 from remanga.console import console, escape as _esc
 from remanga.extensions.llm_crop.bundles import ChapterPage, chapter_pages
 from remanga.extensions.llm_crop.config import LLMCropConfig
+from remanga.extensions.llm_crop.detection import cached_chapter_panels, panels_in_no_crop, resolve_frame_labels
 from remanga.extensions.llm_crop.grid import PageExtent, oriented_size, page_extent
 from remanga.extensions.llm_crop.paths import get_llm_crop_dir, get_llm_crops_path
 from remanga.extensions.llm_crop.reply_check import BOX_KEYS, ReplyCheck, box_bounds, check_reply
@@ -122,11 +123,9 @@ def _summarize(chapter_num: str, crops: dict[str, Any], page_count: int, check: 
 def import_llm_crops(llm: LLMCropConfig, cropper: CropperConfig, project_name: str, chapter_num: str, *,
                      replace_marks: bool | None = None) -> ImportOutcome:
     """Checks the chapter's pasted reply and, when it passes, writes
-    crops.json (and the previews). `replace_marks` answers "replace marks
+    crops.json and the previews, and cuts the panels. `replace_marks` answers "replace marks
     made in the Panel Marker?" up front; None asks a real terminal, and
     keeps the marks anywhere else."""
-    from remanga.cropper.crop import cropped_panels
-
     reply = get_llm_crops_path(project_name, chapter_num)
     if not has_real_json_content(reply):
         return ImportOutcome("empty")
@@ -139,8 +138,12 @@ def import_llm_crops(llm: LLMCropConfig, cropper: CropperConfig, project_name: s
     fix_path = get_llm_crop_dir(project_name, chapter_num) / FIX_REQUEST_NAME
     try:
         doc = json_from_reply(reply.read_text(encoding="utf-8"))
+        detected = cached_chapter_panels(project_name, chapter_num)
+        label_errors = resolve_frame_labels(doc, detected)
         check = check_reply(doc, pages, extents, chapter_num, direction,
                             snap_step=llm.grid_tick_step or llm.grid_line_step)
+        check.errors[:0] = label_errors
+        check.warnings.extend(panels_in_no_crop(doc, detected))
     except json.JSONDecodeError as error:
         check = ReplyCheck(errors=[f"the reply is not valid JSON ({error.msg} at line {error.lineno}, "
                                    f"column {error.colno})"])
@@ -173,6 +176,10 @@ def import_llm_crops(llm: LLMCropConfig, cropper: CropperConfig, project_name: s
         from remanga.extensions.llm_crop.preview import write_previews
 
         write_previews(cropper, project_name, chapter_num, crops, pages)
-    if cropped_panels(project_name, chapter_num):
-        console.print("[dim]This chapter was already cropped - run `crop --force` to cut the new crops.[/]")
+    # Cut right away: importing Gemini's crops is asking for these panels, and
+    # a chapter cropped before would otherwise keep its old panels while the
+    # crop step skipped it as done.
+    from remanga.cropper.crop import CoordinateCropper
+
+    CoordinateCropper(cropper).crop_chapter_from_json(project_name, chapter_num, force=True)
     return ImportOutcome("imported", check=check)

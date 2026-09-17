@@ -1460,15 +1460,28 @@ reply per chapter - a batched design was rejected; don't reintroduce batching.
   when crops.json has content.
 - An order that differs from `mark_ops.reading_order` is a warning, never an error: Gemini orders
   by story. The prompt's own 002_019 example triggers it on purpose.
-- **Measured on RebornTwentyYearsLater ch1 (2026-09-17):** Gemini's frames were mostly right after
-  gutter-snap, but it (a) left a place caption spanning the gutter between two panels out of both
-  crops' text_outside -> each crop showed half, (b) half-cut a publisher blurb, (c) rounded
-  coordinates to 5s on some pages. Fix for (a): the reply now has a page-level `text` list
-  (`{"crop": n, "box": [...]}` for EVERY bubble/caption/SFX) and `text_inventory.py` derives
-  text_outside (piece reaches past owner's frames, or overlaps another crop's frame; 3-unit
-  tolerance). Models attribute text well and forget geometry rules - give them the inventory job,
-  keep the geometry in code. Old replies with text_outside still import; prompt examples derive
-  exactly the text_outside they used to hand-write.
+- **Measured on RebornTwentyYearsLater ch1 (2026-09-17), two rounds.** Gemini reads well (groups,
+  order, who says what) and MEASURES BADLY: frames started at the page margin where art bleeds off,
+  a panel came back as a thin strip, two panels as one frame, whole panels left out of every crop.
+  MAGI's borders on the same pages were nearly exact. So geometry comes from code:
+  - `detection.py`: crop-grid runs MAGI (cached in `llm_crop/chapter_N/detected_panels.json`, keyed
+    on page name/size/mtime + direction) and `grid.render_grid_page(panels=...)` draws orange
+    outlines labeled P1.. in `mark_ops.reading_order`; chapter_info carries `detected_panels`. A
+    reply frame can be `"P3"` -> `resolve_frame_labels` swaps in the box before checks. A label used
+    twice on a page is an ERROR (MAGI merged two panels -> measure both); a label in no crop is a
+    WARNING (`panels_in_no_crop`, MAGI also outlines lettering). Still measure frames MAGI
+    missed/merged. No GPU/MAGI off -> no labels, note printed, old path.
+  - Text: the reply's page `text` list (`{"crop", "box"}` per bubble/caption/SFX);
+    `text_inventory.py` shows a piece in the crop whose frames hold >=60% of its box (DRAWN_IN),
+    whoever Gemini says speaks it - moving a bubble drawn in panel 6 to its speaker in panel 5 erased
+    it from 6 and dragged a strip of 6 into 5 (001_006). Only pieces drawn in no single crop go to
+    Gemini's owner. Added boxes are padded PAD=5 units (model boxes hug the letters; half a bubble
+    otherwise). My first version of this rule (attribution only) caused "hidden speech bubbles".
+  - `llm-crop` / `llm-crop-all` / the step CUT the panels right after a successful import
+    (`import_llm_crops` -> `CoordinateCropper(...).crop_chapter_from_json(force=True)`): the user
+    ran llm-crop and got no panels, because an already-cropped chapter's crop step skips.
+  - Testing without Gemini: convert the user's reply to labels by greedy IoU>=0.4, one label per
+    frame (reusing a label reproduces the merged-panel duplicate), in a `projects/zz*` copy.
 - **Previews used to mislead:** one page-wide red tint for everyone's paint-out made a crop look
   like its own dialogue was erased (the paint belonged to a NEIGHBOUR whose rectangle overlaps).
   Previews now put the real crops beside the page, cut by `cropper/crop_page.py:cut_crops` - the

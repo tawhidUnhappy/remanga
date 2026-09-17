@@ -79,6 +79,10 @@ class LLMCropConfig(BaseModel):
     # <craft> 4). Written into chapter_info.json, so a change reaches Gemini
     # with the next crop-grid.
     grouping: Literal["none", "balanced", "generous"] = "balanced"
+    # Detect each page's panels with MAGI v3 when the grid is built, and draw
+    # them as labeled outlines Gemini names frames by (detection.py). Skipped,
+    # with a note, where MAGI can't run.
+    detect_panels: bool = True
     # Draw every imported crop on its page, for checking by eye.
     preview: bool = True
 

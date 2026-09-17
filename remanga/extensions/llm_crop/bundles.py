@@ -23,6 +23,7 @@ from typing import Any
 
 from PIL import Image
 
+from remanga.config import MarkerConfig
 from remanga.console import console, escape as _esc
 from remanga.cropper.llm_pdf import build_pdf_bundle
 from remanga.cropper.sheets import PanelSheetGenerator
@@ -93,14 +94,15 @@ def ensure_reply_file(project_name: str, chapter_num: str) -> Path:
     return path
 
 
-def _render_one(page: ChapterPage, out_dir: Path, llm: LLMCropConfig) -> Path:
+def _render_one(page: ChapterPage, out_dir: Path, llm: LLMCropConfig,
+                panels: dict[str, list[int]] | None = None) -> Path:
     """One grid image, saved as a plain lossless PNG. Not shrunk here: the
     zip builder already picks the smallest lossless encoding of every image
     it packs, and doing it twice doubled the time of a chapter's build for
     nothing (measured: 118s for 40 pages, the zip saving 0.0MB over it)."""
     with Image.open(page.path) as img:
         grid = render_grid_page(img, page.stem, llm.grid_image_size, llm.grid_line_step,
-                                llm.grid_label_step, llm.grid_tick_step)
+                                llm.grid_label_step, llm.grid_tick_step, panels)
     path = out_dir / f"{page.stem}.png"
     grid.save(path, "PNG", compress_level=6)
     return path
@@ -127,7 +129,8 @@ def generate_grid_pages(llm: LLMCropConfig, project_name: str, chapter_num: str,
     # Threads, not processes: Pillow releases the GIL while resizing and
     # encoding, which is where the time goes.
     with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as pool:
-        images = list(pool.map(lambda page: _render_one(page, out_dir, llm), pages))
+        detected = extra.get("detected_panels", {})
+        images = list(pool.map(lambda page: _render_one(page, out_dir, llm, detected.get(page.stem)), pages))
 
     info = dict(chapter_identity_fields(project_name, chapter_num))
     info.update(extra)
@@ -139,7 +142,8 @@ def generate_grid_pages(llm: LLMCropConfig, project_name: str, chapter_num: str,
     return images
 
 
-def build_grid_bundles(llm: LLMCropConfig, project_name: str, chapter_num: str) -> GridBuild:
+def build_grid_bundles(llm: LLMCropConfig, project_name: str, chapter_num: str,
+                       marker: MarkerConfig | None = None) -> GridBuild:
     """Builds every active grid format for one chapter, and its reply file."""
     pages = chapter_pages(project_name, chapter_num)
     if not pages:
@@ -160,6 +164,13 @@ def build_grid_bundles(llm: LLMCropConfig, project_name: str, chapter_num: str) 
         )
 
     extra = grid_info(llm, pages)
+    if llm.detect_panels and marker is not None:
+        from remanga.extensions.llm_crop.detection import detect_chapter_panels
+
+        detected = detect_chapter_panels(marker, project_name, chapter_num, pages,
+                                         load_project_metadata(project_name)["reading_direction"])
+        if detected:
+            extra["detected_panels"] = detected
     images = generate_grid_pages(llm, project_name, chapter_num, pages, extra)
     zips = build_zip_bundle(
         images, get_grid_zip_dir(project_name, chapter_num, create=False), "grid",

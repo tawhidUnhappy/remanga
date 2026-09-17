@@ -51,6 +51,9 @@ def _same_chapter(a: Any, b: Any) -> bool:
 
 
 def _box_problem(box: Any) -> str | None:
+    if isinstance(box, str):
+        return (f"is {box!r}, which is not a panel label drawn on this page - use a label shown on the page, "
+                f"or measure the box")
     if (not isinstance(box, list) or len(box) != 4
             or not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in box)):
         return "is not a list of four numbers"

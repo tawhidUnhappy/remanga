@@ -25,7 +25,7 @@ A typical request: *"Make the video for https://mangadex.org/title/<uuid>/... ch
 2. download    ./run.sh download-range -p P -u URL -r 3-5
    per chapter N, in order:
 3. grid        ./run.sh crop-grid -p P -c N
-   (MAGI)      run the MAGI overlay script once for the chapter (3.2) - optional
+   (MAGI)      crop-grid draws MAGI's panels on the grid as orange P1, P2 labels (3.2)
 4. YOU CROP    page by page: decide crops on the grid page, THEN borrow MAGI borders that fit (3.3)
                append each page to a scratch file; assemble chapters/chapter_N/llm_crops.json
 5. import      ./run.sh llm-crop -p P -c N --force   (fix and re-run until it passes)
@@ -150,7 +150,7 @@ by hand:
 (a tall page). `[0, 0, 718, 1000]` is a wide spread. **Every box you write must lie inside its page
 area.** Measure in square units, exactly what the ruler shows.
 
-### 3.2 MAGI overlays - run once per chapter, before you look at any page
+### 3.2 MAGI's panel labels on the grid
 
 MAGI v3 is a manga panel detector already installed in `.tools/venv-magi`. It draws **rectangles**
 around things that look like panels. It doesn't know about bubbles, story beats or reading order,
@@ -160,56 +160,17 @@ rectangular panels.
 **MAGI proposes; you decide.** Its boxes are measurements you may borrow, never a list of crops.
 Copying MAGI's boxes into `llm_crops.json` is the most common way this step goes wrong.
 
-Run the script below once per chapter. It saves a JSON file and one **overlay image per page**:
-the grid page with MAGI's boxes drawn over it in magenta, numbered `m0`, `m1`, .... You look at the
-overlay, not at a list of numbers, so you can see at a glance what MAGI got right. Everything goes
-into `projects/P/llm_crop/chapter_N/magi/`. **Never write your own files into
-`chapters/chapter_N/`**, which holds source files only.
+`crop-grid` runs MAGI for you: every grid page has MAGI's panels drawn on it as **orange outlines
+labeled `P1`, `P2`, ...** in reading order, and `projects/P/llm_crop/chapter_N/detected_panels.json`
+lists each label's box in grid units (`{"pages": {"001_015": {"P1": [ymin, xmin, ymax, xmax]}}}`, also
+in chapter_info's `detected_panels`). A frame in the reply can be given as its label (`"P3"`); the
+importer swaps in the box. **Never write your own files into `chapters/chapter_N/`**, which holds
+source files only.
 
-Save as a scratch script (not in the repo):
-
-```python
-# magi_overlay.py  - usage: magi_overlay.py <project> <chapter>   (run crop-grid first)
-import json, sys, zipfile
-from pathlib import Path
-from PIL import Image, ImageDraw, ImageFont, ImageOps
-from remanga.config import RemangaConfig
-from remanga.webui.magi_assist import detect_panels_for_pages
-
-project, chapter = sys.argv[1], sys.argv[2]
-root = Path("projects") / project
-info = json.loads(zipfile.ZipFile(root / f"grid_zip/chapter_{chapter}/grid_1.zip").read("chapter_info.json"))
-out = root / f"llm_crop/chapter_{chapter}/magi"
-out.mkdir(parents=True, exist_ok=True)
-pages = sorted((root / f"chapters/chapter_{chapter}/pages").iterdir())
-results = detect_panels_for_pages(pages, RemangaConfig.load().marker)   # {filename: [[x1,y1,x2,y2] px]}
-boxes = {}
-for page in pages:
-    w, h = ImageOps.exif_transpose(Image.open(page)).size
-    _, _, ay, ax = info["page_areas"][page.stem]                        # page area on the square
-    boxes[page.stem] = [[round(y1 / h * ay), round(x1 / w * ax), round(y2 / h * ay), round(x2 / w * ax)]
-                        for x1, y1, x2, y2 in results.get(page.name, [])]
-    grid = Image.open(root / f"grid_pages/chapter_{chapter}/{page.stem}.png").convert("RGB")
-    draw, s = ImageDraw.Draw(grid), grid.width / 1000
-    font = ImageFont.load_default(size=round(grid.width / 30))
-    for i, (y1, x1, y2, x2) in enumerate(boxes[page.stem]):
-        draw.rectangle([x1 * s, y1 * s, x2 * s, y2 * s], outline=(255, 0, 255), width=round(grid.width / 300))
-        draw.text((x1 * s + 20, y1 * s + 20), f"m{i}", font=font, fill=(255, 0, 255),
-                  stroke_width=4, stroke_fill=(255, 255, 255))
-    grid.save(out / f"{page.stem}.png")
-(out / "boxes.json").write_text(json.dumps(boxes, indent=1))              # grid units, [ymin,xmin,ymax,xmax]
-print("overlays:", out)
-```
-
-```bash
-PATH="$PWD/bin:$PATH" HF_HOME="$PWD/.cache/huggingface" PYTHONPATH="$PWD" \
-  .venv/bin/python /path/to/scratch/magi_overlay.py P N </dev/null
-```
-
-- It loads once, then takes about a second per page on the GPU. RAM was fine on this machine.
-  Run nothing else on the GPU at the same time.
-- If it fails (no CUDA, errors), skip MAGI and measure everything off the grid pages. That is a
-  fully supported route.
+- MAGI loads once, about a minute for 40 pages on the GPU. The result is cached and reused while the
+  pages are unchanged. Run nothing else on the GPU at the same time.
+- If it can't run (no CUDA, MAGI off), `crop-grid` says so and draws no labels: measure every frame
+  off the grid. That is a fully supported route.
 
 ### 3.3 Crop one page at a time - decide, then measure, then write
 
@@ -218,8 +179,9 @@ next. The grid's labels are legible at the size your tool displays (heavy labele
 light labeled lines every 25, ticks every 5; no edge is more than 12.5 units from a numbered line).
 For every page, do these steps in this order:
 
-**Step A - Decide the crops by reading the page.** Open the plain grid page
-(`grid_pages/chapter_N/NNN_PPP.png`), **not** the MAGI overlay, and don't look at any numbers yet.
+**Step A - Decide the crops by reading the page.** Open the grid page
+(`grid_pages/chapter_N/NNN_PPP.png`) and decide from the art and the story, not from the orange
+outlines - they are measurements, not crops.
 Follow `<process>` in `prompts/llm_crop.md`:
 1. Is it a story page? If not: `story: false` with a `skip` reason. Next page.
 2. Find every frame: each bordered panel (rectangular or slanted), each inset, each region of
@@ -234,13 +196,14 @@ Write that plan down in one line per crop before measuring, for example
 `1: top-right panel, knight swings, owns bubble "Die"`. The plan is what you check the numbers
 against.
 
-**Step B - Measure each frame.** Now open the MAGI overlay for the page
-(`llm_crop/chapter_N/magi/NNN_PPP.png`). For each frame in your plan:
-- **One MAGI box outlines exactly that frame** (same four edges, nothing extra, nothing missing):
-  copy that box's numbers from `boxes.json`.
-- **Anything else** - no box, a box covering two frames, two boxes for one frame, a box around
-  lettering or a caption strip, a box whose edge is visibly off the border: ignore MAGI for this
-  frame and measure it off the grid.
+**Step B - Name or measure each frame.** For each frame in your plan:
+- **One orange outline is exactly that frame** (same four edges, nothing extra, nothing missing):
+  write its label, e.g. `"P3"`. Each label at most once per page - the importer rejects a label used
+  twice.
+- **Anything else** - no outline, one outline around two frames, an outline around lettering, an
+  outline whose edge is visibly off the border: measure that frame off the grid.
+- The importer warns about any outline in no crop ("detected panel(s) P2 are in no crop"). Either it
+  isn't a panel, or you left a panel out of the video - check which.
 
 **Step C - Measure what MAGI can never give you.** On the grid page:
 - The page's `text` list: **every** bubble, caption and SFX on the page - inside frames, across
@@ -252,7 +215,7 @@ against.
 - `art_outside` per crop: art it owns that breaks out of its frames.
 
 **Step D - Check the page against your plan, then write it.** Crop count and order match the
-plan. No MAGI index leaked into `order`. Every bubble is owned by exactly one crop. Every box lies
+plan. No label number leaked into `order`. Every bubble is owned by exactly one crop. Every box lies
 inside the page area. Then **append this page's entry to your scratch file right away**, before
 opening the next page.
 
@@ -260,12 +223,12 @@ opening the next page.
 
 | Page | What MAGI returned | What to do |
 |---|---|---|
-| `001_002` | Big borderless action area `m4` with a bordered inset `m3` drawn inside it | Correct: two frames, two crops (an inset is its own frame). Copy both. |
-| `001_003` | Middle tier of **slanted** panels: rectangles `m1`, `m2`, `m3` overlap each other | The rectangles are the right frames and must overlap. List the hero's bubble "CHANGE OUR FATE" in `text` with the hero's crop (step C); it sits inside the next panel's rectangle, so the importer removes it from that crop. |
-| `001_003` | `m4` a black caption strip, `m5` a box around applause lettering only | Neither is a crop on its own. The caption and its sound are one moment, so group them as one crop, or attach them to the shot they narrate. |
-| `001_001` | `m0` stops short of the blurb "The long-awaited new series" at its left edge | Frame from MAGI is fine. The blurb is publisher lettering, not story text: list it nowhere. |
-| `001_001` | Vertical publisher disclaimer in the margin, partly inside `m1` | Belongs to no crop, same as watermarks and page numbers. |
-| any | Boxes numbered in detection order | `order` comes from step A, never from `m` numbers. |
+| `001_002` | Big borderless action area `P5` with a bordered inset `P4` drawn inside it | Correct: two frames, two crops (an inset is its own frame). Use both labels. |
+| `001_003` | Middle tier of **slanted** panels: rectangles `P2`, `P3`, `P4` overlap each other | The rectangles are the right frames and must overlap. List the hero's bubble "CHANGE OUR FATE" in `text` with the hero's crop (step C); it sits inside the next panel's rectangle, so the importer removes it from that crop. |
+| `001_003` | `P5` a black caption strip, `P6` a box around applause lettering only | Neither is a crop on its own. The caption and its sound are one moment, so group them as one crop, or attach them to the shot they narrate. |
+| `001_001` | `P1` stops short of the blurb "The long-awaited new series" at its left edge | Frame from MAGI is fine. The blurb is publisher lettering, not story text: list it nowhere. |
+| `001_001` | Vertical publisher disclaimer in the margin, partly inside `P2` | Belongs to no crop, same as watermarks and page numbers. |
+| any | Labels follow the layout's reading order | `order` comes from step A, never from label numbers - the story can reorder. |
 
 #### Reply format
 
@@ -292,7 +255,7 @@ The file content is plain JSON; code fences are tolerated but not needed:
 ```
 
 - Boxes are `[ymin, xmin, ymax, xmax]`, integers 0-1000, in **square** (grid) units, the same units
-  as MAGI's `boxes.json`.
+  as `detected_panels.json`. A frame can instead be a label string, `"P3"`.
 - Every page in `full_manifest` appears exactly once, in order. `skip` is one of `credits`, `ad`,
   `blank`, `duplicate`. A title page counts as story (a `splash`).
 - `kind`: `panel` (1 frame), `group` (2+ frames, one narration line), `splash` (one frame covering

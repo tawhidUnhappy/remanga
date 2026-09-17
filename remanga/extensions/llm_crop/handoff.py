@@ -89,7 +89,7 @@ def run_llm_crop_step(project: str, chapter: str, config: RemangaConfig, *,
     if grid_built(llm, project, chapter):
         ensure_reply_file(project, chapter)
     else:
-        build_grid_bundles(llm, project, chapter)
+        build_grid_bundles(llm, project, chapter, config.marker)
     reply = get_llm_crops_path(project, chapter)
     cropper = cropper_config_for(config, project)
 

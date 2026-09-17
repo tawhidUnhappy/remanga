@@ -29,7 +29,7 @@ def crop_grid(params: dict[str, Any], config: RemangaConfig) -> None:
 
     project, chapter = params["project"], params["chapter"]
     GRID_FORMATS.apply(config, GRID_FORMATS.parse(params.get("formats")))
-    build_grid_bundles(llm_config(config), project, chapter)
+    build_grid_bundles(llm_config(config), project, chapter, config.marker)
     print_llm_crop_handoff(project, chapter, config)
     console.print("\n[dim]Once the reply is saved, run `llm-crop` to turn it into crops.json.[/]")
 
@@ -70,7 +70,7 @@ def crop_grid_all(params: dict[str, Any], config: RemangaConfig) -> None:
     GRID_FORMATS.apply(config, formats)
     for i, chapter in enumerate(ready, start=1):
         console.print(f"[bold cyan]({i}/{len(ready)}) Chapter {chapter}[/]")
-        build_grid_bundles(llm_config(config), project, chapter)
+        build_grid_bundles(llm_config(config), project, chapter, config.marker)
     console.print(
         f"[bold green]✓ Grid uploads built for {len(ready)} chapter(s)[/]"
         + (f"\n[dim]No pages yet, skipped: {', '.join(empty)}[/]" if empty else "")

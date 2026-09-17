@@ -43,6 +43,14 @@ With `grid_zip` it creates:
 | `projects/my_manga/grid_pdf/chapter_2/grid_1.pdf` | the same as a PDF, with `grid_pdf` |
 | `projects/my_manga/chapters/chapter_2/llm_crops.json` | **empty (0 bytes)** - where Gemini's reply goes |
 
+Before drawing, MAGI v3 finds each page's panels (about a minute for 40 pages on the GPU, cached
+while the pages don't change), and every grid page shows them as **orange outlines labeled `P1`,
+`P2`, ...** in reading order. Gemini names a frame by its label instead of measuring it - on
+RebornTwentyYearsLater chapter 1 its measured frames were often badly off, while MAGI's borders were
+nearly exact. It still measures frames MAGI missed or merged. Without a GPU or with MAGI turned off
+(`detect_panels` in the LLM crop settings, `marker.magi_enabled`), the grid has no labels and every
+frame is measured.
+
 It then prints exactly what to upload and where to paste. An existing `llm_crops.json` is never
 overwritten.
 
@@ -64,9 +72,10 @@ Pasting the whole reply, code fence and any stray sentence included, is fine.
 - **If something is wrong**, it writes `projects/my_manga/llm_crop/chapter_2/fix_request.md`.
   Paste that into the same Gemini chat, paste the new reply over `llm_crops.json`, and press
   Enter - it checks again.
-- **If it passes**, it writes `crops.json` and preview images in
+- **If it passes**, it writes `crops.json`, **cuts the panels** (no separate `crop` needed), and writes preview images in
   `projects/my_manga/llm_crop/chapter_2/preview/`, and lists anything worth a look (for example an
-  order that differs from the layout's usual order).
+  order that differs from the layout's usual order, or a labeled panel that is in no crop and so
+  would be missing from the video).
 - **If the chapter already has Panel Marker marks**, it asks before replacing them (`--force` on
   the CLI replaces without asking).
 
@@ -83,7 +92,6 @@ details; a box you move becomes a plain hand-drawn box.
 
 ### 7. Carry on as usual
 ```bash
-./run.sh crop -p my_manga -c 2      # add --force if the chapter was cropped before
 ./run.sh package -p my_manga -c 2
 ```
 
@@ -156,9 +164,12 @@ still read there. `grid_tick_step: 0` turns the ticks off; finer than 5 needs a 
 
 Gemini's reply gives each page its crops (`frames`, `art_outside`) and a `text` list: every bubble,
 caption and sound effect with the crop it belongs to. The importer turns that list into each crop's
-`text_outside` - the pieces that reach past the crop's frames, or overlap another crop's frame - so
-a caption across a gutter can't be forgotten by the model and cut in half
-(`remanga/extensions/llm_crop/text_inventory.py`). A reply that writes `text_outside` itself still
+`text_outside` (`remanga/extensions/llm_crop/text_inventory.py`): a piece drawn inside one crop's
+frames stays in that crop, whoever says it; a piece not drawn inside any one crop (a caption across a
+gutter, a bubble over a border) goes to the crop Gemini names. Either way it goes into `text_outside`
+when it reaches past that crop's frames or overlaps another crop's frame, padded a little so the
+bubble's outline comes along, and is painted out of the neighbour. Frames given as labels (`"P3"`)
+are replaced with the detected panel's box first. A reply that writes `text_outside` itself still
 imports. Each crop then becomes one panel entry with `src: "llm"`, its boxes converted from the
 square to the page:
 
