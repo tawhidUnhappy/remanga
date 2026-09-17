@@ -56,14 +56,16 @@ chapters of their own: `1-5` includes 4.5 but not 5.1.
 
 ## The LLM step
 
-Upload **`prompts/narration.md`** and the chapter's PDF (all parts, if it was split). The PDF's first
-page tells the LLM the manga, the chapter, the reading direction, the page list, and the story so far
-from earlier chapters, so there is nothing to type.
+Upload **`prompts/narration.md`** and the chapter's PDF (all parts, if it was split) - that's all.
+The PDF's first page tells the LLM the manga, the chapter, the reading direction, the page list, and
+the story so far, so there is nothing to type.
 
-The LLM replies with one JSON block. Paste all of it into `chapters/chapter_N/narration.json` (the
-code fence can come along). It holds, for every page: whether it is story, a short note per panel in
-reading order, and the page's narration - plus `memory`, the story so far, which remanga saves to
-`memory.json` and puts in the next chapter's PDF.
+The LLM replies with one JSON block in two sections. Paste all of it into
+`chapters/chapter_N/narration.json` (the code fence can come along):
+- `narration` - for every page: whether it is story, a short note per panel in reading order, and the
+  page's narration;
+- `memory` - the story so far after this chapter. The next chapter's PDF reads it straight from this
+  file and prints it on its first page, so continuity carries forward with no extra step.
 
 **Make video** checks the reply first. If a page is missing, a story page has no narration, or a
 skipped page has no reason, nothing is narrated: the problems are listed and written to
@@ -71,18 +73,17 @@ skipped page has no reason, nothing is narrated: the problems are listed and wri
 `narration.json`. It also warns (without stopping) when a page's narration looks too short for its
 panels, or uses quotation marks, `?`, `!`, `...` or contractions, which the voice reads badly.
 
-Make each chapter's PDF after the chapter before it has its video (or at least its narration pasted),
-so its story so far is up to date.
+Make each chapter's PDF after pasting the previous chapter's narration, so its story so far is up to
+date (the PDF step says so when an earlier chapter has none yet).
 
 ## How the files work
 
 ```
 projects/<name>/
   project.json            the manga, its reading direction, per-project settings
-  memory.json             the story so far
   chapters/chapter_N/
     pages/                downloaded pages
-    narration.json        the LLM's reply
+    narration.json        the LLM's reply: narration + memory
   pdf/chapter_N/          pages_1.pdf, ... and fix_request.md
   audio/chapter_N/        one clip per page + audio_timing.json
   audio_modified/chapter_N/  the mixed track

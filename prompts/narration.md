@@ -11,8 +11,8 @@ Each part starts with a text page giving:
 - the manga, the chapter, and `reading_direction` (`right_to_left` for Japanese manga);
 - the page IDs in this part and in the whole chapter (`001_001`, `001_002`, ...), in order. The
   pages that follow are those pages, in that order;
-- the story so far, when earlier chapters were narrated: characters, places and events to stay
-  consistent with. If there is none, this is the first chapter.
+- the story so far - the memory you wrote with the previous chapter's narration: characters,
+  places and events to stay consistent with. If there is none, this is the first chapter.
 
 ## How to narrate a page
 
@@ -62,43 +62,51 @@ panels and empty text. A cover or title page is story. Watermarks, page numbers 
 
 ## Reply
 
-Reply with exactly one ```json code block and nothing else. Standard JSON: double quotes, no
-trailing commas, no comments.
+Reply with exactly one ```json code block and nothing else - no greeting, headings or notes.
+Standard JSON: double quotes, no trailing commas, no comments. It has two sections: `narration`
+first, `memory` last.
 
 ```json
 {
-  "chapter": "1",
-  "problems": [],
-  "pages": [
-    {"page": "001_001", "story": false, "skip": "credits", "panels": [], "text": ""},
-    {
-      "page": "001_002",
-      "story": true,
-      "panels": [
-        "top: the royal capital at dusk, with its place caption",
-        "middle right: the boy drinking from a well, thinking he nearly died",
-        "middle left: a girl telling him the well is the baker's",
-        "bottom: he apologizes and she asks if he is from elsewhere"
-      ],
-      "text": "As evening falls over the royal capital of Feldam, a boy in a tattered cloak drinks greedily from a well, thinking that after three days without water he truly believed he would die. However, a girl carrying a basket stops behind him and scolds him, pointing out that the well belongs to the baker and that he cannot simply drink from it. Startled, he turns with water still dripping from his chin and stammers out an apology, insisting that he did not know. After a brief pause, she quietly remarks that he is clearly not from around here."
-    }
-  ],
+  "narration": {
+    "chapter": "1",
+    "problems": [],
+    "pages": [
+      {"page": "001_001", "story": false, "skip": "credits", "panels": [], "text": ""},
+      {
+        "page": "001_002",
+        "story": true,
+        "panels": [
+          "top: the royal capital at dusk, with its place caption",
+          "middle right: the boy drinking from a well, thinking he nearly died",
+          "middle left: a girl telling him the well is the baker's",
+          "bottom: he apologizes and she asks if he is from elsewhere"
+        ],
+        "text": "As evening falls over the royal capital of Feldam, a boy in a tattered cloak drinks greedily from a well, thinking that after three days without water he truly believed he would die. However, a girl carrying a basket stops behind him and scolds him, pointing out that the well belongs to the baker and that he cannot simply drink from it. Startled, he turns with water still dripping from his chin and stammers out an apology, insisting that he did not know. After a brief pause, she quietly remarks that he is clearly not from around here."
+      }
+    ]
+  },
   "memory": {
     "series_title": "Series Title",
-    "characters": {"Name or description": "who they are, what they want, where they are now"},
-    "key_events": ["What has happened so far, one line each, including this chapter"],
-    "open_threads": ["Mysteries and cliffhangers still unresolved"]
+    "last_chapter": "1",
+    "characters": {"Name or description": "who they are, how they relate to others, where they are now"},
+    "places": {"Name": "what it is"},
+    "key_events": ["What has happened so far, one line each, in order, including this chapter"],
+    "open_threads": ["Mysteries, promises and cliffhangers still unresolved"]
   }
 }
 ```
 
+**`narration`**
 - `chapter`: copied from the text page.
 - `problems`: short sentences about anything you could not do (a missing part, an unreadable page),
   or `[]`.
 - `pages`: one entry per page ID, in order. `skip` is one of `credits`, `ad`, `blank`, `duplicate`.
   `panels` is a short note per panel in reading order, for checking - it is never read aloud.
-- `memory`: the story so far after this chapter. Start from the story so far you were given, keep
-  everything still relevant, and add this chapter.
+
+**`memory`** - the story so far after this chapter. It is given back to you on the text page of the
+next chapter's PDF, so write what you will need to narrate that chapter consistently. Start from the
+story so far you were given, keep everything still relevant, and add this chapter.
 
 If the user pastes back a list of problems, fix only those, checked against the pages, and reply
-again with the complete JSON.
+again with the complete JSON - both sections, every page.

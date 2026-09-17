@@ -40,14 +40,17 @@ call these), `cli.py`, `wizard.py` (menus), `settings.py` (voice/music/video/pdf
 
 ## Narration reply (prompts/narration.md is the contract)
 
-`{"chapter", "problems", "pages": [{"page", "story", "skip", "panels": [notes], "text"}], "memory"}`
+One JSON block, two sections (user request - NOT two blocks):
+`{"narration": {"chapter", "problems", "pages": [{"page", "story", "skip", "panels": [notes], "text"}]}, "memory": {...}}`
+(`narration.read_reply` also accepts `pages`+`memory` side by side, and two separate blocks.)
 - One entry per page ID, in order. Story page: `panels` = one note per panel in reading order (forces
   per-panel coverage, never read aloud) + `text`. Non-story: `skip` in credits/ad/blank/duplicate.
 - `narration.load_narration` errors -> nothing synthesized, `pdf/chapter_N/fix_request.md` written.
   Warnings only: <12 words per listed panel; quotes/?/!/.../contractions (the user's narration style:
   reported speech, complete content, no quote marks, no ?/!, no contractions, one steady narrator).
-- `memory` -> `memory.json` (with `last_chapter_processed`), never rolled back by re-running an
-  earlier chapter; `make_pdf` puts it on the PDF text page only if it's from an EARLIER chapter.
+- No memory.json any more: `make_pdf` reads the memory section of the nearest EARLIER chapter's
+  narration.json (`narration.story_so_far`) and prints it on the text page, warning when earlier
+  chapters have no narration yet. The user uploads only the prompt + PDF.
 
 ## Things that bit before - don't reintroduce
 
@@ -90,6 +93,9 @@ call these), `cli.py`, `wizard.py` (menus), `settings.py` (voice/music/video/pdf
   any command run in the session (last one 18:37), and no remanga code can delete it. Test anything
   that writes under `projects/` from a scratch cwd (`cd scratch; PYTHONPATH=repo python -m
   remanga.cli ...` with a copied config.json) - `get_projects_dir()` even mkdirs `projects/` in cwd.
+- **Every menu opens with the cursor on a blank row** where Enter/Space do nothing (user request, to
+  stop early keypresses picking something); the current setting gets a `[current]` badge instead of
+  being pre-selected. Confirms too (y/n keys still answer).
 - **Menus put Back and Exit at the TOP** (user request: long chapter lists). `select` shifts the
   default cursor by the prepended rows - and the non-tty fallback must get the UNshifted index (it
   printed a default 2 too high once). Checklists start the cursor on the first real row: with Exit

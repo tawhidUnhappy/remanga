@@ -13,7 +13,7 @@ pixels, and a page that can't fit even at the last floor stops the build.
 
 Each part starts with a text page: the chapter's identity, reading direction,
 which pages this part holds and the chapter's full page list, and the story
-so far (memory.json) when there is one.
+so far (the previous chapter's memory section) when there is one.
 
 Why not Pillow's own PDF writer: it re-encodes every page as JPEG, with no
 way to turn that off (see writer.py)."""

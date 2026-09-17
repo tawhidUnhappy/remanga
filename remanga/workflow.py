@@ -32,7 +32,7 @@ from remanga.paths import (
     save_project_metadata,
 )
 from remanga.pdf import build_pages_pdf
-from remanga.pdf.manifest_info import MEMORY_KEY
+from remanga.pdf.manifest_info import MEMORY_KEY, MEMORY_SOURCE_KEY
 
 # MangaDex's originalLanguage -> how that market's comics are read.
 READING_DIRECTION_BY_LANGUAGE = {
@@ -222,19 +222,28 @@ def settle_reading_direction(project: str) -> str:
 def make_pdf(project: str, chapter: str, config: RemangaConfig) -> list[Path]:
     """The chapter's pages as PDF parts, with the chapter's identity and the
     story so far on each part's first page, then what to upload and where the
-    reply goes. An empty narration.json is put in place to paste into."""
+    reply goes. The story so far comes from the previous chapter's pasted
+    narration. An empty narration.json is put in place to paste into."""
     pages = page_files(project, chapter)
     if not pages:
         raise FileNotFoundError(f"Chapter {chapter} has no downloaded pages - download it first.")
     settle_reading_direction(project)
 
     info = dict(chapter_identity_fields(project, chapter))
-    memory = story_so_far(project)
-    last = str((memory or {}).get("last_chapter_processed", ""))
-    # Only memory written before this chapter: re-making an earlier chapter's
-    # PDF must not hand the LLM what happens later.
-    if memory and (not last or chapter_sort_key(last) < chapter_sort_key(str(chapter))):
+    # The story so far: the memory section of the nearest earlier chapter's
+    # pasted narration - only ever an earlier chapter's, so re-making a PDF
+    # never hands the LLM what happens later.
+    memory, source = story_so_far(project, chapter)
+    if memory:
         info[MEMORY_KEY] = memory
+        info[MEMORY_SOURCE_KEY] = source
+    missing = [c for c in local_chapters(project)
+               if chapter_sort_key(c) < chapter_sort_key(str(chapter))
+               and (source is None or chapter_sort_key(c) > chapter_sort_key(source))]
+    if missing:
+        console.print(f"[yellow]Chapter(s) {', '.join(missing)} before this one have no narration with a memory "
+                      f"section yet[/] [dim]- the story so far in this PDF "
+                      + (f"stops at chapter {source}" if source else "is empty") + ".[/]")
     parts = build_pages_pdf(pages, get_pdf_dir(project, chapter), config.pdf.max_mb, info)
 
     narration = get_narration_path(project, chapter)

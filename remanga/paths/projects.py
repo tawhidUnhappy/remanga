@@ -1,7 +1,7 @@
 """Per-project, per-chapter layout.
 
     projects/<manga>/
-      project.json, memory.json, manifest.json
+      project.json, manifest.json
       chapters/chapter_N/pages/         downloaded pages      (source)
       chapters/chapter_N/narration.json the LLM's narration   (source)
       pdf/chapter_N/pages_1.pdf, ...    upload for the LLM    (generated)

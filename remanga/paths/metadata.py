@@ -1,5 +1,5 @@
 """Project-level metadata files: project.json (manga identity/source),
-memory.json (story continuity), manifest.json (small per-chapter production
+manifest.json (small per-chapter production
 bookkeeping), and the project listing the wizard's picker reads."""
 
 from __future__ import annotations
@@ -14,20 +14,6 @@ from .projects import get_project_dir, get_projects_dir
 
 def get_project_metadata_path(project_name: str) -> Path:
     return get_project_dir(project_name) / "project.json"
-
-
-def get_memory_path(project_name: str) -> Path:
-    return get_project_dir(project_name) / "memory.json"
-
-
-def ensure_memory_file(project_name: str) -> Path:
-    """Creates a blank placeholder memory.json at the project root the first time a project
-    is touched, without ever clobbering continuity data an LLM has already written there."""
-    memory_path = get_memory_path(project_name)
-    if not memory_path.exists():
-        memory_path.parent.mkdir(parents=True, exist_ok=True)
-        memory_path.write_text("", encoding="utf-8")
-    return memory_path
 
 
 def load_project_metadata(project_name: str) -> dict[str, Any]:
@@ -53,7 +39,6 @@ def save_project_metadata(project_name: str, data: dict[str, Any]) -> None:
     existing = load_project_metadata(project_name)
     existing.update(data)
     write_json(meta_path, existing)
-    ensure_memory_file(project_name)
 
 
 def get_manifest_path(project_name: str) -> Path:

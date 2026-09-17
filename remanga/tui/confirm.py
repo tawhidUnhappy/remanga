@@ -8,7 +8,7 @@ answerable with either y/n or Enter-on-the-highlighted-row."""
 from __future__ import annotations
 
 from remanga.tui import fallback, keys
-from remanga.tui.choices import Choice
+from remanga.tui.choices import RESTING, Choice, start_row
 from remanga.tui.loop import MenuState, run_menu
 
 FOOTER = "↑↓ move · y/n · enter confirm · ctrl+q exit"
@@ -32,6 +32,7 @@ def confirm(
         return fallback.confirm(title, default=default)
 
     rows = [
+        start_row(),
         Choice(label=yes_label, hint=yes_hint, value=True),
         Choice(label=no_label, hint=no_hint, value=False),
     ]
@@ -43,13 +44,15 @@ def confirm(
             return (False,)
         if key == keys.ENTER:
             current = state.current
-            return (bool(current.value),) if current else (default,)
+            if current is None or current.value is RESTING:
+                return None
+            return (bool(current.value),)
         if key == keys.ESC:
             return (default,)
         return None
 
     return run_menu(
-        MenuState(rows, cursor=0 if default else 1, filterable=False), title=title, footer=FOOTER,
+        MenuState(rows, cursor=0, filterable=False), title=title, footer=FOOTER,
         note=note, on_key=on_key,
         echo=(lambda value: yes_label if value else no_label) if echo else None,
     )

@@ -60,6 +60,22 @@ class Choice:
             self.value = self.label
 
 
+# The value of the blank row a menu opens on: the cursor rests there, and
+# Enter or Space on it does nothing, so a key pressed before looking picks
+# nothing (see start_row).
+class _Resting:
+    def __repr__(self) -> str:
+        return "RESTING"
+
+
+RESTING = _Resting()
+
+
+def start_row() -> Choice:
+    """The empty row at the very top of every menu, where the cursor starts."""
+    return Choice(label="", value=RESTING, plain=True)
+
+
 def exit_row(label: str) -> Choice:
     """The quit row at the top of every menu (ctrl+q does the same). Plain, so
     it's never numbered or checkable; menus turn picking it into PromptExit."""

@@ -7,10 +7,11 @@ yes/no-with-context question is this function plus a list of Choices."""
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import Any
 
 from remanga.tui import fallback, keys
-from remanga.tui.choices import Choice, exit_row, index_of_value
+from remanga.tui.choices import RESTING, Choice, exit_row, index_of_value, start_row
 from remanga.tui.frame import numbered_rows
 from remanga.tui.loop import MenuState, run_menu
 from remanga.tui.result import CANCEL, EXIT, PromptExit
@@ -37,9 +38,9 @@ def select(
 ) -> Any:
     """Returns the chosen Choice's `value`, or CANCEL if the user backed out.
 
-    `default` pre-highlights whichever row carries that value - the "you are
-    here" that makes Enter alone the right answer whenever the current
-    setting is already correct. `back_label` adds an explicit last row for
+    `default` marks whichever row carries that value as "current". The cursor
+    itself always starts on a blank row where Enter does nothing, so nothing
+    is picked by a key pressed too early. `back_label` adds an explicit last row for
     backing out, shown at the top (None removes it, for a question that must be answered);
     Esc does the same thing, after first clearing an active filter.
 
@@ -64,23 +65,26 @@ def select(
         return CANCEL
 
     start = index_of_value(rows, default, fallback=default_index) if default is not None else default_index
-    # Back and Exit go at the TOP, so leaving a long list (a manga's chapters)
-    # never means scrolling to its end. The cursor still starts on the default
-    # row below them. `plain` keeps the two action rows out of the numbering
-    # (see frame.numbered_rows), so the items stay 1., 2., 3.
-    actions = []
+    # The current setting is marked rather than pre-selected (see below).
+    if default is not None and 0 <= start < len(rows) and not rows[start].badge:
+        rows[start] = replace(rows[start], badge="current")
+    # The cursor starts on a blank row at the very top, where Enter does
+    # nothing, so a key pressed before reading the menu picks nothing. Back and
+    # Exit come right under it, so leaving a long list (a manga's chapters)
+    # never means scrolling to its end. `plain` keeps these rows out of the
+    # numbering (see frame.numbered_rows), so the items stay 1., 2., 3.
+    actions = [start_row()]
     if back_label:
         actions.append(Choice(label=back_label, value=CANCEL, hint="", plain=True))
     if exit_label:
         actions.append(exit_row(exit_label))
     rows = [*actions, *rows]
-    start += len(actions)
 
     if footer is None:
         footer = NUMBERED_FOOTER.format(count=min(len(choices), 9)) if numbered else FOOTER
 
     if not keys.is_interactive():
-        return fallback.select(title, choices, default_index=start - len(actions), back_label=back_label,
+        return fallback.select(title, choices, default_index=start, back_label=back_label,
                                exit_label=exit_label)
 
     def on_key(state: MenuState, key: str):
@@ -88,7 +92,7 @@ def select(
         # menu reads: the arrows walk in and out as well as up and down.
         if key in (keys.ENTER, keys.RIGHT):
             current = state.current
-            if current is None or current.disabled:
+            if current is None or current.disabled or current.value is RESTING:
                 return None
             return (current.value,)
         if key == keys.ESC:
@@ -108,7 +112,7 @@ def select(
         return None
 
     picked = run_menu(
-        MenuState(rows, cursor=start, space_filters=True, filterable=not numbered),
+        MenuState(rows, cursor=0, space_filters=True, filterable=not numbered),
         title=title, footer=footer, note=note, numbered=numbered,
         on_key=on_key,
         echo=(lambda value: _echo_label(rows, value)) if echo else None,

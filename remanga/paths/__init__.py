@@ -7,9 +7,7 @@ from __future__ import annotations
 from .global_assets import ensure_hf_token_file, get_hf_token_path
 from .metadata import (
     chapter_identity_fields,
-    ensure_memory_file,
     get_manifest_path,
-    get_memory_path,
     get_project_metadata_path,
     list_projects,
     load_project_metadata,
@@ -54,7 +52,6 @@ __all__ = [
     "UV_BIN",
     "chapter_identity_fields",
     "ensure_hf_token_file",
-    "ensure_memory_file",
     "get_audio_dir",
     "get_audio_timing_path",
     "get_chapter_dir",
@@ -63,7 +60,6 @@ __all__ = [
     "get_hf_token_path",
     "get_manifest_path",
     "get_master_audio_path",
-    "get_memory_path",
     "get_modified_audio_dir",
     "get_narration_path",
     "get_pages_dir",

@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from remanga.tui import fallback, keys
-from remanga.tui.choices import Choice, exit_row
+from remanga.tui.choices import RESTING, Choice, exit_row, start_row
 from remanga.tui.loop import MenuState, run_menu
 from remanga.tui.result import CANCEL, EXIT, PromptExit
 
@@ -55,9 +55,9 @@ def multiselect(
     # Back and the quit row sit at the top, reachable with the arrow keys
     # without scrolling past a long list, but they are never checkable: Space
     # or Enter on them backs out or quits, ctrl+a skips them, and they can't
-    # end up in the result. The cursor starts on the first real row, so a
-    # Space pressed straight away ticks an item rather than quitting.
-    actions = []
+    # end up in the result. The cursor starts on the blank row above them, where
+    # Space and Enter do nothing, so a key pressed straight away picks nothing.
+    actions = [start_row()]
     if back_label:
         actions.append(Choice(label=back_label, value=CANCEL, plain=True))
     if exit_label:
@@ -120,6 +120,8 @@ def multiselect(
             set_all(False)
             return None
         if key == keys.ENTER:
+            if current is not None and current.value is RESTING:
+                return None
             picked = result()
             if not picked and not allow_empty:
                 return None
@@ -128,7 +130,7 @@ def multiselect(
             return menu.escape(bool(back_label))
         return None
 
-    state = MenuState(rows, cursor=min(len(actions), len(rows) - 1))
+    state = MenuState(rows, cursor=0)
     return run_menu(
         state, title=title, footer=footer or (ORDERED_FOOTER if ordered else FOOTER),
         note=note, checkable=True, order_of=order_of if ordered else None,

@@ -36,19 +36,20 @@ def build_part_info(
 # with 54pt margins holds about this many).
 LINE_WIDTH = 95
 MEMORY_KEY = "story_so_far"
+MEMORY_SOURCE_KEY = "story_so_far_from_chapter"
 
 
 def info_to_text_lines(info: dict[str, Any]) -> list[str]:
     """A build_part_info() dict as plain lines for the PDF's text page(s),
     wrapped to the page. The page lists get labeled sections of their own,
-    and the story so far (MEMORY_KEY, a dict from memory.json) comes last,
+    and the story so far (MEMORY_KEY, the previous chapter's memory section) comes last,
     as indented JSON."""
     import json
     import textwrap
 
     lines = []
     for k, v in info.items():
-        if isinstance(v, list) or k == MEMORY_KEY:
+        if isinstance(v, list) or k in (MEMORY_KEY, MEMORY_SOURCE_KEY):
             continue
         lines.append(f"{k}: {v}")
 
@@ -66,7 +67,7 @@ def info_to_text_lines(info: dict[str, Any]) -> list[str]:
     memory = info.get(MEMORY_KEY)
     lines.append("")
     if memory:
-        lines.append("Story so far (memory.json from the chapters before this one):")
+        lines.append(f"Story so far (the memory written with chapter {info.get(MEMORY_SOURCE_KEY)}'s narration):")
         lines.extend(json.dumps(memory, indent=2, ensure_ascii=False).splitlines())
     else:
         lines.append("Story so far: none - this is the first chapter narrated for this manga.")

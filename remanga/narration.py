@@ -5,8 +5,8 @@ Its shape is prompts/narration.md's <output_format>: one entry per page of the
 chapter, in order - a story page lists its panels (one short note each, in
 reading order) and its narration `text`, which tells every one of those
 panels; a page that isn't story (credits, an ad, a blank page) is skipped with
-a reason - plus `memory`, the story so far, carried into the next chapter's
-PDF.
+a reason. The reply's second section, `memory`, is the story so far after this
+chapter, which the next chapter's PDF reads straight from this file.
 
 A reply that doesn't check out stops the video before anything is
 synthesized, and gets a fix request (pdf/chapter_N/fix_request.md) to paste
@@ -21,8 +21,8 @@ from pathlib import Path
 from typing import Any
 
 from remanga.chapters import chapter_sort_key
-from remanga.json_io import has_real_json_content, json_from_reply, read_json_or, write_json
-from remanga.paths import PROMPTS_DIR, get_memory_path, get_narration_path, get_pages_dir, get_pdf_dir
+from remanga.json_io import has_real_json_content, json_blocks_from_reply
+from remanga.paths import PROMPTS_DIR, get_narration_path, get_pages_dir, get_pdf_dir
 
 PROMPT_PATH = PROMPTS_DIR / "narration.md"
 FIX_REQUEST_NAME = "fix_request.md"
@@ -144,18 +144,34 @@ def fix_request_text(chapter: str, errors: list[str]) -> str:
     """What to paste back into the same LLM conversation."""
     return "\n".join([
         f"The narration for chapter {chapter} didn't pass the checks. Fix only the problems below, checked "
-        f"against the pages, and reply again with the complete JSON - every page and the memory, not only what "
-        f"changed.",
+        f"against the pages, and reply again in full - the one JSON block with both sections, narration (every "
+        f"page) and memory - not only what changed.",
         "",
         *[f"- {error}" for error in errors],
     ]) + "\n"
 
 
+def read_reply(path: Path) -> tuple[Any, dict[str, Any] | None]:
+    """A pasted reply's narration document and its memory. The reply is one
+    JSON block with two sections, `{"narration": {...}, "memory": {...}}`.
+    Also read: a reply with `pages` and `memory` side by side, or two separate
+    blocks, the narration then the memory."""
+    blocks = json_blocks_from_reply(path.read_text(encoding="utf-8"))
+    first = blocks[0]
+    if isinstance(first, dict) and isinstance(first.get("narration"), dict):
+        doc, memory = first["narration"], first.get("memory")
+    else:
+        doc = next((b for b in blocks if isinstance(b, dict) and "pages" in b), first)
+        memory = doc.get("memory") if isinstance(doc, dict) else None
+        if not isinstance(memory, dict):
+            memory = next((b for b in blocks if isinstance(b, dict) and b is not doc and "pages" not in b), None)
+    return doc, memory if isinstance(memory, dict) and memory else None
+
+
 def load_narration(project: str, chapter: str) -> tuple[list[StoryPage], Check]:
     """The chapter's story pages with their narration, in page order, and the
     check's warnings. Raises NarrationError - after writing the fix request -
-    when the narration is missing or doesn't check out. On success, the
-    reply's memory is saved to memory.json (see save_memory)."""
+    when the narration is missing or doesn't check out."""
     path = get_narration_path(project, chapter)
     if not has_real_json_content(path):
         raise NarrationError(f"Chapter {chapter} has no narration yet - paste the LLM's reply into {path}")
@@ -165,8 +181,11 @@ def load_narration(project: str, chapter: str) -> tuple[list[StoryPage], Check]:
 
     fix_path = get_pdf_dir(project, chapter) / FIX_REQUEST_NAME
     try:
-        doc = json_from_reply(path.read_text(encoding="utf-8"))
+        doc, memory = read_reply(path)
         check = check_reply(doc, [p.stem for p in pages], chapter)
+        if not memory:
+            check.warnings.append("the reply has no memory section - the next chapter's PDF will carry the story so "
+                                  "far from an earlier chapter instead")
     except json.JSONDecodeError as error:
         doc, check = None, Check(errors=[f"the reply is not valid JSON ({error.msg} at line {error.lineno}, "
                                          f"column {error.colno})"])
@@ -180,26 +199,26 @@ def load_narration(project: str, chapter: str) -> tuple[list[StoryPage], Check]:
     fix_path.unlink(missing_ok=True)
 
     entries = {entry["page"]: entry for entry in doc["pages"]}
-    save_memory(project, chapter, doc.get("memory"))
     return [StoryPage(page, entries[page.stem]["text"].strip()) for page in pages
             if entries[page.stem]["story"]], check
 
 
-def save_memory(project: str, chapter: str, memory: Any) -> None:
-    """The story so far from a chapter's reply into memory.json - unless
-    memory.json already holds a later chapter's, which a re-run of an earlier
-    chapter must not roll back."""
-    if not isinstance(memory, dict) or not memory:
-        return
-    path = get_memory_path(project)
-    current = read_json_or(path, {}) if has_real_json_content(path) else {}
-    latest = str(current.get("last_chapter_processed", "")) if isinstance(current, dict) else ""
-    if latest and chapter_sort_key(latest) > chapter_sort_key(str(chapter)):
-        return
-    write_json(path, {**memory, "last_chapter_processed": str(chapter)})
+def story_so_far(project: str, chapter: str) -> tuple[dict[str, Any] | None, str | None]:
+    """The memory section of the nearest earlier chapter whose pasted narration
+    has one, and which chapter that is - read straight from its narration.json,
+    so the next chapter's PDF carries it without any other step. (None, None)
+    when no earlier chapter has one."""
+    from remanga.chapters import discover_chapters
 
-
-def story_so_far(project: str) -> dict[str, Any] | None:
-    path = get_memory_path(project)
-    memory = read_json_or(path, None) if has_real_json_content(path) else None
-    return memory if isinstance(memory, dict) and memory else None
+    earlier = [c for c in discover_chapters(project) if chapter_sort_key(c) < chapter_sort_key(str(chapter))]
+    for previous in reversed(earlier):
+        path = get_narration_path(project, previous)
+        if not has_real_json_content(path):
+            continue
+        try:
+            _, memory = read_reply(path)
+        except (json.JSONDecodeError, OSError, IndexError):
+            continue
+        if memory:
+            return memory, previous
+    return None, None

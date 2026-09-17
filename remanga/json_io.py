@@ -50,7 +50,7 @@ PLACEHOLDER_MAX_BYTES = 10
 
 def has_real_json_content(path: Path | str) -> bool:
     """True if `path` exists and holds more than a blank placeholder - the shared
-    check for whether narration.json or memory.json has been written yet."""
+    check for whether narration.json has been written yet."""
     p = Path(path)
     return p.exists() and p.stat().st_size > PLACEHOLDER_MAX_BYTES
 
@@ -69,3 +69,23 @@ def json_from_reply(raw: str) -> Any:
         if start != -1 and end > start:
             text = text[start:end + 1]
     return json.loads(text)
+
+
+def json_blocks_from_reply(raw: str) -> list[Any]:
+    """Every JSON document in a pasted reply, in order: each fenced block, or -
+    with no fences - each top-level {...} one after another. Raises
+    json.JSONDecodeError when there is none."""
+    text = raw.lstrip("\ufeff").strip()
+    fenced = re.findall(r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n[ \t]*```", text, re.DOTALL)
+    if fenced:
+        return [json.loads(block) for block in fenced]
+    decoder, blocks, i = json.JSONDecoder(), [], 0
+    while True:
+        i = text.find("{", i)
+        if i == -1:
+            break
+        document, i = decoder.raw_decode(text, i)
+        blocks.append(document)
+    if not blocks:
+        return [json.loads(text)]
+    return blocks
