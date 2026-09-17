@@ -9,7 +9,7 @@ from remanga.extensions.spec import Extension, Placed
 
 
 def _commands():
-    from remanga.extensions.llm_crop.commands import CROP_GRID, CROP_GRID_ALL, LLM_CROP, LLM_CROP_ALL
+    from remanga.extensions.llm_crop.commands import AUTO, CROP_GRID, CROP_GRID_ALL, LLM_CROP, LLM_CROP_ALL
 
     return (
         # Right after the Panel Marker's commands, which these replace.
@@ -17,6 +17,8 @@ def _commands():
         Placed(LLM_CROP, after="crop-grid"),
         Placed(CROP_GRID_ALL, after="view-marks"),
         Placed(LLM_CROP_ALL, after="crop-grid-all"),
+        # First in Run & check: the whole run, hands-off.
+        Placed(AUTO, after="remix"),
     )
 
 

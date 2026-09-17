@@ -103,3 +103,34 @@ LLM_CROP_ALL = Command(
     detail="the whole-project form of llm-crop - no waiting, just whatever has been pasted",
     setup=LLM_CROP_SETUP,
 )
+
+
+def _ask_chapter_range(param, session, values):
+    from remanga.tui import CANCEL, ask_text
+
+    answer = ask_text("Chapters to take to video", default="", allow_empty=True,
+                      note="a range like 1-5, commas for more (1-5,8) - chapters not downloaded yet are "
+                           "downloaded · leave empty for every chapter this project has")
+    return CANCEL if answer is None else (answer.strip() or None)
+
+
+AUTO = Command(
+    "auto",
+    "Hands-off: take chapters from download to rendered video, stopping for nothing but the Gemini "
+    "hand-offs - it downloads, builds each grid upload with MAGI's panel labels, watches llm_crops.json and "
+    "imports and cuts each reply as it is saved (writing a fix request when one doesn't check out), packages, "
+    "lists each narration upload in chapter order, watches narration.json, and voices, mixes and renders. "
+    "No Enter presses: save a reply and it carries on. Stop with Ctrl+C and run it again to resume",
+    handlers.auto,
+    [
+        project_param(),
+        Param("chapters", ["--chapters", "-c"], required=False, default=None, prompter=_ask_chapter_range,
+              help="Chapters to take to video: numbers and ranges, e.g. '1-5,8' (default: every chapter the "
+                   "project has). Chapters MangaDex lists that aren't downloaded yet are downloaded.",
+              prompt="Chapters to take to video"),
+    ],
+    category="Run & check",
+    short="Hands-off: chapters to video - you only do the Gemini hand-offs",
+    detail="save each Gemini reply into its file and it carries on by itself",
+    setup=LLM_CROP_SETUP,
+)

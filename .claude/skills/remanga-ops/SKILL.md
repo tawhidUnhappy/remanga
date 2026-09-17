@@ -1482,6 +1482,16 @@ reply per chapter - a batched design was rejected; don't reintroduce batching.
     ran llm-crop and got no panels, because an already-cropped chapter's crop step skips.
   - Testing without Gemini: convert the user's reply to labels by greedy IoU>=0.4, one label per
     frame (reusing a label reproduces the merged-panel duplicate), in a `projects/zz*` copy.
+- **`auto` (2026-09-17): the user wants the run hands-off except the Gemini upload/paste**, which is
+  NOT automatable for them (web app, not API - don't propose driving it). `extensions/llm_crop/auto.py`
+  derives each chapter's next stage from disk every 4s tick (download -> grid -> wait reply -> import+cut
+  -> package -> wait narration, in chapter order for memory.json -> tts/mix/render with interactive=False
+  -> done); one stage per tick then rescan; a failed stage BLOCKS the chapter until its source files'
+  mtimes change; an invalid reply waits for the file to change. Hand-offs print once
+  (`print_llm_crop_handoff`, `wizard/narration.py:print_narration_handoff`, split out of
+  run_narration_step so nothing blocks). No mark/pause/review. Verified end to end on a 2-chapter copy
+  (bad reply -> fix request -> corrected -> cut/package -> narration order -> Chatterbox render ->
+  rerun resumes as done). Doesn't cover page mode yet.
 - **Previews used to mislead:** one page-wide red tint for everyone's paint-out made a crop look
   like its own dialogue was erased (the paint belonged to a NEIGHBOUR whose rectangle overlaps).
   Previews now put the real crops beside the page, cut by `cropper/crop_page.py:cut_crops` - the

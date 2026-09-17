@@ -133,3 +133,35 @@ def llm_crop_all(params: dict[str, Any], config: RemangaConfig) -> None:
         + (f"\n[dim]Panel Marker marks kept: {', '.join(named('declined'))}[/]" if named("declined") else "")
         + (f"\n[dim]No reply pasted yet: {', '.join(waiting)}[/]" if waiting else "")
     )
+
+
+def auto(params: dict[str, Any], config: RemangaConfig) -> None:
+    """Takes chapters from download to rendered video, stopping for nothing
+    but the Gemini hand-offs - see auto.py. `--chapters` accepts ranges
+    ('1-5,8'), expanded against the chapters this project has and the ones
+    MangaDex lists, so chapters not downloaded yet can be in the run."""
+    from remanga.extensions.llm_crop.auto import AutoRun
+    from remanga.full_recap.discovery import chapter_sort_key, discover_chapters, expand_chapter_selection
+
+    project = params["project"]
+    raw = (params.get("chapters") or "").strip()
+    local = discover_chapters(project)
+    if not raw:
+        if not local:
+            raise ValueError("This project has no chapters yet - pass --chapters, e.g. --chapters 1-5.")
+        chapters = local
+    else:
+        known = set(local)
+        try:
+            from remanga.downloader import MangaDexDownloader
+
+            known |= {entry["chapter"] for entry in
+                      MangaDexDownloader(config.downloader).list_chapters_with_status(project, None)}
+        except Exception as error:  # offline: the chapters on disk still run
+            console.print(f"[yellow]Couldn't list MangaDex's chapters ({error}) - using the ones on disk.[/]")
+        chapters = expand_chapter_selection(raw, sorted(known, key=chapter_sort_key))
+    if not chapters:
+        raise ValueError(f"No chapter matches {raw!r}.")
+    console.print(f"[bold]auto:[/] chapter(s) {', '.join(chapters)} - you only upload to Gemini and paste its "
+                  f"replies; everything else runs by itself.")
+    AutoRun(project, chapters, config).run()

@@ -6,6 +6,8 @@ pipeline never re-prompts for a chapter that's already written."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from remanga.config import RemangaConfig
 from remanga.console import console
 from remanga.json_io import has_real_json_content
@@ -28,10 +30,29 @@ def chapter_needs_memory(chapter: str) -> bool:
 
 def run_narration_step(project: str, chapter: str, config: RemangaConfig) -> None:
     chap_dir = get_chapter_dir(project, chapter)
-    narration_path = chap_dir / "narration.json"
-    if has_real_json_content(narration_path):
+    if has_real_json_content(chap_dir / "narration.json"):
         return
+    memory_path = print_narration_handoff(project, chapter, config)
 
+    pause("Press Enter once both files are saved and ready")
+
+    while chapter_needs_memory(chapter) and not has_real_json_content(memory_path):
+        console.print(
+            "\n[bold red]memory.json is still empty/missing.[/] From chapter 2 onward this is "
+            "required, not optional - it's what carries story continuity forward from the last "
+            "chapter. Save the LLM's memory.json reply to:"
+        )
+        print_paths([(memory_path, "")])
+        pause("Press Enter once memory.json is saved")
+
+
+def print_narration_handoff(project: str, chapter: str, config: RemangaConfig) -> Path:
+    """What to upload for this chapter's narration and where the two replies
+    go, with an empty narration.json put in place - without waiting, so
+    `auto` can list it and watch for the files itself. Returns memory.json's
+    path."""
+    chap_dir = get_chapter_dir(project, chapter)
+    narration_path = chap_dir / "narration.json"
     memory_path = ensure_memory_file(project)
     lessons_path = ensure_global_lessons_file()
     memory_has_content = has_real_json_content(memory_path)
@@ -84,13 +105,4 @@ def run_narration_step(project: str, chapter: str, config: RemangaConfig) -> Non
     console.print("  memory.json")
     print_paths([(memory_path, "")], indent="    ")
 
-    pause("Press Enter once both files are saved and ready")
-
-    while needs_memory and not has_real_json_content(memory_path):
-        console.print(
-            "\n[bold red]memory.json is still empty/missing.[/] From chapter 2 onward this is "
-            "required, not optional - it's what carries story continuity forward from the last "
-            "chapter. Save the LLM's memory.json reply to:"
-        )
-        print_paths([(memory_path, "")])
-        pause("Press Enter once memory.json is saved")
+    return memory_path

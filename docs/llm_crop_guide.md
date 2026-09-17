@@ -95,6 +95,27 @@ details; a box you move becomes a plain hand-drawn box.
 ./run.sh package -p my_manga -c 2
 ```
 
+### Hands-off: `auto`
+
+```bash
+./run.sh auto -p my_manga --chapters 1-5
+```
+Takes chapters from download to rendered video, and the only things you do are the Gemini
+hand-offs. Nothing asks for Enter; `auto` watches the files:
+
+1. It downloads any chapter that isn't here yet, builds every chapter's grid upload (with MAGI's
+   labels) and lists all the uploads - send them all to Gemini at once if you like.
+2. Save each reply into its `llm_crops.json`. As soon as it lands it is checked; a reply with
+   problems gets its `fix_request.md` (paste it into the same chat, save the new reply over the old),
+   a good one is imported, cut and packaged.
+3. It then lists each chapter's narration upload - in chapter order, because each chapter needs the
+   `memory.json` the one before it left. Save `narration.json` and `memory.json`.
+4. A narration that matches the panels is voiced, mixed and rendered.
+
+The Panel Marker, the pause stage and the review loop are not part of it. A chapter whose stage fails
+is reported and skipped until one of its files changes; the other chapters keep going. Ctrl+C stops
+it, and running it again picks up from what is on disk. In the wizard: **Run & check → auto**.
+
 ### Whole project, and the pipeline
 - `crop-grid-all -p my_manga` builds every downloaded chapter's upload at once.
 - `llm-crop-all -p my_manga` imports every chapter whose `llm_crops.json` has a reply in it, and
