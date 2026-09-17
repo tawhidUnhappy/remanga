@@ -25,11 +25,12 @@ A typical request: *"Make the video for https://mangadex.org/title/<uuid>/... ch
 2. download    ./run.sh download-range -p P -u URL -r 3-5
    per chapter N, in order:
 3. grid        ./run.sh crop-grid -p P -c N
-4. YOU CROP    look at grid_pages/chapter_N/*.png, write chapters/chapter_N/llm_crops.json
-   (MAGI)      optional: run MAGI for exact panel borders and check your frames against them
+   (MAGI)      run the MAGI overlay script once for the chapter (3.2) - optional
+4. YOU CROP    page by page: decide crops on the grid page, THEN borrow MAGI borders that fit (3.3)
+               append each page to a scratch file; assemble chapters/chapter_N/llm_crops.json
 5. import      ./run.sh llm-crop -p P -c N --force   (fix and re-run until it passes)
-6. check       look at llm_crop/chapter_N/preview/*
-7. cut         ./run.sh crop -p P -c N --force
+6. check       look at EVERY llm_crop/chapter_N/preview/* page
+7. cut         ./run.sh crop -p P -c N --force        then look at the tricky panels (3.5)
 8. template    ./run.sh narration-init -p P -c N --mode template --force
 9. YOU NARRATE look at chapters/chapter_N/panels/*, fill narration.json, update memory.json
 10. voice+mix  ./run.sh tts -p P -c N  &&  ./run.sh mix -p P -c N
@@ -149,18 +150,126 @@ by hand:
 (a tall page). `[0, 0, 718, 1000]` is a wide spread. **Every box you write must lie inside its page
 area.** Measure in square units, exactly what the ruler shows.
 
-### 3.2 Look, then write
+### 3.2 MAGI overlays - run once per chapter, before you look at any page
 
-Open the grid images with your image-reading tool **one page at a time, in `full_manifest` order**.
-The labels are legible at the size your tool displays (heavy labeled lines every 100, light labeled
-lines every 25, ticks every 5 - no edge is more than 12.5 units from a numbered line). For each page, follow `<process>` in the prompt: story page or not, find every
-frame, assign every bubble, caption and SFX to exactly one crop, decide groups (`grouping`, default
-`balanced`), number crops in reading order, and measure `frames`, `text_outside`, `art_outside`.
+MAGI v3 is a manga panel detector already installed in `.tools/venv-magi`. It draws **rectangles**
+around things that look like panels. It doesn't know about bubbles, story beats or reading order,
+and it often boxes things that aren't panels. Its one strength is exact border positions on clean
+rectangular panels.
 
-A long chapter is 40+ images. Don't hold the whole plan in your head: write each page's entry to a
-scratch file as you finish it, then assemble.
+**MAGI proposes; you decide.** Its boxes are measurements you may borrow, never a list of crops.
+Copying MAGI's boxes into `llm_crops.json` is the most common way this step goes wrong.
 
-Reply format (the file content is plain JSON; code fences are tolerated but not needed):
+Run the script below once per chapter. It saves a JSON file and one **overlay image per page**:
+the grid page with MAGI's boxes drawn over it in magenta, numbered `m0`, `m1`, .... You look at the
+overlay, not at a list of numbers, so you can see at a glance what MAGI got right. Everything goes
+into `projects/P/llm_crop/chapter_N/magi/`. **Never write your own files into
+`chapters/chapter_N/`**, which holds source files only.
+
+Save as a scratch script (not in the repo):
+
+```python
+# magi_overlay.py  - usage: magi_overlay.py <project> <chapter>   (run crop-grid first)
+import json, sys, zipfile
+from pathlib import Path
+from PIL import Image, ImageDraw, ImageFont, ImageOps
+from remanga.config import RemangaConfig
+from remanga.webui.magi_assist import detect_panels_for_pages
+
+project, chapter = sys.argv[1], sys.argv[2]
+root = Path("projects") / project
+info = json.loads(zipfile.ZipFile(root / f"grid_zip/chapter_{chapter}/grid_1.zip").read("chapter_info.json"))
+out = root / f"llm_crop/chapter_{chapter}/magi"
+out.mkdir(parents=True, exist_ok=True)
+pages = sorted((root / f"chapters/chapter_{chapter}/pages").iterdir())
+results = detect_panels_for_pages(pages, RemangaConfig.load().marker)   # {filename: [[x1,y1,x2,y2] px]}
+boxes = {}
+for page in pages:
+    w, h = ImageOps.exif_transpose(Image.open(page)).size
+    _, _, ay, ax = info["page_areas"][page.stem]                        # page area on the square
+    boxes[page.stem] = [[round(y1 / h * ay), round(x1 / w * ax), round(y2 / h * ay), round(x2 / w * ax)]
+                        for x1, y1, x2, y2 in results.get(page.name, [])]
+    grid = Image.open(root / f"grid_pages/chapter_{chapter}/{page.stem}.png").convert("RGB")
+    draw, s = ImageDraw.Draw(grid), grid.width / 1000
+    font = ImageFont.load_default(size=round(grid.width / 30))
+    for i, (y1, x1, y2, x2) in enumerate(boxes[page.stem]):
+        draw.rectangle([x1 * s, y1 * s, x2 * s, y2 * s], outline=(255, 0, 255), width=round(grid.width / 300))
+        draw.text((x1 * s + 20, y1 * s + 20), f"m{i}", font=font, fill=(255, 0, 255),
+                  stroke_width=4, stroke_fill=(255, 255, 255))
+    grid.save(out / f"{page.stem}.png")
+(out / "boxes.json").write_text(json.dumps(boxes, indent=1))              # grid units, [ymin,xmin,ymax,xmax]
+print("overlays:", out)
+```
+
+```bash
+PATH="$PWD/bin:$PATH" HF_HOME="$PWD/.cache/huggingface" PYTHONPATH="$PWD" \
+  .venv/bin/python /path/to/scratch/magi_overlay.py P N </dev/null
+```
+
+- It loads once, then takes about a second per page on the GPU. RAM was fine on this machine.
+  Run nothing else on the GPU at the same time.
+- If it fails (no CUDA, errors), skip MAGI and measure everything off the grid pages. That is a
+  fully supported route.
+
+### 3.3 Crop one page at a time - decide, then measure, then write
+
+Work **one page at a time, in `full_manifest` order**, and finish each page before opening the
+next. The grid's labels are legible at the size your tool displays (heavy labeled lines every 100,
+light labeled lines every 25, ticks every 5; no edge is more than 12.5 units from a numbered line).
+For every page, do these steps in this order:
+
+**Step A - Decide the crops by reading the page.** Open the plain grid page
+(`grid_pages/chapter_N/NNN_PPP.png`), **not** the MAGI overlay, and don't look at any numbers yet.
+Follow `<process>` in `prompts/llm_crop.md`:
+1. Is it a story page? If not: `story: false` with a `skip` reason. Next page.
+2. Find every frame: each bordered panel (rectangular or slanted), each inset, each region of
+   borderless art.
+3. Read every bubble, caption and sound effect, and decide which frame owns it (follow the tail).
+4. Decide the crops: which frames stand alone and which form a group (`grouping` in chapter_info,
+   usually `balanced`).
+5. Number the crops in reading order from `reading_direction` (for `right_to_left`: top tier first,
+   right to left within a tier).
+
+Write that plan down in one line per crop before measuring, for example
+`1: top-right panel, knight swings, owns bubble "Die"`. The plan is what you check the numbers
+against.
+
+**Step B - Measure each frame.** Now open the MAGI overlay for the page
+(`llm_crop/chapter_N/magi/NNN_PPP.png`). For each frame in your plan:
+- **One MAGI box outlines exactly that frame** (same four edges, nothing extra, nothing missing):
+  copy that box's numbers from `boxes.json`.
+- **Anything else** - no box, a box covering two frames, two boxes for one frame, a box around
+  lettering or a caption strip, a box whose edge is visibly off the border: ignore MAGI for this
+  frame and measure it off the grid.
+
+**Step C - Measure what MAGI can never give you.** For each crop, on the grid page:
+- `text_outside`: every bubble, caption or SFX it owns that reaches past its frames, as one box
+  around the **whole** element including the tail.
+- `art_outside`: art it owns that breaks out of its frames.
+- **Slanted borders:** where two crops' frame rectangles overlap, also list in `text_outside`
+  every bubble or caption the owner has **inside the overlap strip**, even if it sits inside the
+  owner's own frame. That's what gets it painted out of the neighbour's crop. Without it the
+  neighbour shows half of that bubble.
+
+**Step D - Check the page against your plan, then write it.** Crop count and order match the
+plan. No MAGI index leaked into `order`. Every bubble is owned by exactly one crop. Every box lies
+inside the page area. Then **append this page's entry to your scratch file right away**, before
+opening the next page.
+
+#### What MAGI gets wrong - real cases from `nakamaMamotte` chapter 1
+
+| Page | What MAGI returned | What to do |
+|---|---|---|
+| `001_002` | Big borderless action area `m4` with a bordered inset `m3` drawn inside it | Correct: two frames, two crops (an inset is its own frame). Copy both. |
+| `001_003` | Middle tier of **slanted** panels: rectangles `m1`, `m2`, `m3` overlap each other | The rectangles are the right frames and must overlap. The hero's bubble "CHANGE OUR FATE" sits inside the next panel's rectangle, so it goes in the hero crop's `text_outside` (step C). |
+| `001_003` | `m4` a black caption strip, `m5` a box around applause lettering only | Neither is a crop on its own. The caption and its sound are one moment, so group them as one crop, or attach them to the shot they narrate. |
+| `001_001` | `m0` stops short of the caption "The long-awaited new series" at its left edge | Frame from MAGI is fine. Measure the caption yourself into `text_outside`. |
+| `001_001` | Vertical publisher disclaimer in the margin, partly inside `m1` | Belongs to no crop, same as watermarks and page numbers. |
+| any | Boxes numbered in detection order | `order` comes from step A, never from `m` numbers. |
+
+#### Reply format
+
+The file content is plain JSON; code fences are tolerated but not needed:
 
 ```json
 {
@@ -179,7 +288,8 @@ Reply format (the file content is plain JSON; code fences are tolerated but not 
 }
 ```
 
-- Boxes are `[ymin, xmin, ymax, xmax]`, integers 0-1000, in **square** units.
+- Boxes are `[ymin, xmin, ymax, xmax]`, integers 0-1000, in **square** (grid) units, the same units
+  as MAGI's `boxes.json`.
 - Every page in `full_manifest` appears exactly once, in order. `skip` is one of `credits`, `ad`,
   `blank`, `duplicate`. A title page counts as story (a `splash`).
 - `kind`: `panel` (1 frame), `group` (2+ frames, one narration line), `splash` (one frame covering
@@ -188,48 +298,6 @@ Reply format (the file content is plain JSON; code fences are tolerated but not 
   carry a line should be grouped. A crop that covers two separate beats should be split.**
 - When unsure where a border is, put the edge **on the gutter side**. `crop` snaps edges that land in
   a gutter; an edge inside the art cuts the art.
-
-### 3.3 MAGI - exact panel borders (optional, recommended for dense pages)
-
-MAGI v3 is a manga panel detector already installed in `.tools/venv-magi`. It finds bordered
-panels precisely but knows nothing about bubbles, groups or story order. The way to combine it
-with your judgement: **you decide what the crops are; MAGI tells you where the borders are.** Run it
-on a chapter's pages, convert its boxes to square units, and compare them to your `frames`.
-
-Save as a scratch script (not in the repo) and run it with the repo env:
-
-```python
-# magi_boxes.py  - usage: magi_boxes.py <project> <chapter> [page_stem ...]
-import json, sys, zipfile
-from pathlib import Path
-from PIL import Image
-from remanga.config import RemangaConfig
-from remanga.webui.magi_assist import detect_panels_for_pages
-
-project, chapter, only = sys.argv[1], sys.argv[2], set(sys.argv[3:])
-root = Path("projects") / project
-info = json.loads(zipfile.ZipFile(root / f"grid_zip/chapter_{chapter}/grid_1.zip").read("chapter_info.json"))
-pages = [p for p in sorted((root / f"chapters/chapter_{chapter}/pages").iterdir())
-         if not only or p.stem in only]
-results = detect_panels_for_pages(pages, RemangaConfig.load().marker)   # {filename: [[x1,y1,x2,y2] px]}
-for page in pages:
-    w, h = Image.open(page).size
-    _, _, ay, ax = info["page_areas"][page.stem]          # page area on the square
-    sq = [[round(y1 / h * ay), round(x1 / w * ax), round(y2 / h * ay), round(x2 / w * ax)]
-          for x1, y1, x2, y2 in results.get(page.name, [])]
-    print(page.stem, json.dumps(sq))                       # [ymin,xmin,ymax,xmax] in square units
-```
-
-```bash
-PATH="$PWD/bin:$PATH" HF_HOME="$PWD/.cache/huggingface" PYTHONPATH="$PWD" \
-  .venv/bin/python /path/to/scratch/magi_boxes.py P N </dev/null
-```
-
-- Loads once, then about a second per page on the GPU. Weights are in `checkpoints/magiv3`.
-  RAM was fine on this machine (≥ 8.7 GB stayed free). Output order is **not** reading order.
-- Use its borders for `frames` when they agree with what you see. It misses borderless art, merges
-  or splits odd layouts, and can't see `text_outside` / `art_outside`; those stay your call.
-- Requires CUDA. If it errors, skip it. Your own measurements are acceptable input.
 
 ### 3.4 Import and check
 
@@ -242,13 +310,16 @@ PATH="$PWD/bin:$PATH" HF_HOME="$PWD/.cache/huggingface" PYTHONPATH="$PWD" \
   Marker marks without asking; without it a headless run keeps the old marks.)
 - **Fail:** exits 1 and writes `projects/P/llm_crop/chapter_N/fix_request.md`. Read it, fix only
   what it names, overwrite `llm_crops.json`, run again.
+- Read every warning it prints. "The order differs from the layout's reading order" and "nearly the
+  same frame" are usually MAGI boxes copied without step B.
 
-**Look at the previews** before cutting: green = frames, blue = text outside a frame, magenta = art
-outside a frame, red box = the actual cut with its order number, red tint = painted out. Fix any
-bubble that is cut in half, any frame that is clipped or includes a neighbour, and any order that
-is wrong. Then re-import.
+**Look at every preview**, not a sample: green = frames, blue = text outside a frame, magenta =
+art outside a frame, red box = the actual cut with its order number, red tint = painted out. Where
+red rectangles overlap (slanted panels), the order number sits at each rectangle's top-left corner.
+Fix any bubble that is cut in half, any frame that is clipped or includes a neighbour, and any
+order that is wrong. Then re-import.
 
-### 3.5 Cut
+### 3.5 Cut, and look at the result
 
 ```bash
 ./run.sh crop -p P -c N --force </dev/null
@@ -256,8 +327,13 @@ is wrong. Then re-import.
 
 Panels land in `projects/P/chapters/chapter_N/panels/NNN_PPP_KK.png` (e.g. `003_012_02.png` =
 chapter 3, page 12, 2nd crop on that page). `--force` is needed when the chapter was cropped before;
-it wipes `panels/` and cuts again. **Look at a sample of the panels.** They are what the viewer
-sees and what you will narrate.
+it wipes `panels/` and cuts again.
+
+**Look at the cut panels** for every page with slanted borders, groups, insets or `text_outside`,
+since the preview can't show everything the cut does. Half a bubble in a panel means its owner
+is missing that bubble in `text_outside` (step C). A blank hole means a group's rectangle took in
+a frame that isn't a member. A thin strip of the neighbouring panel along a slanted edge is expected
+and fine. Fix in `llm_crops.json`, then re-run `llm-crop` and `crop`.
 
 > Re-cropping renumbers panels. If `narration.json` already exists for that chapter, it has to be
 > rebuilt to match (step 4), or TTS/mix/render will refuse to run.

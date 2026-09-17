@@ -63,8 +63,10 @@ A crop is described by three lists of boxes:
 
 - **`frames`** - the panel or panels the crop shows. For a bordered panel, the box runs along the
   outer edge of its border line. For artwork drawn without a border, the box covers the region
-  that art occupies and stops where a bordered panel begins. Frames of different crops do not
-  overlap, except for an inset panel drawn on top of a larger one.
+  that art occupies and stops where a bordered panel begins. For a panel with a slanted border,
+  the box is the rectangle around the whole panel, corners included. Frames of different crops do
+  not overlap, with two exceptions: an inset panel drawn on top of a larger one, and the rectangles
+  of neighbouring panels whose shared border is slanted, which always overlap.
 - **`text_outside`** - every speech bubble, thought bubble, caption box and piece of sound-effect
   lettering that belongs to this crop and reaches past its frames, even slightly. The box covers
   the whole element - the entire bubble with its tail tip - not only the part that sticks out.
@@ -102,7 +104,9 @@ every bubble, caption and sound effect on the page, which crop it belongs to:
   are never listed.
 
 A bubble that reaches past its owner's frames goes in that crop's `text_outside`, and in no other
-crop's.
+crop's. So does a bubble that sits inside its owner's frame but also inside another crop's frame,
+as happens beside a slanted border where the rectangles overlap. Listing it is what removes it
+from the neighbour, which otherwise shows half of it.
 
 ### 3. One frame, one crop
 The border decides what a frame is, not the number of things happening inside it. A frame that
@@ -226,7 +230,8 @@ speaking and which moment a frame belongs to.
      past its owner's frames is in that crop's `text_outside`;
    - every piece of art that breaks out of a frame is in its crop's `art_outside`;
    - no frame is split or appears in two crops, and frames of different crops do not overlap, apart
-     from insets;
+     from insets and slanted borders - and every bubble inside such an overlap is in its owner's
+     `text_outside`;
    - no group's rectangle takes in a frame that is not a member, and no group is much taller than
      it is wide;
    - `order` runs 1, 2, 3 and onward in reading order;
