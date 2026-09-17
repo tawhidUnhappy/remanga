@@ -27,25 +27,28 @@ Silicon or CPU. Run `./run.sh setup` later to repair the Kokoro install.
 ./pipeline.sh
 ```
 
-Pick a project (or **New project…**: a name and the manga's MangaDex URL or title), then:
+Pick a project, or **New project…** and paste the manga's MangaDex URL (or ID, or a title to
+search): the project is named after the manga's English title, and its reading direction comes from
+the manga's original language. A manga you already have opens its existing project.
 
 | Menu | What it does |
 |---|---|
-| **Download chapters** | Shows how many chapters MangaDex has, then downloads the ones you type: `3`, `1-5`, `1-5,8`, or empty for all. Chapters already here are re-checked against MangaDex's checksums. |
+| **Chapters** | The chapter list, fetched fresh from MangaDex each time: every chapter marked ✓ downloaded, ◐ partial or + new, with its title, page count and where it is (PDF ready, narration pasted, video done). **Download all new chapters** or **Pick several…** at the top; pick one chapter to download it, check its pages (fixes missing or corrupt ones), re-download it from scratch, reset it (deletes its PDF, narration, audio and video, keeps the pages) or delete it. Reset and delete ask first. |
 | **Make PDF** | Builds `projects/<name>/pdf/chapter_N/pages_1.pdf` and tells you what to upload and where to paste. |
 | **Make video** | Checks the pasted narration, narrates it, mixes the music and renders `projects/<name>/video/chapter_N/<name>_chN_recap.mp4`. |
-| **Chapters** | Where each chapter is: not downloaded, PDF ready, narration pasted, video done. |
 | **Settings** | Narrator voice and speed, background music and volume, video size, PDF size cap. |
 
 ## Or with commands
 
 ```bash
-./run.sh download -p my_manga -c 1-5 --url "https://mangadex.org/title/..."   # --url once per project
-./run.sh pdf      -p my_manga -c 1-5
+./run.sh new "https://mangadex.org/title/..."   # prints the project name, e.g. MyMangaTitle
+./run.sh download -p MyMangaTitle               # MangaDex's chapter list, with what you have
+./run.sh download -p MyMangaTitle -c 1-5        # or -c new for every chapter you don't have
+./run.sh pdf      -p MyMangaTitle -c 1-5
 # give pdf/chapter_N/pages_*.pdf + prompts/narration.md to the LLM, paste the reply into
-# projects/my_manga/chapters/chapter_N/narration.json
-./run.sh video    -p my_manga -c 1-5
-./run.sh chapters -p my_manga
+# projects/MyMangaTitle/chapters/chapter_N/narration.json
+./run.sh video    -p MyMangaTitle -c 1-5
+./run.sh chapters -p MyMangaTitle
 ```
 
 `-c` takes a chapter, a range, several (`1-5,8`) or `all` (the default). Decimal chapters are

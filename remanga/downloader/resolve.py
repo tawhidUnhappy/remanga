@@ -110,8 +110,11 @@ class MangaDexResolver:
         question with a known answer."""
         res = self.request_with_retry("GET", f"{BASE_URL}/manga/{manga_id}")
         attrs = res.json().get("data", {}).get("attributes", {})
+        titles = attrs.get("title", {})
+        english = titles.get("en") or next((alt["en"] for alt in attrs.get("altTitles", []) if alt.get("en")), "")
         return {
-            "title": self._pick_title(attrs.get("title", {})),
+            "title": self._pick_title(titles),
+            "english_title": english,
             "original_language": str(attrs.get("originalLanguage") or "").lower(),
         }
 

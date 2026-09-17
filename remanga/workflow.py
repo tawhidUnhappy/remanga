@@ -10,6 +10,7 @@ two can't do a step differently."""
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from remanga.chapters import chapter_sort_key, discover_chapters, expand_chapter_selection
@@ -18,10 +19,15 @@ from remanga.console import console, display_path, escape as _esc
 from remanga.json_io import has_real_json_content
 from remanga.narration import PROMPT_PATH, load_narration, page_files, story_so_far
 from remanga.paths import (
+    GENERATED_KINDS,
     chapter_identity_fields,
+    get_chapter_dir,
     get_final_video_path,
+    get_generated_dir,
     get_narration_path,
     get_pdf_dir,
+    get_project_dir,
+    list_projects,
     load_project_metadata,
     save_project_metadata,
 )
@@ -38,6 +44,63 @@ READING_DIRECTION_BY_LANGUAGE = {
 }
 
 
+# --- projects ---------------------------------------------------------------
+
+# Longest folder name made from a title; cut at a word.
+PROJECT_NAME_MAX = 40
+
+
+def project_name_from_title(title: str) -> str:
+    """A folder name from a manga's title, in the projects' PascalCase style:
+    "I Died Protecting My Comrades..." -> "IDiedProtectingMyComrades...",
+    cut at a whole word."""
+    words = re.findall(r"[A-Za-z0-9]+", title)
+    name = ""
+    for word in words:
+        piece = word[:1].upper() + word[1:]
+        if name and len(name) + len(piece) > PROJECT_NAME_MAX:
+            break
+        name += piece
+    return name or "Manga"
+
+
+def create_project(source: str, config: RemangaConfig) -> str:
+    """A project for the manga at `source` (a MangaDex URL, ID or a title to
+    search), named after its English title, with its title, original language
+    and reading direction fetched. A manga that already has a project opens
+    that project instead. Returns the project's name."""
+    from remanga.downloader import MangaDexDownloader
+
+    resolver = MangaDexDownloader(config.downloader).resolver
+    manga_id = resolver.parse_manga_id(source)
+    for project in list_projects():
+        if project["manga_id"] == manga_id:
+            console.print(f"[green]You already have this manga:[/] {_esc(project['name'])}")
+            return project["name"]
+
+    info = resolver.get_manga_info(manga_id)
+    base = project_name_from_title(info["english_title"] or info["title"])
+    taken = {project["name"].casefold() for project in list_projects()}
+    name, n = base, 2
+    while name.casefold() in taken:
+        name, n = f"{base}{n}", n + 1
+    direction = READING_DIRECTION_BY_LANGUAGE.get(info["original_language"], "right_to_left")
+    save_project_metadata(name, {
+        "project_name": name,
+        "manga_url": source.strip(),
+        "manga_id": manga_id,
+        "manga_title": info["title"],
+        "original_language": info["original_language"],
+        "reading_direction": direction,
+    })
+    console.print(f"[bold green]✓ New project:[/] {_esc(name)}\n"
+                  f"  {_esc(info['english_title'] or info['title'])}\n"
+                  f"  [dim]reads {direction.replace('_', '-')}"
+                  + (f" (original language '{info['original_language']}')" if info["original_language"] else "")
+                  + "[/]")
+    return name
+
+
 # --- chapters ---------------------------------------------------------------
 
 
@@ -46,9 +109,10 @@ def local_chapters(project: str) -> list[str]:
 
 
 def mangadex_chapters(project: str, config: RemangaConfig, url: str | None = None,
-                      refresh: bool = False) -> list[dict]:
-    """Every chapter MangaDex lists for the project's manga, each with its
-    local status (downloaded / partial / missing)."""
+                      refresh: bool = True) -> list[dict]:
+    """Every chapter MangaDex lists for the project's manga right now, each
+    with its local status (downloaded / partial / missing). Fetched fresh by
+    default, so a chapter published since the last run is in it."""
     from remanga.downloader import MangaDexDownloader
 
     return MangaDexDownloader(config.downloader).list_chapters_with_status(project, url, force_refresh=refresh)
@@ -78,6 +142,17 @@ def chapter_state(project: str, chapter: str) -> str:
 # --- download ---------------------------------------------------------------
 
 
+def print_chapter_list(listing: list[dict]) -> None:
+    """MangaDex's chapters with what this project has of each, compact enough
+    for a long manga: one line per chapter, title when it has one."""
+    marks = {"downloaded": "[green]✓ downloaded[/]", "partial": "[yellow]◐ partial[/]", "missing": "[dim]· new[/]"}
+    console.print(f"\n[bold]MangaDex lists {len(listing)} chapter(s)[/] [dim](fetched just now)[/]")
+    for entry in listing:
+        title = f"  [dim]{_esc(entry['title'])}[/]" if entry.get("title") else ""
+        pages = f"[dim]{entry['pages']}p[/]" if entry.get("pages") else ""
+        console.print(f"  ch {entry['chapter']:>6}  {marks.get(entry['status'], entry['status']):<24} {pages}{title}")
+
+
 def download(project: str, chapters: list[str], config: RemangaConfig, url: str | None = None,
              force: bool = False) -> list[Path]:
     from remanga.downloader import MangaDexDownloader
@@ -85,6 +160,45 @@ def download(project: str, chapters: list[str], config: RemangaConfig, url: str 
     paths = MangaDexDownloader(config.downloader).download_chapters(project, chapters, url, force=force)
     settle_reading_direction(project)
     return paths
+
+
+def _inside(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return path.resolve() != root.resolve()
+    except ValueError:
+        return False
+
+
+def _chapter_paths(project: str, chapter: str, *, with_pages: bool) -> list[Path]:
+    """What resetting (or, `with_pages`, deleting) a chapter removes - each
+    one checked to be a chapter folder or file strictly inside this project,
+    so a blank or odd project/chapter name can never widen it."""
+    if not str(project).strip() or not str(chapter).strip():
+        raise ValueError("A project and a chapter are needed.")
+    project_dir = get_project_dir(project)
+    chapter_dir = get_chapter_dir(project, chapter)
+    paths = [get_generated_dir(project, kind, chapter, create=False) for kind in GENERATED_KINDS]
+    paths.append(chapter_dir if with_pages else get_narration_path(project, chapter))
+    for path in paths:
+        if not _inside(path, project_dir) or not path.name.startswith(("chapter_", "narration.json")):
+            raise ValueError(f"Refusing to delete {path} - it isn't one chapter's file inside {project_dir}.")
+    return [path for path in paths if path.exists()]
+
+
+def reset_chapter(project: str, chapter: str, *, delete_pages: bool = False) -> list[Path]:
+    """Deletes a chapter's PDF, pasted narration, audio and video - and, with
+    `delete_pages`, its downloaded pages too, removing the chapter. Returns
+    what was removed."""
+    import shutil
+
+    removed = _chapter_paths(project, chapter, with_pages=delete_pages)
+    for path in removed:
+        if path.is_dir():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+    return removed
 
 
 def settle_reading_direction(project: str) -> str:

@@ -80,6 +80,16 @@ call these), `cli.py`, `wizard.py` (menus), `settings.py` (voice/music/video/pdf
   ffmpeg summary lines AFTER it - parse to the last `}`). Single-pass dynamic loudnorm pumps music.
 - The voice identity in audio_timing.json includes SPEED; before, a speed change silently reused
   clips at the old speed.
+- **Projects are created from a MangaDex URL/ID/title** (`workflow.create_project`): named from the
+  English title (`title.en`, else the first `altTitles` en) in PascalCase cut at 40 chars, reading
+  direction from `originalLanguage`; same manga_id -> opens the existing project. The chapter screen
+  (`wizard.chapters_screen`) refetches MangaDex's list on opening; reset/delete go through
+  `workflow.reset_chapter`, whose `_chapter_paths` refuses blank names and anything not a
+  `chapter_*`/`narration.json` strictly inside the project.
+- **2026-09-17: the user's whole `projects/` directory vanished at 18:58:36** - between turns, not by
+  any command run in the session (last one 18:37), and no remanga code can delete it. Test anything
+  that writes under `projects/` from a scratch cwd (`cd scratch; PYTHONPATH=repo python -m
+  remanga.cli ...` with a copied config.json) - `get_projects_dir()` even mkdirs `projects/` in cwd.
 - Decimal chapters are chapters of their own: `1-5` takes 4.5, not 5.1 (`chapters.expand_chapter_selection`).
 - MangaDex chapter list is cached 24h in manifest.json.
 
