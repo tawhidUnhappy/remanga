@@ -12,6 +12,7 @@ dependencies = [
     "pydantic>=2.8.2",
     "requests>=2.32.3",
     "rich>=13.7.1",
+    "textual>=8.2",
     "pydub>=0.25.1",
 ]
 
@@ -81,6 +82,8 @@ ignore = [
 # nothing from `remanga` - so they can't be held to this project's import
 # graph, and their `sys.path` juggling has to come before their imports.
 "remanga/*/scripts/*.py" = ["E402"]
+# Textual declares key bindings as plain class-level lists; that is its API.
+"remanga/ui/*.py" = ["RUF012"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["remanga"]

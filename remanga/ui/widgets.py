@@ -1,91 +1,157 @@
-"""The small stateful pieces screens are built from."""
+"""Textual widgets with remanga's safety rule built in.
+
+Nothing is highlighted until you ask for it: a list opens with no row picked,
+so an Enter pressed before looking does nothing (user request). The first
+arrow key or click highlights a row; Enter or a DOUBLE click chooses it. A
+single click only moves the highlight - clicking around never starts work."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from rich.text import Text
+from textual import events
+from textual.app import ComposeResult
+from textual.binding import Binding
+from textual.containers import Horizontal
+from textual.coordinate import Coordinate
+from textual.message import Message
+from textual.widgets import DataTable, Input, OptionList, Static
 
-from remanga.tui import keys
-from remanga.tui.key_decode import PASTE_PREFIX
+
+class TopBar(Horizontal):
+    """Where you are on the left, a short fact on the right."""
+
+    DEFAULT_CSS = """
+    TopBar { dock: top; height: 2; padding: 0 1; border-bottom: solid $panel-lighten-2; }
+    TopBar #where { width: 1fr; text-wrap: nowrap; text-overflow: ellipsis; }
+    TopBar #info { width: auto; color: $text-muted; }
+    """
+
+    def __init__(self, path: list[str], info: str = "") -> None:
+        super().__init__()
+        self.path, self._info = path, info
+
+    def compose(self) -> ComposeResult:
+        where = Text()
+        for i, part in enumerate(self.path):
+            if i:
+                where.append("  ›  ", style="dim")
+            where.append(part, style="bold" if i == len(self.path) - 1 else "dim")
+        yield Static(where, id="where")
+        yield Static(self._info, id="info")
+
+    def set_info(self, info: str) -> None:
+        self.query_one("#info", Static).update(info)
 
 
-@dataclass
-class ListState:
-    """A cursor over `count` rows, with a scroll position and marked rows.
+class SafeTable(DataTable):
+    """A row table that starts with no row highlighted."""
 
-    The cursor starts on NOTHING: no row is highlighted until an arrow key is
-    pressed, so Enter pressed before looking picks nothing (user request - it
-    used to be a blank row at the top)."""
+    # Shown in the footer (DataTable's own Enter binding is hidden, and a
+    # focused widget's binding hides the screen's).
+    BINDINGS = [Binding("enter", "select_cursor", "Choose")]
 
-    count: int = 0
-    cursor: int | None = None
-    top: int = 0
-    marks: set[int] = field(default_factory=set)
+    DEFAULT_CSS = """
+    SafeTable { height: 1fr; }
+    """
 
-    def resize(self, count: int) -> None:
-        self.count = count
-        self.marks = {m for m in self.marks if m < count}
-        if self.cursor is not None and self.cursor >= count:
-            self.cursor = count - 1 if count else None
+    class MarkClicked(Message):
+        """The first column of a table with `mark_column` was clicked."""
 
-    def handle(self, key: str, page: int) -> bool:
-        """Moves for a navigation key; True when the key was one."""
-        if not self.count:
-            return key in (keys.UP, keys.DOWN, keys.PAGE_UP, keys.PAGE_DOWN, keys.HOME, keys.END)
-        if key in (keys.UP, "k"):
-            self.cursor = self.count - 1 if self.cursor is None else max(0, self.cursor - 1)
-        elif key in (keys.DOWN, "j"):
-            self.cursor = 0 if self.cursor is None else min(self.count - 1, self.cursor + 1)
-        elif key == keys.PAGE_UP:
-            self.cursor = max(0, (self.cursor or 0) - page)
-        elif key == keys.PAGE_DOWN:
-            self.cursor = min(self.count - 1, (self.cursor or 0) + page)
-        elif key == keys.HOME:
-            self.cursor = 0
-        elif key == keys.END:
-            self.cursor = self.count - 1
-        else:
+        def __init__(self, row: int) -> None:
+            super().__init__()
+            self.row = row
+
+    def __init__(self, *, mark_column: bool = False, **kwargs) -> None:
+        super().__init__(cursor_type="row", show_cursor=False, zebra_stripes=False, **kwargs)
+        self.mark_column = mark_column
+
+    @property
+    def picked_row(self) -> int | None:
+        """The highlighted row, or None before an arrow key or click."""
+        return self.cursor_row if self.show_cursor and self.row_count else None
+
+    def _arm(self, row: int) -> bool:
+        """Shows the cursor on `row` if it isn't shown yet; True if it wasn't."""
+        if self.show_cursor or not self.row_count:
             return False
+        self.show_cursor = True
+        self.move_cursor(row=row)
         return True
 
-    def scroll_for(self, height: int) -> int:
-        """Keeps the cursor inside a window of `height` rows; returns the top row."""
-        visible = max(1, height)
-        if self.cursor is not None:
-            if self.cursor < self.top:
-                self.top = self.cursor
-            elif self.cursor >= self.top + visible:
-                self.top = self.cursor - visible + 1
-        self.top = max(0, min(self.top, max(0, self.count - visible)))
-        return self.top
+    def action_cursor_down(self) -> None:
+        if not self._arm(0):
+            super().action_cursor_down()
 
-    def toggle_mark(self) -> None:
-        if self.cursor is None:
+    def action_cursor_up(self) -> None:
+        if not self._arm(self.row_count - 1):
+            super().action_cursor_up()
+
+    def action_page_down(self) -> None:
+        if not self._arm(0):
+            super().action_page_down()
+
+    def action_page_up(self) -> None:
+        if not self._arm(0):
+            super().action_page_up()
+
+    def action_scroll_home(self) -> None:
+        if not self._arm(0):
+            super().action_scroll_home()
+
+    def action_scroll_end(self) -> None:
+        if not self._arm(self.row_count - 1):
+            super().action_scroll_end()
+
+    def action_select_cursor(self) -> None:
+        if self.show_cursor:
+            super().action_select_cursor()
+
+    async def _on_click(self, event: events.Click) -> None:
+        meta = event.style.meta
+        row = meta.get("row")
+        if row is None or row < 0 or meta.get("out_of_bounds", False):
+            await super()._on_click(event)  # header clicks and the like
             return
-        self.marks ^= {self.cursor}
+        # Textual would also run DataTable's own click handler (which chooses
+        # on the second single click) - prevent_default stops that.
+        event.prevent_default()
+        event.stop()
+        self.show_cursor = True
+        self.cursor_coordinate = Coordinate(row, max(0, meta.get("column", 0)))
+        if self.mark_column and meta.get("column") == 0:
+            self.post_message(self.MarkClicked(row))
+        elif event.chain >= 2:
+            self._post_selected_message()
 
-    def chosen(self) -> list[int]:
-        """The marked rows, or the cursor row when nothing is marked."""
-        if self.marks:
-            return sorted(self.marks)
-        return [self.cursor] if self.cursor is not None else []
 
+class SafeOptionList(OptionList):
+    """Dialog options: none highlighted at first, double click to choose."""
 
-@dataclass
-class TextBox:
-    value: str = ""
+    BINDINGS = [Binding("enter", "select", "Choose")]
 
-    def handle(self, key: str) -> bool:
-        """Edits for a typing key; True when the key was one."""
-        if key.startswith(PASTE_PREFIX):
-            self.value += key[len(PASTE_PREFIX):]
-        elif key == keys.BACKSPACE:
-            self.value = self.value[:-1]
-        elif key in ("ctrl-u", "ctrl-w"):
-            self.value = ""
-        elif key == keys.SPACE:
-            self.value += " "
-        elif len(key) == 1 and key.isprintable():
-            self.value += key
+    def __init__(self, *options, **kwargs) -> None:
+        super().__init__(*options, **kwargs)
+        self.highlighted = None  # OptionList highlights the first option itself
+
+    def action_cursor_up(self) -> None:
+        if self.highlighted is None:
+            self.action_last()
         else:
-            return False
-        return True
+            super().action_cursor_up()
+
+    async def _on_click(self, event: events.Click) -> None:
+        event.prevent_default()  # not OptionList's handler, which chooses on one click
+        clicked = event.style.meta.get("option")
+        if clicked is None or self._options[clicked].disabled:
+            return
+        self.highlighted = clicked
+        if event.chain >= 2:
+            self.action_select()
+
+    def action_select(self) -> None:
+        if self.highlighted is not None:
+            super().action_select()
+
+
+class TextInput(Input):
+    BINDINGS = [Binding("enter", "submit", "OK")]

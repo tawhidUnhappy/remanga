@@ -32,11 +32,11 @@ video     -> check reply -> Kokoro clip per story page -> mix with BGM -> render
 ```
 
 Code map (`remanga/`): `workflow.py` (download / make_pdf / make_video - the CLI and menus both
-call these), `cli.py`, `ui/` (full-screen menus: `app.py` screens, `views.py` Rich renderables, `widgets.py` list/text state, `tasks.py` task runner, `term.py` session), `activity.py` (progress bars: CLI Rich bar or UI task view),
+call these), `cli.py`, `ui/` (full-screen menus on Textual: `app.py` styles/quit, `screens.py` projects/chapters/settings, `dialogs.py` choice/ask/result/log, `tasks.py` task screen, `widgets.py` SafeTable/SafeOptionList/TopBar), `activity.py` (progress bars: CLI Rich bar or UI task view),
 `narration.py` (reply check, fix request, memory), `chapters.py` (ranges, sort, page naming),
 `pdf/` (builder, writer, text page), `downloader/`, `audio/` (tts, mix, master, synth/kokoro),
 `video/` (compose, frame_timeline, render, encoding), `config/`, `paths/`, `tool_envs/` +
-`workers/` + `models/` (Kokoro's isolated venv + weights), `tui/` (raw key reading only).
+`workers/` + `models/` (Kokoro's isolated venv + weights).
 
 ## Narration reply (prompts/narration.md is the contract)
 
@@ -93,18 +93,21 @@ One JSON block, two sections (user request - NOT two blocks):
   any command run in the session (last one 18:37), and no remanga code can delete it. Test anything
   that writes under `projects/` from a scratch cwd (`cd scratch; PYTHONPATH=repo python -m
   remanga.cli ...` with a copied config.json) - `get_projects_dir()` even mkdirs `projects/` in cwd.
-- **The UI is full-screen (user request: the old line menus looked ugly and left messy logs
-  behind).** One Rich `Live(screen=True)` per session: header / body / key hints footer, dialogs
-  centred, chapters as a table. Work runs through `ui.tasks.run_task`: work in the main thread,
-  `console.file` redirected to `projects/P/logs/chapter_N.log` (or `project.log`), progress via
-  `remanga.activity` (never create a Rich Progress directly - it would draw into the log), a
-  painter thread redraws and turns Ctrl+C into `interrupt_main`. Results say what was made and
-  what to do next; `l` opens the log.
-- **Nothing is highlighted until an arrow key is pressed** (user request, to stop early keypresses
-  picking something - earlier this was a blank cursor row). Applies to one-option dialogs too:
-  a test that presses Enter without an arrow first "hangs" - that is the rule working, not a bug.
-- Test the UI in a pty with TERM=xterm-256color and a terminal emulator (`bin/uv run --no-project
-  --with pyte python drive.py`) from a scratch cwd; check `\x1b[?1049l` is sent on quit.
+- **The UI is Textual, full-screen (user requests: the old line menus looked ugly and left messy
+  logs behind; then mouse input).** TopBar / body / Footer on every screen. Flows are `@work` async
+  methods that `await app.push_screen_wait(Choice|Ask|Confirm|TaskScreen|Result)`. Work runs in
+  `TaskScreen`'s thread worker: `console.file` redirected to `projects/P/logs/chapter_N.log` (or
+  `project.log`), progress via `remanga.activity` (never create a Rich Progress directly), Ctrl+C =
+  async KeyboardInterrupt into the thread + SIGTERM to child processes (`pgrep -P`).
+- **Nothing is highlighted until an arrow key or click; single click only highlights, double click
+  (or Enter) chooses** (user request). `SafeTable`/`SafeOptionList` enforce it. Textual gotchas hit:
+  a subclass `_on_click` must call `event.prevent_default()` or the base class handler still runs
+  (and chooses); `OptionList.__init__` highlights option 0 itself; a focused widget's hidden Enter
+  binding hides the screen's footer hint (so the widgets carry shown Enter bindings, and `Result`
+  has `AUTO_FOCUS = ""`); `log` is a Widget property - don't name an attribute `log`.
+- Test the UI with Textual's `app.run_test()` Pilot (keys, `click(times=2)`) and once in a real pty
+  (TERM=xterm-256color, pyte via `bin/uv run --no-project --with pyte`, SGR mouse `\x1b[<0;x;yM`)
+  from a scratch cwd; a test that presses Enter without an arrow first "hangs" - that is the rule.
 - Decimal chapters are chapters of their own: `1-5` takes 4.5, not 5.1 (`chapters.expand_chapter_selection`).
 - MangaDex chapter list is cached 24h in manifest.json.
 
@@ -112,8 +115,8 @@ One JSON block, two sections (user request - NOT two blocks):
 
 `download -c 1 --url ...` (40 pages, checksums) -> `pdf` (29.6MB, all lossless, text page ok) ->
 bad reply refused with fix request -> good reply -> Kokoro (af_heart) -> mix with BGM -> h264_nvenc
-render; frame checked; rerun reused clips/mix/video; next chapter's PDF carried the previous chapter's memory section; full-screen
-UI walked in a pty (projects, chapters, actions, download, PDF result, log, settings, quit); `setup` recognizes the installed Kokoro env.
+render; frame checked; rerun reused clips/mix/video; next chapter's PDF carried the previous chapter's memory section; Textual
+UI walked in Pilot + a real pty with mouse (projects, chapters, actions, download, Ctrl+C stop, PDF result, copy, log, settings, quit); `setup` recognizes the installed Kokoro env.
 
 ## Maintenance rule (do this, don't just read this)
 

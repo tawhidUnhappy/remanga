@@ -1,11 +1,11 @@
-"""The full-screen menus (`./pipeline.sh`): one screen at a time, keys in the
-footer, work shown as a task view with its details in a log file.
+"""The full-screen menus (`./pipeline.sh`), built on Textual.
 
-    term.py    the terminal session: alternate screen, keys, drawing
-    views.py   what a screen looks like: frame, tables, dialogs, task view
-    widgets.py small interactive pieces: a list cursor, a text box
-    tasks.py   running work behind a task view, output to the chapter's log
-    app.py     the screens themselves"""
+    app.py      the app: styles, quitting, entry point
+    screens.py  projects, chapters (download / PDF / video), settings
+    dialogs.py  choices, text questions, results, the log viewer
+    tasks.py    running work in a task screen, output to the chapter's log
+    widgets.py  the top bar, and a table and option list that start with
+                nothing highlighted and choose on double click only"""
 
 from remanga.ui.app import run
 
