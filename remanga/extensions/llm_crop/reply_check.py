@@ -7,7 +7,14 @@ right (an order that differs from the layout's XY-cut is often Gemini reading
 the story), and never blocks the import.
 
 Boxes are checked as Gemini wrote them: on the square grid image, where a
-unit is the same size across and down, so shapes compare directly."""
+unit is the same size across and down, so shapes compare directly.
+
+A page can carry `text` - every bubble, caption and sound effect on it, each
+with the crop it belongs to. Reading and attributing text is what a model
+does well; turning that into `text_outside` (which pieces reach past their
+owner's frames, or sit where another crop's frame overlaps) is geometry, and
+the importer does it (text_inventory.py) rather than trusting the model to
+remember a caption that straddles two panels."""
 
 from __future__ import annotations
 
@@ -22,6 +29,7 @@ KINDS = ("panel", "group", "splash")
 SKIP_REASONS = ("credits", "ad", "blank", "duplicate")
 BOX_KEYS = ("frames", "text_outside", "art_outside")
 CROP_KEYS = ("order", "kind", *BOX_KEYS)
+TEXT_KEYS = ("crop", "box")
 
 
 @dataclass
@@ -123,7 +131,36 @@ def _check_page(entry: dict[str, Any], extent: PageExtent, check: ReplyCheck) ->
             check.errors.append(f"{stem}: crop {position} is not an object")
             continue
         _check_crop(f"{stem} crop {crop.get('order', position)}", crop, extent, check)
+    _check_text(stem, entry.get("text"), len(crops), extent, check)
     return len(check.errors) == before
+
+
+def _check_text(stem: str, text: Any, crop_count: int, extent: PageExtent, check: ReplyCheck) -> None:
+    """The page's text inventory, when it has one: each piece names a crop
+    on this page and has a box inside the page."""
+    if text is None:
+        return
+    if not isinstance(text, list):
+        check.errors.append(f'{stem}: "text" must be a list of {{"crop": ..., "box": [...]}} objects')
+        return
+    for n, item in enumerate(text):
+        label = f"{stem} text[{n}]"
+        if not isinstance(item, dict):
+            check.errors.append(f'{label} is not an object with "crop" and "box"')
+            continue
+        owner = item.get("crop")
+        if not isinstance(owner, int) or isinstance(owner, bool) or not 1 <= owner <= crop_count:
+            check.errors.append(f"{label}: crop must be one of this page's crop numbers, 1 to {crop_count} "
+                                f"(got {owner!r})")
+        problem = _box_problem(item.get("box"))
+        if problem:
+            check.errors.append(f"{label}: box {problem}")
+        elif item["box"][0] >= extent.ymax or item["box"][1] >= extent.xmax:
+            check.errors.append(f"{label}: box {item['box']} lies in the black padding, outside the page "
+                                f"(the page area is {extent.box})")
+        unknown = sorted(set(item) - set(TEXT_KEYS))
+        if unknown:
+            check.warnings.append(f"{label}: ignored unknown key(s) {', '.join(unknown)}")
 
 
 def _layout_warnings(stem: str, crops: list[dict[str, Any]], direction: str, snap_step: int) -> list[str]:

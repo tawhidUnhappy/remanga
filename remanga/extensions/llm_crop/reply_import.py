@@ -23,6 +23,7 @@ from remanga.extensions.llm_crop.config import LLMCropConfig
 from remanga.extensions.llm_crop.grid import PageExtent, oriented_size, page_extent
 from remanga.extensions.llm_crop.paths import get_llm_crop_dir, get_llm_crops_path
 from remanga.extensions.llm_crop.reply_check import BOX_KEYS, ReplyCheck, box_bounds, check_reply
+from remanga.extensions.llm_crop.text_inventory import text_outside_from_inventory
 from remanga.json_io import has_real_json_content, read_json_or, write_json
 from remanga.paths import get_chapter_dir, load_project_metadata
 
@@ -64,7 +65,7 @@ def to_crops_json(doc: dict[str, Any], pages: list[ChapterPage], extents: dict[s
     """A checked reply as crops.json, every box converted to its page."""
     from remanga.webui.marks_file import DECIDED_KEY, FORMAT_KEY, MARKS_FORMAT
 
-    entries = {entry["page"]: entry for entry in doc["pages"]}
+    entries = {entry["page"]: text_outside_from_inventory(entry)[0] for entry in doc["pages"]}
     out_pages = []
     for page in pages:
         entry, extent = entries[page.stem], extents[page.stem]

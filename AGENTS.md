@@ -242,14 +242,14 @@ against.
   lettering or a caption strip, a box whose edge is visibly off the border: ignore MAGI for this
   frame and measure it off the grid.
 
-**Step C - Measure what MAGI can never give you.** For each crop, on the grid page:
-- `text_outside`: every bubble, caption or SFX it owns that reaches past its frames, as one box
-  around the **whole** element including the tail.
-- `art_outside`: art it owns that breaks out of its frames.
-- **Slanted borders:** where two crops' frame rectangles overlap, also list in `text_outside`
-  every bubble or caption the owner has **inside the overlap strip**, even if it sits inside the
-  owner's own frame. That's what gets it painted out of the neighbour's crop. Without it the
-  neighbour shows half of that bubble.
+**Step C - Measure what MAGI can never give you.** On the grid page:
+- The page's `text` list: **every** bubble, caption and SFX on the page - inside frames, across
+  borders, in gutters - as `{"crop": <owner's order>, "box": [...]}`, one box around the **whole**
+  element including the tail. The importer derives each crop's `text_outside` from it (pieces
+  that reach past the owner's frames or overlap another crop's frame, slanted borders included),
+  so don't write `text_outside` yourself. Captions spanning the gutter between two panels are the
+  ones that get missed and cut in half.
+- `art_outside` per crop: art it owns that breaks out of its frames.
 
 **Step D - Check the page against your plan, then write it.** Crop count and order match the
 plan. No MAGI index leaked into `order`. Every bubble is owned by exactly one crop. Every box lies
@@ -261,9 +261,9 @@ opening the next page.
 | Page | What MAGI returned | What to do |
 |---|---|---|
 | `001_002` | Big borderless action area `m4` with a bordered inset `m3` drawn inside it | Correct: two frames, two crops (an inset is its own frame). Copy both. |
-| `001_003` | Middle tier of **slanted** panels: rectangles `m1`, `m2`, `m3` overlap each other | The rectangles are the right frames and must overlap. The hero's bubble "CHANGE OUR FATE" sits inside the next panel's rectangle, so it goes in the hero crop's `text_outside` (step C). |
+| `001_003` | Middle tier of **slanted** panels: rectangles `m1`, `m2`, `m3` overlap each other | The rectangles are the right frames and must overlap. List the hero's bubble "CHANGE OUR FATE" in `text` with the hero's crop (step C); it sits inside the next panel's rectangle, so the importer removes it from that crop. |
 | `001_003` | `m4` a black caption strip, `m5` a box around applause lettering only | Neither is a crop on its own. The caption and its sound are one moment, so group them as one crop, or attach them to the shot they narrate. |
-| `001_001` | `m0` stops short of the caption "The long-awaited new series" at its left edge | Frame from MAGI is fine. Measure the caption yourself into `text_outside`. |
+| `001_001` | `m0` stops short of the blurb "The long-awaited new series" at its left edge | Frame from MAGI is fine. The blurb is publisher lettering, not story text: list it nowhere. |
 | `001_001` | Vertical publisher disclaimer in the margin, partly inside `m1` | Belongs to no crop, same as watermarks and page numbers. |
 | any | Boxes numbered in detection order | `order` comes from step A, never from `m` numbers. |
 
@@ -276,13 +276,16 @@ The file content is plain JSON; code fences are tolerated but not needed:
   "chapter": "3",
   "problems": [],
   "pages": [
-    {"page": "003_001", "story": false, "skip": "credits", "crops": []},
+    {"page": "003_001", "story": false, "skip": "credits", "crops": [], "text": []},
     {"page": "003_002", "story": true, "crops": [
-      {"order": 1, "kind": "splash", "frames": [[0, 0, 1000, 696]], "text_outside": [], "art_outside": []}
-    ]},
+      {"order": 1, "kind": "splash", "frames": [[0, 0, 1000, 696]], "art_outside": []}
+    ], "text": []},
     {"page": "003_003", "story": true, "crops": [
-      {"order": 1, "kind": "panel", "frames": [[48, 42, 470, 654]], "text_outside": [[440, 49, 540, 230]], "art_outside": []},
-      {"order": 2, "kind": "group", "frames": [[492, 362, 690, 654], [492, 42, 690, 352]], "text_outside": [], "art_outside": []}
+      {"order": 1, "kind": "panel", "frames": [[48, 42, 470, 654]], "art_outside": []},
+      {"order": 2, "kind": "group", "frames": [[492, 362, 690, 654], [492, 42, 690, 352]], "art_outside": []}
+    ], "text": [
+      {"crop": 1, "box": [440, 49, 540, 230]},
+      {"crop": 2, "box": [520, 390, 598, 470]}
     ]}
   ]
 }
@@ -313,8 +316,9 @@ The file content is plain JSON; code fences are tolerated but not needed:
 - Read every warning it prints. "The order differs from the layout's reading order" and "nearly the
   same frame" are usually MAGI boxes copied without step B.
 
-**Look at every preview**, not a sample: green = frames, blue = text outside a frame, magenta =
-art outside a frame, red box = the actual cut with its order number, red tint = painted out. Where
+**Look at every preview**, not a sample. Left half: green = frames, blue = text outside a frame,
+magenta = art outside a frame, red box = the rectangle each crop covers, with its order number.
+Right half: every crop exactly as `crop` will cut it (snapped, painted out, trimmed) - judge those. Where
 red rectangles overlap (slanted panels), the order number sits at each rectangle's top-left corner.
 Fix any bubble that is cut in half, any frame that is clipped or includes a neighbour, and any
 order that is wrong. Then re-import.
@@ -330,8 +334,8 @@ chapter 3, page 12, 2nd crop on that page). `--force` is needed when the chapter
 it wipes `panels/` and cuts again.
 
 **Look at the cut panels** for every page with slanted borders, groups, insets or `text_outside`,
-since the preview can't show everything the cut does. Half a bubble in a panel means its owner
-is missing that bubble in `text_outside` (step C). A blank hole means a group's rectangle took in
+since the preview can't show everything the cut does. Half a bubble in a panel means that bubble
+is missing from the page's `text` list, or listed with the wrong crop (step C). A blank hole means a group's rectangle took in
 a frame that isn't a member. A thin strip of the neighbouring panel along a slanted edge is expected
 and fine. Fix in `llm_crops.json`, then re-run `llm-crop` and `crop`.
 

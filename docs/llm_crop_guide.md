@@ -74,9 +74,11 @@ Pasting the whole reply, code fence and any stray sentence included, is fine.
 hand-off, and waits for you to paste.
 
 ### 6. Look at the previews
-In each preview: **green** = frames, **blue** = text outside a frame, **magenta** = art outside a
-frame, **red box** = what will be cut (with its order number), **red tint** = what will be painted
-over. To fix a box by hand, open the chapter in `mark`. Boxes you don't touch keep their LLM
+Each preview has two halves. On the left, the page with Gemini's boxes: **green** = frames,
+**blue** = text outside a frame, **magenta** = art outside a frame, **red box** = the rectangle
+each crop covers, with its order number. On the right, **every crop exactly as `crop` will cut
+it** - gutter-snapped, other crops painted out, trimmed. Judge the crops on the right: a bubble cut
+in half, a slice of the next panel, or a blank hole shows there as it will in the video. To fix a box by hand, open the chapter in `mark`. Boxes you don't touch keep their LLM
 details; a box you move becomes a plain hand-drawn box.
 
 ### 7. Carry on as usual
@@ -152,8 +154,13 @@ still read there. `grid_tick_step: 0` turns the ticks off; finer than 5 needs a 
 
 ## What `crops.json` gets
 
-Each Gemini crop becomes one panel entry with `src: "llm"`, its boxes converted from the square to
-the page:
+Gemini's reply gives each page its crops (`frames`, `art_outside`) and a `text` list: every bubble,
+caption and sound effect with the crop it belongs to. The importer turns that list into each crop's
+`text_outside` - the pieces that reach past the crop's frames, or overlap another crop's frame - so
+a caption across a gutter can't be forgotten by the model and cut in half
+(`remanga/extensions/llm_crop/text_inventory.py`). A reply that writes `text_outside` itself still
+imports. Each crop then becomes one panel entry with `src: "llm"`, its boxes converted from the
+square to the page:
 
 ```json
 {"panel_id": 1, "box_1000": [58, 639, 363, 936], "src": "llm", "kind": "panel",
