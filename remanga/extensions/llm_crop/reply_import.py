@@ -154,7 +154,8 @@ def import_llm_crops(llm: LLMCropConfig, cropper: CropperConfig, project_name: s
     fix_path = get_llm_crop_dir(project_name, chapter_num) / FIX_REQUEST_NAME
     try:
         doc = reply_document(reply.read_text(encoding="utf-8"))
-        check = check_reply(doc, pages, extents, chapter_num, direction)
+        check = check_reply(doc, pages, extents, chapter_num, direction,
+                            snap_step=llm.grid_tick_step or llm.grid_line_step)
     except json.JSONDecodeError as error:
         check = ReplyCheck(errors=[f"the reply is not valid JSON ({error.msg} at line {error.lineno}, "
                                    f"column {error.colno})"])

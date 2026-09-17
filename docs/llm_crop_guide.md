@@ -106,8 +106,8 @@ which is the cropper's own `cropper.paint_out`.
 | `cropper.paint_out` | on | paint other crops' frames and bubbles out of each crop |
 | `preview` | on | write preview images on import |
 | `grid_image_size` | 2048 | side of the square grid image, in pixels |
-| `grid_line_step` / `grid_label_step` | 50 / 100 | half lines / labeled lines, in 0-1000 units |
-| `grid_tick_step` | 10 | ruler ticks, in 0-1000 units (0 draws none) |
+| `grid_line_step` / `grid_label_step` | 25 / 100 | light lines / labeled lines, in 0-1000 units |
+| `grid_tick_step` | 5 | ruler ticks, in 0-1000 units (0 draws none) |
 
 `grouping` and the grid settings are written into the upload, so run `crop-grid` again after
 changing them.
@@ -120,9 +120,9 @@ changing them.
 - The page is scaled evenly to fit and placed in the **top-left corner**; the rest is **black**.
   A tall page leaves a black strip on the right, a wide spread leaves one at the bottom.
 - A green ruler over the **whole square** in the 0-1000 units Gemini's bounding boxes use, in three
-  weights: **labeled lines every 100** (heaviest, numbered on all four edges), **half lines every
-  50** (lighter, numbered in smaller tags along the top and left), and **ticks every 10** along the
-  four edges and across every labeled line.
+  weights: **labeled lines every 100** (heaviest, numbered on all four edges), **light lines every
+  25** (numbered in smaller tags along the top and left), and **ticks every 5** along the four
+  edges and across every labeled line.
 - The **page ID** (e.g. `002_019`) is stamped in the black strip, so it covers no art.
 - `chapter_info.json` → `page_areas` gives each page's area on the square, e.g. `[0, 0, 1000, 696]`
   for a tall page. Gemini's boxes must stay inside it.
@@ -131,14 +131,17 @@ Why square: one unit is the same distance across and down, so Gemini doesn't hav
 the page's shape. Why top-left: converting a box back to the page is one division per axis, with
 no offset.
 
-Why a ruler rather than a mesh: a cell 50 units wide is too coarse to place a border in - Gemini
-rounds to the nearest line and the crop lands a few units out - but drawing lines every 10 is
-worse, because at that spacing they cross nearly every bubble and turn screentone into noise
-(every 25 already did). Ticks give the fine scale where it is read, at the edges and along the
-labeled lines, and touch no artwork anywhere else. The three weights matter too: drawn alike, a
-labeled line and a half line are the same line once the model scales the image down, and then even
-the coarse reading is a guess. `grid_tick_step: 0` turns the ticks off; finer than 10 needs a
-bigger `grid_image_size` to stay legible.
+Why lines every 25 and ticks every 5: with lines every 50 a border could sit 25 units from the
+nearest numbered line, Gemini rounded toward the line, and crops landed a few units out. Every 25
+halves the worst case to 12.5 units, and the ticks split each cell into 5-unit steps, so an edge is
+counted rather than estimated. The cost is more green over the art: lines every 25 do cross more
+bubbles and screentone, which is accepted for the precision. A full 5-unit mesh would not be, so
+the fine scale stays ticks, at the edges and along the labeled lines. The three weights matter too:
+drawn alike, a labeled line and a light line are the same line once the model scales the image
+down. On the 2048 px square the ticks are 10 px apart, which separates when a model reads a page
+closely (around 2000 px) and blurs when it shrinks the page to around 1000 px; the 25-unit lines
+still read there. `grid_tick_step: 0` turns the ticks off; finer than 5 needs a bigger
+`grid_image_size` to stay legible.
 
 ---
 

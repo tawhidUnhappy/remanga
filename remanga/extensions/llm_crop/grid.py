@@ -19,18 +19,20 @@ pages from this repo and shrinking them to roughly the size a model sees:
 
 - **Labeled lines every 100 units**, the heaviest, with their value on all
   four edges.
-- **Half lines every 50**, clearly lighter than a labeled line and labeled in
-  a smaller tag along the top and left, so "which line is this" never has to
-  be counted from the nearest hundred.
-- **Ticks every 10 units** - along all four edges, and across each labeled
-  line - rather than a full 10-unit mesh. Lines that fine turn screentone
-  into noise and cross nearly every bubble (25 already did), but an edge
-  falling between two lines still has to be estimated, and ticks give that
-  estimate something to count against without covering any art.
+- **Light lines every 25**, clearly lighter than a labeled line and labeled
+  in a smaller tag along the top and left, so "which line is this" never has
+  to be counted from the nearest hundred. At 50 a border could sit 25 units
+  from the nearest line and crops landed a few units out; 25 halves that, at
+  the cost of more lines over the art - accepted for the precision.
+- **Ticks every 5 units** - along all four edges, and across each labeled
+  line - rather than a full 5-unit mesh, which would bury screentone and
+  bubbles. Four ticks split each 25-unit cell into 5-unit steps, so an edge
+  between two lines is a count, not an estimate. They are 10 px apart on a
+  2048 px square: separate at the ~2000 px a model reads a page closely,
+  blurred at ~1000 px, where the 25-unit lines still carry the reading.
 
-A cell between two drawn lines is 50 units, so before the ticks an edge
-inside one could only be guessed to within about a tenth of it. The ticks
-make the same reading a count."""
+The spacing is configurable (`extensions.llm_crop.grid_*`) and written into
+each upload's chapter_info.json."""
 
 from __future__ import annotations
 
@@ -43,7 +45,7 @@ GRID_GREEN = (0, 230, 0)
 LABEL_INK = (0, 105, 0)
 PADDING_COLOR = (0, 0, 0)
 # Line opacity, and the gap between the three weights matters as much as the
-# values: at the size a model sees, a labeled line and a half line drawn alike
+# values: at the size a model sees, a labeled line and a light line drawn alike
 # are the same line to it, and then even the coarse reading is a guess.
 LABELED_ALPHA = 210
 FAINT_ALPHA = 105
@@ -169,7 +171,7 @@ def _draw_ticks(draw: ImageDraw.ImageDraw, size: int, tick_step: int, line_step:
 
 
 def _draw_labels(draw: ImageDraw.ImageDraw, size: int, line_step: int, label_step: int) -> None:
-    """Every labeled line's value on all four edges, and every half line's
+    """Every labeled line's value on all four edges, and every light line's
     value in a smaller tag along the top and left - so which line a reading
     sits against is read off, never counted from the nearest hundred."""
     font = ImageFont.load_default(size=max(12, round(size / 73)))
@@ -196,7 +198,7 @@ def _draw_labels(draw: ImageDraw.ImageDraw, size: int, line_step: int, label_ste
 
 
 def render_grid_page(page: Image.Image, page_id: str, size: int = 2048,
-                     line_step: int = 50, label_step: int = 100, tick_step: int = 10) -> Image.Image:
+                     line_step: int = 25, label_step: int = 100, tick_step: int = 5) -> Image.Image:
     """`page` on its black square, with the grid, its ticks and its page ID
     stamp."""
     page = ImageOps.exif_transpose(page).convert("RGB")

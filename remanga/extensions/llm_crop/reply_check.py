@@ -126,8 +126,10 @@ def _check_page(entry: dict[str, Any], extent: PageExtent, check: ReplyCheck) ->
     return len(check.errors) == before
 
 
-def _layout_warnings(stem: str, crops: list[dict[str, Any]], direction: str) -> list[str]:
-    """Things about a sound page worth a look."""
+def _layout_warnings(stem: str, crops: list[dict[str, Any]], direction: str, snap_step: int) -> list[str]:
+    """Things about a sound page worth a look. `snap_step` is the ruler's
+    finest mark - values that nearly all land on it were snapped, not
+    measured."""
     from remanga.webui.mark_ops import reading_order
 
     warnings = []
@@ -152,8 +154,9 @@ def _layout_warnings(stem: str, crops: list[dict[str, Any]], direction: str) -> 
             warnings.append(f"{stem}: group {crop['order']} is {height / width:.1f}x taller than it is wide")
 
     values = [v for crop in crops for key in BOX_KEYS for box in crop.get(key, []) for v in box if v not in (0, 1000)]
-    if len(values) >= 8 and sum(v % 50 == 0 for v in values) >= 0.7 * len(values):
-        warnings.append(f"{stem}: most coordinates sit exactly on grid lines - rounded rather than measured?")
+    if snap_step and len(values) >= 8 and sum(v % snap_step == 0 for v in values) >= 0.7 * len(values):
+        warnings.append(f"{stem}: most coordinates sit exactly on the ruler's {snap_step}-unit marks - "
+                        f"rounded rather than measured?")
 
     rects = [box_bounds([b for key in BOX_KEYS for b in crop.get(key, [])]) for crop in crops]
     marks = [{"id": str(crop["order"]), "x": r[1], "y": r[0], "w": r[3] - r[1], "h": r[2] - r[0]}
@@ -166,7 +169,7 @@ def _layout_warnings(stem: str, crops: list[dict[str, Any]], direction: str) -> 
 
 
 def check_reply(doc: Any, pages: list[ChapterPage], extents: dict[str, PageExtent],
-                chapter_num: str, direction: str) -> ReplyCheck:
+                chapter_num: str, direction: str, snap_step: int = 5) -> ReplyCheck:
     check = ReplyCheck()
     if not isinstance(doc, dict) or not isinstance(doc.get("pages"), list):
         check.errors.append('the reply is not a JSON object with a "pages" list')
@@ -192,7 +195,7 @@ def check_reply(doc: Any, pages: list[ChapterPage], extents: dict[str, PageExten
             continue
         seen.append(stem)
         if _check_page(entry, extents[stem], check) and entry["story"]:
-            check.warnings.extend(_layout_warnings(stem, entry["crops"], direction))
+            check.warnings.extend(_layout_warnings(stem, entry["crops"], direction, snap_step))
 
     missing = [page.stem for page in pages if page.stem not in seen]
     if missing:

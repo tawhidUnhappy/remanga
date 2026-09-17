@@ -61,18 +61,20 @@ class LLMCropConfig(BaseModel):
 
     # Side of every square grid image, in pixels. A page is scaled evenly to
     # fit it, anchored top-left, and the rest of the square is black. Big
-    # enough that the 10-unit ticks below still separate after the model
-    # scales the image down for itself.
+    # enough that the 5-unit ticks below (10 px apart) still separate at the
+    # ~2000 px a model looks at a page closely; shrunk to ~1000 px they blur,
+    # and the 25-unit lines still carry the reading.
     grid_image_size: int = Field(2048, ge=512, le=4096)
-    # Half lines every grid_line_step units and labeled lines every
-    # grid_label_step, on the 0-1000 scale Gemini's boxes use.
-    grid_line_step: int = Field(50, ge=10, le=500)
+    # Light lines every grid_line_step units and heavy labeled lines every
+    # grid_label_step, on the 0-1000 scale Gemini's boxes use. 25 puts every
+    # border within 12.5 units of a numbered line.
+    grid_line_step: int = Field(25, ge=10, le=500)
     grid_label_step: int = Field(100, ge=10, le=500)
     # Ticks every grid_tick_step units, along the four edges and across every
     # labeled line - what turns an edge that falls between two lines into a
     # count rather than a guess. 0 draws none. See grid.py for why these are
     # ticks and not a mesh of lines that fine.
-    grid_tick_step: int = Field(10, ge=0, le=100)
+    grid_tick_step: int = Field(5, ge=0, le=100)
     # How readily Gemini shows several frames as one crop (prompts/llm_crop.md
     # <craft> 4). Written into chapter_info.json, so a change reaches Gemini
     # with the next crop-grid.

@@ -160,9 +160,9 @@
       "grid_pdf_zip_splite": false,
       "max_mb": 50.0,
       "grid_image_size": 2048,
-      "grid_line_step": 50,
+      "grid_line_step": 25,
       "grid_label_step": 100,
-      "grid_tick_step": 10,
+      "grid_tick_step": 5,
       "grouping": "balanced",
       "preview": true
     }

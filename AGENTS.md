@@ -152,8 +152,8 @@ area.** Measure in square units, exactly what the ruler shows.
 ### 3.2 Look, then write
 
 Open the grid images with your image-reading tool **one page at a time, in `full_manifest` order**.
-The labels are legible at the size your tool displays (heavy lines every 100, light lines every 50,
-ticks every 10). For each page, follow `<process>` in the prompt: story page or not, find every
+The labels are legible at the size your tool displays (heavy labeled lines every 100, light labeled
+lines every 25, ticks every 5 - no edge is more than 12.5 units from a numbered line). For each page, follow `<process>` in the prompt: story page or not, find every
 frame, assign every bubble, caption and SFX to exactly one crop, decide groups (`grouping`, default
 `balanced`), number crops in reading order, and measure `frames`, `text_outside`, `art_outside`.
 
