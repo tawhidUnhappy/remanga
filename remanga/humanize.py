@@ -1,8 +1,6 @@
 """Turning numbers into something a human reads at a glance.
 
-Small on purpose, and shared: a duration formatted one way in the full-recap
-summary and another way in a render log is the kind of inconsistency nobody
-files a bug about and everybody notices."""
+Small on purpose, and shared, so a duration reads the same everywhere."""
 
 from __future__ import annotations
 

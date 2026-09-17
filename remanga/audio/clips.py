@@ -1,4 +1,4 @@
-"""What happens to one synthesized panel clip between the engine and disk.
+"""What happens to one synthesized page clip between the engine and disk.
 
 Gain, edge fades and the atomic write - the three things every clip goes
 through once the synthesizer hands it back, none of which have anything to
@@ -80,7 +80,7 @@ def apply_edge_fades(segment: AudioSegment, edge_fade_ms: int) -> AudioSegment:
     That distinction is the whole point. A TTS engine returns audio that
     starts within a few milliseconds of the first phoneme, so applying the
     configured 35ms flat - as this used to - ramped the opening consonant
-    itself: across a finished chapter the first 35ms of 52 of 60 panels
+    itself: across a finished chapter the first 35ms of 52 of 60 clips
     came back ~36x quieter than the speech immediately following it, which
     is what swallowed the start of nearly every line."""
     if edge_fade_ms <= 0 or len(segment) < 4 * DECLICK_FADE_MS:

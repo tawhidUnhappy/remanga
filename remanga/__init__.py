@@ -1,8 +1,8 @@
 """
-remanga: Lightweight, modular, LLM-guided manga recap video production pipeline powered by Kokoro-82M.
+remanga: manga pages to recap video - download, PDF for an LLM to narrate, Kokoro-82M narration, video.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 # Before anything can shell out to ffmpeg. Importing remanga at all is enough
 # to make the vendored binaries findable, so BGM in mp3/m4a/ogg/opus/flac

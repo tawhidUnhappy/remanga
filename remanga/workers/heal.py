@@ -4,12 +4,11 @@ Every heavy engine runs in its own `.tools/venv-<name>` (see
 remanga/tool_envs/) and announces itself with a ready event on stdout. When
 it reports a missing dependency instead - either transformers' own
 trust_remote_code check, or a plain unlisted import its remote code happens
-to need (matplotlib and einops have both come up) - that package is
+to need  - that package is
 installed into the tool's environment and the worker started again, rather
 than a session failing over something one pip install fixes.
 
-One implementation for every engine: TTS (audio/synth/), OCR (ocr/engine.py)
-and MAGI (webui/magi_assist.py)."""
+Used by the Kokoro synthesizer (audio/synth/)."""
 
 from __future__ import annotations
 

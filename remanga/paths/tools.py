@@ -1,13 +1,5 @@
-"""Where the standalone worker scripts live, for the isolated per-tool
-virtualenvs bootstrap.sh provisions (`.tools/venv-kokoro`,
-`.tools/venv-chatterbox`, `.tools/venv-magi`, `.tools/venv-deepseek-ocr`,
-...) - one dependency-isolated environment per heavy ML engine so their
-conflicting library pins never have to share one Python process.
-
-Which interpreter a tool runs is remanga/tool_envs/ (`ensure_tool`, also
-re-exported as `remanga.venvs.get_tool_python`), which installs the
-environment if this is its first use - there is no second, locate-only copy
-of that lookup here. remanga/workers/ drives the subprocesses."""
+"""Where the standalone worker scripts live, run by the isolated tool
+virtualenv (`.tools/venv-kokoro`) - see remanga/tool_envs/ and remanga/workers/."""
 
 from __future__ import annotations
 

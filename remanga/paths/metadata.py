@@ -35,17 +35,9 @@ def load_project_metadata(project_name: str) -> dict[str, Any]:
 
 
 def chapter_identity_fields(project_name: str, chapter_num: str) -> dict[str, Any]:
-    """The project/manga/chapter identity fields every chapter_info.json starts
-    from - shared by the primary vision archive (cropper/crop_report.py's
-    write_chapter_info) and the size-capped LLM zip bundle (cropper/llm_zip.py),
-    which adds its own part_index/total_parts per part on top of this same
-    dict. See prompts/narration.md's "Chapter Identity" section for how the
-    LLM is expected to read whichever of those it's handed. `reading_direction`
-    ("right_to_left"/"left_to_right") comes from project.json's
-    `reading_direction` field (see remanga/wizard/projects.py, which derives it from MangaDex's
-    originalLanguage when a chapter has been downloaded), defaulting
-    to "right_to_left" since that's the norm for native Japanese manga - the
-    vast majority of what this pipeline imports."""
+    """The project/manga/chapter identity on a PDF's text page.
+    `reading_direction` comes from project.json (the wizard derives it from
+    MangaDex's original language), defaulting to right to left."""
     meta = load_project_metadata(project_name)
     return {
         "project_name": project_name,
@@ -62,16 +54,6 @@ def save_project_metadata(project_name: str, data: dict[str, Any]) -> None:
     existing.update(data)
     write_json(meta_path, existing)
     ensure_memory_file(project_name)
-
-
-def get_pipeline_path(project_name: str) -> Path:
-    """{manga}/pipeline.json - LEGACY. The ordered step list lives in
-    project.json now ("pipeline", see remanga.settings.project_prefs), with
-    everything else a project remembers. This path is still resolved for two
-    reasons: remanga.pipeline.load_pipeline reads it when a project written by
-    an older version has one, and project_prefs deletes it once the steps have
-    been saved to project.json."""
-    return get_project_dir(project_name) / "pipeline.json"
 
 
 def get_manifest_path(project_name: str) -> Path:
@@ -120,11 +102,7 @@ def write_remote_chapter_cache(
 def update_manifest_chapter(project_name: str, chapter_num: str, section: str, data: Any) -> None:
     """Read-modify-write manifest.json['chapters'][chapter_num][section] = data.
     Chapters/sections are independent - downloader writes "pages" (called
-    once per chapter, well before cropping touches this file), cropper
-    writes "panels" (called once per chapter, after downloader already has)
-    - so there's no cross-stage write race within a single chapter's
-    production run, and each stage only ever rewrites its own section,
-    never another chapter's or another stage's."""
+    once per chapter) - each stage only ever rewrites its own section."""
     manifest = read_manifest(project_name)
     manifest.setdefault("chapters", {}).setdefault(str(chapter_num), {})[section] = data
     write_json(get_manifest_path(project_name), manifest)

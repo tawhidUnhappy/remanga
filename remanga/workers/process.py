@@ -1,14 +1,13 @@
 """One long-lived worker subprocess, and the conversation with it.
 
-A heavy engine - Kokoro or Chatterbox synthesizing a panel, DeepSeek-OCR-2
-reading one - loads its model once and then answers requests over
-stdin/stdout, so that cost is paid per session instead of per panel. This is
+A heavy engine - Kokoro synthesizing a page - loads its model once and then answers requests over
+stdin/stdout, so that cost is paid per session instead of per page. This is
 the side of that conversation remanga owns: spawning the process (heal.py
 handles a dependency its install missed), draining its stderr so a full pipe
 can't deadlock it, bounded reads so a wedged worker fails clearly instead of
 hanging, and a clean shutdown.
 
-Mixed into each engine's own class (audio/synth/base.py, ocr/engine.py),
+Mixed into the engine's class (audio/synth/base.py),
 which adds only what differs between them: the command line, the request
 payload, and what to do with the answer."""
 

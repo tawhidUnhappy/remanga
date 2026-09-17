@@ -1,34 +1,20 @@
-"""RemangaConfig: the top-level aggregate of every subsystem's config below,
-plus config.json load/save, plus the per-manga layer over it.
+"""RemangaConfig: every subsystem's settings, config.json load/save, and the
+per-manga layer over it.
 
-config.json is this machine: where ffmpeg lives, whether to prefer the GPU,
-which port the web UIs open on. But a manga is not this machine - a dark
-fantasy series wants a different narrator, different music and maybe a
-different resolution than a school comedy, and answering that once per
-machine means re-answering it every time you switch projects.
-
-So the settings that describe *the work* rather than *the computer* -
-tts.*, audio.*, video.*, cropper.*, extensions.* - can be overridden per
-project, and those overrides live in that project's own project.json
-alongside everything else it remembers (its pipeline, its upload formats, its
-wipe keep-list). `for_project()` layers them over config.json; `save()` on the
-result writes each change back to whichever file owns it. Nothing else in the
-codebase has to know: a settings screen still just sets a field and saves,
-and where that lands depends only on which config object it was handed.
-
-Extensions (remanga.extensions) bring their own settings: every extension
-with a `config_model` gets `config.extensions.<its name>`, built into the
-schema here when remanga starts."""
+config.json is this machine. The settings that describe the work rather than
+the computer - tts.*, audio.*, video.*, pdf.* - can be overridden per project,
+in that project's project.json under "settings". `for_project()` layers them
+over config.json; `save()` on the result writes each change back to whichever
+file owns it."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field, PrivateAttr, create_model
+from pydantic import BaseModel, Field, PrivateAttr
 
 from remanga.config.base import ConfigModel
-from remanga.extensions import load_extensions
 from remanga.json_io import read_json, write_json
 from remanga.paths import (
     CONFIG_EXAMPLE_PATH,
@@ -38,36 +24,23 @@ from remanga.paths import (
 )
 
 from .audio import AudioConfig
-from .cropper import CropperConfig
 from .downloader import DownloaderConfig
-from .marker import MarkerConfig
-from .ocr import OCRConfig
-from .reviewer import ReviewerConfig
+from .pdf import PdfConfig
 from .system import SystemConfig
-from .tts import RETIRED_ENGINE_BLOCKS, RETIRED_TOP_LEVEL_FIELDS, TTSConfig
+from .tts import TTSConfig
 from .video import VideoConfig
-from .writer import WriterConfig
 
 # Where a project's own overrides live inside its project.json.
 PROJECT_SETTINGS_KEY = "settings"
 
 # What a manga is allowed to have its own answer for: the voice that reads it,
-# the music under it, the size and look of its video, how its pages are cut,
-# and how its extensions work.
-PROJECT_SCOPED_PREFIXES = ("tts.", "audio.", "video.", "cropper.", "extensions.")
-
-# ...except the packaging switches, which already have a per-project answer of
-# their own (project.json's "package_formats", written by `package --formats`
-# and read by settings.project_prefs.active_package_formats). Two mechanisms
-# for one setting is how they end up disagreeing.
-_MACHINE_EXCEPTIONS = ("cropper.package.",)
+# the music under it, the size and look of its video, its PDF cap.
+PROJECT_SCOPED_PREFIXES = ("tts.", "audio.", "video.", "pdf.")
 
 
 def is_project_scoped(dotted: str) -> bool:
     """Whether this dotted field is something a project may override, rather
     than a fact about this computer."""
-    if dotted.startswith(_MACHINE_EXCEPTIONS):
-        return False
     return dotted.startswith(PROJECT_SCOPED_PREFIXES)
 
 
@@ -85,24 +58,19 @@ def _flatten(model: BaseModel, prefix: str = "") -> dict[str, Any]:
     return flat
 
 
-# Per-project overrides are stored as flat dotted keys, so a project.json
-# written for a retired engine still names settings that no longer exist -
-# a reference-clip path, a sampling temperature, or a whole `tts.indextts.*`
-# / `tts.audio8.*` key. Those are dropped here rather than left to _apply,
-# which would silently ignore them one at a time: a project that pinned its
-# own narrator to a WAV must NOT have that path quietly land in a Kokoro
-# voice field, because a path is not a voice name and the failure would
-# surface as a whole chapter narrated in the wrong voice.
 def _migrate_override_key(dotted: str) -> tuple[str, ...]:
-    """The dotted path(s) an override key applies to today. A key belonging
-    to a retired engine returns empty (drop it); anything else is returned
-    unchanged, as a single path."""
-    if not dotted.startswith("tts."):
-        return (dotted,)
-    tail = dotted[len("tts."):]
-    if tail.split(".")[0] in RETIRED_ENGINE_BLOCKS:
-        return ()
-    if tail in RETIRED_TOP_LEVEL_FIELDS:
+    """The dotted path an override written by an older version applies to
+    today: Kokoro's settings moved from `tts.kokoro.*` to `tts.*`; other
+    engines' settings no longer exist."""
+    renamed = {"audio.pause_between_panels_ms": "audio.pause_between_pages_ms",
+               "video.panel_padding_percent": "video.page_padding_percent",
+               "video.panel_border_width": "video.page_border_width",
+               "video.panel_border_color": "video.page_border_color"}
+    if dotted in renamed:
+        return (renamed[dotted],)
+    if dotted.startswith("tts.kokoro."):
+        return ("tts." + dotted[len("tts.kokoro."):],)
+    if dotted.startswith("tts.") and dotted.count(".") > 1:
         return ()
     return (dotted,)
 
@@ -120,33 +88,13 @@ def _apply(model: BaseModel, dotted: str, value: Any) -> None:
         setattr(target, attr, value)
 
 
-def _extensions_config_model() -> type[ConfigModel]:
-    """`config.extensions`: one section per extension that has settings,
-    named after it. An extension that is removed simply stops having one - its
-    old section in config.json is ignored on load, like any retired key."""
-    fields: dict[str, Any] = {}
-    for extension in load_extensions():
-        if extension.config_model is not None:
-            model = extension.config_model()
-            fields[extension.name] = (model, Field(default_factory=model))
-    return create_model("ExtensionsConfig", __base__=ConfigModel, **fields)
-
-
-ExtensionsConfig = _extensions_config_model()
-
-
 class RemangaConfig(ConfigModel):
     system: SystemConfig = Field(default_factory=SystemConfig)
     downloader: DownloaderConfig = Field(default_factory=DownloaderConfig)
-    cropper: CropperConfig = Field(default_factory=CropperConfig)
-    marker: MarkerConfig = Field(default_factory=MarkerConfig)
-    reviewer: ReviewerConfig = Field(default_factory=ReviewerConfig)
-    writer: WriterConfig = Field(default_factory=WriterConfig)
+    pdf: PdfConfig = Field(default_factory=PdfConfig)
     tts: TTSConfig = Field(default_factory=TTSConfig)
-    ocr: OCRConfig = Field(default_factory=OCRConfig)
     audio: AudioConfig = Field(default_factory=AudioConfig)
     video: VideoConfig = Field(default_factory=VideoConfig)
-    extensions: ExtensionsConfig = Field(default_factory=ExtensionsConfig)
 
     # The manga this instance is scoped to, if any. Set by for_project() and
     # read by save() - it's the whole difference between "change this setting"

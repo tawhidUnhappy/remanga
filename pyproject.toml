@@ -1,24 +1,18 @@
 [project]
 name = "remanga"
-version = "0.2.0"
-description = "High-retention, LLM-guided manga recap video production pipeline powered by Kokoro-82M"
+version = "0.3.0"
+description = "Manga pages to recap video: download, PDF for an LLM to narrate, Kokoro-82M narration, video"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    # Deliberately lightweight: heavy/conflicting ML stacks (torch, transformers,
-    # modelscope, timm, shapely, pytorch-metric-learning, ...) live in their own
-    # isolated environments per tool - .venv-kokoro and .venv-magi, provisioned
-    # by bootstrap.sh - and are only ever reached via subprocess. See
-    # remanga/venvs.py, remanga/audio/synth/, remanga/webui/magi_assist.py.
+    # torch and Kokoro live in their own environment (.tools/venv-kokoro),
+    # reached only through a subprocess - see remanga/tool_envs/.
     "numpy>=1.24.0",
-    "scipy>=1.11.0",
     "pillow>=10.4.0",
     "pydantic>=2.8.2",
     "requests>=2.32.3",
     "rich>=13.7.1",
     "pydub>=0.25.1",
-    "tqdm>=4.66.5",
-    "flask>=3.0.0",
 ]
 
 [project.scripts]

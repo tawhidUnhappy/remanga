@@ -12,129 +12,27 @@
     "image_quality": "data",
     "max_retries": 3,
     "retry_delay_seconds": 2,
-    "request_delay_seconds": 0.35,
-    "zip_pages_enabled": false
+    "request_delay_seconds": 0.35
   },
-  "cropper": {
-    "margin_padding_pixels": 8,
-    "auto_contrast_clean": false,
-    "save_format": "PNG",
-    "panels_per_sheet": 4,
-    "panels_per_folder": 10,
-    "package": {
-      "sheets": true,
-      "sheets_zip": false,
-      "sheets_folders": false,
-      "pdf": false,
-      "pdf_splite": false,
-      "pdf_zip": false,
-      "pdf_zip_splite": false,
-      "panels_zip": false,
-      "panels_zip_splites": false,
-      "max_mb": 50.0
-    },
-    "snap_to_gutters": true,
-    "gutter_search_radius_pixels": 60,
-    "gutter_search_radius_fraction": 0.1,
-    "gutter_bg_tolerance": 20.0,
-    "gutter_min_run_pixels": 3,
-    "gutter_min_background_fraction": 0.96,
-    "reconcile_panel_seams": true,
-    "seam_max_gap_fraction": 0.15,
-    "seam_min_axis_overlap_fraction": 0.5,
-    "gutter_background_sample_strip_pixels": 12,
-    "trim_panel_whitespace": true,
-    "trim_min_background_fraction": 0.985,
-    "trim_max_margin_fraction": 0.04,
-    "dedupe_duplicate_panels": true,
-    "duplicate_iou_threshold": 0.6,
-    "paint_out": true
-  },
-  "marker": {
-    "host": "127.0.0.1",
-    "port": 8765,
-    "auto_open_browser": true,
-    "magi_enabled": true,
-    "magi_repo_id": "ragavsachdeva/magiv3",
-    "magi_model_dir": "checkpoints/magiv3",
-    "magi_panel_score_threshold": 0.5,
-    "auto_detect_scope": "chapter",
-    "auto_save": true,
-    "auto_order": false,
-    "click_to_select": true,
-    "shortcuts": {
-      "save": [
-        "mod+s"
-      ],
-      "mark_full_page": [
-        "mod+f"
-      ],
-      "tool_draw": [
-        "d"
-      ],
-      "tool_adjust": [
-        "v"
-      ],
-      "prev_page": [
-        "arrowleft"
-      ],
-      "next_page": [
-        "arrowright"
-      ],
-      "delete_mark": [
-        "delete",
-        "backspace"
-      ],
-      "reset_view": [
-        "0"
-      ]
-    }
-  },
-  "reviewer": {
-    "host": "127.0.0.1",
-    "port": 8766,
-    "auto_open_browser": true
-  },
-  "writer": {
-    "host": "127.0.0.1",
-    "port": 8767,
-    "auto_open_browser": true
+  "pdf": {
+    "max_mb": 50.0
   },
   "tts": {
-    "engine": "kokoro",
-    "lang": "EN",
+    "voice": "af_heart",
     "speed": 1.0,
+    "volume_boost_db": 0.0,
     "synth_timeout_seconds": 180,
-    "kokoro": {
-      "hf_repo_id": "hexgrad/Kokoro-82M",
-      "model_dir": "checkpoints/kokoro_82m",
-      "voice": "af_heart",
-      "volume_boost_db": 0.0,
-      "sample_rate": 24000
-    },
-    "chatterbox": {
-      "hf_repo_id": "ResembleAI/chatterbox-turbo",
-      "model_dir": "checkpoints/chatterbox_turbo",
-      "voice": "",
-      "volume_boost_db": 0.0
-    }
-  },
-  "ocr": {
-    "hf_repo_id": "deepseek-ai/DeepSeek-OCR-2",
-    "model_dir": "checkpoints/deepseek_ocr_2",
-    "prompt": "<image>\nFree OCR.",
-    "base_size": 1024,
-    "image_size": 768,
-    "crop_mode": true
+    "hf_repo_id": "hexgrad/Kokoro-82M",
+    "model_dir": "checkpoints/kokoro_82m",
+    "sample_rate": 24000
   },
   "audio": {
     "sample_rate": 44100,
     "edge_fade_ms": 35,
-    "pause_between_panels_ms": 350,
+    "pause_between_pages_ms": 350,
     "bgm_enabled": false,
     "bgm_path": "",
     "bgm_volume_db": -35.0,
-    "bgm_target_below_narration_db": 20.0,
     "enable_loudnorm": true
   },
   "video": {
@@ -144,27 +42,9 @@
     "background_style": "blur",
     "blur_brightness": 0.42,
     "background_color": "#000000",
-    "panel_padding_percent": 4,
+    "page_padding_percent": 4,
     "auto_adaptive_padding": true,
-    "panel_border_width": 2,
-    "panel_border_color": "#222222"
-  },
-  "extensions": {
-    "llm_crop": {
-      "grid_pages": true,
-      "grid_zip": false,
-      "grid_zip_splites": false,
-      "grid_pdf": false,
-      "grid_pdf_splite": false,
-      "grid_pdf_zip": false,
-      "grid_pdf_zip_splite": false,
-      "max_mb": 50.0,
-      "grid_image_size": 2048,
-      "grid_line_step": 25,
-      "grid_label_step": 100,
-      "grid_tick_step": 5,
-      "grouping": "balanced",
-      "preview": true
-    }
+    "page_border_width": 2,
+    "page_border_color": "#222222"
   }
 }

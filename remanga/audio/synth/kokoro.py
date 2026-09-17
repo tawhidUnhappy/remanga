@@ -8,40 +8,31 @@ from typing import Any
 
 from remanga.audio.synth.base import BaseWorkerSynthesizer
 from remanga.config import AudioConfig, TTSConfig
-from remanga.config.tts import engine_spec
+from remanga.config.tts import DISPLAY_NAME
 from remanga.models import ModelManager
 from remanga.workers import spawn_script_worker
-
-# This engine's identity as config.json and every menu know it - taken from
-# the spec rather than repeated here, so the name shown while a chapter
-# synthesizes is provably the name that selected this class.
-SPEC = engine_spec("kokoro")
 
 
 class KokoroSynthesizer(BaseWorkerSynthesizer):
     """Kokoro-82M - talks to `.tools/venv-kokoro`/kokoro_worker.py."""
 
     tool_name = "kokoro"
-    display_name = SPEC.display_name
-    spec = SPEC
+    display_name = DISPLAY_NAME
 
     def __init__(self, tts_config: TTSConfig, audio_config: AudioConfig):
         self.tts_config = tts_config
-        # This engine's own block - its model and its voice. Read through
-        # `engine_config` rather than off tts_config directly so a second
-        # engine added later is shaped the same way.
-        self.engine_config = tts_config.kokoro
+        self.engine_config = tts_config
         super().__init__(audio_config, ModelManager(
             self.engine_config.model_dir, self.engine_config.hf_repo_id,
             tool_name="kokoro", download_script="download_kokoro.py",
-            expected_files=("kokoro-v1_0.pth",), display_name=SPEC.display_name,
+            expected_files=("kokoro-v1_0.pth",), display_name=DISPLAY_NAME,
         ))
 
     def _spawn_worker(self, model_dir: Path) -> subprocess.Popen:
         # lang_code is derived from the voice rather than configured: Kokoro
         # takes the accent separately from the voice name, and a mismatch
         # makes a voice speak through the wrong accent's phonemes instead of
-        # raising anything. See KokoroConfig.lang_code.
+        # raising anything. See TTSConfig.lang_code.
         return spawn_script_worker(
             "kokoro", "audio", "kokoro_worker.py",
             "--model_dir", str(model_dir.resolve()),
@@ -54,7 +45,7 @@ class KokoroSynthesizer(BaseWorkerSynthesizer):
         return self.tts_config.synth_timeout_seconds
 
     def _build_request(self, text: str, voice: str, output_wav: Path) -> dict[str, Any]:
-        """One panel's request.
+        """One page's request.
 
         `voice` is a Kokoro voice NAME, not a path to a reference clip -
         this engine does not clone. Speed is applied by the model itself

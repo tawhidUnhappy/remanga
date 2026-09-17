@@ -7,13 +7,9 @@ from __future__ import annotations
 import hashlib
 import re
 import shutil
-import zipfile
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-
-from remanga.console import console, escape as _esc
-from remanga.paths import get_pages_zip_path
 
 # MangaDex@Home names every page file after the SHA-256 of its own bytes
 # ("3-<64 hex digits>.png") - checked against real chapters at both image
@@ -66,16 +62,3 @@ def remove_paths(paths: Iterable[Path]) -> None:
             path.unlink(missing_ok=True)
 
 
-def create_pages_zip(project_name: str, chapter_num: str, pages_dir: Path) -> Path:
-    """Package downloaded pages into a single ZIP archive for easy LLM uploading."""
-    zip_path = get_pages_zip_path(project_name, chapter_num)
-    if zip_path.exists():
-        zip_path.unlink()
-
-    pages = sorted(p for p in pages_dir.iterdir() if p.is_file())
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for p in pages:
-            zf.write(p, arcname=p.name)
-
-    console.print(f"[bold green]✓ Created Pages ZIP archive:[/] {_esc(str(zip_path))}")
-    return zip_path

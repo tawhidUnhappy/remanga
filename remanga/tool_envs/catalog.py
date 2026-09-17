@@ -1,8 +1,7 @@
-"""The tool environments themselves, one ToolSpec each.
+"""The tool environments themselves, one ToolSpec each - today only Kokoro.
 
-Adding a tool is an entry here plus the code that drives it; removing one is
-deleting both. bootstrap.sh, `remanga setup-tools` and a tool's own first use
-all provision from this list, so none of them can drift from the others."""
+bootstrap.sh, `remanga setup` and a tool's own first use all provision from
+this list, so none of them can drift from the others."""
 
 from __future__ import annotations
 
@@ -29,78 +28,6 @@ TOOLS: tuple[ToolSpec, ...] = (
                  "en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",),
                 torch_backend=False,
             ),
-        ),
-    ),
-    ToolSpec(
-        "chatterbox", "Chatterbox Turbo", "TTS engine - clones a narrator from a recording",
-        steps=(
-            # chatterbox-tts pins torch==2.6.0 exactly, which makes a plain
-            # install unsatisfiable on every machine that resolves to a recent
-            # wheel index: 2.6 is not in cu129 at all (it jumps from <2.6 to
-            # >2.7), and uv says so - "there is no version of torch==2.6.0".
-            # Like DeepSeek-OCR-2's torch pin it is not load-bearing, so the
-            # dependencies go in first against this machine's torch, and the
-            # package itself second with --no-deps. transformers and diffusers
-            # keep upstream's exact pins - the model code is written against
-            # them. Left out on purpose: gradio (upstream's demo UI, several
-            # hundred MB) and spacy-pkuseg/pykakasi (Chinese/Japanese text for
-            # the multilingual model, imported only inside those code paths).
-            InstallStep((
-                "torch", "torchaudio", "numpy<2", "librosa==0.11.0", "s3tokenizer",
-                "transformers==5.2.0", "diffusers==0.29.0",
-                "conformer==0.3.2", "safetensors", "pyloudnorm", "omegaconf",
-                "soundfile", "huggingface-hub",
-            )),
-            # The PyPI package named "resemble-perth" is an abstract-base-class
-            # stub with no working implementation - `PerthImplicitWatermarker`
-            # imports as None from it, which fails with an opaque "'NoneType'
-            # object is not callable" the instant a worker tries to construct
-            # one. chatterbox-tts's own pyproject.toml pins the real
-            # implementation from GitHub instead of PyPI for exactly this
-            # reason; installed here the same way, before the --no-deps
-            # package below would otherwise pull in the broken PyPI one.
-            InstallStep(
-                ("resemble-perth @ git+https://github.com/resemble-ai/Perth.git@master",),
-                torch_backend=False,
-            ),
-            InstallStep(("chatterbox-tts==0.1.7",), torch_backend=False, no_deps=True),
-        ),
-    ),
-    ToolSpec(
-        "magi", "MAGI v3", "panel detection for the Panel Marker web UI",
-        steps=(
-            # einops/matplotlib: undeclared imports MAGI v3's remote modeling
-            # code needs beyond its own requirements. magi_assist.py
-            # auto-installs anything still missing on first load; listing the
-            # known ones saves a round trip.
-            InstallStep((
-                "torch", "transformers<4.52.0", "timm", "shapely",
-                "pytorch-metric-learning", "huggingface-hub", "pillow", "numpy",
-                "einops", "matplotlib",
-            )),
-        ),
-    ),
-    ToolSpec(
-        "deepseek-ocr", "DeepSeek-OCR-2", "OCR for the Narration Writer's per-panel button",
-        steps=(
-            # transformers is pinned exactly, torch is not. The model card pins
-            # both (transformers==4.46.3, torch==2.6.0), but the pins are not
-            # equally load-bearing: the pinned transformers is what the model's
-            # own trust_remote_code modeling code is written against, while
-            # torch 2.6 simply is not in the wheel index this machine resolves
-            # to, so honouring it would mean installing wheels built for a
-            # different machine. einops/addict/easydict are undeclared imports
-            # that modeling code needs.
-            #
-            # flash-attn is deliberately absent. The card uses it, but it is a
-            # long, fragile CUDA extension build and transformers falls back to
-            # its own attention without it - the same reasoning that keeps
-            # every other optional kernel build out of a first run.
-            InstallStep((
-                "torch", "transformers==4.46.3", "tokenizers==0.20.3", "einops",
-                "addict", "easydict", "accelerate", "pillow", "huggingface-hub",
-                "safetensors",
-            )),
         ),
     ),
 )

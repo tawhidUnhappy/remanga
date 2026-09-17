@@ -1,244 +1,65 @@
-"""Text-to-speech engine settings - see remanga/audio/synth/.
+"""Kokoro-82M narration settings - see remanga/audio/synth/kokoro.py.
 
-Shape: the handful of settings that mean the same thing whichever engine is
-driving (which engine that is, the speaking rate, how long to wait on a
-worker) sit at the top of TTSConfig, and everything that belongs to ONE
-engine - its model, its voice, its gain - lives in that engine's own block,
-which is what makes adding or removing an engine a contained change (see
-tts_engines.py).
-
-The two engines take a voice in opposite ways. Kokoro ships fixed, named
-voices, so its narrator is chosen from a list (config/kokoro_voices.py).
-Chatterbox Turbo clones one from a reference recording, so its narrator is
-a file path. Neither carries forward the settings of the retired
-IndexTTS-2.5 / Audio8 engines: old config.json files are migrated on load by
-TTSConfig._migrate_retired_engines below."""
+hexgrad/Kokoro-82M runs in its own isolated `.tools/venv-kokoro`. It has fixed,
+named voices (config/kokoro_voices.py) - no reference recording."""
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import model_validator
 
 from remanga.config.base import ConfigModel
-from remanga.config.kokoro_voices import (
-    DEFAULT_VOICE,
-    KOKORO_VOICES,
-    KokoroVoice,
-    lang_code_for,
-    voice_spec,
-)
-from remanga.config.tts_engines import (
-    TTS_ENGINE_SPECS,
-    TTS_ENGINES,
-    TTSEngineSpec,
-    engine_spec,
-    voice_field_for,
-)
+from remanga.config.kokoro_voices import DEFAULT_VOICE, KokoroVoice, lang_code_for, voice_spec
 
-# Re-exported so `from remanga.config.tts import engine_spec, TTS_ENGINES`
-# keeps working - see tts_engines.py for where these now live.
-__all__ = [
-    "KOKORO_VOICES",
-    "TTS_ENGINES",
-    "TTS_ENGINE_SPECS",
-    "ChatterboxConfig",
-    "KokoroConfig",
-    "KokoroVoice",
-    "TTSConfig",
-    "TTSEngineSpec",
-    "engine_spec",
-    "voice_field_for",
-]
+DISPLAY_NAME = "Kokoro-82M"
 
 
-class KokoroConfig(ConfigModel):
-    """Settings specific to the kokoro engine - hexgrad/Kokoro-82M on
-    Hugging Face, an 82M-parameter StyleTTS 2 / iSTFTNet model with fixed
-    built-in voices. Runs in its own isolated `.tools/venv-kokoro`.
-
-    No reference clip and no cloning: `voice` names one of the model's own
-    voices (see config/kokoro_voices.py). That is the point of it - the
-    engines it replaced derived the narrator's whole delivery from a clip,
-    which made the clip the single largest source of quality problems."""
-
+class TTSConfig(ConfigModel):
+    # Which of Kokoro's built-in voices narrates.
+    voice: str = DEFAULT_VOICE
+    # Speaking rate, applied by the model itself (1.0 = normal).
+    speed: float = 1.0
+    # Gain on every synthesized clip, in dB. With background music and the
+    # master's loudness normalization this mostly sets how far the music sits
+    # under the voice. Changing it re-applies only the difference to clips
+    # already synthesized - see audio/tts.py.
+    volume_boost_db: float = 0.0
+    # How long one synthesize call may take before the worker is treated as hung.
+    synth_timeout_seconds: int = 180
     hf_repo_id: str = "hexgrad/Kokoro-82M"
     model_dir: str = "checkpoints/kokoro_82m"
-    # Which of Kokoro's built-in voices narrates. Defaults to its
-    # highest-graded voice; see kokoro_voices.DEFAULT_VOICE for why that is
-    # the default rather than the closest match to any particular narrator.
-    voice: str = DEFAULT_VOICE
-    # Gain applied to synthesized narration clips, in decibels (0.0 =
-    # untouched, positive = louder).
-    #
-    # Applied to each panel's clip as it is written (audio/tts.py), so the
-    # WAVs on disk really are louder - not a flag read at mix time. The
-    # audible result in the finished video is mostly VOICE-VS-MUSIC balance
-    # rather than a louder file: audio/mix.py's EBU R128 loudnorm pass
-    # normalizes the whole master to a fixed target afterwards, so boosting
-    # the narration pushes the BGM down under it rather than raising the
-    # final output level. Turn off audio.enable_loudnorm if you want the
-    # boost to survive into the master's absolute level too.
-    #
-    # Changing this does NOT require re-synthesizing: audio_timing.json
-    # records the gain baked into the clips it describes, and the next tts
-    # run applies only the difference to clips it would otherwise reuse -
-    # see audio/tts.py. Boosting far enough to clip is possible (pydub
-    # saturates rather than wraps); a run that clips says so.
-    volume_boost_db: float = 0.0
-    # Kokoro's native output rate. Not a resampling knob - it is what the
-    # model emits, and the pipeline resamples from here (audio/resample.py).
+    # Kokoro's native output rate; the pipeline resamples from here.
     sample_rate: int = 24000
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_engine_blocks(cls, data: Any) -> Any:
+        """A config.json from the multi-engine version kept Kokoro's settings
+        in a `kokoro` block beside the other engines' - lifted up here, the
+        rest dropped."""
+        if not isinstance(data, dict):
+            return data
+        lifted = {key: value for key, value in data.items() if key in cls.model_fields}
+        block = data.get("kokoro")
+        if isinstance(block, dict):
+            lifted.update({key: value for key, value in block.items() if key in cls.model_fields})
+        return lifted
 
     @property
     def spec(self) -> KokoroVoice:
-        """The active voice's catalogue entry - its label, grade and accent."""
         return voice_spec(self.voice)
 
     @property
     def voice_label(self) -> str:
-        """The voice as a menu row names it, e.g. "Heart (female)"."""
         return self.spec.label
 
     @property
     def voice_detail(self) -> str:
-        """The voice with what identifies it exactly - name and grade."""
         return f"{self.spec.label} ({self.spec.name}, grade {self.spec.grade})"
 
     @property
     def lang_code(self) -> str:
-        """Kokoro's one-character accent code for the active voice.
-
-        Derived rather than configured: Kokoro takes this separately from
-        the voice name, and a mismatch makes a voice speak through the wrong
-        accent's phonemes instead of raising anything."""
+        """Kokoro's accent code for the voice - derived, since a mismatch makes a
+        voice speak through the wrong accent's phonemes without any error."""
         return lang_code_for(self.voice)
-
-
-class ChatterboxConfig(ConfigModel):
-    """Settings specific to the chatterbox engine - ResembleAI/chatterbox-turbo
-    on Hugging Face, Resemble AI's 350M-parameter distilled Chatterbox (MIT).
-    Runs in its own isolated `.tools/venv-chatterbox`.
-
-    The opposite trade from Kokoro: there are no built-in voices, it clones
-    whoever is speaking in `voice`. That makes the recording the voice - its
-    accent, pace, microphone and room all come through, noise included -
-    which is exactly the quality risk the retired cloning engines had, and
-    why Kokoro stays the default. English only."""
-
-    hf_repo_id: str = "ResembleAI/chatterbox-turbo"
-    model_dir: str = "checkpoints/chatterbox_turbo"
-    # Path to the recording to clone: one speaker, no music, longer than 5
-    # seconds (Turbo refuses anything shorter). The speaker embedding hears
-    # the whole clip, but the speech it imitates is taken from the first 10
-    # to 15 seconds, so that is where the best of the voice should be.
-    # Recordings normally live in global/voice/. Empty until one is chosen -
-    # there is no sensible default for a voice that is meant to be yours.
-    voice: str = ""
-    # Gain applied to synthesized narration clips, in decibels - the same
-    # knob as tts.kokoro.volume_boost_db, see there.
-    volume_boost_db: float = 0.0
-
-    @property
-    def voice_label(self) -> str:
-        """The recording as a menu row names it - its filename."""
-        return Path(self.voice).name
-
-    @property
-    def voice_detail(self) -> str:
-        """The recording with what identifies it exactly - its full path."""
-        return f"clone of {self.voice}"
-
-
-# Settings that belonged to the retired IndexTTS-2.5 / Audio8 blocks and
-# have no meaning under the current engines. Named explicitly so migration
-# can drop them quietly rather than leaving them to fail validation on load.
-RETIRED_ENGINE_BLOCKS = ("indextts", "audio8")
-RETIRED_TOP_LEVEL_FIELDS = (
-    "hf_repo_id", "model_dir", "cfg_path", "use_bf16", "temperature", "top_p",
-    "sample_rate", "spk_audio_prompt",
-)
-
-
-class TTSConfig(ConfigModel):
-    # Which engine actually synthesizes speech - one of TTS_ENGINES.
-    engine: str = "kokoro"
-    # Settings below this line are engine-independent.
-    lang: str = "EN"
-    speed: float = 1.0
-    # How long to wait for one panel's synthesize response before treating the
-    # worker as hung and killing it (see audio/synth/base.py:synthesize). Kokoro
-    # synthesizes a panel in well under a second on any GPU and a few seconds on
-    # CPU, so this is a generous ceiling, not a tight budget.
-    synth_timeout_seconds: int = 180
-    kokoro: KokoroConfig = Field(default_factory=KokoroConfig)
-    chatterbox: ChatterboxConfig = Field(default_factory=ChatterboxConfig)
-
-    @model_validator(mode="before")
-    @classmethod
-    def _migrate_retired_engines(cls, data: Any) -> Any:
-        """Reads a config.json written for IndexTTS-2.5 or Audio8.
-
-        Those engines cloned from a reference WAV, but through settings no
-        current engine shares - a `spk_audio_prompt` path is not a Kokoro
-        voice name, and a temperature neither engine is configured with is
-        noise. Pydantic ignores unknown keys, so the practical job here is
-        narrower than the old migration's: drop the retired blocks and the
-        older flat keys, and force `engine` onto a name that still exists, so
-        an upgraded install starts in a valid state instead of failing
-        validation or selecting an engine whose code was deleted."""
-        if not isinstance(data, dict):
-            return data
-
-        migrated: dict[str, Any] = dict(data)
-        for block in RETIRED_ENGINE_BLOCKS:
-            migrated.pop(block, None)
-        for field_name in RETIRED_TOP_LEVEL_FIELDS:
-            migrated.pop(field_name, None)
-
-        if str(migrated.get("engine", "")).strip().lower() not in TTS_ENGINES:
-            migrated["engine"] = TTS_ENGINES[0]
-        return migrated
-
-    @property
-    def spec(self) -> TTSEngineSpec:
-        """This config's engine as a TTSEngineSpec - the display name,
-        one-line summary and settings block every screen reads instead of
-        re-testing `engine == "some-string"`."""
-        return engine_spec(self.engine)
-
-    @property
-    def engine_block(self) -> BaseModel:
-        """The active engine's own settings block, resolved through its spec
-        rather than by branching on the engine name. Returns the live
-        sub-model, not a copy, so a caller applying a one-off override (see
-        audio/tts.py's voice_override) can assign straight through it."""
-        return getattr(self, self.spec.config_attr)
-
-    @property
-    def active_voice(self) -> str:
-        """The voice the ACTIVE engine narrates in. Every caller that just
-        wants "the voice being used" asks this instead of reaching into a
-        block and assuming which engine is selected."""
-        return getattr(self.engine_block, "voice", "") or ""
-
-    @property
-    def voice_label(self) -> str:
-        """The active voice as a menu row names it - a Kokoro voice's label,
-        or the filename of the recording Chatterbox clones. Empty when the
-        active engine has no voice set."""
-        return self.engine_block.voice_label if self.active_voice else ""
-
-    @property
-    def voice_detail(self) -> str:
-        """The active voice with what identifies it exactly, for the screens
-        that have room: Kokoro's name and grade, or the recording's path."""
-        return self.engine_block.voice_detail if self.active_voice else ""
-
-    @property
-    def active_voice_field(self) -> str:
-        """Dotted config path of the active engine's voice, for the settings
-        screens that edit a field by name (see remanga.settings.fields) and
-        for error messages that tell someone where to fix it."""
-        return voice_field_for(self.engine)

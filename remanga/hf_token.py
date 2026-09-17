@@ -1,5 +1,5 @@
-"""Optional Hugging Face token, shared by every model download in remanga
-(Kokoro-82M, Chatterbox Turbo, MAGI v3, DeepSeek-OCR-2) - config.json's
+"""Optional Hugging Face token, for downloading the Kokoro-82M
+weights - config.json's
 `system.hf_token_path` points at a small JSON file:
 
     {"token": "hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}
@@ -9,7 +9,7 @@ path means the actual token value never has to sit in config.json itself,
 which gets displayed/printed/git-committed far more casually than a
 one-off secrets file would). Used to raise Hugging Face Hub's per-IP rate
 limit and download speed for unauthenticated requests (the Hub prints this
-suggestion itself - see the remanga-ops skill's OCR section).
+suggestion itself).
 
 Defaults to global/hf_token.json - auto-created (blank "token", plus a
 "_hint" field pointing at where to actually get one) the first time it's
@@ -28,8 +28,7 @@ unauthenticated download into a broken one, only a present, well-formed,
 non-blank token changes anything.
 
 Passed to each download script as a plain positional CLI argument (see
-models/weights.py:ModelManager.ensure_model and magi_assist.py's own
-subprocess call) - simple and consistent with every other arg these scripts
+models/weights.py:ModelManager.ensure_model) - simple and consistent with every other arg these scripts
 already take, at the cost of being visible to `ps`/`/proc/<pid>/cmdline` for
 other local users on a shared machine for the download's duration. Fine for
 remanga's single-user local-machine use case; flag if that ever changes."""

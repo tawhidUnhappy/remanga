@@ -7,9 +7,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-# Straight from the submodule: full_recap's own __init__ also pulls in
-# compiler.py (the audio/video stack), which a chapter listing has no need of.
-from remanga.full_recap.discovery import chapter_sort_key
+from remanga.chapters import chapter_sort_key
 from remanga.paths import get_chapter_dir, read_manifest, read_remote_chapter_cache, write_remote_chapter_cache
 
 # How long a fetched MangaDex chapter feed is trusted before a plain

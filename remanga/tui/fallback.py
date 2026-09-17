@@ -90,8 +90,7 @@ def select(title: str, choices: Sequence[Choice], *, default_index: int = 0,
 def multiselect(title: str, choices: Sequence[Choice], *, back_label: str | None = None,
                 ordered: bool = False, **_ignored) -> Any:
     """Comma-separated numbers instead of space-toggling. In `ordered` mode
-    the order they're typed in is the order they're returned in, which is
-    how the pipeline editor gets a step sequence out of a non-tty terminal."""
+    the order they're typed in is the order they're returned in."""
     selectable = [c for c in choices if not c.disabled]
     if not selectable:
         return []

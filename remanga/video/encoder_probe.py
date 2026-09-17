@@ -104,10 +104,7 @@ class EncoderChoiceMixin:
         return None, f"falling back to CPU - {self.system_config.resolve_gpu_codec()} didn't work: {bundled_error}"
 
     def encoder(self) -> tuple[str, str, bool, str]:
-        """(ffmpeg binary, codec, is-GPU, note) - probed once per renderer.
-        A full recap asks for every chapter, and the answer shouldn't change
-        mid-run anyway: pictures from two different encoders can't be
-        stream-copied into one join."""
+        """(ffmpeg binary, codec, is-GPU, note) - probed once per renderer."""
         if self._encoder_choice is None:
             gpu_ffmpeg, note = self._resolve_gpu_ffmpeg()
             use_gpu = gpu_ffmpeg is not None

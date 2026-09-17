@@ -1,7 +1,7 @@
 """The shared moving parts of an interactive menu: what's visible after
 filtering, where the cursor is, and the redraw/read-key loop around both.
 
-`select`, `multiselect` and the ordered pipeline editor all differ in
+`select`, `multiselect` and the ordered checklist all differ in
 exactly one thing - what a keypress *means* - so that is the only thing
 they implement. Cursor movement, type-to-filter, scrolling a list longer
 than the terminal, transient redraw, and terminal restoration all live here
@@ -92,12 +92,8 @@ class MenuState:
         if self.query:
             needle = self.query.casefold()
             # Label matches first, then rows that only match on their hint or
-            # badge. Hints are searchable on purpose ("blur", "zip", "gutter"
-            # find the right row without knowing its name), but a row whose
-            # *name* is what you typed must never sit below one that merely
-            # mentions it in passing - typing "package" and pressing Enter
-            # has to land on the `package` command, not on `crop`, whose
-            # description happens to contain the word.
+            # badge: a row whose *name* is what you typed must never sit below
+            # one that merely mentions it in passing.
             by_label, by_text = [], []
             for choice in self.choices:
                 if needle in choice.label.casefold():

@@ -3,11 +3,8 @@
 BaseWorkerSynthesizer turns synthesize() calls into requests to one
 isolated-venv worker, splitting text an engine can't take in a single call.
 The worker itself - spawn, ready handshake, auto-heal, bounded reads, stderr
-draining, shutdown - is remanga/workers/, shared with OCR and MAGI. An engine
-subclass fills in only what actually differs between engines: the command
-line and the per-request payload, which is what keeps adding a third engine
-to a small file (see kokoro.py, under 80 lines) rather than a fourth copy of
-all of this."""
+draining, shutdown - is remanga/workers/. The engine subclass (kokoro.py)
+fills in only the command line and the per-request payload."""
 
 from __future__ import annotations
 
@@ -22,9 +19,9 @@ from remanga.workers import ToolWorker
 
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 
-# What synthesize() says about a panel that timed out: which panel it was,
-# and that a re-run costs only that panel.
-_TIMEOUT_ADVICE = (" Safe to just re-run; already-synthesized panels are cached and this "
+# What synthesize() says about a page that timed out: that a re-run costs
+# only that page.
+_TIMEOUT_ADVICE = (" Safe to just re-run; already-synthesized pages are cached and this "
                    "one regenerates automatically.")
 
 
@@ -58,7 +55,7 @@ def _split_text_into_chunks(text: str, max_chars: int) -> list[str]:
 class BaseWorkerSynthesizer(ToolWorker):
     """Owns one long-lived isolated-venv worker subprocess and speaks to it
     over stdin/stdout for every synthesize() call, so the model loads onto
-    the GPU once per production run instead of once per panel. Subclasses
+    the GPU once per run instead of once per page. Subclasses
     fill in: `tool_name` (selects `.tools/venv-<tool_name>`), `display_name`
     (for console messages), `_spawn_worker()` (the process command line),
     and `_build_request()` (the per-call JSON payload)."""
@@ -136,7 +133,7 @@ class BaseWorkerSynthesizer(ToolWorker):
         request = self._build_request(text, voice, output_wav)
         self._request(
             request, self._synth_timeout_seconds(), action="synthesis",
-            on_timeout=f" on panel text {text[:80]!r}", advice=_TIMEOUT_ADVICE,
+            on_timeout=f" on page text {text[:80]!r}", advice=_TIMEOUT_ADVICE,
         )
         self._post_synthesize(output_wav, request)
 

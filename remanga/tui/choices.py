@@ -96,8 +96,7 @@ def index_of_value(choices: Sequence[Choice], value: Any, fallback: int = 0) -> 
 
 @dataclass
 class Toggle:
-    """A named on/off setting, for the checklist screens that edit config
-    (see remanga.settings.vision). Kept separate from Choice because the
+    """A named on/off setting, for checklist screens that edit config. Kept separate from Choice because the
     thing being chosen there is the *state* of every row at once, not one
     row out of many."""
 

@@ -1,17 +1,9 @@
 """remanga's interactive terminal toolkit - arrow-key menus, checklists,
 confirmations and validated text/path prompts.
 
-Why this exists: every interactive screen in remanga used to be hand-rolled
-from `console.print` loops plus `rich.prompt.Prompt`, which meant the user
-typed a number for a category, typed another number for a command, typed a
-comma-separated list for pipeline steps, typed exact filenames for a wipe's
-keep-list, and answered eight fixed questions in a fixed order to change one
-video setting. Each of those screens also invented its own layout and its
-own idea of what "0" meant. Now every one of them is a Choice list handed to
-`select`/`multiselect`/`confirm`: arrow keys move, typing filters, space
-toggles, Enter accepts the pre-highlighted current value, Esc backs out -
-the same everywhere, with the *content* being the only thing each caller
-writes.
+Every prompt is a Choice list handed to `select`/`multiselect`/`confirm`:
+arrow keys move, typing filters, space toggles, Enter accepts the
+pre-highlighted current value, Esc backs out.
 
 Non-tty terminals (piped stdin, CI, an editor's output pane) keep working:
 every prompt checks `is_interactive()` and routes to the numbered-prompt

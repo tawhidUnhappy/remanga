@@ -1,162 +1,75 @@
+"""A chapter's master track: every page's narration clip with the pause after
+it, background music under the whole of it, normalized.
+
+Skipped when master_audio.wav already matches: the synthesized audio
+(audio_timing.json, rewritten only when its content changes) and every mix
+setting are fingerprinted, so a plain re-run doesn't re-mix - and in turn
+doesn't make the render think the sound changed."""
+
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
-from pydub import AudioSegment
-
-from remanga import settings
 from remanga.audio.join import join_segments
-from remanga.audio.master import load_bgm, panel_segments, under_narration, write_master
-from remanga.audio.recipe import mix_fingerprint, write_recipe
-from remanga.config import AudioConfig, RemangaConfig
+from remanga.audio.master import load_bgm, page_segments, under_narration, write_master
+from remanga.config import AudioConfig
 from remanga.console import console, escape as _esc
 from remanga.json_io import read_json, read_json_or, write_json
-from remanga.paths import (
-    get_audio_dir,
-    get_audio_timing_path,
-    get_master_audio_path,
-    get_modified_audio_dir,
-)
-from remanga.verify import ensure_panels_match_narration
+from remanga.paths import get_audio_dir, get_audio_timing_path, get_master_audio_path
 
 
-class AudioProcessor:
-    def __init__(self, config: AudioConfig | None = None):
-        self.config = config or AudioConfig()
+def _bgm_file(config: AudioConfig) -> Path | None:
+    if not config.bgm_enabled:
+        return None
+    path = Path(str(config.bgm_path or "")).expanduser()
+    if path.is_file():
+        return path
+    console.print(f"[yellow]Background music is on, but '{_esc(str(config.bgm_path))}' isn't a file - mixing "
+                  f"without music.[/]")
+    return None
 
-    @staticmethod
-    def _fingerprint(timing_path: Path, config: AudioConfig) -> dict[str, Any]:
-        """Everything that determines mix_master_audio's output for a given
-        audio_timing.json: the timing file's own mtime (a reliable "did the
-        synthesized audio change" signal now that tts.py only rewrites it
-        when its content actually changes) plus every mix-affecting config
-        field. Two calls with an identical fingerprint are guaranteed to
-        produce the same master_audio.wav."""
-        return {
-            "timing_mtime": timing_path.stat().st_mtime,
-            "bgm_enabled": config.bgm_enabled,
-            "bgm_path": config.bgm_path,
-            "bgm_volume_db": config.bgm_volume_db,
-            "sample_rate": config.sample_rate,
-            "enable_loudnorm": config.enable_loudnorm,
-        }
 
-    def mix_master_audio(
-        self,
-        project_name: str,
-        chapter_num: str,
-        bgm_override: str | None = None,
-        interactive: bool = True,
-        force: bool = False,
-    ) -> Path:
-        """
-        Combines narration segments, adds inter-panel pauses, overlays background music (if enabled),
-        and applies EBU R128 loudness normalization.
+def _fingerprint(timing_path: Path, config: AudioConfig, bgm: Path | None) -> dict[str, Any]:
+    bgm_stat = bgm.stat() if bgm else None
+    return {
+        "timing_mtime": timing_path.stat().st_mtime,
+        "bgm": [str(bgm), bgm_stat.st_size, int(bgm_stat.st_mtime)] if bgm_stat else None,
+        "bgm_volume_db": config.bgm_volume_db,
+        "sample_rate": config.sample_rate,
+        "enable_loudnorm": config.enable_loudnorm,
+    }
 
-        Skips the whole rebuild (force=False, the default) if master_audio.wav
-        already exists and nothing that would change its output has changed
-        since: the synthesized audio timeline (audio_timing.json - see
-        tts.py, which itself only rewrites that file when its content
-        actually changes) and the BGM/loudnorm settings this call would use.
-        Without this, every call would unconditionally rebuild and touch
-        master_audio.wav's mtime - which video/render.py treats as "the mix
-        changed, re-encode the video" - so a plain resume (nothing actually
-        changed) would silently re-mix and re-render every chapter it
-        touches, every single time, for no reason.
-        """
-        # Refuse to produce output that would be silently degraded - see
-        # verify/gate.py. Here rather than in pipeline.py so full-recap,
-        # which does not go through the wizard's steps, is covered too.
-        ensure_panels_match_narration(project_name, chapter_num, stage="the audio mix")
 
-        # Scoped to the project: the validator below reads the BGM out of this
-        # config, and it has to be the one this manga uses.
-        full_config = RemangaConfig.load().for_project(project_name)
-        if bgm_override:
-            full_config.audio.bgm_path = bgm_override
-            full_config.audio.bgm_enabled = True
-            self.config.bgm_path = bgm_override
-            self.config.bgm_enabled = True
+def mix_master_audio(project_name: str, chapter_num: str, config: AudioConfig, force: bool = False) -> Path:
+    timing_path = get_audio_timing_path(project_name, chapter_num)
+    if not timing_path.exists():
+        raise FileNotFoundError(f"No narration audio for chapter {chapter_num} yet: {timing_path}")
+    master = get_master_audio_path(project_name, chapter_num)
+    fingerprint_path = master.with_name("master_audio_fingerprint.json")
+    bgm = _bgm_file(config)
 
-        valid_bgm = settings.ensure_valid_bgm(full_config, interactive=interactive)
-        if valid_bgm:
-            self.config.bgm_path = valid_bgm
-            self.config.bgm_enabled = True
+    fingerprint = _fingerprint(timing_path, config, bgm)
+    if (not force and master.exists() and master.stat().st_size > 1000
+            and read_json_or(fingerprint_path, None) == fingerprint):
+        console.print(f"[dim]✓ Chapter {chapter_num}'s audio mix is already up to date.[/]")
+        return master
 
-        timing_path = get_audio_timing_path(project_name, chapter_num)
-        audio_dir = get_audio_dir(project_name, chapter_num)
-        master_final_path = get_master_audio_path(project_name, chapter_num)
-        master_raw_path = master_final_path.with_name("master_audio_raw.wav")
-        fingerprint_path = master_final_path.with_name("master_audio_fingerprint.json")
+    console.print(f"[cyan]Mixing chapter {chapter_num}'s audio...[/]")
+    audio_dir = get_audio_dir(project_name, chapter_num)
+    segments = []
+    for page in read_json(timing_path).get("pages", []):
+        segments.extend(page_segments(audio_dir, page, config.sample_rate))
+    track = join_segments(segments).set_channels(2).set_frame_rate(config.sample_rate)
 
-        if not timing_path.exists():
-            raise FileNotFoundError(f"Missing audio timing metadata at: {timing_path}")
+    if bgm:
+        console.print(f"[cyan]Adding background music:[/] {_esc(str(bgm))}")
+        track = under_narration(track, load_bgm(bgm, config.sample_rate), config.bgm_volume_db)
 
-        timing_info = read_json(timing_path)
-
-        fingerprint = self._fingerprint(timing_path, self.config)
-        if (not force and master_final_path.exists() and master_final_path.stat().st_size > 1000
-                and read_json_or(fingerprint_path, None) == fingerprint):
-            console.print(
-                f"[dim]✓ master_audio.wav for chapter {chapter_num} is already up to date - skipping remix.[/]"
-            )
-            return master_final_path
-
-        modified_dir = get_modified_audio_dir(project_name, chapter_num)
-        panels = timing_info.get("panels", [])
-        console.print(f"[cyan]Assembling master audio stream for chapter {chapter_num}...[/]")
-
-        # 1. Assemble narration track
-        #
-        # Narration is used exactly as synthesized. There is no per-clip
-        # processing stage any more (it lived in audio/voice.py and cost
-        # roughly a quarter of real time per chapter for a subtle result),
-        # so nothing is written back per clip either - audio_modified/ holds
-        # only the mixed master now.
-        segments: list[AudioSegment] = []
-        for p in panels:
-            segments.extend(panel_segments(audio_dir, p, self.config.sample_rate))
-
-        # One join rather than `+=` per clip, which re-copied the whole track
-        # so far on every append - see audio/join.py.
-        combined_voice = join_segments(segments)
-
-        # Convert to 2-channel stereo for master output
-        master_audio = combined_voice.set_channels(2).set_frame_rate(self.config.sample_rate)
-
-        # 2. Mix Background Music (BGM) if enabled
-        if self.config.bgm_enabled and self.config.bgm_path and Path(self.config.bgm_path).exists():
-            console.print(f"[cyan]Overlaying background music:[/] {_esc(str(self.config.bgm_path))}")
-            master_audio = under_narration(
-                master_audio, load_bgm(self.config.bgm_path, self.config.sample_rate), self.config.bgm_volume_db,
-            )
-        elif self.config.bgm_enabled:
-            console.print(
-                f"[yellow]BGM is enabled in config, but file was not found at: {_esc(str(self.config.bgm_path))}. "
-                f"Continuing without BGM.[/]"
-            )
-
-        # 3. Export Raw Master Track
-        master_audio.export(master_raw_path, format="wav")
-
-        # 4. Loudness Normalization via FFmpeg (EBU R128)
-        write_master(master_raw_path, master_final_path, self.config.sample_rate,
-                     normalize=self.config.enable_loudnorm,
-                     announcement="Applying EBU R128 audio normalization...",
-                     on_failure="standard raw master audio")
-
-        # Recomputed rather than reusing the pre-mix `fingerprint` above:
-        # timing_path's mtime could theoretically be touched again by a
-        # concurrent process during a long mix - cheap to just re-read it
-        # fresh right before recording what actually went into this file.
-        write_json(fingerprint_path, self._fingerprint(timing_path, self.config))
-
-        # Record what produced everything now sitting in audio_modified/, so
-        # the next run can tell at a glance whether to reuse it or rebuild -
-        # and so a partially-written cache from an interrupted run is never
-        # mistaken for a complete one, since the recipe is written last.
-        write_recipe(modified_dir, mix=mix_fingerprint(self.config))
-
-        console.print(f"[bold green]✓ Master audio track generated successfully:[/] {_esc(str(master_final_path))}")
-        return master_final_path
+    raw = master.with_name("master_audio_raw.wav")
+    track.export(raw, format="wav")
+    write_master(raw, master, config.sample_rate, normalize=config.enable_loudnorm,
+                 announcement="Normalizing loudness (EBU R128)...", on_failure="the un-normalized mix")
+    write_json(fingerprint_path, _fingerprint(timing_path, config, bgm))
+    console.print(f"[bold green]✓ Audio mixed:[/] {_esc(str(master))}")
+    return master

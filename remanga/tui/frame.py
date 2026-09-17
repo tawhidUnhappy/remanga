@@ -81,7 +81,7 @@ def _row(choice: Choice, *, active: bool, checkable: bool, order: int | None,
         line.append("  ")  # an action row, not one of the selectable items
     elif checkable:
         if order is not None:
-            # Ordered checklists (pipeline steps) show the run position
+            # Ordered checklists show the run position
             # instead of a plain tick - the number IS the information.
             line.append(f"{order}. " if choice.checked else "-- ", style=_STYLE_ON if choice.checked else _STYLE_HINT)
         else:
@@ -119,8 +119,8 @@ def menu_frame(
     """Assembles one complete menu screen.
 
     `order` (index -> 1-based position) turns the checkbox column into
-    ordered run positions, for the pipeline editor where *sequence* is half
-    the answer. `numbered` puts 1., 2., 3. in front of the pickable rows, for
+    ordered run positions, where *sequence* is half the answer. `numbered`
+    puts 1., 2., 3. in front of the pickable rows, for
     a short menu whose answer is typed rather than arrowed to (see
     remanga.tui.select). `note` is a single line under the title for context
     the user needs while choosing (a path, a warning, a count)."""

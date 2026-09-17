@@ -1,12 +1,5 @@
-"""Building a master audio track: the narration clips end to end, the music
-bed under them, and the loudness pass over the result.
-
-One implementation for both mixes - a chapter's (audio/mix.py) and the whole
-manga's (full_recap/timeline.py) - so the two can't drift into treating the
-same clips, the same music file or the same normalization differently. What
-genuinely differs stays in each: a chapter's mix covers one chapter, while
-the full recap pads every chapter out to its picture's length and keeps one
-continuous bed across all of them."""
+"""Building a chapter's master audio track: the narration clips end to end,
+the music bed under them, and the loudness pass over the result."""
 
 from __future__ import annotations
 
@@ -29,18 +22,18 @@ BGM_FADE_OUT_MS = 2000
 LOUDNORM_FILTER = "loudnorm=I=-16:LRA=11:TP=-1.5"
 
 
-def panel_segments(audio_dir: Path, panel: dict[str, Any], sample_rate: int) -> list[AudioSegment]:
-    """One panel's place in the narration track: its synthesized clip - or
-    silence of the same length, for a panel whose clip is missing, so the
+def page_segments(audio_dir: Path, page: dict[str, Any], sample_rate: int) -> list[AudioSegment]:
+    """One page's place in the narration track: its synthesized clip - or
+    silence of the same length, for a page whose clip is missing, so the
     track stays true to audio_timing.json either way - plus the pause held
     after it."""
-    clip_file = audio_dir / panel["audio_file"]
+    clip_file = audio_dir / page["audio_file"]
     if clip_file.exists():
         segments = [AudioSegment.from_file(clip_file)]
     else:
-        segments = [AudioSegment.silent(duration=panel["duration_ms"], frame_rate=sample_rate)]
+        segments = [AudioSegment.silent(duration=page["duration_ms"], frame_rate=sample_rate)]
 
-    pause_ms = panel.get("pause_after_ms", 0)
+    pause_ms = page.get("pause_after_ms", 0)
     if pause_ms > 0:
         segments.append(AudioSegment.silent(duration=pause_ms, frame_rate=sample_rate))
     return segments

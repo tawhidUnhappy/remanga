@@ -1,4 +1,4 @@
-"""audio_timing.json: which clip each panel is, how long it sounds, and the
+"""audio_timing.json: which clip each page is, how long it sounds, and the
 gap held after it.
 
 Everything downstream lays itself out from this file - the mix concatenates
@@ -14,16 +14,16 @@ from typing import Any
 from remanga.json_io import read_json_or, write_json
 
 
-def panel_timing(index: int, panel_id: str, text: str, clip_name: str, *, start_ms: int,
+def page_timing(index: int, page_id: str, text: str, clip_name: str, *, start_ms: int,
                  duration_ms: int, pause_after_ms: int) -> dict[str, Any]:
-    """One panel's row: where it starts, how long it sounds, and how long its
+    """One page's row: where it starts, how long it sounds, and how long its
     slot is once the pause after it is counted. Milliseconds are what the
     mix works in; the seconds are there for reading."""
     end_ms = start_ms + duration_ms
     total_slot_ms = duration_ms + pause_after_ms
     return {
         "index": index,
-        "panel_id": panel_id,
+        "page_id": page_id,
         "text": text,
         "audio_file": clip_name,
         "start_time_ms": start_ms,
@@ -37,7 +37,7 @@ def panel_timing(index: int, panel_id: str, text: str, clip_name: str, *, start_
     }
 
 
-def write_timing(path: Path, chapter_num: str, panels: list[dict[str, Any]], *, boost_db: float,
+def write_timing(path: Path, chapter_num: str, pages: list[dict[str, Any]], *, boost_db: float,
                  total_ms: int, voice: dict[str, Any] | None) -> dict[str, Any]:
     """Writes the manifest, skipping the write entirely when the content is
     identical to what is already there.
@@ -66,7 +66,7 @@ def write_timing(path: Path, chapter_num: str, panels: list[dict[str, Any]], *, 
         "volume_boost_db": boost_db,
         "total_timeline_ms": total_ms,
         "total_timeline_sec": round(total_ms / 1000.0, 3),
-        "panels": panels,
+        "pages": pages,
     }
     if voice is not None:
         document["voice"] = voice

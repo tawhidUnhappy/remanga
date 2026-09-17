@@ -1,120 +1,108 @@
-"""The `remanga` command line: every registered command as a subcommand, and
-the interactive wizard when no command is given.
+"""The `remanga` command line. With no command, the menus.
 
-Exit status follows the shell's conventions, so remanga composes in scripts
-the way any other command does: 0 when the run finished or you chose to
-quit, 1 when it failed, 130 when Ctrl+C stopped it - a chain like
-`remanga download-all -p x && remanga crop-all -p x` stops when you stop it
-instead of reading the interrupted half as a success. The error or
-interruption itself goes to stderr, so it reaches the terminal even when
-stdout is redirected."""
+    remanga download -p NAME -c 1-5 [--url MANGADEX_URL]
+    remanga pdf      -p NAME -c 1-5
+    remanga video    -p NAME -c 1-5 [--force]
+    remanga chapters -p NAME
+    remanga setup
+
+Exit status: 0 done, 1 failed, 130 stopped with Ctrl+C."""
 
 from __future__ import annotations
 
 import argparse
-import difflib
 import sys
-from importlib.metadata import PackageNotFoundError, version
 
-from remanga.commands import COMMAND_BY_NAME, add_param_to_parser, commands_by_category, params_from_namespace
-from remanga.config import RemangaConfig
 from remanga.console import console, err_console, escape as _esc
 from remanga.tui import PromptExit
-from remanga.wizard import run_interactive_pipeline
 
-PAUSED_MESSAGE = "[bold yellow]👋 Production paused. You can resume at any time![/]"
-# 128 + SIGINT: what a shell reports for a command stopped by Ctrl+C.
 EXIT_INTERRUPTED = 130
-_INTERACTIVE_HELP = "Start the interactive wizard (the default when no command is given)"
-
-
-def _version() -> str:
-    try:
-        return version("remanga")
-    except PackageNotFoundError:
-        return "unknown"
-
-
-def _command_overview() -> str:
-    """Every command, grouped the way the wizard's menus group them, one
-    line each - the listing `remanga --help` ends with. Built from the
-    registry like everything else, so the help can't list a command the
-    wizard doesn't have, or file it under a different heading."""
-    groups = commands_by_category()
-    width = max(len(cmd.name) for cmds in groups.values() for cmd in cmds) + 2
-    lines = ["commands:", f"  {'interactive'.ljust(width)}{_INTERACTIVE_HELP}"]
-    for category, cmds in groups.items():
-        lines.append(f"\n  {category.name} - {category.description}")
-        lines.extend(f"    {cmd.name.ljust(width)}{cmd.summary}" for cmd in cmds)
-    lines.append("\nrun `remanga <command> --help` for a command's options")
-    return "\n".join(lines)
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """One subparser per registered command. Each one's full help text is its
-    own --help description; the top-level help lists them all by category
-    instead of argparse's flat, unreadable `{a,b,c,...}` of thirty names."""
-    parser = argparse.ArgumentParser(
-        prog="remanga",
-        description="Manga-to-recap-video production pipeline. With no command, starts the "
-                    "interactive wizard.",
-        epilog=_command_overview(),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument("--version", action="version", version=f"remanga {_version()}")
-    subparsers = parser.add_subparsers(dest="command", metavar="<command>",
-                                       help="one of the commands listed below")
-    subparsers.add_parser("interactive", description=_INTERACTIVE_HELP)
-    for cmd in COMMAND_BY_NAME.values():
-        sub = subparsers.add_parser(cmd.name, description=cmd.help)
-        for param in cmd.params:
-            add_param_to_parser(sub, param)
+    parser = argparse.ArgumentParser(prog="remanga", description=__doc__.splitlines()[0],
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = parser.add_subparsers(dest="command", metavar="<command>")
+
+    def with_project(name: str, help_text: str, chapters: bool = True) -> argparse.ArgumentParser:
+        p = sub.add_parser(name, help=help_text, description=help_text)
+        p.add_argument("--project", "-p", required=True, help="project name (projects/<name>/)")
+        if chapters:
+            p.add_argument("--chapters", "-c", default="all",
+                           help="a chapter (3), a range (1-5), several (1-5,8), or 'all' (default)")
+        return p
+
+    sub.add_parser("interactive", help="the menus (the default)")
+    d = with_project("download", "Download chapters from MangaDex (re-verifies ones already here)")
+    d.add_argument("--url", help="MangaDex URL, ID or title - needed once per project, then remembered")
+    d.add_argument("--force", action="store_true", help="delete the pages and download them again")
+    with_project("pdf", "Make each chapter's PDF of pages to give to the LLM, with prompts/narration.md")
+    v = with_project("video", "Make each chapter's video from the narration pasted into narration.json")
+    v.add_argument("--force", action="store_true", help="narrate, mix and render again from scratch")
+    with_project("chapters", "Show where each chapter is", chapters=False)
+    sub.add_parser("setup", help="install Kokoro-82M (its environment and weights)")
     return parser
 
 
-def _reject_unknown_command(parser: argparse.ArgumentParser, argv: list[str]) -> None:
-    """A mistyped command gets its nearest match suggested, rather than
-    argparse's list of every command there is."""
-    if not argv or argv[0].startswith("-") or argv[0] == "interactive" or argv[0] in COMMAND_BY_NAME:
+def _run(args: argparse.Namespace) -> None:
+    from remanga import workflow
+    from remanga.config import RemangaConfig
+
+    if args.command in (None, "interactive"):
+        from remanga.wizard import run_wizard
+
+        run_wizard()
         return
-    close = difflib.get_close_matches(argv[0], [*COMMAND_BY_NAME, "interactive"], n=1)
-    hint = f" - did you mean '{close[0]}'?" if close else " - see `remanga --help`"
-    parser.error(f"unknown command '{argv[0]}'{hint}")
+    if args.command == "setup":
+        setup()
+        return
+
+    config = RemangaConfig.load().for_project(args.project)
+    if args.command == "chapters":
+        from remanga.wizard import show_chapters
+
+        show_chapters(args.project)
+        return
+    if args.command == "download":
+        available = [entry["chapter"] for entry in workflow.mangadex_chapters(args.project, config, args.url)]
+        chapters = workflow.select_chapters(args.chapters, available)
+        workflow.download(args.project, chapters, config, url=args.url, force=args.force)
+        return
+
+    chapters = workflow.select_chapters(args.chapters, workflow.local_chapters(args.project))
+    if not chapters:
+        raise ValueError(f"No downloaded chapter matches '{args.chapters}'.")
+    for chapter in chapters:
+        console.print(f"\n[bold cyan]Chapter {chapter}[/]")
+        if args.command == "pdf":
+            workflow.make_pdf(args.project, chapter, config)
+        else:
+            workflow.make_video(args.project, chapter, config, force=args.force)
+
+
+def setup() -> None:
+    """Kokoro's environment and weights, ready before the first video."""
+    from remanga.audio.synth import create_synthesizer
+    from remanga.config import RemangaConfig
+    from remanga.tool_envs import provision
+
+    if provision(["kokoro"], None):
+        raise RuntimeError("Installing Kokoro's environment failed - see the messages above.")
+    config = RemangaConfig.load()
+    create_synthesizer(config.tts, config.audio).model_manager.ensure_model()
+    console.print("[bold green]✓ Kokoro-82M is installed and ready.[/]")
 
 
 def main() -> None:
-    parser = build_parser()
-    _reject_unknown_command(parser, sys.argv[1:])
-    args = parser.parse_args()
+    args = build_parser().parse_args()
     try:
-        if args.command in ("interactive", None):
-            run_interactive_pipeline()
-            return
-        cmd = COMMAND_BY_NAME[args.command]
-        params = params_from_namespace(cmd, args)
-        # Every command that names a project runs on that project's
-        # settings - its voice, its music, its resolution - falling back to
-        # config.json for everything it hasn't overridden. A command with no
-        # project (setup-config, paths, setup-models) edits the machine's
-        # own configuration.
-        config = RemangaConfig.load()
-        project = params.get("project")
-        cmd.handler(params, config.for_project(project) if project else config)
+        _run(args)
     except PromptExit:
-        # The Exit row / ctrl+q, from any prompt at any depth (see
-        # remanga.tui.result.PromptExit). Not an error - the user asked to
-        # leave.
         console.print("\n[dim]Bye.[/]")
     except KeyboardInterrupt:
-        # Ctrl+C anywhere: raised by Python itself in normal terminal mode,
-        # and by remanga.tui.loop from inside a menu (which reads Ctrl+C as a
-        # key), with the terminal already restored either way. Worker
-        # processes are shut down by their own atexit hooks on the way out.
-        err_console.print("\n" + PAUSED_MESSAGE)
+        err_console.print("\n[yellow]Stopped. Run it again to carry on where it left off.[/]")
         sys.exit(EXIT_INTERRUPTED)
     except EOFError:
-        # A scripted/non-tty run whose piped input ran out mid-prompt. Said
-        # plainly instead of surfacing readline's "EOF when reading a line".
         err_console.print("\n[yellow]Input ended before the prompt was answered - stopping here.[/]")
         sys.exit(1)
     except Exception as error:

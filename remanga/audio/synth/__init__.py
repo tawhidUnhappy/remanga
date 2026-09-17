@@ -1,61 +1,18 @@
-"""Low-level speech synthesis, one module per supported TTS engine.
+"""Speech synthesis: Kokoro-82M, driven through its own isolated
+`.tools/venv-kokoro` worker process (remanga/audio/scripts/kokoro_worker.py).
 
-Each engine spawns and talks to its own isolated `.tools/venv-<tool>` worker
-process (remanga/audio/scripts/*_worker.py) so no two engines' dependency
-pins ever have to share a Python process or a dependency resolution - with
-each other, or with MAGI v3's environment. See remanga/venvs.py for how
-those environments are located.
-
-    base.py       - the worker lifecycle every engine shares
-    kokoro.py     - Kokoro-82M
-    chatterbox.py - Chatterbox Turbo
-
-`create_synthesizer` below is the only place an engine *name* is mapped to
-an engine *class*; everything else asks config.TTSConfig.spec for the
-engine's properties (see remanga/config/tts.py)."""
+    base.py    - the worker lifecycle
+    kokoro.py  - Kokoro-82M"""
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from remanga.audio.synth.base import BaseWorkerSynthesizer
-from remanga.audio.synth.chatterbox import ChatterboxSynthesizer
 from remanga.audio.synth.kokoro import KokoroSynthesizer
 from remanga.config import AudioConfig, TTSConfig
-from remanga.config.tts import TTS_ENGINE_SPECS
-
-# engine name -> the class that drives it, keyed by each class's own spec so
-# the name isn't written out a second time. Checked against the full spec
-# list at import time below, so adding an engine to the specs without a
-# driver - or the reverse - fails loudly here rather than at synthesis time,
-# deep inside a chapter's TTS run.
-ENGINE_CLASSES = (KokoroSynthesizer, ChatterboxSynthesizer)
-
-SYNTHESIZER_BY_ENGINE: dict[str, Callable[..., BaseWorkerSynthesizer]] = {
-    cls.spec.name: cls for cls in ENGINE_CLASSES
-}
-
-_missing = {spec.name for spec in TTS_ENGINE_SPECS} ^ set(SYNTHESIZER_BY_ENGINE)
-if _missing:  # pragma: no cover - a wiring mistake, not a runtime condition
-    raise ImportError(
-        f"TTS engine specs and synthesizer classes disagree about: {', '.join(sorted(_missing))}. "
-        f"Every engine in remanga.config.tts.TTS_ENGINE_SPECS needs a class here, and vice versa."
-    )
 
 
-def create_synthesizer(tts_config: TTSConfig, audio_config: AudioConfig) -> BaseWorkerSynthesizer:
-    """The Synthesizer matching `tts_config.engine`. An unrecognized engine
-    name falls back to the default engine, the same way TTSConfig.spec does -
-    config.json is hand-editable, and a typo there should degrade rather
-    than crash."""
-    spec = tts_config.spec
-    return SYNTHESIZER_BY_ENGINE[spec.name](tts_config, audio_config)
+def create_synthesizer(tts_config: TTSConfig, audio_config: AudioConfig) -> KokoroSynthesizer:
+    return KokoroSynthesizer(tts_config, audio_config)
 
 
-__all__ = [
-    "SYNTHESIZER_BY_ENGINE",
-    "BaseWorkerSynthesizer",
-    "ChatterboxSynthesizer",
-    "KokoroSynthesizer",
-    "create_synthesizer",
-]
+__all__ = ["BaseWorkerSynthesizer", "KokoroSynthesizer", "create_synthesizer"]

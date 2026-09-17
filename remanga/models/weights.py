@@ -14,8 +14,7 @@ class ModelManager:
     isolated `.tools/venv-<tool_name>` environment's modelscope/huggingface_hub
     install (those packages aren't part of the main env - see remanga/venvs.py).
 
-    Generic across every model remanga fetches (Kokoro-82M, DeepSeek-OCR-2,
-    ...) - what differs is just which isolated venv talks to the Hub, which
+    Generic over which model it fetches - what differs is just which isolated venv talks to the Hub, which
     download script it runs, and which files on disk prove the download
     actually finished; everything else (skip-if-present check, the status
     spinner, error handling) is identical. There are no defaults for those:

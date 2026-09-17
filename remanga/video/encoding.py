@@ -1,9 +1,6 @@
-"""How a recap's picture and sound are encoded - in one place, because two
-callers have to agree to the byte: a chapter render writes each chapter's
-picture stream, and the full-recap join stream-copies those streams end to
-end, which only works when every chapter was encoded identically.
+"""How a recap's picture and sound are encoded.
 
-Measured on a real 71-panel, 7.6-minute chapter (RTX 3060, Ryzen 5 5600G);
+Measured on a real 71-picture, 7.6-minute chapter (RTX 3060, Ryzen 5 5600G);
 quality is PSNR of the decoded video against the composited source frames:
 
     before  30fps  NVENC p6 CQ20, BT.601 untagged          65.5s  56.5dB
@@ -32,9 +29,9 @@ from remanga.video.frame_timeline import FrameTimeline
 # stream-copied into a join next to pictures it no longer matches.
 PICTURE_FORMAT_VERSION = 1
 
-# A keyframe at least this often, on top of the one forced at every panel
+# A keyframe at least this often, on top of the one forced at every page
 # change. Nothing moves in between, so a long interval costs nothing but a
-# slower seek into the middle of an unusually long panel.
+# slower seek into the middle of an unusually long page.
 MAX_KEYFRAME_INTERVAL_SEC = 60
 
 # ffmpeg's own documentation of the `fast` AAC coder: "Worse with low
@@ -77,7 +74,7 @@ def picture_codec_args(codec: str, use_gpu: bool, threads: int) -> list[str]:
     """The encoder and its quality settings (see the table above)."""
     if use_gpu and codec.endswith("_nvenc"):
         # Constant quality with no bitrate ceiling; -forced-idr makes each
-        # forced keyframe a true IDR, a clean entry point at every panel.
+        # forced keyframe a true IDR, a clean entry point at every page.
         args = ["-c:v", codec, "-preset", "p4", "-rc", "vbr", "-cq", "18", "-b:v", "0", "-forced-idr", "1"]
         if codec == "h264_nvenc":
             args += ["-profile:v", "high"]

@@ -3,7 +3,7 @@
 pydub's `a + b` builds a brand-new buffer holding both, so growing a track
 with `track += clip` in a loop re-copies everything accumulated so far on
 every step - quadratic in the length of the track. Measured on a real
-82-minute, 584-panel full recap (1,168 appends): 168.9s of nothing but
+82-minute, 584-clip track (1,168 appends): 168.9s of nothing but
 copying. Joining the raw samples once gives the byte-identical track in
 0.23s."""
 

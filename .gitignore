@@ -27,11 +27,7 @@ env/
 venv/
 ENV/
 
-# Project Data & Artifacts (Keep source, ignore heavy rendered outputs)
-projects/*/chapters/*/pages/
-projects/*/chapters/*/panels/
-projects/*/chapters/*/audio/
-projects/*/chapters/*/video/
+# Projects, shared assets, weights and caches stay local
 *.mp4
 *.wav
 *.mp3

@@ -27,9 +27,7 @@ BIN_DIR="$SCRIPT_DIR/bin"
 CACHE_DIR="$SCRIPT_DIR/.cache"
 TOOLS_DIR="$SCRIPT_DIR/.tools"
 VENV_DIR="$SCRIPT_DIR/.venv"
-# Individual tool venv paths (venv-kokoro, venv-chatterbox, ...) are no
-# longer named here - remanga/tool_envs/catalog.py's TOOLS list is the one place
-# that names them now. See "4. Virtual environments" below.
+# Kokoro's environment (.tools/venv-kokoro) is named in remanga/tool_envs/catalog.py.
 
 WARNINGS=()
 
@@ -50,15 +48,9 @@ try_step() {
 
 echo "=== Initializing self-contained remanga environment ==="
 
-# global/bgm and global/voice, not assets/: shared assets live under global/
-# (paths/roots.py's GLOBAL_DIR), and that is the only place the settings
-# screens look. This used to create assets/voices and assets/bgm, which
-# nothing has read for a long time - a new user who dropped their music into
-# the folder bootstrap had just made for them would have found remanga unable
-# to see it. global/voice is where Chatterbox's recordings to clone go;
-# Kokoro's voices are named, not supplied, and never need it.
+# global/bgm is where the settings screen looks for background music.
 mkdir -p "$BIN_DIR" "$CACHE_DIR/uv" "$CACHE_DIR/huggingface" "$CACHE_DIR/torch" \
-         "$TOOLS_DIR" global/bgm global/voice projects || die "could not create working directories"
+         "$TOOLS_DIR" global/bgm projects || die "could not create working directories"
 
 # Every cache stays inside the repo, so provisioning never writes to (or is
 # poisoned by) a shared machine-wide cache.
@@ -205,14 +197,9 @@ fi
 # ---------------------------------------------------------------------------
 # 4. Virtual environments
 # ---------------------------------------------------------------------------
-# One lightweight main env plus one per heavy ML dependency, tucked under
-# .tools/. Their requirements genuinely conflict - MAGI v3 needs
-# transformers<4.52 and DeepSeek-OCR-2 pins ==4.46.3, and nothing guarantees
-# any two of them would ever agree on one resolution - so separate
-# environments buy permanent isolation instead of a pin that has to be
-# re-verified by hand every time one tool's install could clobber another's.
-# Nothing "activates" them: the main env invokes
-# `.tools/venv-<tool>/bin/python` as a subprocess (see remanga/paths/tools.py).
+# A lightweight main env, plus Kokoro's under .tools/ so torch never touches
+# the main one. The main env runs `.tools/venv-kokoro/bin/python` as a
+# subprocess (see remanga/tool_envs/).
 make_venv() {
     "$UV" venv "$1" --python 3.11 --allow-existing >/dev/null 2>&1 || return 1
     return 0
@@ -222,17 +209,9 @@ say "Creating main environment ($VENV_DIR)..."
 make_venv "$VENV_DIR" || die "could not create the main virtual environment"
 "$UV" pip install --python "$VENV_DIR" -e . || die "could not install remanga into the main environment"
 
-# Every OTHER environment - one per ML engine (Kokoro, Chatterbox, MAGI v3,
-# DeepSeek-OCR-2, ...) - is provisioned from ONE place: the TOOLS list in
-# remanga/tool_envs/catalog.py, not a hand-written block per tool here. It runs on the
-# main env's own interpreter (just installed above) with no other remanga
-# machinery needed - same reason remanga/hardware.py runs on a bare
-# interpreter earlier in this script. Adding or removing a tool is now a
-# change to that one list; this script never needs editing for it again.
-# --torch-backend is passed through from hardware detection, same as before.
-say "Provisioning tool environments (Kokoro, Chatterbox, MAGI v3, DeepSeek-OCR-2)..."
-try_step "tool environment provisioning" \
-    "$VENV_DIR/bin/python3" -m remanga.tool_envs install --torch-backend "$REMANGA_TORCH_BACKEND"
+say "Provisioning Kokoro-82M's environment..."
+try_step "Kokoro environment provisioning" \
+    "$VENV_DIR/bin/python3" -m remanga.tool_envs install --prune --torch-backend "$REMANGA_TORCH_BACKEND"
 
 # ---------------------------------------------------------------------------
 # 5. Config + weights
@@ -241,12 +220,8 @@ if [ ! -f "config.json" ]; then
     cp config.example.json config.json && say "Created config.json from config.example.json"
 fi
 
-# video.gpu_codec defaults to "auto" and is resolved per machine at render
-# time (see remanga/config/system.py and video/render.py), so nothing about
-# the encoder needs writing into config.json here.
-
-say "Verifying and downloading model weights..."
-try_step "model weight download" "$VENV_DIR/bin/python3" -m remanga.cli setup-models
+say "Downloading the Kokoro-82M weights..."
+try_step "Kokoro weight download" "$VENV_DIR/bin/python3" -m remanga.cli setup
 
 # ---------------------------------------------------------------------------
 echo
@@ -261,7 +236,6 @@ echo
 echo "  Machine:  $REMANGA_SUMMARY"
 echo "  Encoder:  $REMANGA_VIDEO_ENCODER"
 echo
-echo "  Guided wizard : ./pipeline.sh"
-echo "  Step-by-step  : ./run.sh --help"
-echo "  Re-check hw   : ./run.sh hardware"
+echo "  Menus         : ./pipeline.sh"
+echo "  Commands      : ./run.sh --help"
 echo "=========================================================="

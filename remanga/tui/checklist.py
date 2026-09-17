@@ -2,13 +2,10 @@
 
 Two shapes, one implementation:
 
-- plain checklist (`multiselect`): what to keep during a wipe, which
-  chapters to compile, which config switches are on. Space toggles.
-- ordered checklist (`multiselect(ordered=True)`): the pipeline editor,
-  where *sequence* is half the answer. Rows show their run position (1., 2.,
-  3.) instead of a tick, taken from the order they were checked in, so
-  building "crop, then tts, then render" is just checking three boxes in
-  that order rather than typing a comma-separated list correctly."""
+- plain checklist (`multiselect`). Space toggles.
+- ordered checklist (`multiselect(ordered=True)`), where *sequence* is half
+  the answer: rows show their run position (1., 2., 3.) instead of a tick,
+  taken from the order they were checked in."""
 
 from __future__ import annotations
 
@@ -43,8 +40,7 @@ def multiselect(
     Pre-check rows by setting `Choice.checked` - every caller in remanga
     does, so the menu opens showing the current state and Enter alone keeps
     it exactly as it is. `allow_empty=False` refuses to confirm an empty
-    selection, for the answers where "none of them" isn't meaningful (a
-    pipeline with no steps)."""
+    selection, for the answers where "none of them" isn't meaningful."""
     rows = [
         Choice(label=c.label, hint=c.hint, detail=c.detail, badge=c.badge,
                value=c.value, disabled=c.disabled, checked=c.checked, plain=c.plain)
@@ -63,7 +59,7 @@ def multiselect(
         rows = [*rows, exit_row(exit_label)]
 
     # Check order, which is the run order in `ordered` mode. Seeded from
-    # whatever arrived pre-checked so an existing pipeline keeps its order.
+    # whatever arrived pre-checked so an existing order is kept.
     order: list[Any] = [c.value for c in rows if c.checked]
 
     def toggle(choice: Choice) -> None:

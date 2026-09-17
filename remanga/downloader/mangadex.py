@@ -12,17 +12,12 @@ from pathlib import Path
 import requests
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn, TimeRemainingColumn
 
+from remanga.chapters import chapter_key, page_stem
 from remanga.config import DownloaderConfig
 from remanga.console import console, escape as _esc
-from remanga.cropper.naming import page_stem
 from remanga.downloader.chapter_list import ChapterListMixin
-from remanga.downloader.pages import IMAGE_QUALITY, PageFile, create_pages_zip, remove_paths
+from remanga.downloader.pages import IMAGE_QUALITY, PageFile, remove_paths
 from remanga.downloader.resolve import BASE_URL, MangaDexResolver
-
-# Straight from the submodule: full_recap's own __init__ also pulls in
-# compiler.py (the audio/video stack), which this module has no other reason
-# to import.
-from remanga.full_recap.discovery import chapter_key
 from remanga.paths import (
     get_chapter_dir,
     load_project_metadata,
@@ -75,10 +70,8 @@ class MangaDexDownloader(ChapterListMixin):
 
         # Resolving an ID/URL directly (as opposed to a title search - see
         # MangaDexResolver.parse_manga_id) never otherwise learns the manga's
-        # actual title along the way, but cropper/crop_report.py's
-        # chapter_info.json (bundled into the vision zip - see
-        # prompts/narration.md) needs a human-readable name for the LLM, so
-        # fetch and cache it here. Only re-fetched when missing or the manga
+        # actual title along the way, but the PDF's text page names the manga
+        # for the LLM, so fetch and cache it here. Only re-fetched when missing or the manga
         # ID changed, to avoid an extra API call on every re-run of an
         # already-downloaded chapter.
         existing_meta = load_project_metadata(project_name)
@@ -95,7 +88,7 @@ class MangaDexDownloader(ChapterListMixin):
             "manga_id": manga_id,
             "manga_title": manga_title,
             # Where the wizard derives reading_direction from instead of
-            # asking - see remanga/wizard/projects.py.
+            # asking - see remanga/workflow.py.
             "original_language": original_language,
             "last_chapter": str(chapter_num)
         })
@@ -152,7 +145,7 @@ class MangaDexDownloader(ChapterListMixin):
             # attempt resolved. `verified` is written False before the first
             # page is fetched and True only once every page is on disk and
             # checked, so a run killed mid-download leaves a record saying so
-            # - the status panel and the download picker read it. No per-page
+            # - the chapter listing reads it. No per-page
             # list: pages/ itself already shows that.
             update_manifest_chapter(project_name, chapter_num, "pages", {
                 "chapter_id": chapter_id,
@@ -169,8 +162,6 @@ class MangaDexDownloader(ChapterListMixin):
                 f"[bold green]✓ All {len(pages)} pages verified against MangaDex's checksums - "
                 f"nothing to download.[/]"
             )
-            if self.config.zip_pages_enabled:
-                create_pages_zip(project_name, chapter_num, dest_dir)
             return dest_dir
 
         record_pages(False)
@@ -224,8 +215,6 @@ class MangaDexDownloader(ChapterListMixin):
             f"MangaDex's checksums.[/]"
         )
 
-        if self.config.zip_pages_enabled:
-            create_pages_zip(project_name, chapter_num, dest_dir)
 
         return dest_dir
 

@@ -20,7 +20,6 @@ from remanga.paths import (
     get_video_picture_path,
     get_video_work_dir,
 )
-from remanga.verify import ensure_panels_match_narration
 from remanga.video.compose import FrameCompositor
 from remanga.video.encoder_probe import EncoderChoiceMixin
 from remanga.video.encoding import (
@@ -41,9 +40,9 @@ class VideoRenderer(EncoderChoiceMixin):
         self._encoder_choice: tuple[str, str, bool, str] | None = None
 
     def frame_timeline(self, project_name: str, chapter_num: str) -> FrameTimeline:
-        """This chapter's panels on the configured frame grid (video/frame_timeline.py)."""
-        panels = read_json(get_audio_timing_path(project_name, chapter_num)).get("panels", [])
-        return build_frame_timeline(panels, self.video_config.fps)
+        """This chapter's pages on the configured frame grid (video/frame_timeline.py)."""
+        pages = read_json(get_audio_timing_path(project_name, chapter_num)).get("pages", [])
+        return build_frame_timeline(pages, self.video_config.fps)
 
     # --- the picture stream: video only, cached apart from the final MP4 ---
 
@@ -79,9 +78,7 @@ class VideoRenderer(EncoderChoiceMixin):
 
     def ensure_picture(self, project_name: str, chapter_num: str, force: bool = False) -> tuple[Path, FrameTimeline]:
         """This chapter's encoded picture stream, encoded only if it's missing
-        or stale. A render muxes it with the mixed sound; full-recap
-        stream-copies every chapter's picture into the join. Either way, a
-        change to the sound alone never re-encodes a frame."""
+        or stale, so a change to the sound alone never re-encodes a frame."""
         timeline = self.frame_timeline(project_name, chapter_num)
         if force or not self._picture_is_fresh(project_name, chapter_num, timeline):
             self._encode_picture(project_name, chapter_num, timeline, force=force)
@@ -97,12 +94,13 @@ class VideoRenderer(EncoderChoiceMixin):
         the same ffmpeg run. ffmpeg gives each encoder a thread of its own, so
         a fresh render waits for the slower of the two, not both in turn."""
         if not timeline.total_frames:
-            raise RuntimeError(f"audio_timing.json for chapter {chapter_num} lists no panels - nothing to render.")
+            raise RuntimeError(f"audio_timing.json for chapter {chapter_num} lists no pages - nothing to render.")
 
         # 1. Composite frames to canvas
-        self.compositor.prepare_composited_frames(project_name, chapter_num, force=force)
+        self.compositor.prepare_composited_frames(project_name, chapter_num,
+                                                  [slot.page_id for slot in timeline.slots], force=force)
 
-        # 2. Concat script: one entry per panel, snapped to the frame grid
+        # 2. Concat script: one entry per page, snapped to the frame grid
         concat_file = get_video_concat_path(project_name, chapter_num)
         timeline.write_concat_list(concat_file, get_video_frames_dir(project_name, chapter_num))
 
@@ -153,11 +151,6 @@ class VideoRenderer(EncoderChoiceMixin):
         stream-copied together at the end, so when only the mix changed the
         cached picture is reused and the render is one audio encode.
         """
-        # Refuse to produce output that would be silently degraded - see
-        # verify/gate.py. Here rather than in pipeline.py so full-recap,
-        # which does not go through the wizard's steps, is covered too.
-        ensure_panels_match_narration(project_name, chapter_num, stage="video rendering")
-
         master_audio = get_master_audio_path(project_name, chapter_num)
         # Final MP4 lives at {manga}/video/chapter_N/ - see remanga.paths.
         final_video = get_final_video_path(project_name, chapter_num)

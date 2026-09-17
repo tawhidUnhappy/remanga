@@ -1,6 +1,6 @@
 """The driver side of every isolated-venv worker: one spawn, one auto-heal,
-one request/shutdown lifecycle, shared by TTS (audio/synth/), OCR
-(ocr/engine.py) and MAGI (webui/magi_assist.py).
+one request/shutdown lifecycle, used by the Kokoro synthesizer
+(audio/synth/).
 
     heal.py     starting a worker, installing what its own install missed
     process.py  ToolWorker: the running process and the requests to it

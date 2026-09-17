@@ -9,9 +9,9 @@ from typing import Any
 import requests
 from rich.progress import BarColumn, Progress, TextColumn
 
+from remanga.chapters import chapter_key
 from remanga.config import DownloaderConfig
 from remanga.console import console, escape as _esc
-from remanga.full_recap.discovery import chapter_key
 
 BASE_URL = "https://api.mangadex.org"
 
@@ -103,7 +103,7 @@ class MangaDexResolver:
         regardless of which form the user originally gave it in.
 
         `original_language` ("ja", "ko", "zh", ...) is what the reading
-        direction is derived from (see remanga/wizard/projects.py): native
+        direction is derived from (see remanga/wizard.py): native
         Japanese manga reads right-to-left, Korean/Chinese webtoons
         left-to-right. It's already in this response, so asking a user which
         way their manga reads - when MangaDex has just told us - is a
