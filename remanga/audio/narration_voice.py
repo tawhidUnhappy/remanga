@@ -11,8 +11,10 @@ from __future__ import annotations
 from typing import Any
 
 
-def narration_voice_identity(voice: str) -> dict[str, Any]:
-    return {"engine": "kokoro", "voice": voice}
+def narration_voice_identity(voice: str, speed: float) -> dict[str, Any]:
+    """The voice AND its speed: a clip made at another speed is another
+    delivery, and resuming over it would mix two paces in one chapter."""
+    return {"engine": "kokoro", "voice": voice, "speed": round(float(speed), 3)}
 
 
 def voice_changed_from(previous_timing: dict[str, Any], identity: dict[str, Any]) -> str | None:
@@ -23,4 +25,5 @@ def voice_changed_from(previous_timing: dict[str, Any], identity: dict[str, Any]
     previous = previous_timing.get("voice") or {}
     if previous == identity:
         return None
-    return f"{previous.get('engine', 'another engine')}, {previous.get('voice', 'another voice')}"
+    speed = f" at {previous['speed']:g}x" if "speed" in previous else ""
+    return f"{previous.get('engine', 'another engine')}, {previous.get('voice', 'another voice')}{speed}"

@@ -69,7 +69,17 @@ call these), `cli.py`, `wizard.py` (menus), `settings.py` (voice/music/video/pdf
 - **Config migration:** old config.json nested `tts.kokoro.*` is lifted to `tts.*`; old
   project.json override keys (`tts.kokoro.*`, `audio.pause_between_panels_ms`, `video.panel_*`) are
   mapped in `config/root.py:_migrate_override_key`; pydantic AliasChoices cover the renamed fields.
-- The user's `tts.volume_boost_db` is 8 and speed 1.3: Kokoro clips clip at +8 dB (the run says so).
+- **Sound settings (tuned 2026-09-17, measured):** speed 1.33, boost 0, music 14 LU under the voice,
+  loudnorm on to -14 LUFS / -1 dBTP. Kokoro speed is NOT linear: 1.0=185 wpm, 1.3=225, 1.33=237,
+  then 1.36=266 (sentence pauses start disappearing) - don't go past ~1.35 for "a little faster".
+  Music gain is computed at mix time from the integrated loudness of the narration and of the exact
+  looped bed the mix plays (whole-file measurement was ~1 LU off - songs' openings are quieter);
+  verified 14.0 LU on all three global/bgm tracks. The tracks are mastered -9.9 to -12.7 LUFS, which
+  is why the old fixed `bgm_volume_db` (removed) put them 18-20 LU under = barely audible.
+- Loudnorm is two-pass linear (first pass `print_format=json`, JSON is the last {...} on stderr with
+  ffmpeg summary lines AFTER it - parse to the last `}`). Single-pass dynamic loudnorm pumps music.
+- The voice identity in audio_timing.json includes SPEED; before, a speed change silently reused
+  clips at the old speed.
 - Decimal chapters are chapters of their own: `1-5` takes 4.5, not 5.1 (`chapters.expand_chapter_selection`).
 - MangaDex chapter list is cached 24h in manifest.json.
 

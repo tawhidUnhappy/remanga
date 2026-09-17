@@ -17,6 +17,8 @@ from remanga.tui import Choice, ask_number, is_cancel, select
 MUSIC_EXTS = (".mp3", ".wav", ".m4a", ".ogg", ".opus", ".flac")
 RESOLUTIONS = ((1920, 1080, "1080p widescreen"), (1280, 720, "720p widescreen"), (1080, 1920, "1080p vertical"))
 _MUSIC_OFF = "__off__"
+MUSIC_LEVELS = ((12.0, "energetic - music clearly felt"), (14.0, "balanced - recommended"),
+                (18.0, "subtle - a quiet bed"))
 
 
 def _music_files() -> list[Path]:
@@ -28,8 +30,8 @@ def summary(config: RemangaConfig) -> dict[str, str]:
     audio = config.audio
     return {
         "voice": f"{config.tts.voice_label} · speed {config.tts.speed:g}x",
-        "music": f"{Path(audio.bgm_path).name} at {audio.bgm_volume_db:g} dB" if audio.bgm_enabled and audio.bgm_path
-        else "off",
+        "music": f"{Path(audio.bgm_path).name}, {audio.bgm_below_voice_lu:g} LU under the voice"
+        if audio.bgm_enabled and audio.bgm_path else "off",
         "video": f"{config.video.width}x{config.video.height}",
         "pdf": f"at most {config.pdf.max_mb:g}MB per file",
     }
@@ -76,10 +78,14 @@ def _music(config: RemangaConfig) -> None:
     if picked == _MUSIC_OFF:
         config.audio.bgm_enabled = False
     else:
-        volume = ask_number("Music volume, in dB", default=config.audio.bgm_volume_db, minimum=-60, maximum=0,
-                            note="how far the music sits under the voice - more negative is quieter")
+        level = select("How present should the music be?", [
+            Choice(f"{lu:g} LU under the voice", hint=hint, value=lu) for lu, hint in MUSIC_LEVELS
+        ], default=config.audio.bgm_below_voice_lu, back_label="Back",
+            note="measured per track and chapter, so any music file sits at the same level")
+        if is_cancel(level):
+            return
         config.audio.bgm_path, config.audio.bgm_enabled = picked, True
-        config.audio.bgm_volume_db = float(volume)
+        config.audio.bgm_below_voice_lu = float(level)
     config.save()
     console.print(f"[green]✓ Music:[/] {summary(config)['music']}")
 

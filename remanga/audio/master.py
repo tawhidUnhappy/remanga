@@ -3,6 +3,8 @@ the music bed under them, and the loudness pass over the result."""
 
 from __future__ import annotations
 
+import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -17,9 +19,9 @@ from remanga.ffmpeg_io import run_ffmpeg
 BGM_FADE_IN_MS = 1500
 BGM_FADE_OUT_MS = 2000
 
-# What a finished master is normalized to: -16 LUFS, what streaming
-# platforms expect (EBU R128).
-LOUDNORM_FILTER = "loudnorm=I=-16:LRA=11:TP=-1.5"
+# Loudness range and true-peak ceiling for the normalized master.
+LOUDNORM_LRA = 11
+LOUDNORM_TRUE_PEAK = -1.0
 
 
 def page_segments(audio_dir: Path, page: dict[str, Any], sample_rate: int) -> list[AudioSegment]:
@@ -50,41 +52,57 @@ def load_bgm(path: str | Path, sample_rate: int) -> AudioSegment:
     return load_audio(Path(path), sample_rate, channels=2)
 
 
-def under_narration(narration: AudioSegment, bgm: AudioSegment, volume_db: float) -> AudioSegment:
-    """The narration over the music: the bed set to `volume_db`, looped to
-    the narration's length, and faded in and out exactly once - so however
-    many chapters this covers, the music arrives and leaves once, and never
-    restarts at a join."""
-    bed = bgm + volume_db
-    total_duration_ms = len(narration)
-    loop_count = (total_duration_ms // max(1, len(bed))) + 1
-    bed = (bed * loop_count)[:total_duration_ms]
-    bed = bed.fade_in(BGM_FADE_IN_MS).fade_out(BGM_FADE_OUT_MS)
-    return bed.overlay(narration)
+def integrated_loudness(path: Path) -> float | None:
+    """A file's integrated loudness in LUFS (EBU R128), or None when it can't
+    be measured (silence, an unreadable file)."""
+    result = run_ffmpeg(["ffmpeg", "-hide_banner", "-nostats", "-i", str(path), "-af", "ebur128", "-f", "null", "-"],
+                        capture=True)
+    found = re.findall(r"I:\s+(-?[\d.]+) LUFS", result.stderr or "")
+    value = float(found[-1]) if found else None
+    return value if value is not None and value > -70 else None
 
 
-def write_master(raw_path: Path, final_path: Path, sample_rate: int, *, normalize: bool,
-                 announcement: str = "", on_failure: str = "the un-normalized track",
-                 progress: tuple[str, float] | None = None) -> None:
-    """Puts the raw master in place as the finished one, normalized when
-    asked for.
+def music_bed(narration: AudioSegment, bgm: AudioSegment) -> AudioSegment:
+    """The music looped to the narration's length, faded in and out once - the
+    exact stretch the mix plays, so it is also what gets measured."""
+    loop_count = (len(narration) // max(1, len(bgm))) + 1
+    return (bgm * loop_count)[:len(narration)].fade_in(BGM_FADE_IN_MS).fade_out(BGM_FADE_OUT_MS)
 
-    A failed loudnorm pass is a warning rather than an error: the
-    un-normalized master is moved into place instead, because a recap at the
-    wrong loudness beats no recap at all."""
+
+def under_narration(narration: AudioSegment, bed: AudioSegment, volume_db: float) -> AudioSegment:
+    """The narration over a music bed (music_bed) set to `volume_db`."""
+    return (bed + volume_db).overlay(narration)
+
+
+def write_master(raw_path: Path, final_path: Path, sample_rate: int, *, normalize: bool, target_lufs: float,
+                 announcement: str = "", on_failure: str = "the un-normalized track") -> None:
+    """Puts the raw master in place as the finished one, normalized to
+    `target_lufs` when asked for.
+
+    Two passes: the first measures, the second applies one linear gain from
+    those measurements - single-pass loudnorm rides the gain up and down
+    through the track, which pumps the music between sentences. A failed pass
+    is a warning: the un-normalized master is used instead, because a recap at
+    the wrong loudness beats no recap at all."""
     if not normalize:
-        raw_path.rename(final_path)
+        raw_path.replace(final_path)
         return
 
     console.print(f"[cyan]{announcement}[/]")
-    cmd = ["ffmpeg", "-y", "-i", str(raw_path), "-af", LOUDNORM_FILTER, "-ar", str(sample_rate), str(final_path)]
+    base = f"loudnorm=I={target_lufs:g}:LRA={LOUDNORM_LRA}:TP={LOUDNORM_TRUE_PEAK:g}"
     try:
-        if progress is not None:
-            run_ffmpeg(cmd, check=True, capture=True, show_progress=True,
-                       total_seconds=progress[1], description=progress[0])
-        else:
-            run_ffmpeg(cmd, check=True, capture=True)
+        measured = run_ffmpeg(["ffmpeg", "-hide_banner", "-nostats", "-i", str(raw_path), "-af",
+                               f"{base}:print_format=json", "-f", "null", "-"], check=True, capture=True)
+        # loudnorm prints its measurements as the last {...} block on stderr,
+        # with ffmpeg's own summary lines after it.
+        err = measured.stderr or ""
+        stats = json.loads(err[err.rindex("{"):err.rindex("}") + 1])
+        second = (f"{base}:measured_I={stats['input_i']}:measured_LRA={stats['input_lra']}"
+                  f":measured_TP={stats['input_tp']}:measured_thresh={stats['input_thresh']}"
+                  f":offset={stats['target_offset']}:linear=true")
+        run_ffmpeg(["ffmpeg", "-y", "-i", str(raw_path), "-af", second, "-ar", str(sample_rate), str(final_path)],
+                   check=True, capture=True)
         raw_path.unlink(missing_ok=True)
     except Exception as e:
-        console.print(f"[yellow]Loudnorm filter warning: {_esc(str(e))}. Falling back to {on_failure}.[/]")
-        raw_path.rename(final_path)
+        console.print(f"[yellow]Loudness normalization failed ({_esc(str(e))}) - using {on_failure}.[/]")
+        raw_path.replace(final_path)

@@ -51,11 +51,11 @@ class TTSEngine:
 
         timing_path = get_audio_timing_path(project_name, chapter_num)
         previous_timing = read_json_or(timing_path, {})
-        voice_identity = narration_voice_identity(voice)
+        voice_identity = narration_voice_identity(voice, self.tts_config.speed)
         was = voice_changed_from(previous_timing, voice_identity)
         if was and not force:
-            console.print(f"[yellow]This chapter's existing clips are in another voice[/] [dim]({escape(was)}) - "
-                          f"narrating every page again.[/]")
+            console.print(f"[yellow]This chapter's clips are in another voice or speed[/] "
+                          f"[dim]({escape(was)}) - narrating every page again.[/]")
             force = True
 
         boost_db = clamp_boost(self.tts_config.volume_boost_db)

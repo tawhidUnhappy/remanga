@@ -102,11 +102,12 @@ for every project (`config.json`). Everything else is in `config.json`:
 
 | Key | Default | Meaning |
 |---|---|---|
-| `tts.voice` / `tts.speed` | `af_heart` / 1.0 | Kokoro voice (see Settings for the list) and speaking speed |
-| `tts.volume_boost_db` | 0 | gain on the narration; with music on, how far the music sits under it |
-| `audio.bgm_enabled` / `bgm_path` / `bgm_volume_db` | off / - / -35 | background music |
+| `tts.voice` / `tts.speed` | `af_heart` / 1.0 | Kokoro voice (see Settings for the list) and speaking speed - Kokoro at 1.33 is about 237 words a minute; past about 1.35 it starts dropping the pauses between sentences |
+| `tts.volume_boost_db` | 0 | gain on each clip; leave at 0 when loudness normalization is on |
+| `audio.bgm_enabled` / `bgm_path` | off / - | background music |
+| `audio.bgm_below_voice_lu` | 14 | how far the music sits under the voice, in LU - measured per track and chapter, so every music file sits at the same level (12 energetic, 14 balanced, 18 subtle) |
 | `audio.pause_between_pages_ms` | 350 | silence between pages |
-| `audio.enable_loudnorm` | true | normalize the mix to broadcast loudness |
+| `audio.enable_loudnorm` / `loudness_target_lufs` | true / -14 | normalize the finished audio (two-pass, linear) to YouTube's -14 LUFS |
 | `video.width` / `height` / `fps` | 1920 / 1080 / 24 | video size |
 | `video.background_style` | `blur` | `blur` (the page, blurred) or `solid` (`background_color`) |
 | `pdf.max_mb` | 50 | largest PDF file |

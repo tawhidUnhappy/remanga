@@ -32,8 +32,9 @@
     "pause_between_pages_ms": 350,
     "bgm_enabled": false,
     "bgm_path": "",
-    "bgm_volume_db": -35.0,
-    "enable_loudnorm": true
+    "bgm_below_voice_lu": 14.0,
+    "enable_loudnorm": true,
+    "loudness_target_lufs": -14.0
   },
   "video": {
     "width": 1920,
