@@ -16,7 +16,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen, Screen
-from textual.widgets import Button, Footer, Input, Label, Log, Static
+from textual.widgets import Button, Footer, Input, Label, RichLog, Static
 from textual.widgets.option_list import Option
 
 from remanga.ui.widgets import SafeOptionList, TextInput, TopBar
@@ -172,14 +172,15 @@ class LogView(Screen[None]):
 
     def compose(self) -> ComposeResult:
         yield TopBar([*self.path, "Log"], str(self.log_path))
-        yield Log(highlight=False, id="log")
+        yield RichLog(wrap=True, markup=False, highlight=False, id="log")
         yield Footer()
 
     def on_mount(self) -> None:
         exists = self.log_path.exists()
         text = self.log_path.read_text(encoding="utf-8", errors="replace") if exists else "The log is empty."
-        log = self.query_one(Log)
-        log.write(text)
+        log = self.query_one(RichLog)
+        for line in text.splitlines():
+            log.write(Text(line))
         log.scroll_end(animate=False)
         log.focus()
 

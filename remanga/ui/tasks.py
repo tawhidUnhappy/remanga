@@ -27,11 +27,12 @@ from typing import Any
 
 from rich.table import Table
 from rich.text import Text
+from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Footer, Label, Log, ProgressBar, Static
+from textual.widgets import Footer, Label, ProgressBar, RichLog, Static
 
 from remanga import activity
 from remanga.console import console
@@ -115,6 +116,7 @@ class TaskScreen(Screen[TaskOutcome]):
         self.thread_id: int | None = None
         self.stopping = False
         self.tick = 0
+        self.partial = ""
 
     def compose(self) -> ComposeResult:
         yield TopBar(self.path, "working…")
@@ -125,8 +127,9 @@ class TaskScreen(Screen[TaskOutcome]):
                 yield Label(id="bar-label")
                 yield ProgressBar(show_eta=False, id="bar")
                 yield Label(id="bar-detail")
-            yield Log(highlight=False, id="output")
-            yield Static(Text(f"log: {self.log_path}", style="dim"), classes="note")
+            output = RichLog(wrap=True, markup=False, highlight=False, id="output")
+            output.border_subtitle = str(self.log_path)
+            yield output
         yield Footer()
 
     def on_mount(self) -> None:
@@ -152,9 +155,17 @@ class TaskScreen(Screen[TaskOutcome]):
             self.query_one("#bar", ProgressBar).update(total=bar.total, progress=bar.completed)
             count = f"{bar.completed:.0f}/{bar.total:.0f}" if bar.total else ""
             self.query_one("#bar-detail", Label).update(" ".join(x for x in (count, bar.detail) if x))
-        text = self.sink.take().replace("\r\n", "\n").replace("\r", "\n")
-        if text:
-            self.query_one("#output", Log).write(text)
+        text = self.partial + self.sink.take().replace("\r\n", "\n").replace("\r", "\n")
+        *lines, self.partial = text.split("\n")
+        output = self.query_one("#output", RichLog)
+        for line in lines:
+            output.write(Text(line))
+
+    def on_resize(self, event: events.Resize) -> None:
+        # A short terminal squeezes the output box to nothing, and an empty
+        # box still draws scrollbars - hide it instead (it is all in the log).
+        needed = 12 + len(self.steps)  # top bar, footer, border, title, steps, progress bar, box borders
+        self.query_one("#output").display = event.size.height >= needed
 
     def work(self) -> None:
         self.thread_id = threading.get_ident()

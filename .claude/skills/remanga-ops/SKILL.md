@@ -104,7 +104,10 @@ One JSON block, two sections (user request - NOT two blocks):
   a subclass `_on_click` must call `event.prevent_default()` or the base class handler still runs
   (and chooses); `OptionList.__init__` highlights option 0 itself; a focused widget's hidden Enter
   binding hides the screen's footer hint (so the widgets carry shown Enter bindings, and `Result`
-  has `AUTO_FOCUS = ""`); `log` is a Widget property - don't name an attribute `log`.
+  has `AUTO_FOCUS = ""`); `log` is a Widget property - don't name an attribute `log`; a box squeezed
+  to zero height still draws scrollbars (user saw it in VS Code's short terminal panel) - output boxes
+  are wrapping `RichLog`s with `overflow-x: hidden`, and the task screen hides its box when too short.
+  Test small sizes too (116x18, 116x12).
 - Test the UI with Textual's `app.run_test()` Pilot (keys, `click(times=2)`) and once in a real pty
   (TERM=xterm-256color, pyte via `bin/uv run --no-project --with pyte`, SGR mouse `\x1b[<0;x;yM`)
   from a scratch cwd; a test that presses Enter without an arrow first "hangs" - that is the rule.

@@ -34,17 +34,21 @@ Result, Choice, Ask { align: center middle; }
 .buttons { height: auto; margin-top: 1; }
 .buttons Button { margin-right: 2; }
 
-.task { height: 1fr; border: round $accent; padding: 1 2; margin: 1 2; }
+.task { height: 1fr; border: round $accent; padding: 0 2; margin: 0 1; }
+.task .dialog-title { margin: 0; }
 #steps { height: auto; }
-#bar-row { height: 1; margin: 1 0; }
+#bar-row { height: 1; }
 #bar-label { width: auto; margin-right: 2; color: $text-muted; }
 #bar { width: 44; }
 #bar-detail { width: 1fr; color: $text-muted; margin-left: 1; }
-#output { height: 1fr; border: round $panel-lighten-2; color: $text-muted; }
-.task .note { margin: 1 0 0 0; }
+#output {
+    height: 1fr; min-height: 3; margin-top: 1; border: round $panel-lighten-2; color: $text-muted;
+    background: $background; overflow-x: hidden; scrollbar-size-vertical: 1;
+    border-subtitle-color: $text-muted;
+}
 
 LoadingIndicator { height: 1fr; }
-LogView Log { height: 1fr; }
+LogView RichLog { height: 1fr; overflow-x: hidden; }
 """
 
 
