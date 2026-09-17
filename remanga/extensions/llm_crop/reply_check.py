@@ -7,11 +7,7 @@ right (an order that differs from the layout's XY-cut is often Gemini reading
 the story), and never blocks the import.
 
 Boxes are checked as Gemini wrote them: on the square grid image, where a
-unit is the same size across and down, so shapes compare directly. A reply
-can instead declare `"units": "page"` - boxes normalised to the page itself,
-crops.json's own `box_1000` - for a model that measures on the plain pages
-(or from MAGI's boxes) and never saw a grid; shapes are then scaled back to
-the page's real proportions before they're compared."""
+unit is the same size across and down, so shapes compare directly."""
 
 from __future__ import annotations
 
@@ -26,11 +22,6 @@ KINDS = ("panel", "group", "splash")
 SKIP_REASONS = ("credits", "ad", "blank", "duplicate")
 BOX_KEYS = ("frames", "text_outside", "art_outside")
 CROP_KEYS = ("order", "kind", *BOX_KEYS)
-GRID_UNITS, PAGE_UNITS = "grid", "page"
-UNITS = (GRID_UNITS, PAGE_UNITS)
-# A page measured in its own units: the whole 0-1000 range, and converting a
-# box to crops.json's box_1000 changes nothing.
-WHOLE_PAGE = PageExtent(1000.0, 1000.0)
 
 
 @dataclass
@@ -42,19 +33,6 @@ class ReplyCheck:
 def box_bounds(boxes: list[list[float]]) -> list[float]:
     """The rectangle around `[ymin, xmin, ymax, xmax]` boxes."""
     return [min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)]
-
-
-def reply_units(doc: Any) -> str:
-    """The units the reply's boxes are measured in - `grid` unless it says."""
-    return doc.get("units", GRID_UNITS) if isinstance(doc, dict) else GRID_UNITS
-
-
-def box_extents(doc: Any, extents: dict[str, PageExtent]) -> dict[str, PageExtent]:
-    """Each page's extent in the reply's own units: its area on the square
-    for a grid reply, the whole 0-1000 range for a page-units one."""
-    if reply_units(doc) == PAGE_UNITS:
-        return dict.fromkeys(extents, WHOLE_PAGE)
-    return extents
 
 
 def _same_chapter(a: Any, b: Any) -> bool:
@@ -148,11 +126,8 @@ def _check_page(entry: dict[str, Any], extent: PageExtent, check: ReplyCheck) ->
     return len(check.errors) == before
 
 
-def _layout_warnings(stem: str, crops: list[dict[str, Any]], direction: str,
-                     y_per_x: float = 1.0, measured_on_grid: bool = True) -> list[str]:
-    """Things about a sound page worth a look. `y_per_x` turns a box's height
-    into the same scale as its width - 1 on the square grid, the page's own
-    height-to-width ratio for a page-units reply."""
+def _layout_warnings(stem: str, crops: list[dict[str, Any]], direction: str) -> list[str]:
+    """Things about a sound page worth a look."""
     from remanga.webui.mark_ops import reading_order
 
     warnings = []
@@ -172,12 +147,12 @@ def _layout_warnings(stem: str, crops: list[dict[str, Any]], direction: str,
         if swallowed:
             warnings.append(f"{stem}: group {crop['order']}'s rectangle takes in most of crop(s) "
                             f"{', '.join(map(str, swallowed))}, which will be painted out of it")
-        height, width = (rect[2] - rect[0]) * y_per_x, rect[3] - rect[1]
+        height, width = rect[2] - rect[0], rect[3] - rect[1]
         if width and height > 2 * width:
             warnings.append(f"{stem}: group {crop['order']} is {height / width:.1f}x taller than it is wide")
 
     values = [v for crop in crops for key in BOX_KEYS for box in crop.get(key, []) for v in box if v not in (0, 1000)]
-    if measured_on_grid and len(values) >= 8 and sum(v % 50 == 0 for v in values) >= 0.7 * len(values):
+    if len(values) >= 8 and sum(v % 50 == 0 for v in values) >= 0.7 * len(values):
         warnings.append(f"{stem}: most coordinates sit exactly on grid lines - rounded rather than measured?")
 
     rects = [box_bounds([b for key in BOX_KEYS for b in crop.get(key, [])]) for crop in crops]
@@ -201,12 +176,6 @@ def check_reply(doc: Any, pages: list[ChapterPage], extents: dict[str, PageExten
             f"the reply says chapter {doc['chapter']!r}, but it was pasted into chapter {chapter_num}"
         )
     check.warnings.extend(f"Gemini reported: {problem}" for problem in doc.get("problems") or [])
-    units = reply_units(doc)
-    if units not in UNITS:
-        check.errors.append(f'"units" must be "grid" (boxes measured on the grid squares) or "page" '
-                            f'(boxes normalised to the page itself), not {units!r}')
-        return check
-    measured = box_extents(doc, extents)
 
     known = {page.stem for page in pages}
     seen: list[str] = []
@@ -222,11 +191,8 @@ def check_reply(doc: Any, pages: list[ChapterPage], extents: dict[str, PageExten
             check.errors.append(f"page {stem} appears more than once")
             continue
         seen.append(stem)
-        if _check_page(entry, measured[stem], check) and entry["story"]:
-            real = extents[stem]
-            y_per_x = real.ymax / real.xmax if units == PAGE_UNITS else 1.0
-            check.warnings.extend(_layout_warnings(stem, entry["crops"], direction, y_per_x,
-                                                   measured_on_grid=units == GRID_UNITS))
+        if _check_page(entry, extents[stem], check) and entry["story"]:
+            check.warnings.extend(_layout_warnings(stem, entry["crops"], direction))
 
     missing = [page.stem for page in pages if page.stem not in seen]
     if missing:

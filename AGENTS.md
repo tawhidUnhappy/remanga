@@ -11,8 +11,8 @@ plan, look at the panels, write the narration, then let remanga do everything el
 cutting, speech, mixing, rendering.
 
 Everything in this file was run on this machine (RTX 3060 12 GB, 14 GB RAM) in September 2026:
-download, grid, crop import in both grid and page units, crop, narration template, TTS, mix,
-render, status, and MAGI detection called from a script.
+download, grid, crop import, crop, narration template, TTS, mix, render, status, and MAGI detection
+called from a script.
 
 ---
 
@@ -24,9 +24,9 @@ A typical request: *"Make the video for https://mangadex.org/title/<uuid>/... ch
 1. project     pick/create the project, make sure project.json has reading_direction
 2. download    ./run.sh download-range -p P -u URL -r 3-5
    per chapter N, in order:
-3. grid        ./run.sh crop-grid -p P -c N          (skip on the page-units route, 3.0)
-4. YOU CROP    look at grid_pages/chapter_N/*.png (or the plain pages), write chapters/chapter_N/llm_crops.json
-   (MAGI)      run MAGI for exact panel borders: optional on the grid route, the backbone of the page route
+3. grid        ./run.sh crop-grid -p P -c N
+4. YOU CROP    look at grid_pages/chapter_N/*.png, write chapters/chapter_N/llm_crops.json
+   (MAGI)      optional: run MAGI for exact panel borders and check your frames against them
 5. import      ./run.sh llm-crop -p P -c N --force   (fix and re-run until it passes)
 6. check       look at llm_crop/chapter_N/preview/*
 7. cut         ./run.sh crop -p P -c N --force
@@ -124,29 +124,7 @@ remanga's "LLM crop" extension was built for Gemini. You play Gemini's part. **R
 spec your reply is checked against, and it has worked examples. [docs/llm_crop_guide.md](docs/llm_crop_guide.md)
 explains what the program does with the reply.
 
-### 3.0 Pick a route: grid or page units
-
-The reply (`llm_crops.json`) can measure its boxes in either of two units. The rest is identical
-either way: the format, the checks, previews, gutter-snap, bubbles kept whole, paint-out.
-
-| | **Grid units** (default) | **Page units** (`"units": "page"`) |
-|---|---|---|
-| What you look at | gridded squares from `crop-grid` | the plain pages in `chapters/chapter_N/pages/` |
-| A box's 0-1000 is | the 2048 px square the page sits in | the page itself: y by page height, x by page width |
-| Where precision comes from | reading the ruler | MAGI's borders (3.3), plus correcting against the previews (3.4) |
-| Build step | `crop-grid` first | none - no grid is built |
-| Best when | you have no GPU/MAGI, or pages have lots of borderless art | MAGI runs, and the pages are mostly bordered panels |
-
-Don't pick page units just because you can see images. Coordinates guessed off a plain page are
-usually a few percent out, and that's enough to halve a bubble. What makes page units precise is
-MAGI (which outputs page units natively, so its boxes paste straight in) and **the preview loop**:
-import, look, adjust, re-import. Budget for that loop. If MAGI isn't available, use the grid.
-
-The spec in `prompts/llm_crop.md` still applies in full to a page-units reply. Only `<grid>` (how
-to read the ruler) and "inside the page area" change: in page units the page area is always
-`[0, 0, 1000, 1000]`.
-
-### 3.1 Grid route: build the grid
+### 3.1 Build the grid
 
 ```bash
 ./run.sh crop-grid -p P -c N </dev/null
@@ -171,18 +149,13 @@ by hand:
 (a tall page). `[0, 0, 718, 1000]` is a wide spread. **Every box you write must lie inside its page
 area.** Measure in square units, exactly what the ruler shows.
 
-**Page route:** skip this step. The page list is `ls projects/P/chapters/chapter_N/pages/` (the
-file stems are the page IDs, in order), `reading_direction` is in `project.json`, and use
-`grouping: balanced` unless the user says otherwise. Write `llm_crops.json` yourself (3.2).
-
 ### 3.2 Look, then write
 
-Open the images with your image-reading tool **one page at a time, in page order**: the grid
-squares (grid route) or the pages themselves (page route). On the grid, the labels are legible at
-the size your tool displays (heavy lines every 100, light lines every 50, ticks every 10). For each
-page, follow `<process>` in the prompt: story page or not, find every frame, assign every bubble,
-caption and SFX to exactly one crop, decide groups, number crops in reading order, and measure
-`frames`, `text_outside`, `art_outside`.
+Open the grid images with your image-reading tool **one page at a time, in `full_manifest` order**.
+The labels are legible at the size your tool displays (heavy lines every 100, light lines every 50,
+ticks every 10). For each page, follow `<process>` in the prompt: story page or not, find every
+frame, assign every bubble, caption and SFX to exactly one crop, decide groups (`grouping`, default
+`balanced`), number crops in reading order, and measure `frames`, `text_outside`, `art_outside`.
 
 A long chapter is 40+ images. Don't hold the whole plan in your head: write each page's entry to a
 scratch file as you finish it, then assemble.
@@ -192,7 +165,6 @@ Reply format (the file content is plain JSON; code fences are tolerated but not 
 ```json
 {
   "chapter": "3",
-  "units": "grid",
   "problems": [],
   "pages": [
     {"page": "003_001", "story": false, "skip": "credits", "crops": []},
@@ -207,11 +179,9 @@ Reply format (the file content is plain JSON; code fences are tolerated but not 
 }
 ```
 
-- `units`: `"grid"` (the default when left out) or `"page"`. In page units a full-page splash is
-  `[0, 0, 1000, 1000]`.
-- Boxes are `[ymin, xmin, ymax, xmax]`, integers 0-1000, in the units you declared.
-- Every page appears exactly once, in order. `skip` is one of `credits`, `ad`, `blank`,
-  `duplicate`. A title page counts as story (a `splash`).
+- Boxes are `[ymin, xmin, ymax, xmax]`, integers 0-1000, in **square** units.
+- Every page in `full_manifest` appears exactly once, in order. `skip` is one of `credits`, `ad`,
+  `blank`, `duplicate`. A title page counts as story (a `splash`).
 - `kind`: `panel` (1 frame), `group` (2+ frames, one narration line), `splash` (one frame covering
   most of the page).
 - Each crop becomes one image on screen with one narration line. **Crops that are too small to
@@ -219,39 +189,35 @@ Reply format (the file content is plain JSON; code fences are tolerated but not 
 - When unsure where a border is, put the edge **on the gutter side**. `crop` snaps edges that land in
   a gutter; an edge inside the art cuts the art.
 
-### 3.3 MAGI - exact panel borders (optional for grid, the backbone of the page route)
+### 3.3 MAGI - exact panel borders (optional, recommended for dense pages)
 
 MAGI v3 is a manga panel detector already installed in `.tools/venv-magi`. It finds bordered
 panels precisely but knows nothing about bubbles, groups or story order. The way to combine it
-with your judgement: **you decide what the crops are; MAGI tells you where the borders are.**
+with your judgement: **you decide what the crops are; MAGI tells you where the borders are.** Run it
+on a chapter's pages, convert its boxes to square units, and compare them to your `frames`.
 
-Save as a scratch script (not in the repo) and run it with the repo env. It prints page units, and
-grid units too when the chapter's grid has been built:
+Save as a scratch script (not in the repo) and run it with the repo env:
 
 ```python
 # magi_boxes.py  - usage: magi_boxes.py <project> <chapter> [page_stem ...]
 import json, sys, zipfile
 from pathlib import Path
-from PIL import Image, ImageOps
+from PIL import Image
 from remanga.config import RemangaConfig
 from remanga.webui.magi_assist import detect_panels_for_pages
 
 project, chapter, only = sys.argv[1], sys.argv[2], set(sys.argv[3:])
 root = Path("projects") / project
-grid_zip = root / f"grid_zip/chapter_{chapter}/grid_1.zip"
-areas = json.loads(zipfile.ZipFile(grid_zip).read("chapter_info.json"))["page_areas"] if grid_zip.exists() else {}
+info = json.loads(zipfile.ZipFile(root / f"grid_zip/chapter_{chapter}/grid_1.zip").read("chapter_info.json"))
 pages = [p for p in sorted((root / f"chapters/chapter_{chapter}/pages").iterdir())
          if not only or p.stem in only]
 results = detect_panels_for_pages(pages, RemangaConfig.load().marker)   # {filename: [[x1,y1,x2,y2] px]}
 for page in pages:
-    w, h = ImageOps.exif_transpose(Image.open(page)).size
-    boxes = [[round(y1 / h * 1000), round(x1 / w * 1000), round(y2 / h * 1000), round(x2 / w * 1000)]
-             for x1, y1, x2, y2 in results.get(page.name, [])]
-    print(page.stem, "page", json.dumps(boxes))              # [ymin,xmin,ymax,xmax], page units
-    if page.stem in areas:
-        _, _, ay, ax = areas[page.stem]                      # page area on the square
-        print(page.stem, "grid", json.dumps([[round(b[0] * ay / 1000), round(b[1] * ax / 1000),
-                                               round(b[2] * ay / 1000), round(b[3] * ax / 1000)] for b in boxes]))
+    w, h = Image.open(page).size
+    _, _, ay, ax = info["page_areas"][page.stem]          # page area on the square
+    sq = [[round(y1 / h * ay), round(x1 / w * ax), round(y2 / h * ay), round(x2 / w * ax)]
+          for x1, y1, x2, y2 in results.get(page.name, [])]
+    print(page.stem, json.dumps(sq))                       # [ymin,xmin,ymax,xmax] in square units
 ```
 
 ```bash
@@ -262,9 +228,8 @@ PATH="$PWD/bin:$PATH" HF_HOME="$PWD/.cache/huggingface" PYTHONPATH="$PWD" \
 - Loads once, then about a second per page on the GPU. Weights are in `checkpoints/magiv3`.
   RAM was fine on this machine (≥ 8.7 GB stayed free). Output order is **not** reading order.
 - Use its borders for `frames` when they agree with what you see. It misses borderless art, merges
-  or splits odd layouts, and can't see `text_outside` / `art_outside`. Those are yours to measure,
-  in the same units, and the previews are how you check them.
-- Requires CUDA. If it errors, skip it. On the page route that means switching to the grid route.
+  or splits odd layouts, and can't see `text_outside` / `art_outside`; those stay your call.
+- Requires CUDA. If it errors, skip it. Your own measurements are acceptable input.
 
 ### 3.4 Import and check
 
@@ -277,14 +242,11 @@ PATH="$PWD/bin:$PATH" HF_HOME="$PWD/.cache/huggingface" PYTHONPATH="$PWD" \
   Marker marks without asking; without it a headless run keeps the old marks.)
 - **Fail:** exits 1 and writes `projects/P/llm_crop/chapter_N/fix_request.md`. Read it, fix only
   what it names, overwrite `llm_crops.json`, run again.
-- It builds a grid only when `llm_crops.json` is still empty, so a page-units reply never triggers
-  one.
 
 **Look at the previews** before cutting: green = frames, blue = text outside a frame, magenta = art
 outside a frame, red box = the actual cut with its order number, red tint = painted out. Fix any
 bubble that is cut in half, any frame that is clipped or includes a neighbour, and any order that
-is wrong. Then re-import. On the page route this loop is where your precision comes from: nudge
-the edges by what the preview shows, a few units at a time.
+is wrong. Then re-import.
 
 ### 3.5 Cut
 
@@ -454,7 +416,6 @@ config.json                            machine-wide settings (don't edit unasked
 | Symptom | Cause / fix |
 |---|---|
 | `Missing 'reading_direction' for project` | Add it to `project.json` (section 2). |
-| `"units" must be "grid" ... or "page"` | Typo in `units`, or a value like `"pixels"`. Boxes are always 0-1000. |
 | `llm_crops.json is still empty` | You haven't written the reply yet, or wrote it to the wrong chapter folder. |
 | `Gemini's reply ... didn't check out - see fix_request.md` | Read it, fix exactly those pages, re-run `llm-crop`. |
 | TTS/mix/render: panels and narration don't match | Re-cropped after narrating, or edited ids. Regenerate the template and carry texts over by content, or re-narrate. |

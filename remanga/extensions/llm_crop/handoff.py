@@ -86,13 +86,11 @@ def run_llm_crop_step(project: str, chapter: str, config: RemangaConfig, *,
     failing reply raises instead of waiting - with the path to paste into, or
     the fix request to send back."""
     llm = llm_config(config)
-    reply = get_llm_crops_path(project, chapter)
-    # A reply already written needs no grid to be checked against - it is
-    # checked against the pages - and a page-units reply never used one.
-    if has_real_json_content(reply) or grid_built(llm, project, chapter):
+    if grid_built(llm, project, chapter):
         ensure_reply_file(project, chapter)
     else:
         build_grid_bundles(llm, project, chapter)
+    reply = get_llm_crops_path(project, chapter)
     cropper = cropper_config_for(config, project)
 
     while True:

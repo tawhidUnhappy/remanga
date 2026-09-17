@@ -88,17 +88,6 @@ details; a box you move becomes a plain hand-drawn box.
 - In the pipeline checklist, pick **`llm-crop`** instead of **`mark`**. It is not in the default
   order, so projects that never chose keep marking as before.
 
-### Without the grid: page units
-A reply can say `"units": "page"` at the top level. Its boxes are then normalised to the page itself
-(y by the page's height, x by its width - the same 0-1000 as `crops.json`'s `box_1000` and MAGI's
-boxes scaled to the page), not to the grid square. It's for a model that works on the plain pages,
-typically an agent that takes panel borders from MAGI and corrects them against the previews (see
-[AGENTS.md](../AGENTS.md)). Everything else is unchanged: the same keys, checks, previews and cut.
-The page area is simply `[0, 0, 1000, 1000]`, and the "taller than it is wide" warning is scaled to
-the page's real shape. `llm-crop` builds a grid only when `llm_crops.json` is still empty, so no
-grid is ever made for such a reply. Leaving `units` out means `"grid"`, so every existing reply
-reads as before.
-
 ---
 
 ## Settings
