@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -24,6 +25,58 @@ FRAMES_SETTINGS_NAME = "frames_settings.json"
 # 648ms a 1080p frame took, and on the blurred background it saved nothing:
 # level 1 wrote 1006KB in 57ms, optimize 1034KB.
 _FRAME_PNG_COMPRESS_LEVEL = 1
+
+
+# Under this much scaling a panel is being shown smaller than it is. Not
+# exactly 1.0: a panel a hair over the fit area loses nothing anyone can see,
+# and the integer rounding in the fit lands there by itself.
+KEEPS_DETAIL_SCALE = 0.98
+
+
+def downscaled_panels(panels: Sequence[Path], config: VideoConfig) -> list[tuple[Path, float]]:
+    """Every panel the video would show smaller than it is, with its scale.
+    Only the image headers are read, so this costs nothing next to a render."""
+    compositor = FrameCompositor(config)
+    smaller = []
+    for panel in panels:
+        try:
+            with Image.open(panel) as image:
+                width, height = image.size
+        except Exception:  # a broken panel is the renderer's problem to report
+            continue
+        scale = compositor.scale_for(width, height)
+        if scale < KEEPS_DETAIL_SCALE:
+            smaller.append((panel, scale))
+    return smaller
+
+
+# The sizes a bigger video is offered in, widescreen and vertical - the same
+# ones the Settings screen lists, so the suggestion is something to pick.
+VIDEO_SIZES = ((1920, 1080), (2560, 1440), (3840, 2160))
+
+
+def _big_enough(config: VideoConfig, factor: float) -> str:
+    """The smallest offered video size that fits a video `factor` times this
+    one, in the same orientation - or the exact size when none is."""
+    vertical = config.height > config.width
+    for width, height in VIDEO_SIZES:
+        if vertical:
+            width, height = height, width
+        if width >= config.width * factor and height >= config.height * factor:
+            return f"{width}x{height}"
+    return f"{int(config.width * factor / 2) * 2}x{int(config.height * factor / 2) * 2}"
+
+
+def quality_warning(panels: Sequence[Path], config: VideoConfig) -> str | None:
+    """One sentence about the panels this video size shrinks, or None."""
+    smaller = downscaled_panels(panels, config)
+    if not smaller:
+        return None
+    worst_panel, worst = min(smaller, key=lambda pair: pair[1])
+    return (f"{len(smaller)} of {len(panels)} panel(s) are bigger than the {config.width}x"
+            f"{config.height} video and are shown smaller than they are - {worst_panel.stem} at "
+            f"{worst * 100:.0f}% of its size. {_big_enough(config, 1 / worst)} would show every panel "
+            f"at full detail (Settings - Video size); a bigger video takes longer to render.")
 
 
 class FrameCompositor:
@@ -67,6 +120,16 @@ class FrameCompositor:
         # 4. Upscale back to full canvas
         return tiny.resize((cw, ch), Image.Resampling.BICUBIC)
 
+
+    def scale_for(self, img_w: int, img_h: int) -> float:
+        """How much a panel this size is scaled to fit the video - under 1.0
+        means it is shown smaller than it is, and detail is lost."""
+        if getattr(self.config, "auto_adaptive_padding", True):
+            new_w, _, _, _ = self._calculate_adaptive_bounds(img_w, img_h)
+            return new_w / max(1, img_w)
+        pad_factor = 1.0 - (self.config.page_padding_percent * 2 / 100.0)
+        return min(int(self.config.width * pad_factor) / max(1, img_w),
+                   int(self.config.height * pad_factor) / max(1, img_h))
 
     def _calculate_adaptive_bounds(self, img_w: int, img_h: int) -> tuple[int, int, int, int]:
         """
@@ -204,5 +267,8 @@ class FrameCompositor:
 
         if reused_count > 0:
             console.print(f"[dim cyan](Reused {reused_count} existing panel frames)[/]")
+        warning = quality_warning([panel for panel in by_stem.values() if panel.stem in set(panel_ids)], self.config)
+        if warning:
+            console.print(f"[yellow]{warning}[/]")
         write_json(settings_path, settings)
         return frames_dir

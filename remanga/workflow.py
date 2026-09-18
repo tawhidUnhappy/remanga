@@ -349,6 +349,18 @@ def check_narration(project: str, chapter: str) -> tuple[list, list[str]]:
     return panels, check.warnings
 
 
+def quality_warnings(project: str, chapter: str, config: RemangaConfig, panels: list | None = None) -> list[str]:
+    """Panels this video size would show smaller than they are - detail lost
+    for nothing, since the panels themselves are full resolution. `panels` is
+    the narrated ones (StoryPanel) when they are known, so a skipped panel is
+    not counted for a video it never appears in."""
+    from remanga.video.compose import quality_warning
+
+    shown = [getattr(p, "panel", p) for p in panels] if panels is not None else panel_files(project, chapter)
+    warning = quality_warning(shown, config.video)
+    return [warning] if warning else []
+
+
 def narrate(project: str, chapter: str, panels: list, config: RemangaConfig, force: bool = False) -> Path:
     from remanga.audio import TTSEngine
 
@@ -370,7 +382,7 @@ def render(project: str, chapter: str, config: RemangaConfig, force: bool = Fals
 def make_video(project: str, chapter: str, config: RemangaConfig, force: bool = False) -> Path:
     panels, warnings = check_narration(project, chapter)
     console.print(f"[bold]Chapter {chapter}:[/] narration checked - {len(panels)} panel(s) to narrate")
-    for warning in warnings:
+    for warning in warnings + quality_warnings(project, chapter, config, panels):
         console.print(f"  [yellow]- {_esc(warning)}[/]")
     narrate(project, chapter, panels, config, force)
     mix(project, chapter, config, force)

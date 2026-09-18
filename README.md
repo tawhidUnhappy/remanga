@@ -125,6 +125,11 @@ Every step reuses what is still current: re-running **Make video** after changin
 re-mixes and re-muxes; after changing the voice it narrates again. Stopping with Ctrl+C is safe - run
 it again to carry on.
 
+**Panel quality:** panels are cut at the page's full resolution, so a panel can easily be bigger than
+the video. Making a video says so - how many panels are shrunk, the worst one, and which video size
+would show them all at full detail. Nothing is upscaled or re-encoded twice: the warning is there so
+the choice of video size is yours.
+
 **PDF size:** no PDF is larger than the cap (50MB by default). Panels go in losslessly; a chapter too
 big for one file is split into parts. Only a single panel too big for a file on its own is stored
 near-losslessly.
@@ -142,7 +147,7 @@ for every project (`config.json`). Everything else is in `config.json`:
 | `audio.bgm_below_voice_lu` | 14 | how far the music sits under the voice, in LU - measured per track and chapter, so every music file sits at the same level (12 energetic, 14 balanced, 18 subtle) |
 | `audio.pause_between_panels_ms` | 350 | silence between panels |
 | `audio.enable_loudnorm` / `loudness_target_lufs` | true / -14 | normalize the finished audio (two-pass, linear) to YouTube's -14 LUFS |
-| `video.width` / `height` / `fps` | 1920 / 1080 / 24 | video size |
+| `video.width` / `height` / `fps` | 1920 / 1080 / 24 | video size - 2560x1440 and 3840x2160 keep big panels sharp (see the quality warning), at a slower render |
 | `video.background_style` | `blur` | `blur` (the panel, blurred) or `solid` (`background_color`) |
 | `pdf.max_mb` | 50 | largest PDF file |
 | `marker.magi_enabled` / `magi_panel_score_threshold` | true / 0.5 | MAGI v3's panel detection in the Panel Marker, and how sure it must be |

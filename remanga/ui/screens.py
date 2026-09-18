@@ -399,13 +399,14 @@ class ChaptersScreen(Screen):
             found: dict[str, Any] = {}
 
             def check(ch: str = chapter, found: dict = found) -> list:
-                found["pages"], found["warnings"] = workflow.check_narration(project, ch)
-                return found["pages"]
+                found["panels"], found["warnings"] = workflow.check_narration(project, ch)
+                found["warnings"] += workflow.quality_warnings(project, ch, config, found["panels"])
+                return found["panels"]
 
             outcome = await self.run_task(f"Chapter {chapter}: {'remaking the video' if force else 'video'}", [
                 Step("Check the narration", check),
                 Step("Narrate the panels (Kokoro)",
-                     lambda ch=chapter, found=found: workflow.narrate(project, ch, found["pages"], config, force)),
+                     lambda ch=chapter, found=found: workflow.narrate(project, ch, found["panels"], config, force)),
                 Step("Mix with the music", lambda ch=chapter: workflow.mix(project, ch, config, force)),
                 Step("Render the video", lambda ch=chapter: workflow.render(project, ch, config, force)),
             ], log)
@@ -421,7 +422,9 @@ class ChaptersScreen(Screen):
 # --- settings -------------------------------------------------------------------
 
 MUSIC_EXTS = (".mp3", ".wav", ".m4a", ".ogg", ".opus", ".flac")
-RESOLUTIONS = ((1920, 1080, "1080p widescreen"), (1280, 720, "720p widescreen"), (1080, 1920, "1080p vertical"))
+RESOLUTIONS = ((1920, 1080, "1080p widescreen"), (2560, 1440, "1440p - keeps bigger panels sharp"),
+               (3840, 2160, "4K - slowest to render"), (1280, 720, "720p widescreen"),
+               (1080, 1920, "1080p vertical"), (1440, 2560, "1440p vertical"))
 MUSIC_LEVELS = ((12.0, "energetic - music clearly felt"), (14.0, "balanced - recommended"),
                 (18.0, "subtle - a quiet bed"))
 

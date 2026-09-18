@@ -84,6 +84,11 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   Headless checks that work: `MarkerSession(project, [ch])` + `webui.detection.run_detection(state,
   config.marker)` + `session.save_chapter(ch)` writes crops.json; `create_app(session,
   config.marker).run(port=…)` then GET `/`, `/api/chapter`, `/api/pages/<file>`, `/api/outline`.
+- **Panels bigger than the video are warned about** (user request: don't lose quality silently).
+  `video/compose.py:quality_warning` uses the compositor's own `scale_for`, so the number is the real
+  fit scale, and suggests the smallest offered size that fits. It fires twice on purpose: in the
+  pre-check (the result screen / CLI, counting only NARRATED panels) and while compositing. Measured
+  on a real chapter: 8 of 60 panels shrink at 1080p, 2 at 1440p, none at 4K.
 - **Narration is Kokoro-82M** (fixed built-in voices, `tts.voice` a NAME from `config/kokoro_voices.py`).
   **Chatterbox voice cloning was tried on 2026-09-18 and rejected the same day** - the user found the
   clone bad and the music too loud under it - so it was removed again; that version is on the branch
