@@ -150,10 +150,10 @@ it again to carry on.
   default, Settings - Enlarge panels) caps it: a small panel sits smaller on screen, sharp, with more
   of the blurred background around it.
 
-**PDF pages:** every panel page is the same size - the chapter's biggest panel - with the panel
-centred on black, so the PDF does not change shape on every scroll. The image bytes are untouched by
-this: it is page geometry, not a re-encoding, so nothing costs quality or size. The leading text page
-stays letter-sized.
+**PDF pages:** every page is the same size - the chapter's biggest panel - and black: the panels are
+centred on it, and the leading text page is white text on the same black, with its type scaled to the
+page. Nothing changes shape as you scroll. The panel images are untouched by this - it is page
+geometry, not a re-encoding - so it costs no quality and no size.
 
 **PDF size:** no PDF is larger than the cap (50MB by default). Panels go in losslessly; a chapter too
 big for one file is split into parts. Only a single panel too big for a file on its own is stored

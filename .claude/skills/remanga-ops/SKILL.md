@@ -99,10 +99,12 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   Headless checks that work: `MarkerSession(project, [ch])` + `webui.detection.run_detection(state,
   config.marker)` + `session.save_chapter(ch)` writes crops.json; `create_app(session,
   config.marker).run(port=…)` then GET `/`, `/api/chapter`, `/api/pages/<file>`, `/api/outline`.
-- **Every image page in a chapter's PDF is one size** - the chapter's biggest panel, panel centred
-  on black (`pdf/writer.py:build_pdf(canvas=...)`, passed from `builder.py`) - because panels are all
-  different shapes and a PDF that changes shape per page reads badly (user request). Geometry only:
-  the image streams, the JPEG passthrough and the file size are unchanged.
+- **Every page of a chapter's PDF is one size and black** - the chapter's biggest panel, panels
+  centred on it, and the text page white-on-black with its type scaled to the page
+  (`pdf/writer.py:build_pdf(canvas=...)` + `_text_layout`, canvas passed from `builder.py`) - panels
+  are all different shapes, and a PDF that changes shape per page reads badly (user request).
+  Geometry only: the image streams, the JPEG passthrough and the file size are unchanged, and the
+  text still extracts with pdftotext.
 - **`video.max_upscale` (3x, user 2026-09-18) caps how far a SMALL panel is enlarged** - at 4K the
   median panel was being blown up 4x and the smallest 8x, which is soft for nothing. Looked at
   rendered frames to pick it: 2x leaves a tall panel at 13% of frame width (lost), 3x reads well and

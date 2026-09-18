@@ -35,17 +35,18 @@ from dataclasses import dataclass
 
 import numpy as np
 
-# US Letter-ish page size in points (1/72 inch) for the leading text page.
-# Image pages use their own pixel dimensions directly as the page size
-# (1 image pixel = 1 PDF point), so no image ever needs rescaling/letterboxing.
+# US Letter in points (1/72 inch): what the text page's type was sized for,
+# and the page size when a PDF has no panels at all. Every page of a real
+# chapter is the biggest panel's size instead (1 image pixel = 1 PDF point),
+# so no image is ever rescaled.
 _TEXT_PAGE_SIZE = (612, 792)
 _TEXT_FONT = "Helvetica"
 _TEXT_SIZE = 11
 _TEXT_LEADING = 15
 _TEXT_MARGIN = 54
-# How many lines of the text page(s) fit before overflowing the page height -
-# usable height (page height minus top/bottom margin) divided by the leading.
-_LINES_PER_TEXT_PAGE = (_TEXT_PAGE_SIZE[1] - 2 * _TEXT_MARGIN) // _TEXT_LEADING
+# The base layout for the text page, in points. A bigger page (the image
+# pages set the size - see build_pdf) scales all of it by the same factor,
+# and how many lines fit follows from that - see _text_layout.
 
 
 @dataclass
@@ -150,9 +151,24 @@ def _escape_pdf_text(s: str) -> str:
     return s.replace("\\", r"\\").replace("(", r"\(").replace(")", r"\)")
 
 
-def _text_page_content(lines: Sequence[str]) -> bytes:
-    x, y = _TEXT_MARGIN, _TEXT_PAGE_SIZE[1] - _TEXT_MARGIN
-    parts = [f"BT /F1 {_TEXT_SIZE} Tf {_TEXT_LEADING} TL {x} {y} Td"]
+def _text_layout(page_w: int, page_h: int) -> tuple[int, int, int, int]:
+    """Type size, leading, margin and lines per page for a page this big.
+
+    The base is the letter-sized page these numbers were chosen for; a bigger
+    page scales them by the same factor rather than leaving 11pt text adrift
+    in a corner of it."""
+    scale = max(1.0, min(page_w / _TEXT_PAGE_SIZE[0], page_h / _TEXT_PAGE_SIZE[1]))
+    size, leading, margin = round(_TEXT_SIZE * scale), round(_TEXT_LEADING * scale), round(_TEXT_MARGIN * scale)
+    return size, leading, margin, max(1, (page_h - 2 * margin) // leading)
+
+
+def _text_page_content(lines: Sequence[str], page_w: int, page_h: int) -> bytes:
+    """A text page: black, like the panel pages, with the text in white."""
+    size, leading, margin, _ = _text_layout(page_w, page_h)
+    x, y = margin, page_h - margin - size
+    parts = [f"0 0 0 rg 0 0 {page_w} {page_h} re f",  # the same black as the panel pages
+             "1 1 1 rg",                              # so the text has to be white
+             f"BT /F1 {size} Tf {leading} TL {x} {y} Td"]
     for i, line in enumerate(lines):
         if i > 0:
             parts.append("T*")
@@ -170,7 +186,7 @@ def build_pdf(image_pages: Sequence[ImagePage], info_lines: Sequence[str],
               canvas: tuple[int, int] | None = None) -> bytes:
     """Assembles one complete PDF file: one or more leading text pages
     rendering `info_lines` as real, extractable text (paginated - see
-    `_LINES_PER_TEXT_PAGE` - so a long manifest still gets a plain flowing
+    _text_layout - so a long manifest still gets a plain flowing
     list instead of overflowing a single page), followed by one page per
     `image_pages`, in order.
 
@@ -199,19 +215,20 @@ def build_pdf(image_pages: Sequence[ImagePage], info_lines: Sequence[str],
 
     kids: list[int] = []
 
+    lines_per_page = _text_layout(page_w, page_h)[3]
     text_pages = [
-        info_lines[i:i + _LINES_PER_TEXT_PAGE]
-        for i in range(0, len(info_lines), _LINES_PER_TEXT_PAGE)
+        info_lines[i:i + lines_per_page]
+        for i in range(0, len(info_lines), lines_per_page)
     ] or [[]]
     for page_lines in text_pages:
-        content = _text_page_content(page_lines)
+        content = _text_page_content(page_lines, page_w, page_h)
         content_id = add_object(
             b"<< /Length " + str(len(content)).encode("ascii") + b" >>\nstream\n" + content + b"\nendstream"
         )
         kids.append(add_object(
             b"<< /Type /Page /Parent " + str(pages_id).encode("ascii") + b" 0 R "
-            b"/MediaBox [0 0 " + str(_TEXT_PAGE_SIZE[0]).encode("ascii") + b" " +
-            str(_TEXT_PAGE_SIZE[1]).encode("ascii") + b"] "
+            b"/MediaBox [0 0 " + str(page_w).encode("ascii") + b" " +
+            str(page_h).encode("ascii") + b"] "
             b"/Resources << /Font << /F1 " + str(font_id).encode("ascii") + b" 0 R >> >> "
             b"/Contents " + str(content_id).encode("ascii") + b" 0 R >>"
         ))
