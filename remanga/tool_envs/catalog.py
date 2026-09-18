@@ -45,6 +45,17 @@ TOOLS: tuple[ToolSpec, ...] = (
             )),
         ),
     ),
+    ToolSpec(
+        "qwen-tts", "Qwen3-TTS", "TTS engine - voices designed from a description, and preset narrators",
+        steps=(
+            # qwen-tts pulls transformers and its own tokenizer stack; torch
+            # comes from this machine's wheel index (see hardware.py), which
+            # is why it is named first rather than left to the dependency
+            # resolver. flash-attn is deliberately left out: it builds from
+            # source for many minutes and only saves some VRAM.
+            InstallStep(("torch", "torchaudio", "qwen-tts", "soundfile", "huggingface-hub")),
+        ),
+    ),
 )
 
 TOOL_NAMES = tuple(spec.name for spec in TOOLS)

@@ -21,9 +21,9 @@ from textual.widgets import DataTable, Footer, LoadingIndicator
 
 from remanga import activity, workflow
 from remanga.config import RemangaConfig
-from remanga.config.kokoro_voices import KOKORO_VOICES
 from remanga.console import console
 from remanga.paths import GLOBAL_DIR, get_log_path, list_projects, load_project_metadata
+from remanga.ui import voice_settings
 from remanga.ui.dialogs import Ask, Choice, Confirm, Result, number_check
 from remanga.ui.tasks import Step, TaskOutcome, TaskScreen
 from remanga.ui.widgets import SafeTable, TopBar
@@ -430,11 +430,15 @@ MUSIC_LEVELS = ((12.0, "energetic - music clearly felt"), (14.0, "balanced - rec
 
 
 class SettingsScreen(Screen):
+    """Every setting as a row that knows how to change itself - the narrator's
+    rows come from the engine (ui/voice_settings.py), the rest are here."""
+
     BINDINGS = [Binding("escape", "back", "Back"), Binding("q", "app.quit", "Quit")]
 
     def __init__(self, config: RemangaConfig, path: list[str]) -> None:
         super().__init__()
         self.config, self.path = config, path
+        self.rows: list[voice_settings.Row] = []
 
     def compose(self) -> ComposeResult:
         scope = "this project only" if self.config.project else "defaults for every project"
@@ -449,23 +453,27 @@ class SettingsScreen(Screen):
         self.load()
         table.focus()
 
-    def load(self) -> None:
-        config, table = self.config, self.query_one(SafeTable)
-        audio = config.audio
+    def _rows(self) -> list[voice_settings.Row]:
+        config = self.config
+        audio, video, Row = config.audio, config.video, voice_settings.Row
         music = Path(audio.bgm_path).name if audio.bgm_enabled and audio.bgm_path else "off"
-        row = table.picked_row
+        return [
+            *voice_settings.narrator_rows(config),
+            Row("Background music", music, _change_music),
+            Row("Music level", f"{audio.bgm_below_voice_lu:g} LU under the voice", _change_music_level),
+            Row("Video size", f"{video.width}x{video.height}", _change_video_size),
+            Row("PDF size cap", f"{config.pdf.max_mb:g} MB per file", _change_pdf_cap),
+        ]
+
+    def load(self) -> None:
+        table = self.query_one(SafeTable)
+        at = table.picked_row
         table.clear()
-        for name, value in (
-            ("Narrator voice", config.tts.voice_label),
-            ("Speaking speed", f"{config.tts.speed:g}x"),
-            ("Background music", music),
-            ("Music level", f"{audio.bgm_below_voice_lu:g} LU under the voice"),
-            ("Video size", f"{config.video.width}x{config.video.height}"),
-            ("PDF size cap", f"{config.pdf.max_mb:g} MB per file"),
-        ):
-            table.add_row(name, value)
-        if row is not None:
-            table.move_cursor(row=row)
+        self.rows = self._rows()
+        for row in self.rows:
+            table.add_row(row.label, row.value)
+        if at is not None and self.rows:
+            table.move_cursor(row=min(at, len(self.rows) - 1))
 
     def action_back(self) -> None:
         self.dismiss()
@@ -473,53 +481,62 @@ class SettingsScreen(Screen):
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         self.change(event.cursor_row)
 
+    async def run_work(self, title: str, step: str, work) -> bool:
+        """A settings change that is real work (designing a voice downloads a
+        model and runs it) - shown as a task, like any other."""
+        outcome = await self.app.push_screen_wait(TaskScreen(self.path, title, [Step(step, work)], _global_log()))
+        if not outcome.ok:
+            await self.app.push_screen_wait(Result(self.path, title + " failed", [outcome.error], ok=False,
+                                                   log=_global_log()))
+        return outcome.ok
+
     @work(exclusive=True)
     async def change(self, row: int) -> None:
-        config, wait = self.config, self.app.push_screen_wait
-        if row == 0:
-            voice = await wait(Choice("Narrator voice", [(v.label, f"grade {v.grade} · {v.accent}", v.name)
-                                                         for v in KOKORO_VOICES], current=config.tts.voice,
-                                      note="Kokoro-82M's voices, best graded first. A new voice narrates "
-                                           "chapters again."))
-            if voice:
-                config.tts.voice = voice
-        elif row == 1:
-            speed = await wait(Ask("Speaking speed", "Speed (1.0 is normal)", value=f"{config.tts.speed:g}",
-                                   check=number_check(0.5, 2.0),
-                                   note="1.0 is the voice's own pace, about 185 words a minute. Past about "
-                                        "1.35 Kokoro starts dropping the pauses between sentences. Changing this "
-                                        "narrates every chapter again."))
-            if speed is not None:
-                config.tts.speed = float(speed)
-        elif row == 2:
-            folder = GLOBAL_DIR / "bgm"
-            files = sorted(p for p in folder.iterdir() if p.suffix.lower() in MUSIC_EXTS) if folder.exists() else []
-            current = config.audio.bgm_path if config.audio.bgm_enabled else "off"
-            picked = await wait(Choice("Background music", [("No music", "", "off")] +
-                                       [(p.name, "", str(p)) for p in files], current=current,
-                                       note=f"Put music files in {folder}/"))
-            if picked == "off":
-                config.audio.bgm_enabled = False
-            elif picked:
-                config.audio.bgm_path, config.audio.bgm_enabled = picked, True
-        elif row == 3:
-            level = await wait(Choice("Music level", [(f"{lu:g} LU under the voice", hint, lu)
-                                                      for lu, hint in MUSIC_LEVELS],
-                                      current=config.audio.bgm_below_voice_lu,
-                                      note="Measured per track and chapter, so any music file sits at the same "
-                                           "level."))
-            if level is not None:
-                config.audio.bgm_below_voice_lu = level
-        elif row == 4:
-            size = await wait(Choice("Video size", [(f"{w}x{h}", label, (w, h)) for w, h, label in RESOLUTIONS],
-                                     current=(config.video.width, config.video.height)))
-            if size:
-                config.video.width, config.video.height = size
-        elif row == 5:
-            cap = await wait(Ask("PDF size cap", "Largest PDF file, in MB", value=f"{config.pdf.max_mb:g}",
-                                 check=number_check(1, 2000),
-                                 note="A chapter bigger than this is split into pages_1.pdf, pages_2.pdf, ..."))
-            if cap is not None:
-                config.pdf.max_mb = float(cap)
-        config.save()
-        self.load()
+        if 0 <= row < len(self.rows):
+            await self.rows[row].change(self, self.config)
+            self.config.save()
+            self.load()
+
+
+# --- the settings that belong to no engine ------------------------------------
+
+
+async def _change_music(screen: SettingsScreen, config: RemangaConfig) -> None:
+    folder = GLOBAL_DIR / "bgm"
+    files = sorted(p for p in folder.iterdir() if p.suffix.lower() in MUSIC_EXTS) if folder.exists() else []
+    current = config.audio.bgm_path if config.audio.bgm_enabled else "off"
+    picked = await screen.app.push_screen_wait(Choice(
+        "Background music", [("No music", "", "off")] + [(p.name, "", str(p)) for p in files],
+        current=current, note=f"Put music files in {folder}/"))
+    if picked == "off":
+        config.audio.bgm_enabled = False
+    elif picked:
+        config.audio.bgm_path, config.audio.bgm_enabled = picked, True
+
+
+async def _change_music_level(screen: SettingsScreen, config: RemangaConfig) -> None:
+    level = await screen.app.push_screen_wait(Choice(
+        "Music level", [(f"{lu:g} LU under the voice", hint, lu) for lu, hint in MUSIC_LEVELS],
+        current=config.audio.bgm_below_voice_lu,
+        note="Measured per track and chapter, so any music file sits at the same level."))
+    if level is not None:
+        config.audio.bgm_below_voice_lu = level
+
+
+async def _change_video_size(screen: SettingsScreen, config: RemangaConfig) -> None:
+    size = await screen.app.push_screen_wait(Choice(
+        "Video size", [(f"{w}x{h}", label, (w, h)) for w, h, label in RESOLUTIONS],
+        current=(config.video.width, config.video.height),
+        note="Panels are cut at the page's own resolution, so a bigger video keeps more of them at "
+             "full detail - making a video says which panels it would shrink."))
+    if size:
+        config.video.width, config.video.height = size
+
+
+async def _change_pdf_cap(screen: SettingsScreen, config: RemangaConfig) -> None:
+    cap = await screen.app.push_screen_wait(Ask(
+        "PDF size cap", "Largest PDF file, in MB", value=f"{config.pdf.max_mb:g}",
+        check=number_check(1, 2000),
+        note="A chapter bigger than this is split into panels_1.pdf, panels_2.pdf, ..."))
+    if cap is not None:
+        config.pdf.max_mb = float(cap)

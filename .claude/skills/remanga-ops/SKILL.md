@@ -94,7 +94,20 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   composite in 3s, the NVENC encode takes 1m12s, the MP4 is 42MB (still panels compress hard; the
   encoder is CQ 18 VBR, not bitrate-capped) and a rendered frame is 50dB PSNR against its source.
   Frame cache is ~126MB a chapter. Don't trade this back for speed unasked.
-- **Narration is Kokoro-82M** (fixed built-in voices, `tts.voice` a NAME from `config/kokoro_voices.py`).
+- **TTS engines are plug-ins (user request 2026-09-18: "make this modulous").** Adding one is four
+  pieces and nothing else: a `*Config` block in `config/tts.py` (with `voice_label`, `voice_detail`,
+  `identity()`), a `TTSEngineSpec` in `config/tts_engines.py`, a Synthesizer in `audio/synth/` +
+  worker in `audio/scripts/` registered in `SYNTHESIZERS`, and a `ToolSpec` in `tool_envs/catalog.py`.
+  Settings rows come from `ui/voice_settings.py:ENGINE_ROWS` (a `Row` is label/value/change), so the
+  screen itself never changes. Nothing outside asks which engine is running: `audio/tts.py` calls
+  `synth.synthesize(text, output_wav)` and `config.tts.identity()`.
+- **Engines today:** `kokoro` (default, fixed voices, a 60-panel chapter in seconds) and `qwen`
+  (Qwen3-TTS 1.7B, Apache 2.0, `.tools/venv-qwen-tts`): preset narrator + `instruct`, or a voice
+  DESIGNED from a description. Designed = VoiceDesign model makes one sample once
+  (`synth/qwen.py:design_voice`, a one-shot run, not the worker), then the Base model clones THAT
+  sample for every panel - re-describing per panel is what makes a designed voice drift. Three
+  variants, ~4.3GB each, downloaded only for the way actually used.
+- **Kokoro's voice is a NAME** from `config/kokoro_voices.py` (`tts.kokoro.voice`).
   **Chatterbox voice cloning was tried on 2026-09-18 and rejected the same day** - the user found the
   clone bad and the music too loud under it - so it was removed again; that version is on the branch
   `backup/chatterbox-2026-09-18`. Don't re-propose cloning unasked.

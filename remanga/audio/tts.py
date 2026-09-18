@@ -1,4 +1,4 @@
-"""One narration clip per panel, synthesized with Kokoro-82M, and
+"""One narration clip per panel, synthesized by the configured engine, and
 audio_timing.json laying them out.
 
 Resumes: a panel whose clip is already on disk in the same voice is reused,
@@ -15,13 +15,12 @@ from pydub import AudioSegment
 
 from remanga import activity
 from remanga.audio.clips import apply_edge_fades, apply_gain, atomic_export, clamp_boost, is_audible_gain
-from remanga.audio.narration_voice import narration_voice_identity, voice_changed_from
+from remanga.audio.narration_voice import voice_changed_from
 from remanga.audio.resample import load_audio
 from remanga.audio.resume import clip_is_complete, clips_to_redo
 from remanga.audio.synth import create_synthesizer
 from remanga.audio.timing import panel_timing, write_timing
 from remanga.config import AudioConfig, TTSConfig
-from remanga.config.kokoro_voices import VOICE_BY_NAME
 from remanga.console import console, escape
 from remanga.json_io import read_json_or
 from remanga.narration import StoryPanel
@@ -36,9 +35,6 @@ class TTSEngine:
 
     def generate_narration_audio(self, project_name: str, chapter_num: str, panels: list[StoryPanel],
                                  force: bool = False) -> Path:
-        voice = self.tts_config.voice
-        if voice not in VOICE_BY_NAME:
-            raise ValueError(f"'{voice}' is not a Kokoro voice - pick one in Settings.")
         if not panels:
             raise ValueError(f"Chapter {chapter_num} has no panels to narrate.")
 
@@ -47,14 +43,14 @@ class TTSEngine:
             stray_tmp.unlink(missing_ok=True)
 
         console.print(f"[cyan]Narrating {len(panels)} panel(s) with {self._synth.display_name}[/] "
-                      f"[dim](voice {escape(self.tts_config.voice_detail)}, speed {self.tts_config.speed}x)[/]")
+                      f"[dim]({escape(self.tts_config.voice_detail)})[/]")
 
         timing_path = get_audio_timing_path(project_name, chapter_num)
         previous_timing = read_json_or(timing_path, {})
-        voice_identity = narration_voice_identity(voice, self.tts_config.speed)
+        voice_identity = self.tts_config.identity()
         was = voice_changed_from(previous_timing, voice_identity)
         if was and not force:
-            console.print(f"[yellow]This chapter's clips are in another voice or speed[/] "
+            console.print(f"[yellow]This chapter's clips are in another voice[/] "
                           f"[dim]({escape(was)}) - narrating every panel again.[/]")
             force = True
 
@@ -93,7 +89,7 @@ class TTSEngine:
                     reused += 1
                 else:
                     raw = audio_dir / f"{panel.panel_id}_raw.wav"
-                    self._synth.synthesize(text=panel.text, voice=voice, output_wav=raw)
+                    self._synth.synthesize(text=panel.text, output_wav=raw)
                     # Through resample.load_audio: pydub's own resampler folds
                     # imaging noise into the clip going from 24 kHz to 44.1 kHz.
                     segment = load_audio(raw, self.audio_config.sample_rate, channels=1)

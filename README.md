@@ -17,8 +17,8 @@ Manga panels to recap video, in five steps:
 ./bootstrap.sh
 ```
 
-It sets up everything inside this folder: Python, ffmpeg, Kokoro-82M and MAGI v3, each in its own
-environment (`.tools/venv-kokoro`, `.tools/venv-magi`) with its weights. Linux, macOS or Windows (Git Bash); NVIDIA, AMD, Apple
+It sets up everything inside this folder: Python, ffmpeg, MAGI v3 and the narrator you use, each
+in its own environment (`.tools/venv-magi`, `.tools/venv-kokoro`, ...) with its weights. Linux, macOS or Windows (Git Bash); NVIDIA, AMD, Apple
 Silicon or CPU. Run `./run.sh setup` later to repair either install.
 
 ## Use it with the menus
@@ -41,7 +41,7 @@ click chooses it** - a single click never starts anything.
 | **Projects** | Your projects. `Enter` opens one, `n` starts a new one: paste the manga's MangaDex URL (or ID, or a title to search). The project is named after the manga's English title, and its reading direction comes from the manga's original language. |
 | **Chapters** | The chapter list, fetched fresh from MangaDex each time, as a table: status (✓ downloaded, ◐ partial, + new), pages, what comes next (mark the panels, make the PDF, make the video, video done) and title. `Enter` opens a chapter's actions: download, **mark panels**, make PDF, make video, check pages, re-download, reset (deletes the cut panels, PDF, narration, audio and video - the marks and pages stay) or delete. `space` (or clicking a row's `·`) picks several chapters to act on together, `a` downloads every new chapter. Reset and delete ask first. |
 | **Work** | Downloads, panel cutting, PDFs and videos run in a task view: the steps, a progress bar and the last few lines of output. `Ctrl+C` stops. When the work ends you get a result: what was made and what to do next (for a PDF: which files to upload, where to paste the reply), or what went wrong. `l` opens the full log, `c` copies the paths to upload. |
-| **Settings** (`s`) | Narrator voice and speed, background music and volume, video size, PDF size cap - for the open project, or the defaults from the projects screen. |
+| **Settings** (`s`) | Narrator engine and its voice, background music and volume, video size, PDF size cap - for the open project, or the defaults from the projects screen. |
 
 Logs are kept in `projects/<name>/logs/`: `chapter_N.log` for a chapter's PDF and video,
 `project.log` for downloads.
@@ -81,6 +81,23 @@ or **Mark panels** in a chapter's menu. It opens one browser tab for every chapt
 
 The marks are yours: nothing overwrites them, and Reset keeps them. Making the PDF cuts the panels
 again whenever the marks are newer than them.
+
+## The narrator
+
+Two engines, switchable in **Settings → Narrator engine**; each keeps its own voice, so switching
+back and forth changes nothing else. A chapter narrated by the other one is narrated again.
+
+| Engine | Voice | Speed |
+|---|---|---|
+| **Kokoro-82M** (default) | its own studio voices, picked from a list | a 60-panel chapter in seconds |
+| **Qwen3-TTS** | nine preset narrators, steered by a line of plain English ("calm and unhurried") - or **a voice you design**: describe the narrator, and one sample is made and kept | about ten minutes for the same chapter |
+
+**Designing a voice** (Qwen3-TTS only): Settings → Design a voice, describe the narrator, and one
+sample is generated into `global/voice/designed.wav`. Listen to it; design again if it is not right.
+Every panel is then spoken *from that sample*, which is what keeps one voice across a chapter -
+describing the voice again for each panel is what makes a designed voice wander.
+
+An engine's environment and weights download the first time you use it, not at install time.
 
 ## The LLM step
 
@@ -141,7 +158,10 @@ for every project (`config.json`). Everything else is in `config.json`:
 
 | Key | Default | Meaning |
 |---|---|---|
-| `tts.voice` / `tts.speed` | `af_heart` / 1.0 | Kokoro voice (see Settings for the list) and speaking speed - 1.0 is the voice's own pace (about 185 words a minute); past about 1.35 it starts dropping the pauses between sentences |
+| `tts.engine` | `kokoro` | who narrates: `kokoro` (fixed voices, seconds a chapter) or `qwen` (preset narrators or a voice you design, minutes a chapter) |
+| `tts.kokoro.voice` / `.speed` | `af_heart` / 1.0 | Kokoro's voice and pace - 1.0 is its own (about 185 words a minute); past about 1.35 it drops the pauses between sentences |
+| `tts.qwen.speaker` / `.instruct` | `Ryan` / a calm narrator... | Qwen3-TTS's preset narrator and how it reads |
+| `tts.qwen.design` / `.designed_sample` | - | the voice you described, and the sample every panel is then spoken from |
 | `tts.volume_boost_db` | 0 | gain on each clip; leave at 0 when loudness normalization is on |
 | `audio.bgm_enabled` / `bgm_path` | off / - | background music |
 | `audio.bgm_below_voice_lu` | 14 | how far the music sits under the voice, in LU - measured per track and chapter, so every music file sits at the same level (12 energetic, 14 balanced, 18 subtle) |

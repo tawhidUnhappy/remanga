@@ -49,7 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     v = with_project("video", "Make each chapter's video from the narration pasted into narration.json")
     v.add_argument("--force", action="store_true", help="narrate, mix and render again from scratch")
     with_project("chapters", "Show where each chapter is", chapters=False)
-    sub.add_parser("setup", help="install Kokoro-82M and MAGI v3 (their environments and weights)")
+    sub.add_parser("setup", help="install MAGI v3 and the chosen narrator (their environments and weights)")
     return parser
 
 
@@ -109,19 +109,22 @@ def _run(args: argparse.Namespace) -> None:
 
 
 def setup() -> None:
-    """The two models' environments and weights, ready before the first video:
-    Kokoro-82M for the narration and MAGI v3 for finding panels."""
+    """What the first video needs: MAGI v3 for finding panels, and the
+    configured narrator's own environment and weights. The other engines are
+    installed when they are first chosen, not here - an engine nobody uses
+    should not cost a download."""
     from remanga.audio.synth import create_synthesizer
     from remanga.config import RemangaConfig
     from remanga.tool_envs import provision
     from remanga.webui.magi_assist import ensure_weights_downloaded
 
-    failed = provision(["kokoro", "magi"], None)
-    if "kokoro" in failed:
-        raise RuntimeError("Installing Kokoro's environment failed - see the messages above.")
     config = RemangaConfig.load()
+    engine = config.tts.spec
+    failed = provision([engine.tool_name, "magi"], None)
+    if engine.tool_name in failed:
+        raise RuntimeError(f"Installing {engine.display_name}'s environment failed - see the messages above.")
     create_synthesizer(config.tts, config.audio).model_manager.ensure_model()
-    console.print("[bold green]✓ Kokoro-82M is installed and ready.[/]")
+    console.print(f"[bold green]✓ {engine.display_name} is installed and ready.[/]")
     if "magi" in failed:
         console.print("[yellow]MAGI v3's environment failed to install - the Panel Marker still works, with the "
                       "panels marked by hand.[/]")

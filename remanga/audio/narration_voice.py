@@ -2,19 +2,15 @@
 being asked for.
 
 audio_timing.json records the narrator the clips beside it were synthesized
-with, so a resume can tell "these clips are what I would produce now" from
-"these clips are another voice" - where resuming would otherwise narrate half a
-chapter in a voice nobody asked for."""
+with - engine included - so a resume can tell "these clips are what I would
+produce now" from "these clips are another voice", where resuming would
+otherwise narrate half a chapter in a voice nobody asked for. What goes in it
+is the engine's own `identity()` (config/tts.py), so an engine whose voice is
+not a name says so in its own terms."""
 
 from __future__ import annotations
 
 from typing import Any
-
-
-def narration_voice_identity(voice: str, speed: float) -> dict[str, Any]:
-    """The voice AND its speed: a clip made at another speed is another
-    delivery, and resuming over it would mix two paces in one chapter."""
-    return {"engine": "kokoro", "voice": voice, "speed": round(float(speed), 3)}
 
 
 def voice_changed_from(previous_timing: dict[str, Any], identity: dict[str, Any]) -> str | None:
@@ -25,5 +21,9 @@ def voice_changed_from(previous_timing: dict[str, Any], identity: dict[str, Any]
     previous = previous_timing.get("voice") or {}
     if previous == identity:
         return None
-    speed = f" at {previous['speed']:g}x" if "speed" in previous else ""
-    return f"{previous.get('engine', 'another engine')}, {previous.get('voice', 'another voice')}{speed}"
+    engine = previous.get("engine", "another engine")
+    voice = previous.get("voice", "another voice")
+    speed = f" at {previous['speed']:g}x" if previous.get("speed") not in (None, 1.0) else ""
+    if previous.get("engine") == identity.get("engine") and previous.get("voice") == identity.get("voice"):
+        return f"{engine}, {voice} - with other settings{speed}"
+    return f"{engine}, {voice}{speed}"

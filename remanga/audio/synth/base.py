@@ -74,10 +74,10 @@ class BaseWorkerSynthesizer(ToolWorker):
         self._init_worker_state()
 
     # --- subclass hooks -----------------------------------------------
-    def _build_request(self, text: str, voice: str, output_wav: Path) -> dict[str, Any]:
-        """One synthesize request. `voice` is whatever identifies the
-        narrator to this engine - a name for an engine with fixed voices, a
-        reference-clip path for one that clones."""
+    def _build_request(self, text: str, output_wav: Path) -> dict[str, Any]:
+        """One synthesize request. Which voice it is in comes from the
+        engine's own settings block, so nothing above has to know whether
+        that is a name, a description or a recording."""
         raise NotImplementedError
 
     def _synth_timeout_seconds(self) -> float:
@@ -112,7 +112,7 @@ class BaseWorkerSynthesizer(ToolWorker):
             if temp_wav.exists() and not wav_path.exists():
                 temp_wav.rename(wav_path)
 
-    def synthesize(self, text: str, voice: str, output_wav: Path) -> None:
+    def synthesize(self, text: str, output_wav: Path) -> None:
         """Synthesizes speech via this engine's worker process. Text longer
         than `chunk_max_chars` (when the engine sets one) is split on
         sentence boundaries into several bounded calls first and the
@@ -122,22 +122,22 @@ class BaseWorkerSynthesizer(ToolWorker):
         if self.chunk_max_chars and len(text) > self.chunk_max_chars:
             chunks = _split_text_into_chunks(text, self.chunk_max_chars)
             if len(chunks) > 1:
-                self._synthesize_chunks(chunks, voice, output_wav)
+                self._synthesize_chunks(chunks, output_wav)
                 return
-        self._synthesize_once(text, voice, output_wav)
+        self._synthesize_once(text, output_wav)
 
-    def _synthesize_once(self, text: str, voice: str, output_wav: Path) -> None:
+    def _synthesize_once(self, text: str, output_wav: Path) -> None:
         """One bounded worker call, start to finish - what synthesize() used
         to do inline before chunking existed. Also what each individual
         chunk goes through in the chunked path below."""
-        request = self._build_request(text, voice, output_wav)
+        request = self._build_request(text, output_wav)
         self._request(
             request, self._synth_timeout_seconds(), action="synthesis",
             on_timeout=f" on page text {text[:80]!r}", advice=_TIMEOUT_ADVICE,
         )
         self._post_synthesize(output_wav, request)
 
-    def _synthesize_chunks(self, chunks: list[str], voice: str, output_wav: Path) -> None:
+    def _synthesize_chunks(self, chunks: list[str], output_wav: Path) -> None:
         """Synthesizes each chunk to its own temp WAV via the normal
         single-call path (so per-chunk post-processing like the speed
         ffmpeg-atempo fallback still applies), concatenates them in order,
@@ -152,7 +152,7 @@ class BaseWorkerSynthesizer(ToolWorker):
                 # pick their output format from
                 # the file extension and error on anything else.
                 part_path = output_wav.with_name(f"{output_wav.stem}.chunk{i:03d}.tmp.wav")
-                self._synthesize_once(chunk, voice, part_path)
+                self._synthesize_once(chunk, part_path)
                 part_paths.append(part_path)
 
             combined = AudioSegment.empty()
