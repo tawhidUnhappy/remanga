@@ -37,6 +37,17 @@ SAME_ROW_RATIO = 0.5
 # an inset, which is read after the panel it sits in.
 NESTED_RATIO = 0.9
 
+# A banner, a title bar, a caption strip: a mark that runs across (nearly) the
+# whole width of what is left and is far shorter than it. It reads as its own
+# tier even though it overlaps the panels beside it - a title strip across the
+# top of a page is read before the columns under it, whether or not a tall
+# column happens to start level with it. Without this, a strip and a tall
+# column have their tops within a few pixels of each other, are taken for two
+# panels in one row, and the column is read first (user report: the banner
+# page of chapter 1).
+STRIP_SPANS_RATIO = 0.8
+STRIP_SHORT_RATIO = 0.35
+
 
 def _split(marks: list[Mark], start: str, size: str) -> list[list[Mark]]:
     """Splits marks at every gutter that runs across all of them along one
@@ -88,6 +99,25 @@ def _nested(outer: Mark, inner: Mark) -> bool:
     return iw * ih >= NESTED_RATIO * inner_area and outer["w"] * outer["h"] > inner_area
 
 
+def _bounds(marks: list[Mark]) -> tuple[float, float, float, float]:
+    """The box around every mark in the group: x0, y0, x1, y1."""
+    return (min(m["x"] for m in marks), min(m["y"] for m in marks),
+            max(m["x"] + m["w"] for m in marks), max(m["y"] + m["h"] for m in marks))
+
+
+def _strip(marks: list[Mark]) -> Mark | None:
+    """The topmost strip in the group, if there is one: a mark spanning nearly
+    the whole width and far shorter than the group is tall (see
+    STRIP_SPANS_RATIO). None when nothing looks like one."""
+    x0, y0, x1, y1 = _bounds(marks)
+    width, height = x1 - x0, y1 - y0
+    if width <= 0 or height <= 0:
+        return None
+    strips = [m for m in marks
+              if m["w"] >= STRIP_SPANS_RATIO * width and m["h"] <= STRIP_SHORT_RATIO * height]
+    return min(strips, key=lambda m: m["y"] + m["h"] / 2) if strips else None
+
+
 def _fallback(marks: list[Mark], rtl: bool) -> list[Mark]:
     """Order for a group no gutter separates - panels that overlap, or sit
     inside one another. Decided pairwise, the way a reader decides: an inset
@@ -126,6 +156,15 @@ def _xy_cut(marks: list[Mark], rtl: bool) -> list[Mark]:
         if len(blocks) == 1:  # can't happen (see _merge_gridded), but never recurse on the same group
             blocks = columns
         return [m for block in blocks for m in _xy_cut(block, rtl)]
+    strip = _strip(marks)
+    if strip is not None and len(marks) > 1:
+        # A strip is its own tier: whatever sits above its middle is read
+        # first, then the strip, then the rest.
+        middle = strip["y"] + strip["h"] / 2
+        rest = [m for m in marks if m is not strip]
+        above = [m for m in rest if m["y"] + m["h"] / 2 < middle]
+        below = [m for m in rest if m["y"] + m["h"] / 2 >= middle]
+        return [*_xy_cut(above, rtl), strip, *_xy_cut(below, rtl)]
     return _fallback(marks, rtl)
 
 
@@ -144,6 +183,15 @@ def reading_order(marks: list[Mark], direction: str = "right_to_left") -> list[M
     Gutters are found with a relative overlap allowance (OVERLAP_RATIO), not
     a fixed number of pixels, because real marks overlap their neighbours by
     tens of pixels. A group with no gutter at all goes to _fallback.
+
+    A group with no gutter either way is looked at once more for a strip - a
+    banner or caption bar running across it (STRIP_SPANS_RATIO) - which is its
+    own tier however much the panels beside it overlap it. Only then does it
+    fall through to _fallback.
+
+    `direction` is the manga's own, saved in project.json when the project was
+    made (MangaDex's original language) and handed down by the marker session -
+    never guessed per page.
 
     A genuinely irregular page - diagonal gutters, a panel breaking out across
     three others - has no single right answer, and this gives a sensible one

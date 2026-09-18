@@ -109,6 +109,12 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   favicon and `css/theme.css`, which holds the terminal menus' palette (Textual textual-dark:
   #121212/#1e1e1e, accent #fea62b, muted #9a9a9a) - every stylesheet reads those names, so the look
   changes in one file (user request).
+- **Reading order is `webui/mark_ops.py` (recursive XY-cut) and the direction comes from
+  project.json** (`marker_session.reading_direction`), never guessed. Edge case fixed 2026-09-18: a
+  banner/strip across the top overlapping the tops of two tall columns was read second, because it
+  and the tall column had tops within a few pixels and counted as one row. A mark spanning >=80% of
+  the group's width and <=35% of its height is now its own tier (`_strip`). Checked against 56 real
+  pages (their chapter 1 + a MAGI-marked chapter): no other page's order changed.
 - **The marker needs a browser**; in the Textual UI it runs as a task whose step just waits.
   Headless checks that work: `MarkerSession(project, [ch])` + `webui.detection.run_detection(state,
   config.marker)` + `session.save_chapter(ch)` writes crops.json; `create_app(session,
