@@ -103,10 +103,11 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   `kokoro` block (lifted to `tts.*` by `config/tts.py:_from_engine_blocks`), and a Chatterbox-era one
   has a voice that is a FILE PATH plus no speed - `TTSConfig` drops what it does not know and falls
   back to defaults; old project.json override keys are mapped in `config/root.py`.
-- **Sound settings (tuned 2026-09-17, measured):** speed 1.33, boost 0, music 14 LU under the voice,
-  loudnorm on to -14 LUFS / -1 dBTP. Kokoro speed is NOT linear: 1.0=185 wpm, 1.3=225, 1.33=237,
-  then 1.36=266 (sentence pauses start disappearing) - don't go past ~1.35 for "a little faster".
-  Music gain is computed at mix time from the integrated loudness of the narration and of the exact
+- **Sound settings: speed 1.0 and background music OFF (user, 2026-09-18** - they asked for normal
+  narration with no speed-up, and no music by default; the 1.33 speed tuned on 2026-09-17 is gone).
+  Boost 0, loudnorm on to -14 LUFS / -1 dBTP. When music IS turned on it sits 14 LU under the voice.
+  Kokoro speed is NOT linear: 1.0=185 wpm, 1.3=225, 1.33=237, then 1.36=266 (sentence pauses start
+  disappearing) - don't go past ~1.35 if they ever ask for faster. Music gain is computed at mix time from the integrated loudness of the narration and of the exact
   looped bed the mix plays (whole-file measurement was ~1 LU off - songs' openings are quieter);
   verified 14.0 LU on all three global/bgm tracks. The tracks are mastered -9.9 to -12.7 LUFS, which
   is why the old fixed `bgm_volume_db` (removed) put them 18-20 LU under = barely audible.

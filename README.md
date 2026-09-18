@@ -141,7 +141,7 @@ for every project (`config.json`). Everything else is in `config.json`:
 
 | Key | Default | Meaning |
 |---|---|---|
-| `tts.voice` / `tts.speed` | `af_heart` / 1.0 | Kokoro voice (see Settings for the list) and speaking speed - Kokoro at 1.33 is about 237 words a minute; past about 1.35 it starts dropping the pauses between sentences |
+| `tts.voice` / `tts.speed` | `af_heart` / 1.0 | Kokoro voice (see Settings for the list) and speaking speed - 1.0 is the voice's own pace (about 185 words a minute); past about 1.35 it starts dropping the pauses between sentences |
 | `tts.volume_boost_db` | 0 | gain on each clip; leave at 0 when loudness normalization is on |
 | `audio.bgm_enabled` / `bgm_path` | off / - | background music |
 | `audio.bgm_below_voice_lu` | 14 | how far the music sits under the voice, in LU - measured per track and chapter, so every music file sits at the same level (12 energetic, 14 balanced, 18 subtle) |

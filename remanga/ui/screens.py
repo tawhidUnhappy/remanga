@@ -486,8 +486,9 @@ class SettingsScreen(Screen):
         elif row == 1:
             speed = await wait(Ask("Speaking speed", "Speed (1.0 is normal)", value=f"{config.tts.speed:g}",
                                    check=number_check(0.5, 2.0),
-                                   note="1.33 is about 237 words a minute; past about 1.35 Kokoro starts "
-                                        "dropping the pauses between sentences."))
+                                   note="1.0 is the voice's own pace, about 185 words a minute. Past about "
+                                        "1.35 Kokoro starts dropping the pauses between sentences. Changing this "
+                                        "narrates every chapter again."))
             if speed is not None:
                 config.tts.speed = float(speed)
         elif row == 2:
