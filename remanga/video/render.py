@@ -40,9 +40,9 @@ class VideoRenderer(EncoderChoiceMixin):
         self._encoder_choice: tuple[str, str, bool, str] | None = None
 
     def frame_timeline(self, project_name: str, chapter_num: str) -> FrameTimeline:
-        """This chapter's pages on the configured frame grid (video/frame_timeline.py)."""
-        pages = read_json(get_audio_timing_path(project_name, chapter_num)).get("pages", [])
-        return build_frame_timeline(pages, self.video_config.fps)
+        """This chapter's panels on the configured frame grid (video/frame_timeline.py)."""
+        panels = read_json(get_audio_timing_path(project_name, chapter_num)).get("panels", [])
+        return build_frame_timeline(panels, self.video_config.fps)
 
     # --- the picture stream: video only, cached apart from the final MP4 ---
 
@@ -94,11 +94,11 @@ class VideoRenderer(EncoderChoiceMixin):
         the same ffmpeg run. ffmpeg gives each encoder a thread of its own, so
         a fresh render waits for the slower of the two, not both in turn."""
         if not timeline.total_frames:
-            raise RuntimeError(f"audio_timing.json for chapter {chapter_num} lists no pages - nothing to render.")
+            raise RuntimeError(f"audio_timing.json for chapter {chapter_num} lists no panels - nothing to render.")
 
         # 1. Composite frames to canvas
         self.compositor.prepare_composited_frames(project_name, chapter_num,
-                                                  [slot.page_id for slot in timeline.slots], force=force)
+                                                  [slot.panel_id for slot in timeline.slots], force=force)
 
         # 2. Concat script: one entry per page, snapped to the frame grid
         concat_file = get_video_concat_path(project_name, chapter_num)

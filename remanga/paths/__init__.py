@@ -22,6 +22,7 @@ from .projects import (
     get_audio_dir,
     get_audio_timing_path,
     get_chapter_dir,
+    get_crops_path,
     get_final_video_path,
     get_generated_dir,
     get_log_path,
@@ -29,6 +30,7 @@ from .projects import (
     get_modified_audio_dir,
     get_narration_path,
     get_pages_dir,
+    get_panels_dir,
     get_pdf_dir,
     get_project_dir,
     get_projects_dir,
@@ -40,6 +42,7 @@ from .projects import (
 )
 from .roots import BIN_DIR, CONFIG_EXAMPLE_PATH, CONFIG_PATH, GLOBAL_DIR, PROMPTS_DIR, REPO_ROOT, TOOLS_DIR, UV_BIN
 from .tools import get_scripts_dir
+from .webui_static import MARKER_STATIC_DIR
 
 __all__ = [
     "BIN_DIR",
@@ -47,6 +50,7 @@ __all__ = [
     "CONFIG_PATH",
     "GENERATED_KINDS",
     "GLOBAL_DIR",
+    "MARKER_STATIC_DIR",
     "PROMPTS_DIR",
     "REPO_ROOT",
     "TOOLS_DIR",
@@ -56,6 +60,7 @@ __all__ = [
     "get_audio_dir",
     "get_audio_timing_path",
     "get_chapter_dir",
+    "get_crops_path",
     "get_final_video_path",
     "get_generated_dir",
     "get_hf_token_path",
@@ -65,6 +70,7 @@ __all__ = [
     "get_modified_audio_dir",
     "get_narration_path",
     "get_pages_dir",
+    "get_panels_dir",
     "get_pdf_dir",
     "get_project_dir",
     "get_project_metadata_path",

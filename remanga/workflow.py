@@ -1,11 +1,14 @@
 """The whole workflow, one function per step:
 
     download   chapters from MangaDex into chapters/chapter_N/pages/
-    make_pdf   the pages as PDF parts (pdf/chapter_N/), and what to do with them
+    mark       the Panel Marker web UI: MAGI finds the panels, you fix them,
+               it saves crops.json
+    cut_panels crops.json -> chapters/chapter_N/panels/
+    make_pdf   the panels as PDF parts (pdf/chapter_N/), and what to do with them
     make_video the pasted narration checked, narrated with Kokoro, mixed with
-               background music, and rendered over the pages
+               background music, and rendered over the panels
 
-The command line (cli.py) and the menus (wizard.py) both call these, so the
+The command line (cli.py) and the menus (remanga/ui/) both call these, so the
 two can't do a step differently."""
 
 from __future__ import annotations
@@ -17,23 +20,26 @@ from pathlib import Path
 from remanga.chapters import chapter_sort_key, discover_chapters, expand_chapter_selection
 from remanga.config import RemangaConfig
 from remanga.console import console, display_path, escape as _esc
+from remanga.cropper import CoordinateCropper
 from remanga.json_io import has_real_json_content
-from remanga.narration import PROMPT_PATH, load_narration, page_files, story_so_far
+from remanga.narration import PROMPT_PATH, load_narration, page_files, panel_files, story_so_far
 from remanga.paths import (
     GENERATED_KINDS,
     chapter_identity_fields,
     get_audio_timing_path,
     get_chapter_dir,
+    get_crops_path,
     get_final_video_path,
     get_generated_dir,
     get_narration_path,
+    get_panels_dir,
     get_pdf_dir,
     get_project_dir,
     list_projects,
     load_project_metadata,
     save_project_metadata,
 )
-from remanga.pdf import build_pages_pdf
+from remanga.pdf import build_panels_pdf
 from remanga.pdf.manifest_info import MEMORY_KEY, MEMORY_SOURCE_KEY
 
 # MangaDex's originalLanguage -> how that market's comics are read.
@@ -136,9 +142,13 @@ def chapter_state(project: str, chapter: str) -> str:
         return "video done"
     if has_real_json_content(get_narration_path(project, chapter)):
         return "narration pasted - make the video"
-    if any(get_pdf_dir(project, chapter, create=False).glob("pages_*.pdf")):
+    if any(get_pdf_dir(project, chapter, create=False).glob("panels_*.pdf")):
         return "PDF ready - waiting for the narration"
-    return "downloaded - make the PDF"
+    if panel_files(project, chapter):
+        return "panels cut - make the PDF"
+    if has_marks(project, chapter):
+        return "panels marked - make the PDF"
+    return "downloaded - mark the panels"
 
 
 def has_audio(project: str, chapter: str) -> bool:
@@ -187,17 +197,23 @@ def _chapter_paths(project: str, chapter: str, *, with_pages: bool) -> list[Path
     project_dir = get_project_dir(project)
     chapter_dir = get_chapter_dir(project, chapter)
     paths = [get_generated_dir(project, kind, chapter, create=False) for kind in GENERATED_KINDS]
-    paths.append(chapter_dir if with_pages else get_narration_path(project, chapter))
+    if with_pages:
+        paths.append(chapter_dir)
+    else:
+        # The panels are cut again from crops.json in seconds; the marks and
+        # the pasted narration are the two things nothing can rebuild, and
+        # only the narration is a reset's business.
+        paths += [get_narration_path(project, chapter), get_panels_dir(project, chapter, create=False)]
     for path in paths:
-        if not _inside(path, project_dir) or not path.name.startswith(("chapter_", "narration.json")):
+        if not _inside(path, project_dir) or not path.name.startswith(("chapter_", "narration.json", "panels")):
             raise ValueError(f"Refusing to delete {path} - it isn't one chapter's file inside {project_dir}.")
     return [path for path in paths if path.exists()]
 
 
 def reset_chapter(project: str, chapter: str, *, delete_pages: bool = False) -> list[Path]:
-    """Deletes a chapter's PDF, pasted narration, audio and video - and, with
-    `delete_pages`, its downloaded pages too, removing the chapter. Returns
-    what was removed."""
+    """Deletes a chapter's PDF, cut panels, pasted narration, audio and video
+    - and, with `delete_pages`, its downloaded pages and marks too, removing
+    the chapter. Returns what was removed."""
     import shutil
 
     removed = _chapter_paths(project, chapter, with_pages=delete_pages)
@@ -224,6 +240,43 @@ def settle_reading_direction(project: str) -> str:
     return direction
 
 
+def has_marks(project: str, chapter: str) -> bool:
+    """Whether this chapter's panels have been marked (crops.json saved)."""
+    return has_real_json_content(get_crops_path(project, chapter))
+
+
+def has_panels(project: str, chapter: str) -> bool:
+    return bool(panel_files(project, chapter))
+
+
+# --- panels -----------------------------------------------------------------
+
+
+def mark(project: str, chapters: list[str], config: RemangaConfig) -> list[str]:
+    """Opens the Panel Marker in a browser tab and waits there: MAGI v3 finds
+    the panels when asked, they are fixed by hand, and saving writes each
+    chapter's crops.json. Returns the chapters saved."""
+    from remanga.webui import launch_and_wait_all
+
+    marked = [c for c in chapters if page_files(project, c)]
+    if not marked:
+        raise FileNotFoundError("None of the chosen chapters have pages yet - download them first.")
+    saved = launch_and_wait_all(project, marked, config.marker)
+    console.print(f"[bold green]✓ Marks saved for {len(saved)} chapter(s)[/]")
+    return saved
+
+
+def cut_panels(project: str, chapter: str, config: RemangaConfig, force: bool = False) -> list[Path]:
+    """The marked panels, cut out of the pages into chapters/chapter_N/panels/.
+    Already-cut panels are reused unless the marks changed since (or `force`)."""
+    if not has_marks(project, chapter):
+        raise FileNotFoundError(f"Chapter {chapter} has no marked panels yet - mark them in the Panel Marker "
+                                f"first.")
+    newest_panel = max((p.stat().st_mtime for p in panel_files(project, chapter)), default=0.0)
+    stale = get_crops_path(project, chapter).stat().st_mtime > newest_panel
+    return CoordinateCropper(config.cropper).crop_chapter_from_json(project, chapter, force=force or stale)
+
+
 # --- PDF --------------------------------------------------------------------
 
 
@@ -243,13 +296,14 @@ class PdfResult:
 
 
 def make_pdf(project: str, chapter: str, config: RemangaConfig) -> PdfResult:
-    """The chapter's pages as PDF parts, with the chapter's identity and the
-    story so far on each part's first page. The story so far comes from the
-    previous chapter's pasted narration. An empty narration.json is put in
-    place to paste into."""
-    pages = page_files(project, chapter)
-    if not pages:
-        raise FileNotFoundError(f"Chapter {chapter} has no downloaded pages - download it first.")
+    """The chapter's panels as PDF parts, with the chapter's identity and the
+    story so far on each part's first page. The panels are cut first if the
+    marks are newer than them. The story so far comes from the previous
+    chapter's pasted narration. An empty narration.json is put in place to
+    paste into."""
+    panels = cut_panels(project, chapter, config) or panel_files(project, chapter)
+    if not panels:
+        raise FileNotFoundError(f"Chapter {chapter} has no panels - mark them in the Panel Marker first.")
     settle_reading_direction(project)
 
     info = dict(chapter_identity_fields(project, chapter))
@@ -263,7 +317,7 @@ def make_pdf(project: str, chapter: str, config: RemangaConfig) -> PdfResult:
     missing = [c for c in local_chapters(project)
                if chapter_sort_key(c) < chapter_sort_key(str(chapter))
                and (source is None or chapter_sort_key(c) > chapter_sort_key(source))]
-    parts = build_pages_pdf(pages, get_pdf_dir(project, chapter), config.pdf.max_mb, info)
+    parts = build_panels_pdf(panels, get_pdf_dir(project, chapter), config.pdf.max_mb, info)
 
     narration = get_narration_path(project, chapter)
     if not narration.exists():
@@ -289,16 +343,16 @@ def print_handoff(result: PdfResult) -> None:
 
 
 def check_narration(project: str, chapter: str) -> tuple[list, list[str]]:
-    """The story pages to narrate and the check's warnings; raises
-    NarrationError (after writing the fix request) when it doesn't check out."""
-    pages, check = load_narration(project, chapter)
-    return pages, check.warnings
+    """The panels to narrate and the check's warnings; raises NarrationError
+    (after writing the fix request) when it doesn't check out."""
+    panels, check = load_narration(project, chapter)
+    return panels, check.warnings
 
 
-def narrate(project: str, chapter: str, pages: list, config: RemangaConfig, force: bool = False) -> Path:
+def narrate(project: str, chapter: str, panels: list, config: RemangaConfig, force: bool = False) -> Path:
     from remanga.audio import TTSEngine
 
-    return TTSEngine(config.tts, config.audio).generate_narration_audio(project, chapter, pages, force=force)
+    return TTSEngine(config.tts, config.audio).generate_narration_audio(project, chapter, panels, force=force)
 
 
 def mix(project: str, chapter: str, config: RemangaConfig, force: bool = False) -> Path:
@@ -314,10 +368,10 @@ def render(project: str, chapter: str, config: RemangaConfig, force: bool = Fals
 
 
 def make_video(project: str, chapter: str, config: RemangaConfig, force: bool = False) -> Path:
-    pages, warnings = check_narration(project, chapter)
-    console.print(f"[bold]Chapter {chapter}:[/] narration checked - {len(pages)} page(s) to narrate")
+    panels, warnings = check_narration(project, chapter)
+    console.print(f"[bold]Chapter {chapter}:[/] narration checked - {len(panels)} panel(s) to narrate")
     for warning in warnings:
         console.print(f"  [yellow]- {_esc(warning)}[/]")
-    narrate(project, chapter, pages, config, force)
+    narrate(project, chapter, panels, config, force)
     mix(project, chapter, config, force)
     return render(project, chapter, config, force)

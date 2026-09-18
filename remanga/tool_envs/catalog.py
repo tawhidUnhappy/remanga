@@ -1,4 +1,5 @@
-"""The tool environments themselves, one ToolSpec each - today only Kokoro.
+"""The tool environments themselves, one ToolSpec each: Kokoro-82M for the
+narration and MAGI v3 for finding panels.
 
 bootstrap.sh, `remanga setup` and a tool's own first use all provision from
 this list, so none of them can drift from the others."""
@@ -28,6 +29,20 @@ TOOLS: tuple[ToolSpec, ...] = (
                  "en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",),
                 torch_backend=False,
             ),
+        ),
+    ),
+    ToolSpec(
+        "magi", "MAGI v3", "panel detection for the Panel Marker web UI",
+        steps=(
+            # einops/matplotlib: undeclared imports MAGI v3's remote modeling
+            # code needs beyond its own requirements. magi_assist.py
+            # auto-installs anything still missing on first load; listing the
+            # known ones saves a round trip.
+            InstallStep((
+                "torch", "transformers<4.52.0", "timm", "shapely",
+                "pytorch-metric-learning", "huggingface-hub", "pillow", "numpy",
+                "einops", "matplotlib",
+            )),
         ),
     ),
 )

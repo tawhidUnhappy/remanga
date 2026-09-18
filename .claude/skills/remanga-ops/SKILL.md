@@ -1,6 +1,6 @@
 ---
 name: remanga-ops
-description: Fast-start reference + known-bugs log for the remanga repo (manga pages -> PDF for an LLM -> Kokoro narration -> recap video). Load before any remanga work. Keep it updated (see maintenance rule at bottom).
+description: Fast-start reference + known-bugs log for the remanga repo (manga pages -> panels marked with MAGI in a web UI -> panel PDF for an LLM -> Kokoro narration -> recap video). Load before any remanga work. Keep it updated (see maintenance rule at bottom).
 ---
 
 # remanga fast-start
@@ -16,33 +16,41 @@ Entry points: `./bootstrap.sh` (idempotent setup) · `./pipeline.sh` (menus) · 
   `projects/zz*` copies (or scratch dirs) and delete them after. **Never modify the user's
   `projects/`.**
 - Verify by running, not by asserting (real download / PDF / Kokoro TTS / render, pdfimages for PDFs).
-- The user wants this LIGHT. The multi-feature version (panel cropping, marker/MAGI, Gemini crop
-  grid, sheets/zips, Chatterbox, DeepSeek-OCR, review/writer web UIs, pipeline editor, full-recap,
-  remix, status/verify/wipe, extensions) was removed on 2026-09-17; it lives on branch
-  `backup/main-2026-09-17`. Don't reintroduce any of it unasked.
+- The user wants this LIGHT, and says what comes back. The 2026-09-17 cut removed everything; on
+  2026-09-18 they asked for the **panel concept, the Panel Marker web UI and MAGI** back, and for
+  direct page-based video to go. Still out, and not to be reintroduced unasked: Gemini crop grid,
+  sheets/zips/packaging, the reviewer and writer web UIs, DeepSeek-OCR, pipeline editor, full-recap,
+  remix, status/verify/wipe, extensions, Chatterbox cloning. Branches: `backup/main-2026-09-17`
+  (everything), `backup/pages-kokoro-2026-09-18` (the page-based light version),
+  `backup/chatterbox-2026-09-18`.
 
 ## The workflow (the whole product)
 
 ```
 download  -> projects/P/chapters/chapter_N/pages/          (MangaDex, checksum-verified)
-pdf       -> projects/P/pdf/chapter_N/pages_1.pdf, ...     (+ empty narration.json to paste into)
+mark      -> Panel Marker web UI (Flask, browser): Detect = MAGI v3, hand fixes -> crops.json
+pdf       -> cuts panels/ from crops.json, then projects/P/pdf/chapter_N/panels_1.pdf, ...
+             (+ empty narration.json to paste into)
 [user uploads prompts/narration.md + the PDF to an LLM, pastes the one JSON reply into narration.json]
-video     -> check reply -> Kokoro clip per story page -> mix with BGM -> render pages
+video     -> check reply -> Kokoro clip per panel -> mix with BGM -> render panels
              -> projects/P/video/chapter_N/P_chN_recap.mp4
 ```
 
 Code map (`remanga/`): `workflow.py` (download / make_pdf / make_video - the CLI and menus both
 call these), `cli.py`, `ui/` (full-screen menus on Textual: `app.py` styles/quit, `screens.py` projects/chapters/settings, `dialogs.py` choice/ask/result/log, `tasks.py` task screen, `widgets.py` SafeTable/SafeOptionList/TopBar), `activity.py` (progress bars: CLI Rich bar or UI task view),
 `narration.py` (reply check, fix request, memory), `chapters.py` (ranges, sort, page naming),
+`webui/` (the Panel Marker: Flask routes, MarkerSession/MarkerState, magi_assist + its worker,
+static/), `cropper/` (crops.json -> panels/: crop_page, panel_boxes, gutter/, seams, trim, dedupe),
 `pdf/` (builder, writer, text page), `downloader/`, `audio/` (tts, mix, master, synth/kokoro),
 `video/` (compose, frame_timeline, render, encoding), `config/`, `paths/`, `tool_envs/` +
-`workers/` + `models/` (Kokoro's isolated venv + weights).
+`workers/` + `models/` (Kokoro's and MAGI's isolated venvs + weights).
 
 ## Narration reply (prompts/narration.md is the contract)
 
 One JSON block, two sections (user request - NOT two blocks):
-`{"narration": {"chapter", "problems", "pages": [{"page", "story", "skip", "panels": [notes], "text"}]}, "memory": {...}}`
-(`narration.read_reply` also accepts `pages`+`memory` side by side, and two separate blocks.)
+`{"narration": {"chapter", "problems", "panels": [{"panel", "skip", "text"}]}, "memory": {...}}`
+one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
+(`narration.read_reply` also accepts `panels`+`memory` side by side, and two separate blocks.)
 - One entry per page ID, in order. Story page: `panels` = one note per panel in reading order (forces
   per-panel coverage, never read aloud) + `text`. Non-story: `skip` in credits/ad/blank/duplicate.
 - `narration.load_narration` errors -> nothing synthesized, `pdf/chapter_N/fix_request.md` written.
@@ -68,6 +76,14 @@ One JSON block, two sections (user request - NOT two blocks):
   pydub's `set_frame_rate` (folds imaging noise above 12 kHz).
 - **Frame cuts** snap into the pause between pages (`video/frame_timeline.py`) so a picture changes
   just before its narration starts.
+- **Panels, not pages (2026-09-18, user request):** the video plays one panel per clip.
+  `workflow.mark` opens the marker (blocking until the browser saves), `workflow.cut_panels` recuts
+  whenever crops.json is newer than panels/, and `make_pdf` calls it first. crops.json and the pasted
+  narration are the only things nothing can rebuild - Reset deletes panels/ but keeps crops.json.
+- **The marker needs a browser**; in the Textual UI it runs as a task whose step just waits.
+  Headless checks that work: `MarkerSession(project, [ch])` + `webui.detection.run_detection(state,
+  config.marker)` + `session.save_chapter(ch)` writes crops.json; `create_app(session,
+  config.marker).run(port=…)` then GET `/`, `/api/chapter`, `/api/pages/<file>`, `/api/outline`.
 - **Narration is Kokoro-82M** (fixed built-in voices, `tts.voice` a NAME from `config/kokoro_voices.py`).
   **Chatterbox voice cloning was tried on 2026-09-18 and rejected the same day** - the user found the
   clone bad and the music too loud under it - so it was removed again; that version is on the branch
@@ -136,11 +152,14 @@ bad reply refused with fix request -> good reply -> Kokoro (af_heart) -> mix wit
 render; frame checked; rerun reused clips/mix/video; next chapter's PDF carried the previous chapter's memory section; Textual
 UI walked in Pilot + a real pty with mouse (projects, chapters, actions, download, Ctrl+C stop, PDF result, copy, log, settings, quit); `setup` installs Kokoro's venv and weights.
 
-## Verified 2026-09-18 (video settings, back on Kokoro)
+## Verified 2026-09-18 (panels back)
 
-Changed-setting reruns checked on a 2-page scratch chapter (720p<->1080p, background style, music
-level, unchanged rerun). Chatterbox was installed, verified end to end (16-page chapter, 9m43s,
-3.9GB VRAM), then REMOVED at the user's request the same day - see the engine note above.
+Scratch copy of the user's manga, chapter 2.2: MAGI detection over 16 pages -> 60 panels ->
+crops.json -> cut (36 snapped to gutters, 53 trimmed) -> panels_1.pdf 17.7MB, text page listing every
+panel ID in reading order -> stand-in narration -> 59 Kokoro clips -> h264_nvenc render, 4m23s of
+video. Marker served headlessly: index, /api/chapter (with MAGI marks), page images, outline, static
+assets all 200. Earlier the same day: changed-setting reruns (720p<->1080p, background, music level),
+and Chatterbox installed, verified and then removed at the user's request.
 
 ## Maintenance rule (do this, don't just read this)
 

@@ -24,18 +24,18 @@ LOUDNORM_LRA = 11
 LOUDNORM_TRUE_PEAK = -1.0
 
 
-def page_segments(audio_dir: Path, page: dict[str, Any], sample_rate: int) -> list[AudioSegment]:
-    """One page's place in the narration track: its synthesized clip - or
-    silence of the same length, for a page whose clip is missing, so the
+def panel_segments(audio_dir: Path, panel: dict[str, Any], sample_rate: int) -> list[AudioSegment]:
+    """One panel's place in the narration track: its synthesized clip - or
+    silence of the same length, for a panel whose clip is missing, so the
     track stays true to audio_timing.json either way - plus the pause held
     after it."""
-    clip_file = audio_dir / page["audio_file"]
+    clip_file = audio_dir / panel["audio_file"]
     if clip_file.exists():
         segments = [AudioSegment.from_file(clip_file)]
     else:
-        segments = [AudioSegment.silent(duration=page["duration_ms"], frame_rate=sample_rate)]
+        segments = [AudioSegment.silent(duration=panel["duration_ms"], frame_rate=sample_rate)]
 
-    pause_ms = page.get("pause_after_ms", 0)
+    pause_ms = panel.get("pause_after_ms", 0)
     if pause_ms > 0:
         segments.append(AudioSegment.silent(duration=pause_ms, frame_rate=sample_rate))
     return segments

@@ -2,6 +2,7 @@
 
     remanga new      MANGADEX_URL                (names the project after the manga)
     remanga download -p NAME [-c 1-5]           (no -c: shows MangaDex's chapter list)
+    remanga mark     -p NAME -c 1-5             (the Panel Marker web UI)
     remanga pdf      -p NAME -c 1-5
     remanga video    -p NAME -c 1-5 [--force]
     remanga chapters -p NAME
@@ -42,11 +43,13 @@ def build_parser() -> argparse.ArgumentParser:
                         "'all'; leave out to see the list")
     d.add_argument("--url", help="MangaDex URL, ID or title - needed once per project, then remembered")
     d.add_argument("--force", action="store_true", help="delete the pages and download them again")
-    with_project("pdf", "Make each chapter's PDF of pages to give to the LLM, with prompts/narration.md")
+    with_project("mark", "Open the Panel Marker web UI for these chapters - MAGI v3 finds the panels, you fix "
+                         "them, saving writes crops.json")
+    with_project("pdf", "Make each chapter's PDF of panels to give to the LLM, with prompts/narration.md")
     v = with_project("video", "Make each chapter's video from the narration pasted into narration.json")
     v.add_argument("--force", action="store_true", help="narrate, mix and render again from scratch")
     with_project("chapters", "Show where each chapter is", chapters=False)
-    sub.add_parser("setup", help="install Kokoro-82M (its environment and weights)")
+    sub.add_parser("setup", help="install Kokoro-82M and MAGI v3 (their environments and weights)")
     return parser
 
 
@@ -93,6 +96,10 @@ def _run(args: argparse.Namespace) -> None:
     chapters = workflow.select_chapters(args.chapters, workflow.local_chapters(args.project))
     if not chapters:
         raise ValueError(f"No downloaded chapter matches '{args.chapters}'.")
+    if args.command == "mark":
+        workflow.mark(args.project, chapters, config)
+        return
+
     for chapter in chapters:
         console.print(f"\n[bold cyan]Chapter {chapter}[/]")
         if args.command == "pdf":
@@ -102,16 +109,24 @@ def _run(args: argparse.Namespace) -> None:
 
 
 def setup() -> None:
-    """Kokoro's environment and weights, ready before the first video."""
+    """The two models' environments and weights, ready before the first video:
+    Kokoro-82M for the narration and MAGI v3 for finding panels."""
     from remanga.audio.synth import create_synthesizer
     from remanga.config import RemangaConfig
     from remanga.tool_envs import provision
+    from remanga.webui.magi_assist import ensure_weights_downloaded
 
-    if provision(["kokoro"], None):
+    failed = provision(["kokoro", "magi"], None)
+    if "kokoro" in failed:
         raise RuntimeError("Installing Kokoro's environment failed - see the messages above.")
     config = RemangaConfig.load()
     create_synthesizer(config.tts, config.audio).model_manager.ensure_model()
     console.print("[bold green]✓ Kokoro-82M is installed and ready.[/]")
+    if "magi" in failed:
+        console.print("[yellow]MAGI v3's environment failed to install - the Panel Marker still works, with the "
+                      "panels marked by hand.[/]")
+        return
+    ensure_weights_downloaded(config.marker)
 
 
 def main() -> None:

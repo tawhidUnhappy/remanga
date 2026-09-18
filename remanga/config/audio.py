@@ -10,11 +10,11 @@ from remanga.config.base import ConfigModel
 class AudioConfig(ConfigModel):
     sample_rate: int = 44100
     edge_fade_ms: int = 35
-    # Silence after each page's narration before the next page's. Not 0: clips
+    # Silence after each panel's narration before the next panel's. Not 0: clips
     # come back trimmed tight to the speech, and butted together the sentences
     # run into each other; a narrator reading aloud takes 300-600ms.
-    pause_between_pages_ms: int = Field(350, validation_alias=AliasChoices("pause_between_pages_ms",
-                                                                           "pause_between_panels_ms"))
+    pause_between_panels_ms: int = Field(350, validation_alias=AliasChoices("pause_between_panels_ms",
+                                                                            "pause_between_pages_ms"))
     # Background music: off until a file is chosen.
     bgm_enabled: bool = False
     bgm_path: str = ""

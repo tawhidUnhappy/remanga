@@ -197,8 +197,8 @@ fi
 # ---------------------------------------------------------------------------
 # 4. Virtual environments
 # ---------------------------------------------------------------------------
-# A lightweight main env, plus Kokoro's under .tools/ so torch never touches
-# the main one. The main env runs `.tools/venv-kokoro/bin/python` as a
+# A lightweight main env, plus Kokoro's and MAGI's under .tools/ so torch never
+# touches the main one. The main env runs `.tools/venv-kokoro/bin/python` as a
 # subprocess (see remanga/tool_envs/).
 make_venv() {
     "$UV" venv "$1" --python 3.11 --allow-existing >/dev/null 2>&1 || return 1
@@ -209,8 +209,8 @@ say "Creating main environment ($VENV_DIR)..."
 make_venv "$VENV_DIR" || die "could not create the main virtual environment"
 "$UV" pip install --python "$VENV_DIR" -e . || die "could not install remanga into the main environment"
 
-say "Provisioning Kokoro-82M's environment..."
-try_step "Kokoro environment provisioning" \
+say "Provisioning Kokoro-82M's and MAGI v3's environments..."
+try_step "Tool environment provisioning" \
     "$VENV_DIR/bin/python3" -m remanga.tool_envs install --prune --torch-backend "$REMANGA_TORCH_BACKEND"
 
 # ---------------------------------------------------------------------------
@@ -220,8 +220,8 @@ if [ ! -f "config.json" ]; then
     cp config.example.json config.json && say "Created config.json from config.example.json"
 fi
 
-say "Downloading the Kokoro-82M weights..."
-try_step "Kokoro weight download" "$VENV_DIR/bin/python3" -m remanga.cli setup
+say "Downloading the Kokoro-82M and MAGI v3 weights..."
+try_step "Model weight download" "$VENV_DIR/bin/python3" -m remanga.cli setup
 
 # ---------------------------------------------------------------------------
 echo

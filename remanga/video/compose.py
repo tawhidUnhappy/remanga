@@ -10,7 +10,7 @@ from remanga import activity
 from remanga.config import VideoConfig
 from remanga.console import console
 from remanga.json_io import read_json_or, write_json
-from remanga.paths import get_pages_dir, get_video_frames_dir
+from remanga.paths import get_panels_dir, get_video_frames_dir
 
 # What the frames beside it were composited with. Without this a frame was
 # reused whenever the page hadn't changed, so a new size or background was
@@ -160,17 +160,17 @@ class FrameCompositor:
 
         return output_path
 
-    def prepare_composited_frames(self, project_name: str, chapter_num: str, page_ids: list[str],
+    def prepare_composited_frames(self, project_name: str, chapter_num: str, panel_ids: list[str],
                                   force: bool = False) -> Path:
-        """Every narrated page as a full canvas frame, reusing a frame that is
-        already there and newer than its page."""
-        pages_dir = get_pages_dir(project_name, chapter_num)
+        """Every narrated panel as a full canvas frame, reusing a frame that is
+        already there and newer than its panel."""
+        panels_dir = get_panels_dir(project_name, chapter_num, create=False)
         frames_dir = get_video_frames_dir(project_name, chapter_num)
         frames_dir.mkdir(parents=True, exist_ok=True)
-        by_stem = {p.stem: p for p in pages_dir.iterdir() if p.is_file()} if pages_dir.exists() else {}
-        missing = [page_id for page_id in page_ids if page_id not in by_stem]
+        by_stem = {p.stem: p for p in panels_dir.iterdir() if p.is_file()} if panels_dir.exists() else {}
+        missing = [panel_id for panel_id in panel_ids if panel_id not in by_stem]
         if missing:
-            raise FileNotFoundError(f"Page image(s) not found in {pages_dir}: {', '.join(missing)}")
+            raise FileNotFoundError(f"Panel image(s) not found in {panels_dir}: {', '.join(missing)}")
 
         settings_path = frames_dir / FRAMES_SETTINGS_NAME
         settings = self.config.model_dump()
@@ -179,23 +179,23 @@ class FrameCompositor:
 
         reused_count = 0
         to_composite = []
-        for page_id in page_ids:
-            page, out_frame = by_stem[page_id], frames_dir / f"frame_{page_id}.png"
+        for panel_id in panel_ids:
+            panel, out_frame = by_stem[panel_id], frames_dir / f"frame_{panel_id}.png"
             if (not force and out_frame.exists() and out_frame.stat().st_size > 1000
-                    and out_frame.stat().st_mtime >= page.stat().st_mtime):
+                    and out_frame.stat().st_mtime >= panel.stat().st_mtime):
                 reused_count += 1
                 continue
-            to_composite.append((page, out_frame))
+            to_composite.append((panel, out_frame))
 
         if to_composite:
-            console.print(f"[cyan]Composing {len(to_composite)} page frame(s) at {self.config.width}x"
+            console.print(f"[cyan]Composing {len(to_composite)} panel frame(s) at {self.config.width}x"
                           f"{self.config.height} ({self.config.background_style} background)...[/]")
             # Threads: Pillow releases the GIL for the resize, blur and deflate
             # work that makes up a frame.
             pool = ThreadPoolExecutor(max_workers=min(len(to_composite), os.cpu_count() or 1))
             try:
-                with activity.progress("Composing page frames", total=len(to_composite), unit="pages") as bar:
-                    futures = [pool.submit(self.fit_image_on_canvas, page, out) for page, out in to_composite]
+                with activity.progress("Composing panel frames", total=len(to_composite), unit="panels") as bar:
+                    futures = [pool.submit(self.fit_image_on_canvas, panel, out) for panel, out in to_composite]
                     for future in as_completed(futures):
                         future.result()
                         bar.advance()
@@ -203,6 +203,6 @@ class FrameCompositor:
                 pool.shutdown(wait=True, cancel_futures=True)
 
         if reused_count > 0:
-            console.print(f"[dim cyan](Reused {reused_count} existing page frames)[/]")
+            console.print(f"[dim cyan](Reused {reused_count} existing panel frames)[/]")
         write_json(settings_path, settings)
         return frames_dir

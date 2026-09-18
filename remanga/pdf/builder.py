@@ -1,21 +1,21 @@
-"""A chapter's pages as PDF files for the LLM, never over the size cap.
+"""A chapter's panels as PDF files for the LLM, never over the size cap.
 
-Every page starts lossless: a JPEG page is embedded as its own bytes (the
+Every panel starts lossless: a JPEG panel is embedded as its own bytes (the
 downloaded file exactly, and far smaller than any re-encoding of its pixels),
-any other page in the smaller of two verified lossless encodings (PNG row
+any other panel in the smaller of two verified lossless encodings (PNG row
 filters or TIFF Predictor 2), one channel instead of three when it is pure
-grayscale. Pages are packed in order into as many parts as the cap needs -
-pages_1.pdf, pages_2.pdf, ... - so splitting, not quality, is what keeps a
-file under the cap. Only a page too big to fit in a part on its own gives up
+grayscale. Panels are packed in reading order into as many parts as the cap needs -
+panels_1.pdf, panels_2.pdf, ... - so splitting, not quality, is what keeps a
+file under the cap. Only a panel too big to fit in a part on its own gives up
 exactness: it takes the smallest of a no-dither palette (256 down to 16
 colors) or 4:4:4 JPEG that still reaches a PSNR floor against its own
-pixels, and a page that can't fit even at the last floor stops the build.
+pixels, and a panel that can't fit even at the last floor stops the build.
 
 Each part starts with a text page: the chapter's identity, reading direction,
-which pages this part holds and the chapter's full page list, and the story
+which panels this part holds and the chapter's full panel list, and the story
 so far (the previous chapter's memory section) when there is one.
 
-Why not Pillow's own PDF writer: it re-encodes every page as JPEG, with no
+Why not Pillow's own PDF writer: it re-encodes every image as JPEG, with no
 way to turn that off (see writer.py)."""
 
 from __future__ import annotations
@@ -273,8 +273,8 @@ def _pack_parts(pages: list[_Page], max_bytes: int, render: Render) -> list[_Bui
 def _quality_note(pages: Sequence[_Page]) -> str:
     changed = [page.choice(page.level)[1] for page in pages if not page.page.lossless]
     if not changed:
-        return f"all {len(pages)} pages lossless"
-    return (f"{len(pages) - len(changed)} pages lossless, {len(changed)} near-lossless to fit "
+        return f"all {len(pages)} panels lossless"
+    return (f"{len(pages) - len(changed)} panels lossless, {len(changed)} near-lossless to fit "
             f"(lowest PSNR {min(changed):.1f} dB)")
 
 
@@ -299,19 +299,19 @@ def pixel_identical(reference: Image.Image, candidate_bytes: bytes) -> bool:
         return False
 
 
-def build_pages_pdf(
+def build_panels_pdf(
     image_paths: list[Path],
     out_dir: Path,
     max_mb: float,
     info: dict[str, Any],
 ) -> list[Path]:
-    """Writes `out_dir`/pages_1.pdf, pages_2.pdf, ... from `image_paths`, each
-    at most `max_mb`, replacing any parts from an earlier build. `info` is
-    the chapter's identity and anything else the text page should carry.
-    Returns the parts written; raises when a page can't be encoded or can't
+    """Writes `out_dir`/panels_1.pdf, panels_2.pdf, ... from `image_paths`,
+    each at most `max_mb`, replacing any parts from an earlier build. `info`
+    is the chapter's identity and anything else the text page should carry.
+    Returns the parts written; raises when a panel can't be encoded or can't
     fit under the cap."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    for stale in out_dir.glob("pages_*.pdf"):
+    for stale in out_dir.glob("p*_*.pdf"):  # panels_*.pdf, and any pages_*.pdf from before
         stale.unlink()
     max_bytes = max(1, int(max_mb * 1024 * 1024))
 
@@ -327,15 +327,15 @@ def build_pages_pdf(
 
     built = _pack_parts(pages, max_bytes, render)
     if built is None:
-        raise ValueError(f"A page is over the {max_mb:g}MB cap on its own, even at {PSNR_FLOORS[-1]:g} dB PSNR - "
+        raise ValueError(f"A panel is over the {max_mb:g}MB cap on its own, even at {PSNR_FLOORS[-1]:g} dB PSNR - "
                          f"raise the cap.")
 
     written = []
     for index, part in enumerate(built, start=1):
-        path = out_dir / f"pages_{index}.pdf"
+        path = out_dir / f"panels_{index}.pdf"
         path.write_bytes(part.pdf)
         written.append(path)
     total_mb = sum(p.stat().st_size for p in written) / (1024 * 1024)
-    console.print(f"[bold green]✓ PDF of {len(pages)} pages - {len(written)} file(s), {total_mb:.1f}MB, each at most "
+    console.print(f"[bold green]✓ PDF of {len(pages)} panels - {len(written)} file(s), {total_mb:.1f}MB, each at most "
                   f"{max_mb:g}MB:[/] {_esc(str(out_dir))} [dim]({_quality_note(pages)})[/]")
     return written

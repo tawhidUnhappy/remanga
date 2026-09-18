@@ -1,5 +1,5 @@
 """The chapter information on a PDF's leading text page: identity, which
-pages this part holds (`contents`) and every page of the chapter
+panels this part holds (`contents`) and every panel of the chapter
 (`full_manifest`), so a missing part is visible just by comparing the two."""
 
 from __future__ import annotations
@@ -55,13 +55,13 @@ def info_to_text_lines(info: dict[str, Any]) -> list[str]:
 
     contents = info.get("contents", [])
     lines.append("")
-    lines.append(f"Pages in this part ({len(contents)}):")
+    lines.append(f"Panels in this part ({len(contents)}), in reading order:")
     lines.append(", ".join(contents))
 
     full_manifest = info.get("full_manifest", [])
     if full_manifest != contents:
         lines.append("")
-        lines.append(f"Every page of the chapter ({len(full_manifest)}, across every part):")
+        lines.append(f"Every panel of the chapter ({len(full_manifest)}, in reading order, across every part):")
         lines.append(", ".join(full_manifest))
 
     memory = info.get(MEMORY_KEY)

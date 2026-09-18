@@ -41,6 +41,20 @@ def get_pages_dir(project_name: str, chapter_num: str) -> Path:
     return get_chapter_dir(project_name, chapter_num) / "pages"
 
 
+def get_panels_dir(project_name: str, chapter_num: str, create: bool = True) -> Path:
+    """The panels cut out of this chapter's pages - what the LLM is shown and
+    what the video plays."""
+    path = get_chapter_dir(project_name, chapter_num) / "panels"
+    if create:
+        path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def get_crops_path(project_name: str, chapter_num: str) -> Path:
+    """crops.json: the marks the Panel Marker saved for this chapter."""
+    return get_chapter_dir(project_name, chapter_num) / "crops.json"
+
+
 def get_narration_path(project_name: str, chapter_num: str) -> Path:
     return get_chapter_dir(project_name, chapter_num) / "narration.json"
 

@@ -24,7 +24,9 @@ from remanga.paths import (
 )
 
 from .audio import AudioConfig
+from .cropper import CropperConfig
 from .downloader import DownloaderConfig
+from .marker import MarkerConfig, ShortcutsConfig
 from .pdf import PdfConfig
 from .system import SystemConfig
 from .tts import TTSConfig
@@ -35,7 +37,7 @@ PROJECT_SETTINGS_KEY = "settings"
 
 # What a manga is allowed to have its own answer for: the voice that reads it,
 # the music under it, the size and look of its video, its PDF cap.
-PROJECT_SCOPED_PREFIXES = ("tts.", "audio.", "video.", "pdf.")
+PROJECT_SCOPED_PREFIXES = ("tts.", "audio.", "video.", "pdf.", "cropper.")
 
 
 def is_project_scoped(dotted: str) -> bool:
@@ -92,6 +94,9 @@ class RemangaConfig(ConfigModel):
     system: SystemConfig = Field(default_factory=SystemConfig)
     downloader: DownloaderConfig = Field(default_factory=DownloaderConfig)
     pdf: PdfConfig = Field(default_factory=PdfConfig)
+    cropper: CropperConfig = Field(default_factory=CropperConfig)
+    marker: MarkerConfig = Field(default_factory=MarkerConfig)
+    shortcuts: ShortcutsConfig = Field(default_factory=ShortcutsConfig)
     tts: TTSConfig = Field(default_factory=TTSConfig)
     audio: AudioConfig = Field(default_factory=AudioConfig)
     video: VideoConfig = Field(default_factory=VideoConfig)

@@ -1,4 +1,4 @@
-"""What happens to one synthesized page clip between the engine and disk.
+"""What happens to one synthesized panel clip between the engine and disk.
 
 Gain, edge fades and the atomic write - the three things every clip goes
 through once the synthesizer hands it back, none of which have anything to

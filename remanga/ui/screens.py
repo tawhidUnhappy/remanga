@@ -1,7 +1,7 @@
 """The screens.
 
     Projects        your manga; n adds one from a MangaDex URL
-    Chapters        a project: every chapter as a table - download, PDF, video
+    Chapters        a project: every chapter as a table - download, mark, PDF, video
     Settings        voice, music, video size, PDF cap
 
 Lists open with nothing highlighted (remanga.ui.widgets). What happens after
@@ -186,7 +186,7 @@ class ChaptersScreen(Screen):
     def on_mount(self) -> None:
         table = self.query_one(SafeTable)
         table.display = False
-        for label, width in (("", 1), ("Ch", 6), ("Status", 13), ("Pages", 5), ("Next", 18), ("Title", None)):
+        for label, width in (("", 1), ("Ch", 6), ("Status", 13), ("Pages", 5), ("Next", 24), ("Title", None)):
             table.add_column(label, width=width, key=label or "mark")
         self.fetch(refresh=True)
 
@@ -206,8 +206,8 @@ class ChaptersScreen(Screen):
         self.marks = {m for m in self.marks if m < len(self.rows)}
         for index, chapter in enumerate(self.rows):
             label, style = _STATUS[chapter["status"]]
-            stage = workflow.chapter_state(self.project, chapter["chapter"]).split(" - ")[0]
-            stage = "" if stage in ("not downloaded", "downloaded") else stage
+            stage = workflow.chapter_state(self.project, chapter["chapter"])
+            stage = "" if stage.startswith("not downloaded") else stage.split(" - ")[-1]
             table.add_row(self._mark(index), chapter["chapter"], Text(label, style=style),
                           Text(str(chapter.get("pages") or ""), justify="right"),
                           Text(stage, style="green" if stage == "video done" else ""),
@@ -286,7 +286,9 @@ class ChaptersScreen(Screen):
         if not on_disk:
             options.append(("Download", "fetch the pages", "download"))
         else:
-            options += [("Make PDF", "the pages, to give to the LLM with the prompt", "pdf"),
+            options.append(("Mark panels", "open the Panel Marker in the browser - MAGI finds them, you "
+                            "fix them", "mark"))
+            options += [("Make PDF", "the panels, to give to the LLM with the prompt", "pdf"),
                         ("Make video", "from the narration pasted into narration.json - changed settings "
                          "are picked up, finished work is reused", "video")]
             if any(workflow.has_audio(project, ch) for ch in chapters):
@@ -295,7 +297,8 @@ class ChaptersScreen(Screen):
             options += [("Check pages", "fix any missing or broken page", "download"),
                         ("Re-download", "delete the pages and fetch them all again", "redownload")]
         if some_on_disk:
-            options += [("Reset", "delete the PDF, narration, audio and video - keep the pages", "reset"),
+            options += [("Reset", "delete the cut panels, PDF, narration, audio and video - the marks and "
+                         "pages stay", "reset"),
                         ("Delete", "delete everything, pages included", "delete")]
         note = ", ".join(chapters) if len(chapters) > 1 else (chosen[0].get("title") or "")
         action = await self.app.push_screen_wait(Choice(title, options, note=note, danger=["reset", "delete"]))
@@ -303,6 +306,8 @@ class ChaptersScreen(Screen):
             return
         if action == "download":
             await self.download(chapters)
+        elif action == "mark":
+            await self.mark(chapters, config)
         elif action == "redownload":
             if await self.app.push_screen_wait(Confirm("Re-download", f"Delete the pages of {title.lower()} and "
                                                        f"download them again?", yes="Re-download")):
@@ -318,7 +323,8 @@ class ChaptersScreen(Screen):
                     yes="Remake")):
                 await self.make_videos(chapters, config, force=True)
         elif action in ("reset", "delete"):
-            what = "everything, pages included" if action == "delete" else "the PDF, pasted narration, audio and video"
+            what = ("everything, pages and marks included" if action == "delete"
+                    else "the cut panels, PDF, pasted narration, audio and video")
             if not await self.app.push_screen_wait(Confirm(
                     action.capitalize(), f"Delete {what} for {title.lower()}? The pasted narration can't be "
                     f"recovered.", yes=action.capitalize(), danger=True)):
@@ -347,12 +353,28 @@ class ChaptersScreen(Screen):
             await self.show("Download stopped" if outcome.stopped else "Download failed", [outcome.error],
                             ok=False, log=log)
 
+    async def mark(self, chapters: list[str], config: RemangaConfig) -> None:
+        """The browser does the work; the task screen just waits for it."""
+        project, log = self.project, get_log_path(self.project)
+        outcome = await self.run_task(
+            f"Marking {len(chapters)} chapter(s)",
+            [Step("Panel Marker (waiting for the browser)", lambda: workflow.mark(project, chapters, config))], log)
+        if outcome.ok:
+            marked = [ch for ch in chapters if workflow.has_marks(project, ch)]
+            await self.show("Panels marked", [f"Chapter(s) {', '.join(marked) or '-'} have their panels marked.",
+                                              "", Text("Then Make PDF for the chapter.", style="dim")],
+                            ok=True, log=log)
+        else:
+            await self.show("Marking stopped" if outcome.stopped else "Marking failed", [outcome.error],
+                            ok=False, log=log)
+
     async def make_pdfs(self, chapters: list[str], config: RemangaConfig) -> None:
         project = self.project
         for chapter in chapters:
             log = get_log_path(project, chapter)
             outcome = await self.run_task(f"Chapter {chapter}: PDF", [
-                Step("Build the PDF of the pages", lambda ch=chapter: workflow.make_pdf(project, ch, config)),
+                Step("Cut the panels and build their PDF",
+                     lambda ch=chapter: workflow.make_pdf(project, ch, config)),
             ], log)
             if not outcome.ok:
                 await self.show(f"Chapter {chapter}: PDF {'stopped' if outcome.stopped else 'failed'}",
@@ -382,7 +404,7 @@ class ChaptersScreen(Screen):
 
             outcome = await self.run_task(f"Chapter {chapter}: {'remaking the video' if force else 'video'}", [
                 Step("Check the narration", check),
-                Step("Narrate the pages (Kokoro)",
+                Step("Narrate the panels (Kokoro)",
                      lambda ch=chapter, found=found: workflow.narrate(project, ch, found["pages"], config, force)),
                 Step("Mix with the music", lambda ch=chapter: workflow.mix(project, ch, config, force)),
                 Step("Render the video", lambda ch=chapter: workflow.render(project, ch, config, force)),

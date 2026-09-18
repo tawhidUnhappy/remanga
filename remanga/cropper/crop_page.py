@@ -1,0 +1,209 @@
+"""Per-page cropping: locates one page's image, resolves its panel boxes, and
+crops/trims/saves each panel. Split out of crop.py so CoordinateCropper stays
+a thin per-chapter loop over this one function."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+from PIL import Image, ImageOps
+
+from remanga.config import CropperConfig
+from remanga.console import console, escape as _esc
+from remanga.cropper.dedupe import dedupe_panels
+from remanga.cropper.geometry import apply_padding
+from remanga.cropper.gutter import count_adjusted_edges, page_grayscale_array, sample_background_color
+from remanga.cropper.naming import panel_stem
+from remanga.cropper.page_locator import locate_page_file
+from remanga.cropper.panel_boxes import resolve_page_panel_boxes
+from remanga.cropper.structured import CropPlan, has_structured_crops, paint_mask, plan_structured_crops
+from remanga.cropper.trim import trim_panel_margins
+
+
+@dataclass
+class PageCropResult:
+    """Everything one page's worth of cropping produced, so the chapter-level
+    loop in crop.py only has to accumulate these, not track loose counters."""
+
+    panel_paths: list[Path] = field(default_factory=list)
+    gutter_panels_adjusted: int = 0
+    gutter_edges_adjusted: int = 0
+    duplicate_panels_dropped: int = 0
+    panels_trimmed: int = 0
+    panels_painted: int = 0
+
+
+@dataclass
+class CutCrop:
+    """One crop exactly as `crop` saves it, and how it got there."""
+
+    image: Image.Image
+    box: tuple[int, int, int, int]  # where it came from on the page, after padding and trim
+    adjusted_edges: int = 0
+    painted: bool = False
+    trimmed: bool = False
+
+
+def cut_crops(img: Image.Image, panels: list[dict[str, Any]], config: CropperConfig) -> list[CutCrop]:
+    """Every crop of one RGB page image, in order, cut the way `crop` cuts
+    them: boxes resolved (gutter-snapped, or planned as structured crops),
+    padded, neighbours painted out, blank margin trimmed. The one definition
+    of a finished crop - crop_page saves these, and the LLM crop previews
+    show them, so a preview can't show anything the cut won't produce."""
+    img_w, img_h = img.size
+    structured = has_structured_crops(panels)
+    painting = structured and config.paint_out
+
+    # Computed once per page (not per panel) and reused by panel box
+    # resolution below (remanga/cropper/panel_boxes.py), by the final
+    # per-panel trim (remanga/cropper/trim.py), and as the paper colour
+    # a structured crop's neighbours are painted over with.
+    needs_page_analysis = config.snap_to_gutters or config.trim_panel_whitespace or painting
+    gray_arr = page_grayscale_array(img) if needs_page_analysis else None
+    bg_level = (
+        sample_background_color(gray_arr, config.gutter_background_sample_strip_pixels)
+        if gray_arr is not None else None
+    )
+
+    if structured:
+        plans = plan_structured_crops(panels, img_w, img_h, gray_arr, bg_level, config)
+    else:
+        _valid_panels, original_boxes, panel_boxes = resolve_page_panel_boxes(
+            panels, img_w, img_h, gray_arr, bg_level, config
+        )
+        plans = [CropPlan(marked=[original], frames=[refined])
+                 for original, refined in zip(original_boxes, panel_boxes, strict=True)]
+
+    cuts: list[CutCrop] = []
+    for index, plan in enumerate(plans):
+        adjusted = 0
+        if config.snap_to_gutters:
+            adjusted = sum(count_adjusted_edges(original, refined)
+                           for original, refined in zip(plan.marked, plan.frames, strict=True))
+
+        crop_box = plan.rect
+        if config.margin_padding_pixels > 0:
+            crop_box = apply_padding(crop_box, img_w, img_h, config.margin_padding_pixels)
+
+        cropped_img = img.crop(crop_box)
+
+        painted = False
+        if painting and bg_level is not None:
+            paint = paint_mask(plans, index, crop_box)
+            if paint is not None:
+                pixels = np.array(cropped_img)
+                pixels[paint] = round(bg_level)
+                cropped_img = Image.fromarray(pixels)
+                painted = True
+
+        # Last safety net: trim any leftover blank margin still baked into
+        # the saved image (e.g. a panel with no neighbor to reconcile a
+        # seam against) - see remanga/cropper/trim.py.
+        trimmed = False
+        if config.trim_panel_whitespace and bg_level is not None:
+            cl, ct, cr, cb = crop_box
+            cropped_img, (tl, tt, tr, tb) = trim_panel_margins(
+                cropped_img, bg_level,
+                tolerance=config.gutter_bg_tolerance,
+                min_bg_fraction=config.trim_min_background_fraction,
+                max_trim_fraction=config.trim_max_margin_fraction,
+            )
+            if (tl, tt, tr, tb) != (0, 0, cr - cl, cb - ct):
+                trimmed = True
+                crop_box = (cl + tl, ct + tt, cl + tr, ct + tb)
+
+        if config.auto_contrast_clean:
+            cropped_img = ImageOps.autocontrast(cropped_img, cutoff=1)
+
+        cuts.append(CutCrop(cropped_img, crop_box, adjusted, painted, trimmed))
+    return cuts
+
+
+def crop_page(
+    page_entry: dict[str, Any],
+    pages_dir: Path,
+    panels_dir: Path,
+    chapter_num,
+    page_number: int,
+    config: CropperConfig,
+) -> PageCropResult | None:
+    """Crops every panel on one crops.json page entry. Returns None if the
+    page was skipped (not a story page, no panels, or its image couldn't be
+    located) - the caller just moves on to the next page_entry in that case.
+
+    `page_number` is a fallback page number (crop.py's 1-based position in
+    pages_list) used only if this page_entry has no `page_index` of its
+    own - whichever one wins is what every panel filename is actually
+    numbered against (`{chapter}_{page}_{panel}`, see remanga.cropper.naming),
+    so panel filenames match the downloaded page's own number whenever
+    that's known.
+
+    A page of structured crops (entries carrying `frames` - see
+    remanga.cropper.structured) is planned there instead: frames refined,
+    each crop's own text and art outside them added after, and other crops'
+    frames and bubbles painted out of each rectangle. Every other page takes
+    the marker's path below, unchanged."""
+    is_story_page = page_entry.get("is_story_page", True)
+    panels = page_entry.get("panels", [])
+
+    if not is_story_page or not panels:
+        page_desc = page_entry.get("page_filename") or f"page index {page_entry.get('page_index')}"
+        note_str = page_entry.get("notes") or page_entry.get("skip_reason") or "non-story/duplicate"
+        console.print(f"[dim yellow]Skipping non-story page ({page_desc}): {note_str}[/]")
+        return None
+
+    result = PageCropResult()
+
+    # Safety net for an accidental double-mark: drop any panel entry whose box
+    # is near-identical in both position and size to an earlier one on this
+    # page (same bordered frame marked twice), keeping the earliest occurrence
+    # per reading order. A small panel deliberately nested inside or heavily
+    # overlapping a larger one - a normal manga layout, not a duplicate - is
+    # untouched; see remanga/cropper/dedupe.py.
+    if config.dedupe_duplicate_panels:
+        page_desc = page_entry.get("page_filename") or f"page index {page_entry.get('page_index')}"
+        panels, dupe_report = dedupe_panels(
+            panels,
+            iou_threshold=config.duplicate_iou_threshold,
+        )
+        result.duplicate_panels_dropped = len(dupe_report)
+        for dupe in dupe_report:
+            console.print(
+                f"[bold yellow]⚠ Duplicate crop dropped on {page_desc}:[/] "
+                f"panel_id {dupe['dropped_panel_id']!r} overlaps panel_id {dupe['kept_panel_id']!r} "
+                f"(IoU {dupe['iou']:.2f}) - keeping the earlier crop."
+            )
+
+    page_filename = page_entry.get("page_filename")
+    page_index = page_entry.get("page_index")
+    naming_page_num = page_index if page_index is not None else page_number
+
+    page_img_path = locate_page_file(pages_dir, page_filename, page_index, chapter_num)
+    if not page_img_path or not page_img_path.exists():
+        console.print(f"[yellow]Warning: Could not locate page image for: {_esc(str(page_entry))}. Skipping...[/]")
+        return None
+
+    with Image.open(page_img_path) as img:
+        img = ImageOps.exif_transpose(img)
+        cuts = cut_crops(img.convert("RGB"), panels, config)
+
+    panel_number = 1  # resets every page - see panel_stem's docstring
+    for cut in cuts:
+        if cut.adjusted_edges:
+            result.gutter_panels_adjusted += 1
+            result.gutter_edges_adjusted += cut.adjusted_edges
+        result.panels_painted += cut.painted
+        result.panels_trimmed += cut.trimmed
+
+        panel_id = panel_stem(chapter_num, naming_page_num, panel_number)
+        out_name = f"{panel_id}.{config.save_format.lower()}"
+        out_path = panels_dir / out_name
+        cut.image.save(out_path, format=config.save_format, quality=95)
+        result.panel_paths.append(out_path)
+
+        panel_number += 1
+
+    return result

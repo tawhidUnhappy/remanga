@@ -1,15 +1,15 @@
 # remanga
 
-Manga pages to recap video, in four steps:
+Manga panels to recap video, in five steps:
 
 1. **Download** chapters from MangaDex.
-2. **Make a PDF** of each chapter's pages.
-3. **Give the PDF and `prompts/narration.md` to an LLM** (Gemini, ChatGPT, Claude, ...) and paste its
-   reply into the chapter's `narration.json`.
-4. **Make the video**: each page shown whole while Kokoro-82M reads that page's narration, with
+2. **Mark the panels** in the Panel Marker, a web UI: MAGI v3 finds them when you press Detect, and
+   you fix whatever it got wrong by hand.
+3. **Make a PDF** of the chapter's cut panels, in reading order.
+4. **Give the PDF and `prompts/narration.md` to an LLM** (Gemini, ChatGPT, Claude, ...) and paste its
+   one JSON reply into the chapter's `narration.json`.
+5. **Make the video**: each panel on screen while Kokoro-82M reads that panel's narration, with
    background music underneath.
-
-No panel cropping: the LLM narrates each page, telling every panel on it in reading order.
 
 ## Install
 
@@ -17,9 +17,9 @@ No panel cropping: the LLM narrates each page, telling every panel on it in read
 ./bootstrap.sh
 ```
 
-It sets up everything inside this folder: Python, ffmpeg, and Kokoro-82M in its own environment
-(`.tools/venv-kokoro`) with its weights. Linux, macOS or Windows (Git Bash); NVIDIA, AMD, Apple
-Silicon or CPU. Run `./run.sh setup` later to repair the Kokoro install.
+It sets up everything inside this folder: Python, ffmpeg, Kokoro-82M and MAGI v3, each in its own
+environment (`.tools/venv-kokoro`, `.tools/venv-magi`) with its weights. Linux, macOS or Windows (Git Bash); NVIDIA, AMD, Apple
+Silicon or CPU. Run `./run.sh setup` later to repair either install.
 
 ## Use it with the menus
 
@@ -39,8 +39,8 @@ click chooses it** - a single click never starts anything.
 | Screen | What it does |
 |---|---|
 | **Projects** | Your projects. `Enter` opens one, `n` starts a new one: paste the manga's MangaDex URL (or ID, or a title to search). The project is named after the manga's English title, and its reading direction comes from the manga's original language. |
-| **Chapters** | The chapter list, fetched fresh from MangaDex each time, as a table: status (✓ downloaded, ◐ partial, + new), pages, what comes next (PDF ready, narration pasted, video done) and title. `Enter` opens a chapter's actions: download, make PDF, make video, check pages, re-download, reset (deletes the PDF, narration, audio and video, keeps the pages) or delete. `space` (or clicking a row's `·`) picks several chapters to act on together, `a` downloads every new chapter. Reset and delete ask first. |
-| **Work** | Downloads, PDFs and videos run in a task view: the steps, a progress bar and the last few lines of output. `Ctrl+C` stops. When the work ends you get a result: what was made and what to do next (for a PDF: which files to upload, where to paste the reply), or what went wrong. `l` opens the full log, `c` copies the paths to upload. |
+| **Chapters** | The chapter list, fetched fresh from MangaDex each time, as a table: status (✓ downloaded, ◐ partial, + new), pages, what comes next (mark the panels, make the PDF, make the video, video done) and title. `Enter` opens a chapter's actions: download, **mark panels**, make PDF, make video, check pages, re-download, reset (deletes the cut panels, PDF, narration, audio and video - the marks and pages stay) or delete. `space` (or clicking a row's `·`) picks several chapters to act on together, `a` downloads every new chapter. Reset and delete ask first. |
+| **Work** | Downloads, panel cutting, PDFs and videos run in a task view: the steps, a progress bar and the last few lines of output. `Ctrl+C` stops. When the work ends you get a result: what was made and what to do next (for a PDF: which files to upload, where to paste the reply), or what went wrong. `l` opens the full log, `c` copies the paths to upload. |
 | **Settings** (`s`) | Narrator voice and speed, background music and volume, video size, PDF size cap - for the open project, or the defaults from the projects screen. |
 
 Logs are kept in `projects/<name>/logs/`: `chapter_N.log` for a chapter's PDF and video,
@@ -52,8 +52,9 @@ Logs are kept in `projects/<name>/logs/`: `chapter_N.log` for a chapter's PDF an
 ./run.sh new "https://mangadex.org/title/..."   # prints the project name, e.g. MyMangaTitle
 ./run.sh download -p MyMangaTitle               # MangaDex's chapter list, with what you have
 ./run.sh download -p MyMangaTitle -c 1-5        # or -c new for every chapter you don't have
-./run.sh pdf      -p MyMangaTitle -c 1-5
-# give pdf/chapter_N/pages_*.pdf + prompts/narration.md to the LLM, paste the reply into
+./run.sh mark     -p MyMangaTitle -c 1-5        # the Panel Marker, in your browser
+./run.sh pdf      -p MyMangaTitle -c 1-5        # cuts the panels, then their PDF
+# give pdf/chapter_N/panels_*.pdf + prompts/narration.md to the LLM, paste the reply into
 # projects/MyMangaTitle/chapters/chapter_N/narration.json
 ./run.sh video    -p MyMangaTitle -c 1-5
 ./run.sh chapters -p MyMangaTitle
@@ -62,24 +63,43 @@ Logs are kept in `projects/<name>/logs/`: `chapter_N.log` for a chapter's PDF an
 `-c` takes a chapter, a range, several (`1-5,8`) or `all` (the default). Decimal chapters are
 chapters of their own: `1-5` includes 4.5 but not 5.1.
 
+## Marking the panels
+
+```bash
+./run.sh mark -p MyMangaTitle -c 1-5
+```
+
+or **Mark panels** in a chapter's menu. It opens one browser tab for every chapter you picked:
+
+- **Detect** runs MAGI v3 over the pages and draws the panels it finds (a GPU takes a few seconds a
+  page; without one, mark by hand).
+- Fix what it got wrong: drag a box, resize it, delete it, draw a missing one, mark a full page as
+  one panel. The sidebar lists the pages and what each one has.
+- The reading order follows the manga's direction (right to left for Japanese), and the panel
+  numbers show it.
+- **Save** writes the chapter's `crops.json` and moves to the next chapter in the tab.
+
+The marks are yours: nothing overwrites them, and Reset keeps them. Making the PDF cuts the panels
+again whenever the marks are newer than them.
+
 ## The LLM step
 
 Upload **`prompts/narration.md`** and the chapter's PDF (all parts, if it was split) - that's all.
-The PDF's first page tells the LLM the manga, the chapter, the reading direction, the page list, and
+The PDF's first page tells the LLM the manga, the chapter, the reading direction, the panel list, and
 the story so far, so there is nothing to type.
 
 The LLM replies with one JSON block in two sections. Paste all of it into
 `chapters/chapter_N/narration.json` (the code fence can come along):
-- `narration` - for every page: whether it is story, a short note per panel in reading order, and the
-  page's narration;
+- `narration` - one entry per panel, in reading order: the narration read while that panel is on
+  screen, or a skip reason for a panel that is not story (a credits box, a title);
 - `memory` - the story so far after this chapter. The next chapter's PDF reads it straight from this
   file and prints it on its first page, so continuity carries forward with no extra step.
 
-**Make video** checks the reply first. If a page is missing, a story page has no narration, or a
-skipped page has no reason, nothing is narrated: the problems are listed and written to
-`pdf/chapter_N/fix_request.md` - paste that into the same chat and save the new reply over
-`narration.json`. It also warns (without stopping) when a page's narration looks too short for its
-panels, or uses quotation marks, `?`, `!`, `...` or contractions, which the voice reads badly.
+**Make video** checks the reply first. If a panel is missing, has no narration, or is skipped for no
+reason, nothing is narrated: the problems are listed and written to `pdf/chapter_N/fix_request.md` -
+paste that into the same chat and save the new reply over `narration.json`. It also warns (without
+stopping) when a panel's narration looks too short, or uses quotation marks, `?`, `!`, `...` or
+contractions, which the voice reads badly.
 
 Make each chapter's PDF after pasting the previous chapter's narration, so its story so far is up to
 date (the PDF step says so when an earlier chapter has none yet).
@@ -91,9 +111,11 @@ projects/<name>/
   project.json            the manga, its reading direction, per-project settings
   chapters/chapter_N/
     pages/                downloaded pages
+    crops.json            the panel marks from the Panel Marker
+    panels/               the panels cut from the pages
     narration.json        the LLM's reply: narration + memory
-  pdf/chapter_N/          pages_1.pdf, ... and fix_request.md
-  audio/chapter_N/        one clip per page + audio_timing.json
+  pdf/chapter_N/          panels_1.pdf, ... and fix_request.md
+  audio/chapter_N/        one clip per panel + audio_timing.json
   audio_modified/chapter_N/  the mixed track
   video/chapter_N/        the video
 global/bgm/               your background music files
@@ -103,9 +125,9 @@ Every step reuses what is still current: re-running **Make video** after changin
 re-mixes and re-muxes; after changing the voice it narrates again. Stopping with Ctrl+C is safe - run
 it again to carry on.
 
-**PDF size:** no PDF is larger than the cap (50MB by default). JPEG pages go in exactly as
-downloaded, other pages losslessly; a chapter too big for one file is split into parts. Only a single
-page too big for a file on its own is stored near-losslessly.
+**PDF size:** no PDF is larger than the cap (50MB by default). Panels go in losslessly; a chapter too
+big for one file is split into parts. Only a single panel too big for a file on its own is stored
+near-losslessly.
 
 ## Settings
 
@@ -118,9 +140,11 @@ for every project (`config.json`). Everything else is in `config.json`:
 | `tts.volume_boost_db` | 0 | gain on each clip; leave at 0 when loudness normalization is on |
 | `audio.bgm_enabled` / `bgm_path` | off / - | background music |
 | `audio.bgm_below_voice_lu` | 14 | how far the music sits under the voice, in LU - measured per track and chapter, so every music file sits at the same level (12 energetic, 14 balanced, 18 subtle) |
-| `audio.pause_between_pages_ms` | 350 | silence between pages |
+| `audio.pause_between_panels_ms` | 350 | silence between panels |
 | `audio.enable_loudnorm` / `loudness_target_lufs` | true / -14 | normalize the finished audio (two-pass, linear) to YouTube's -14 LUFS |
 | `video.width` / `height` / `fps` | 1920 / 1080 / 24 | video size |
-| `video.background_style` | `blur` | `blur` (the page, blurred) or `solid` (`background_color`) |
+| `video.background_style` | `blur` | `blur` (the panel, blurred) or `solid` (`background_color`) |
 | `pdf.max_mb` | 50 | largest PDF file |
+| `marker.magi_enabled` / `magi_panel_score_threshold` | true / 0.5 | MAGI v3's panel detection in the Panel Marker, and how sure it must be |
+| `cropper.margin_padding_pixels` / `snap_to_gutters` | 8 / true | breathing room around a cut panel, and snapping its edges to the real gutters |
 | `downloader.language` | `en` | MangaDex translation language |

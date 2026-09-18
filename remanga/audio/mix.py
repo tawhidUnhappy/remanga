@@ -1,4 +1,4 @@
-"""A chapter's master track: every page's narration clip with the pause after
+"""A chapter's master track: every panel's narration clip with the pause after
 it, background music under the whole of it, normalized.
 
 Skipped when master_audio.wav already matches: the synthesized audio
@@ -16,7 +16,7 @@ from remanga.audio.master import (
     integrated_loudness,
     load_bgm,
     music_bed,
-    page_segments,
+    panel_segments,
     under_narration,
     write_master,
 )
@@ -81,8 +81,8 @@ def mix_master_audio(project_name: str, chapter_num: str, config: AudioConfig, f
     console.print(f"[cyan]Mixing chapter {chapter_num}'s audio...[/]")
     audio_dir = get_audio_dir(project_name, chapter_num)
     segments = []
-    for page in read_json(timing_path).get("pages", []):
-        segments.extend(page_segments(audio_dir, page, config.sample_rate))
+    for panel in read_json(timing_path).get("panels", []):
+        segments.extend(panel_segments(audio_dir, panel, config.sample_rate))
     track = join_segments(segments).set_channels(2).set_frame_rate(config.sample_rate)
 
     raw = master.with_name("master_audio_raw.wav")
