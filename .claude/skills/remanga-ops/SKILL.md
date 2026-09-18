@@ -89,6 +89,11 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   fit scale, and suggests the smallest offered size that fits. It fires twice on purpose: in the
   pre-check (the result screen / CLI, counting only NARRATED panels) and while compositing. Measured
   on a real chapter: 8 of 60 panels shrink at 1080p, 2 at 1440p, none at 4K.
+- **Video is 4K (3840x2160) since 2026-09-18 - the user asked for best quality** after the panel
+  warning showed 8 of 59 panels shrinking at 1080p. Measured on a real 4m23s chapter: frames
+  composite in 3s, the NVENC encode takes 1m12s, the MP4 is 42MB (still panels compress hard; the
+  encoder is CQ 18 VBR, not bitrate-capped) and a rendered frame is 50dB PSNR against its source.
+  Frame cache is ~126MB a chapter. Don't trade this back for speed unasked.
 - **Narration is Kokoro-82M** (fixed built-in voices, `tts.voice` a NAME from `config/kokoro_voices.py`).
   **Chatterbox voice cloning was tried on 2026-09-18 and rejected the same day** - the user found the
   clone bad and the music too loud under it - so it was removed again; that version is on the branch

@@ -37,8 +37,8 @@
     "loudness_target_lufs": -14.0
   },
   "video": {
-    "width": 1920,
-    "height": 1080,
+    "width": 3840,
+    "height": 2160,
     "fps": 24,
     "background_style": "blur",
     "blur_brightness": 0.42,
