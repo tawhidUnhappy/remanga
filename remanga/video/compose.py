@@ -9,7 +9,14 @@ from PIL import Image, ImageColor, ImageDraw, ImageEnhance, ImageFilter, ImageOp
 from remanga import activity
 from remanga.config import VideoConfig
 from remanga.console import console
+from remanga.json_io import read_json_or, write_json
 from remanga.paths import get_pages_dir, get_video_frames_dir
+
+# What the frames beside it were composited with. Without this a frame was
+# reused whenever the page hadn't changed, so a new size or background was
+# picked up by the encoder and not by the pictures it encoded - the video came
+# out at the old size (user report).
+FRAMES_SETTINGS_NAME = "frames_settings.json"
 
 # Compression for the composited frame PNGs. They're a private, lossless
 # cache the encoder reads once per page - never a deliverable - so a smaller
@@ -165,6 +172,11 @@ class FrameCompositor:
         if missing:
             raise FileNotFoundError(f"Page image(s) not found in {pages_dir}: {', '.join(missing)}")
 
+        settings_path = frames_dir / FRAMES_SETTINGS_NAME
+        settings = self.config.model_dump()
+        if read_json_or(settings_path, None) != settings:
+            force = True  # a changed video setting is a different picture
+
         reused_count = 0
         to_composite = []
         for page_id in page_ids:
@@ -192,4 +204,5 @@ class FrameCompositor:
 
         if reused_count > 0:
             console.print(f"[dim cyan](Reused {reused_count} existing page frames)[/]")
+        write_json(settings_path, settings)
         return frames_dir

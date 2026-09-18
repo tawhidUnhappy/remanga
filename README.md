@@ -125,7 +125,7 @@ for every project (`config.json`). Everything else is in `config.json`:
 
 | Key | Default | Meaning |
 |---|---|---|
-| `tts.voice` | `global/voice/animextv.wav` | the recording Chatterbox clones: one person speaking, no music, more than 5 seconds - its first 10-15 seconds are what the delivery comes from. Put recordings in `global/voice/` and pick one in Settings |
+| `tts.voice` | `global/voice/narrator.wav` | the recording Chatterbox clones: one person speaking, no music, more than 5 seconds - its first 10-15 seconds are what the delivery comes from. Put recordings in `global/voice/` and pick one in Settings |
 | `audio.bgm_enabled` / `bgm_path` | off / - | background music |
 | `audio.bgm_below_voice_lu` | 14 | how far the music sits under the voice, in LU - measured per track and chapter, so every music file sits at the same level (12 energetic, 14 balanced, 18 subtle) |
 | `audio.pause_between_pages_ms` | 350 | silence between pages |

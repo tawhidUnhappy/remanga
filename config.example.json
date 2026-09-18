@@ -18,7 +18,7 @@
     "max_mb": 50.0
   },
   "tts": {
-    "voice": "global/voice/animextv.wav",
+    "voice": "global/voice/narrator.wav",
     "synth_timeout_seconds": 180,
     "hf_repo_id": "ResembleAI/chatterbox-turbo",
     "model_dir": "checkpoints/chatterbox_turbo"

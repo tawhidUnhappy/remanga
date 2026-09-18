@@ -165,7 +165,14 @@ class VideoRenderer(EncoderChoiceMixin):
             final_video.exists() and master_audio.exists()
             and master_audio.stat().st_mtime > final_video.stat().st_mtime
         )
-        if not force and final_video.exists() and final_video.stat().st_size > 1000 and not stale_audio:
+        # The same for the picture: a changed video setting (size, background,
+        # fps) changes the picture's fingerprint, and the finished MP4 must not
+        # be accepted just because it exists - that is what left a re-render
+        # after changing the video size doing nothing at all.
+        timeline = self.frame_timeline(project_name, chapter_num)
+        stale_picture = not self._picture_is_fresh(project_name, chapter_num, timeline)
+        if (not force and final_video.exists() and final_video.stat().st_size > 1000
+                and not stale_audio and not stale_picture):
             console.print(f"[bold green]✓ Recap video already rendered:[/] {_escape_path(str(final_video))}")
             return final_video
         if stale_audio:
@@ -174,10 +181,12 @@ class VideoRenderer(EncoderChoiceMixin):
                 "video around it.[/]"
             )
 
+        if stale_picture and final_video.exists() and not force:
+            console.print("[dim]the video settings changed since the last render - building the picture again.[/]")
+
         if not master_audio.exists():
             raise FileNotFoundError(f"Master audio not found: {master_audio}")
 
-        timeline = self.frame_timeline(project_name, chapter_num)
         picture = get_video_picture_path(project_name, chapter_num)
         work_dir = get_video_work_dir(project_name, chapter_num)
         partial = work_dir / f"{final_video.stem}.part.mp4"

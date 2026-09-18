@@ -287,8 +287,12 @@ class ChaptersScreen(Screen):
             options.append(("Download", "fetch the pages", "download"))
         else:
             options += [("Make PDF", "the pages, to give to the LLM with the prompt", "pdf"),
-                        ("Make video", "from the narration pasted into narration.json", "video"),
-                        ("Check pages", "fix any missing or broken page", "download"),
+                        ("Make video", "from the narration pasted into narration.json - changed settings "
+                         "are picked up, finished work is reused", "video")]
+            if any(workflow.has_audio(project, ch) for ch in chapters):
+                options.append(("Remake video", "narrate, mix and render again from scratch, even if nothing "
+                                "changed", "revideo"))
+            options += [("Check pages", "fix any missing or broken page", "download"),
                         ("Re-download", "delete the pages and fetch them all again", "redownload")]
         if some_on_disk:
             options += [("Reset", "delete the PDF, narration, audio and video - keep the pages", "reset"),
@@ -307,6 +311,12 @@ class ChaptersScreen(Screen):
             await self.make_pdfs(chapters, config)
         elif action == "video":
             await self.make_videos(chapters, config)
+        elif action == "revideo":
+            if await self.app.push_screen_wait(Confirm(
+                    "Remake video", f"Narrate, mix and render {title.lower()} again from scratch? Narrating is "
+                    f"the slow part - Make video already redoes whatever a changed setting affects.",
+                    yes="Remake")):
+                await self.make_videos(chapters, config, force=True)
         elif action in ("reset", "delete"):
             what = "everything, pages included" if action == "delete" else "the PDF, pasted narration, audio and video"
             if not await self.app.push_screen_wait(Confirm(
@@ -360,7 +370,7 @@ class ChaptersScreen(Screen):
             await self.show(f"Chapter {chapter}: PDF ready", lines, ok=True, warnings=result.warnings(), log=log,
                             copy=[*files, _short(result.narration)])
 
-    async def make_videos(self, chapters: list[str], config: RemangaConfig) -> None:
+    async def make_videos(self, chapters: list[str], config: RemangaConfig, force: bool = False) -> None:
         project = self.project
         for chapter in chapters:
             log = get_log_path(project, chapter)
@@ -370,12 +380,12 @@ class ChaptersScreen(Screen):
                 found["pages"], found["warnings"] = workflow.check_narration(project, ch)
                 return found["pages"]
 
-            outcome = await self.run_task(f"Chapter {chapter}: video", [
+            outcome = await self.run_task(f"Chapter {chapter}: {'remaking the video' if force else 'video'}", [
                 Step("Check the narration", check),
                 Step("Narrate the pages (Chatterbox)",
-                     lambda ch=chapter, found=found: workflow.narrate(project, ch, found["pages"], config)),
-                Step("Mix with the music", lambda ch=chapter: workflow.mix(project, ch, config)),
-                Step("Render the video", lambda ch=chapter: workflow.render(project, ch, config)),
+                     lambda ch=chapter, found=found: workflow.narrate(project, ch, found["pages"], config, force)),
+                Step("Mix with the music", lambda ch=chapter: workflow.mix(project, ch, config, force)),
+                Step("Render the video", lambda ch=chapter: workflow.render(project, ch, config, force)),
             ], log)
             if not outcome.ok:
                 await self.show(f"Chapter {chapter}: video {'stopped' if outcome.stopped else 'failed'}",

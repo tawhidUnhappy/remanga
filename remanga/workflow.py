@@ -22,6 +22,7 @@ from remanga.narration import PROMPT_PATH, load_narration, page_files, story_so_
 from remanga.paths import (
     GENERATED_KINDS,
     chapter_identity_fields,
+    get_audio_timing_path,
     get_chapter_dir,
     get_final_video_path,
     get_generated_dir,
@@ -138,6 +139,12 @@ def chapter_state(project: str, chapter: str) -> str:
     if any(get_pdf_dir(project, chapter, create=False).glob("pages_*.pdf")):
         return "PDF ready - waiting for the narration"
     return "downloaded - make the PDF"
+
+
+def has_audio(project: str, chapter: str) -> bool:
+    """Whether this chapter has been narrated before - what makes remaking the
+    video a thing to offer at all."""
+    return get_audio_timing_path(project, chapter, create=False).exists()
 
 
 # --- download ---------------------------------------------------------------

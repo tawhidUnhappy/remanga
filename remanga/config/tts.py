@@ -16,7 +16,7 @@ from remanga.config.base import ConfigModel
 from remanga.paths import REPO_ROOT
 
 DISPLAY_NAME = "Chatterbox Turbo"
-DEFAULT_VOICE = "global/voice/animextv.wav"
+DEFAULT_VOICE = "global/voice/narrator.wav"
 VOICE_EXTS = (".wav", ".mp3", ".flac", ".m4a", ".ogg", ".opus")
 
 
@@ -35,13 +35,22 @@ class TTSConfig(ConfigModel):
     def _from_older_versions(cls, data: Any) -> Any:
         """Kokoro's settings (a voice NAME, speed, gain, its model) mean nothing
         to Chatterbox and are dropped; a `chatterbox` block from the
-        multi-engine version is lifted up."""
+        multi-engine version is lifted up.
+
+        Every field this model HAS is kept, whatever it holds: this also runs
+        on assignment (validate_assignment), where dropping a field for not
+        being in a shortlist left the model without it - and saving the
+        settings then died on the missing attribute."""
         if not isinstance(data, dict):
             return data
-        kept = {key: value for key, value in data.items() if key in ("voice", "synth_timeout_seconds")}
+        kept = {key: value for key, value in data.items() if key in cls.model_fields}
         block = data.get("chatterbox")
         if isinstance(block, dict) and block.get("voice"):
             kept["voice"] = block["voice"]
+        # Kokoro's model and repo: back to this engine's own defaults.
+        for field_name in ("hf_repo_id", "model_dir"):
+            if "chatterbox" not in str(kept.get(field_name, "chatterbox")).lower():
+                kept.pop(field_name, None)
         return kept
 
     @field_validator("voice")

@@ -74,10 +74,21 @@ One JSON block, two sections (user request - NOT two blocks):
   exaggeration/cfg). Kokoro and every speed/gain setting are GONE; don't reintroduce voice
   post-processing without being asked. The music level and the -14 LUFS master stay - they are the
   finished video's balance, not voice processing.
-- **The voice is a recording to clone** (`tts.voice`, default `global/voice/animextv.wav`, chosen
+- **The voice is a recording to clone** (`tts.voice`, default `global/voice/narrator.wav`, chosen
   from `global/voice/` in Settings): one speaker, no music, >5s or Turbo asserts; conditionals are
   built once per clip in the worker. Turbo truncates silently past ~1000 speech tokens, hence
   `chunk_max_chars = 300` in the synthesizer.
+- **A `model_validator(mode="before")` also runs on ASSIGNMENT** (ConfigModel has
+  `validate_assignment`): returning a shortlist of keys left the model WITHOUT its other fields, and
+  saving the settings then died on `'TTSConfig' object has no attribute 'hf_repo_id'` (user hit it
+  picking a voice). Keep every key in `cls.model_fields`; drop only what is wrong for this engine.
+- **Changed settings must reach the finished video** (user asked where the remake option was):
+  `render_video` used to accept an existing MP4 before consulting the picture fingerprint, and
+  `prepare_composited_frames` reused frames per page with no regard for the video settings - so a
+  new size or background changed nothing. Both are fixed (`stale_picture`, `frames_settings.json`);
+  the chapter menu also has **Remake video** (narrate + mix + render with force). Verified on a
+  2-page scratch chapter: size 720p<->1080p and background style recomposite and re-encode, music
+  level re-mixes and re-encodes the sound only, an unchanged re-run does nothing.
 - **Config migration:** Kokoro's settings (voice NAME, speed, volume_boost, its model/sample_rate)
   are dropped on load - `config/tts.py:_from_older_versions` keeps only voice/timeout and
   `_voice_is_a_recording` falls back to the default clip when `voice` is not an audio path; old
@@ -135,7 +146,7 @@ One JSON block, two sections (user request - NOT two blocks):
 ## Verified 2026-09-17 (light version)
 
 `download -c 1 --url ...` (40 pages, checksums) -> `pdf` (29.6MB, all lossless, text page ok) ->
-bad reply refused with fix request -> good reply -> Chatterbox (clone of animextv.wav) -> mix with BGM -> h264_nvenc
+bad reply refused with fix request -> good reply -> Chatterbox (clone of the recording in global/voice/) -> mix with BGM -> h264_nvenc
 render; frame checked; rerun reused clips/mix/video; next chapter's PDF carried the previous chapter's memory section; Textual
 UI walked in Pilot + a real pty with mouse (projects, chapters, actions, download, Ctrl+C stop, PDF result, copy, log, settings, quit); `setup` installs Chatterbox's venv (7.6GB) and weights (2.8GB).
 
