@@ -176,6 +176,14 @@ bad reply refused with fix request -> good reply -> Kokoro (af_heart) -> mix wit
 render; frame checked; rerun reused clips/mix/video; next chapter's PDF carried the previous chapter's memory section; Textual
 UI walked in Pilot + a real pty with mouse (projects, chapters, actions, download, Ctrl+C stop, PDF result, copy, log, settings, quit); `setup` installs Kokoro's venv and weights.
 
+## Verified 2026-09-18 (TTS engines)
+
+Qwen3-TTS measured on this box (RTX 3060): preset narrator 12.5s for an 8.4s line; voice design ->
+one 8.8s sample; the designed voice's clone mode then narrated panels in 8.6s and 7.1s (~1.4x
+realtime). So a 60-panel chapter is ~10 minutes against Kokoro's ~7 seconds. Model load is slow the
+first time (~4.3GB per variant, three variants). Kokoro still narrates through the same interface -
+only `config.tts.engine` decides.
+
 ## Verified 2026-09-18 (panels back)
 
 Scratch copy of the user's manga, chapter 2.2: MAGI detection over 16 pages -> 60 panels ->
