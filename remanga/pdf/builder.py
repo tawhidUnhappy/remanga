@@ -47,10 +47,14 @@ def build_panels_pdf(
         lossless = list(pool.map(lossless_page, paths))
     pages = [_Page(path.stem, path, page) for path, page in zip(paths, lossless, strict=True)]
     full_ids = [page.stem for page in pages]
+    # Every page of every part is the size of the chapter's biggest panel,
+    # with the panel centred on black: panels are all different shapes, and a
+    # PDF that changes shape on every scroll is hard to read.
+    canvas = (max(page.page.width for page in pages), max(page.page.height for page in pages))
 
     def render(part: Sequence[_Page], index: int, total: int) -> _Built:
         part_info = build_part_info(info, full_ids, [page.stem for page in part], index, total)
-        return _Built(build_pdf([page.page for page in part], info_to_text_lines(part_info)))
+        return _Built(build_pdf([page.page for page in part], info_to_text_lines(part_info), canvas))
 
     built = _pack_parts(pages, max_bytes, render)
     if built is None:

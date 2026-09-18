@@ -166,12 +166,25 @@ def _text_page_content(lines: Sequence[str]) -> bytes:
     return "\n".join(parts).encode("latin-1", errors="replace")
 
 
-def build_pdf(image_pages: Sequence[ImagePage], info_lines: Sequence[str]) -> bytes:
+def build_pdf(image_pages: Sequence[ImagePage], info_lines: Sequence[str],
+              canvas: tuple[int, int] | None = None) -> bytes:
     """Assembles one complete PDF file: one or more leading text pages
     rendering `info_lines` as real, extractable text (paginated - see
     `_LINES_PER_TEXT_PAGE` - so a long manifest still gets a plain flowing
-    list instead of overflowing a single page), followed by one full-page
-    image per `image_pages`, in order."""
+    list instead of overflowing a single page), followed by one page per
+    `image_pages`, in order.
+
+    `canvas` is the size EVERY image page gets, with the image centred on
+    black - panels are cut at whatever size they are, and a PDF whose pages
+    change shape every time you scroll is hard to read (user request). The
+    default is the biggest page given here; the caller passes the biggest of
+    the whole chapter so the parts of a split PDF match each other. The image
+    bytes are untouched either way: this is page geometry, not re-encoding."""
+    if canvas is None:
+        canvas = (max((p.width for p in image_pages), default=1),
+                  max((p.height for p in image_pages), default=1))
+    page_w = max(canvas[0], max((p.width for p in image_pages), default=1))
+    page_h = max(canvas[1], max((p.height for p in image_pages), default=1))
     objects: list[bytes] = [b""]  # 1-indexed - objects[0] is an unused placeholder
 
     def add_object(body: bytes) -> int:
@@ -225,15 +238,21 @@ def build_pdf(image_pages: Sequence[ImagePage], info_lines: Sequence[str]) -> by
             b" /Length " + str(len(img.data)).encode("ascii") + b" >>\nstream\n" +
             img.data + b"\nendstream"
         )
-        img_content = f"q {img.width} 0 0 {img.height} 0 0 cm /Im0 Do Q".encode("ascii")
+        # Black page, then the panel centred on it - `re f` fills the whole
+        # MediaBox, `cm` places the image at its own size.
+        left, bottom = (page_w - img.width) // 2, (page_h - img.height) // 2
+        img_content = (
+            f"0 0 0 rg 0 0 {page_w} {page_h} re f "
+            f"q {img.width} 0 0 {img.height} {left} {bottom} cm /Im0 Do Q"
+        ).encode("ascii")
         img_content_id = add_object(
             b"<< /Length " + str(len(img_content)).encode("ascii") + b" >>\nstream\n" +
             img_content + b"\nendstream"
         )
         kids.append(add_object(
             b"<< /Type /Page /Parent " + str(pages_id).encode("ascii") + b" 0 R "
-            b"/MediaBox [0 0 " + str(img.width).encode("ascii") + b" " +
-            str(img.height).encode("ascii") + b"] "
+            b"/MediaBox [0 0 " + str(page_w).encode("ascii") + b" " +
+            str(page_h).encode("ascii") + b"] "
             b"/Resources << /XObject << /Im0 " + str(image_id).encode("ascii") + b" 0 R >> >> "
             b"/Contents " + str(img_content_id).encode("ascii") + b" 0 R >>"
         ))
