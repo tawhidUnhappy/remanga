@@ -121,6 +121,12 @@ class FrameCompositor:
         return tiny.resize((cw, ch), Image.Resampling.BICUBIC)
 
 
+    def _capped(self, scale: float) -> float:
+        """`scale`, never enlarging a panel more than video.max_upscale - see
+        that setting for why a blown-up panel is worse than a small one."""
+        cap = getattr(self.config, "max_upscale", 0) or 0
+        return min(scale, cap) if cap > 0 else scale
+
     def scale_for(self, img_w: int, img_h: int) -> float:
         """How much a panel this size is scaled to fit the video - under 1.0
         means it is shown smaller than it is, and detail is lost."""
@@ -128,8 +134,8 @@ class FrameCompositor:
             new_w, _, _, _ = self._calculate_adaptive_bounds(img_w, img_h)
             return new_w / max(1, img_w)
         pad_factor = 1.0 - (self.config.page_padding_percent * 2 / 100.0)
-        return min(int(self.config.width * pad_factor) / max(1, img_w),
-                   int(self.config.height * pad_factor) / max(1, img_h))
+        return self._capped(min(int(self.config.width * pad_factor) / max(1, img_w),
+                                int(self.config.height * pad_factor) / max(1, img_h)))
 
     def _calculate_adaptive_bounds(self, img_w: int, img_h: int) -> tuple[int, int, int, int]:
         """
@@ -158,6 +164,7 @@ class FrameCompositor:
             # Standard square / 4:3 page
             fit_scale = min((avail_w * 0.95) / img_w, avail_h / img_h)
 
+        fit_scale = self._capped(fit_scale)
         new_w = max(1, int(img_w * fit_scale))
         new_h = max(1, int(img_h * fit_scale))
 
@@ -189,7 +196,7 @@ class FrameCompositor:
                 pad_factor = 1.0 - (self.config.page_padding_percent * 2 / 100.0)
                 max_w = int(self.config.width * pad_factor)
                 max_h = int(self.config.height * pad_factor)
-                scale = min(max_w / img_w, max_h / img_h)
+                scale = self._capped(min(max_w / img_w, max_h / img_h))
                 new_w = max(1, int(img_w * scale))
                 new_h = max(1, int(img_h * scale))
                 offset_x = (self.config.width - new_w) // 2

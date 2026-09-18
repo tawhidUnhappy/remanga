@@ -37,8 +37,8 @@ def panel_timing(index: int, panel_id: str, text: str, clip_name: str, *, start_
     }
 
 
-def write_timing(path: Path, chapter_num: str, panels: list[dict[str, Any]], *, boost_db: float,
-                 total_ms: int, voice: dict[str, Any] | None) -> dict[str, Any]:
+def write_timing(path: Path, chapter_num: str, panels: list[dict[str, Any]], *, total_ms: int,
+                 voice: dict[str, Any] | None) -> dict[str, Any]:
     """Writes the manifest, skipping the write entirely when the content is
     identical to what is already there.
 
@@ -54,16 +54,10 @@ def write_timing(path: Path, chapter_num: str, panels: list[dict[str, Any]], *, 
     `voice` is written only when there is something to say about it (see
     narration_voice.py): adding it to an untouched older manifest would
     change the file for nothing, and mix and render would take that as new
-    audio and redo themselves.
+    audio and redo themselves."""
 
-    `boost_db` is what is actually baked into the clips this file describes,
-    read back at the top of the next run to work out the difference. It also
-    earns its keep in the staleness chain above: a changed boost changes this
-    file, so mix and render both notice and redo themselves, which is what
-    makes turning that knob reach the finished video with no extra flag."""
     document: dict[str, Any] = {
         "chapter": str(chapter_num),
-        "volume_boost_db": boost_db,
         "total_timeline_ms": total_ms,
         "total_timeline_sec": round(total_ms / 1000.0, 3),
         "panels": panels,

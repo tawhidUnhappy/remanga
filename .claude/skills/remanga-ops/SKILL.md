@@ -84,6 +84,11 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   Headless checks that work: `MarkerSession(project, [ch])` + `webui.detection.run_detection(state,
   config.marker)` + `session.save_chapter(ch)` writes crops.json; `create_app(session,
   config.marker).run(port=…)` then GET `/`, `/api/chapter`, `/api/pages/<file>`, `/api/outline`.
+- **`video.max_upscale` (3x, user 2026-09-18) caps how far a SMALL panel is enlarged** - at 4K the
+  median panel was being blown up 4x and the smallest 8x, which is soft for nothing. Looked at
+  rendered frames to pick it: 2x leaves a tall panel at 13% of frame width (lost), 3x reads well and
+  stays sharp. `FrameCompositor._capped` applies it in both fit paths, so `scale_for` - and the
+  quality warning - see the same number.
 - **Panels bigger than the video are warned about** (user request: don't lose quality silently).
   `video/compose.py:quality_warning` uses the compositor's own `scale_for`, so the number is the real
   fit scale, and suggests the smallest offered size that fits. It fires twice on purpose: in the

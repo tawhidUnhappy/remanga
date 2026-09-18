@@ -142,10 +142,13 @@ Every step reuses what is still current: re-running **Make video** after changin
 re-mixes and re-muxes; after changing the voice it narrates again. Stopping with Ctrl+C is safe - run
 it again to carry on.
 
-**Panel quality:** panels are cut at the page's full resolution, so a panel can easily be bigger than
-the video. Making a video says so - how many panels are shrunk, the worst one, and which video size
-would show them all at full detail. Nothing is upscaled or re-encoded twice: the warning is there so
-the choice of video size is yours.
+**Panel quality:** panels are cut at the page's full resolution, so their size varies a lot.
+- A panel **bigger than the video** would be shown smaller than it is: making a video says so - how
+  many, the worst one, and which video size would show them all whole.
+- A panel **smaller than the video** is enlarged to fill the frame, and past a point that only makes
+  it soft - there is nothing in the source to fill those pixels with. `video.max_upscale` (3x by
+  default, Settings - Enlarge panels) caps it: a small panel sits smaller on screen, sharp, with more
+  of the blurred background around it.
 
 **PDF size:** no PDF is larger than the cap (50MB by default). Panels go in losslessly; a chapter too
 big for one file is split into parts. Only a single panel too big for a file on its own is stored
@@ -168,6 +171,7 @@ for every project (`config.json`). Everything else is in `config.json`:
 | `audio.pause_between_panels_ms` | 350 | silence between panels |
 | `audio.enable_loudnorm` / `loudness_target_lufs` | true / -14 | normalize the finished audio (two-pass, linear) to YouTube's -14 LUFS |
 | `video.width` / `height` / `fps` | 1920 / 1080 / 24 | video size - 2560x1440 and 3840x2160 keep big panels sharp (see the quality warning), at a slower render |
+| `video.max_upscale` | 3 | how far a small panel may be enlarged to fill the frame; 0 means no cap |
 | `video.background_style` | `blur` | `blur` (the panel, blurred) or `solid` (`background_color`) |
 | `pdf.max_mb` | 50 | largest PDF file |
 | `marker.magi_enabled` / `magi_panel_score_threshold` | true / 0.5 | MAGI v3's panel detection in the Panel Marker, and how sure it must be |

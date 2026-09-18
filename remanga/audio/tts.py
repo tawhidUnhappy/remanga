@@ -3,8 +3,7 @@ audio_timing.json laying them out.
 
 Resumes: a panel whose clip is already on disk in the same voice is reused,
 except the panels around where an earlier run stopped (see resume.py). A
-changed voice re-synthesizes everything; a changed volume boost is applied as
-the difference to the clips already there."""
+changed voice re-synthesizes everything."""
 
 from __future__ import annotations
 
@@ -14,7 +13,7 @@ from typing import Any
 from pydub import AudioSegment
 
 from remanga import activity
-from remanga.audio.clips import apply_edge_fades, apply_gain, atomic_export, clamp_boost, is_audible_gain
+from remanga.audio.clips import apply_edge_fades, atomic_export
 from remanga.audio.narration_voice import voice_changed_from
 from remanga.audio.resample import load_audio
 from remanga.audio.resume import clip_is_complete, clips_to_redo
@@ -54,16 +53,6 @@ class TTSEngine:
                           f"[dim]({escape(was)}) - narrating every panel again.[/]")
             force = True
 
-        boost_db = clamp_boost(self.tts_config.volume_boost_db)
-        boost_delta_db = boost_db - clamp_boost(previous_timing.get("volume_boost_db", 0.0))
-        clipped: list[str] = []
-
-        def boosted(segment: AudioSegment, gain_db: float, panel_id: str) -> AudioSegment:
-            out, did_clip = apply_gain(segment, gain_db)
-            if did_clip:
-                clipped.append(panel_id)
-            return out
-
         panel_ids = [panel.panel_id for panel in panels]
         redo = set() if force else clips_to_redo(audio_dir, panel_ids)
 
@@ -83,9 +72,6 @@ class TTSEngine:
                 clip = audio_dir / f"{panel.panel_id}.wav"
                 if reusable(panel.panel_id):
                     segment = AudioSegment.from_file(clip)
-                    if is_audible_gain(boost_delta_db):
-                        segment = boosted(segment, boost_delta_db, panel.panel_id)
-                        atomic_export(segment, clip)
                     reused += 1
                 else:
                     raw = audio_dir / f"{panel.panel_id}_raw.wav"
@@ -94,7 +80,6 @@ class TTSEngine:
                     # imaging noise into the clip going from 24 kHz to 44.1 kHz.
                     segment = load_audio(raw, self.audio_config.sample_rate, channels=1)
                     segment = apply_edge_fades(segment, self.audio_config.edge_fade_ms)
-                    segment = boosted(segment, boost_db, panel.panel_id)
                     atomic_export(segment, clip)
                     raw.unlink(missing_ok=True)
                 timing.append(panel_timing(index, panel.panel_id, panel.text, clip.name, start_ms=timeline_ms,
@@ -102,7 +87,7 @@ class TTSEngine:
                 timeline_ms += len(segment) + pause_ms
                 bar.advance()
 
-        write_timing(timing_path, chapter_num, timing, boost_db=boost_db, total_ms=timeline_ms, voice=voice_identity)
+        write_timing(timing_path, chapter_num, timing, total_ms=timeline_ms, voice=voice_identity)
 
         # Clips of panels no longer narrated (a panel now skipped) are removed.
         wanted = {f"{page_id}.wav" for page_id in panel_ids}
@@ -110,10 +95,6 @@ class TTSEngine:
             if old.name not in wanted:
                 old.unlink(missing_ok=True)
 
-        if clipped:
-            console.print(f"[yellow]{len(clipped)} panel(s) clipped at {boost_db:+.1f} dB[/] "
-                          f"[dim]({', '.join(clipped[:5])}) - lower the volume boost; only the difference is "
-                          f"re-applied.[/]")
         if reused:
             console.print(f"[dim cyan](Reused {reused} panel clip(s) already synthesized)[/]")
         console.print(f"[bold green]✓ Narration synthesized for {len(panels)} panel(s)[/]")

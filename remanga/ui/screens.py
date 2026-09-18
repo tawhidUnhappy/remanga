@@ -422,6 +422,10 @@ class ChaptersScreen(Screen):
 # --- settings -------------------------------------------------------------------
 
 MUSIC_EXTS = (".mp3", ".wav", ".m4a", ".ogg", ".opus", ".flac")
+UPSCALE_CAPS = ((2.0, "sharpest - small panels sit noticeably small"),
+                (3.0, "balanced - recommended"),
+                (4.0, "fuller frame, a little softer"),
+                (0.0, "no cap - every panel fills the frame, small ones look soft"))
 RESOLUTIONS = ((1920, 1080, "1080p widescreen"), (2560, 1440, "1440p - keeps bigger panels sharp"),
                (3840, 2160, "4K - slowest to render"), (1280, 720, "720p widescreen"),
                (1080, 1920, "1080p vertical"), (1440, 2560, "1440p vertical"))
@@ -462,6 +466,8 @@ class SettingsScreen(Screen):
             Row("Background music", music, _change_music),
             Row("Music level", f"{audio.bgm_below_voice_lu:g} LU under the voice", _change_music_level),
             Row("Video size", f"{video.width}x{video.height}", _change_video_size),
+            Row("Enlarge panels", f"up to {video.max_upscale:g}x" if video.max_upscale > 0 else "to fill the frame",
+                _change_max_upscale),
             Row("PDF size cap", f"{config.pdf.max_mb:g} MB per file", _change_pdf_cap),
         ]
 
@@ -531,6 +537,16 @@ async def _change_video_size(screen: SettingsScreen, config: RemangaConfig) -> N
              "full detail - making a video says which panels it would shrink."))
     if size:
         config.video.width, config.video.height = size
+
+
+async def _change_max_upscale(screen: SettingsScreen, config: RemangaConfig) -> None:
+    cap = await screen.app.push_screen_wait(Choice(
+        "Enlarge panels", [(f"up to {c:g}x" if c else "no cap", hint, c) for c, hint in UPSCALE_CAPS],
+        current=config.video.max_upscale,
+        note="A small panel blown up to fill a 4K frame has nothing to fill it with and looks soft. "
+             "Capped, it sits smaller and stays sharp."))
+    if cap is not None:
+        config.video.max_upscale = cap
 
 
 async def _change_pdf_cap(screen: SettingsScreen, config: RemangaConfig) -> None:

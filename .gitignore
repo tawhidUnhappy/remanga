@@ -44,3 +44,5 @@ config.json
 .idea/
 .DS_Store
 Thumbs.db
+# Sample frames rendered to compare settings - regenerate them, don't track them.
+samples/
