@@ -14,12 +14,48 @@ from rich.table import Table
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, Footer, Input, Label, RichLog, Static
 from textual.widgets.option_list import Option
 
 from remanga.ui.widgets import SafeOptionList, TextInput, TopBar
+
+
+def _rows(widget) -> int:
+    """How many rows this widget takes of its parent, margin included - none
+    at all when it is hidden (the buttons, in a short window)."""
+    if not widget.display:
+        return 0
+    return widget.outer_size.height + widget.styles.margin.height
+
+
+def fit_to_window(screen: Screen, scrollable) -> None:
+    """Caps the scrolling part so the whole dialog fits the window - a box
+    taller than the terminal would otherwise be clipped with no way to reach
+    the rest of it, which in a small window is most dialogs.
+
+    Everything around the scrolling part is measured rather than guessed: what
+    sits outside the box (the bar, the footer), the box's own border and
+    padding, and its title, note or buttons. Their heights are real ones, so
+    this runs after a refresh - and never measures the box itself, whose
+    height is what is being decided."""
+    box = scrollable.parent
+    if box is None:
+        return
+    # In a window this short the box's own frame costs more than it is worth:
+    # its border and padding alone are four of the rows there are (.cramped
+    # drops them - see the CSS in ui/app.py).
+    box.set_class(screen.size.height < 14, "cramped")
+    outside = sum(_rows(widget) for widget in screen.children if widget is not box)
+    chrome = box.gutter.height + box.styles.margin.height
+    chrome += sum(_rows(child) for child in box.children if child is not scrollable)
+    scrollable.styles.max_height = max(1, screen.size.height - outside - chrome)
+    # The box scrolls too, as a backstop - but once its content fits again it
+    # must go back to the top, or it sits one line down and hides its title,
+    # and its own scrollbar has to be recomputed against the new height.
+    box.scroll_home(animate=False)
+    box.refresh(layout=True)
 
 
 class Choice(ModalScreen[Any]):
@@ -35,7 +71,8 @@ class Choice(ModalScreen[Any]):
         self.options = []
         for label, hint, value in options:
             row = Table.grid(padding=(0, 2))
-            row.add_column(width=max(len(o[0]) for o in options) + (10 if current is not None else 0))
+            # Room for the label, plus the "◂ current" badge when there is one.
+            row.add_column(width=max(len(o[0]) for o in options) + (12 if current is not None else 0))
             row.add_column(style="dim")
             name = Text(label, style="bold red" if value in danger else "bold")
             if current is not None and value == current:
@@ -50,6 +87,17 @@ class Choice(ModalScreen[Any]):
                 yield Static(self.note, classes="note")
             yield SafeOptionList(*self.options)
         yield Footer()
+
+    def on_mount(self) -> None:
+        self.call_after_refresh(self._fit)
+
+    def on_resize(self) -> None:
+        self.call_after_refresh(self._fit)
+
+    def _fit(self, again: bool = True) -> None:
+        fit_to_window(self, self.query_one(SafeOptionList))
+        if again:  # the first pass measured a clipped box; settle on the second
+            self.call_after_refresh(self._fit, False)
 
     def on_option_list_option_selected(self, event: SafeOptionList.OptionSelected) -> None:
         self.dismiss(self.values[event.option_index])
@@ -109,7 +157,9 @@ def number_check(low: float, high: float) -> Callable[[str], str | None]:
 class Result(Screen[None]):
     """What was made and what to do next - or what went wrong."""
 
-    AUTO_FOCUS = ""  # no button focused: Enter is the screen's Continue, shown in the footer
+    # The text is what gets focus, not a button: Enter stays the screen's
+    # Continue (shown in the footer) and the arrows scroll a long result.
+    AUTO_FOCUS = "#result-text"
 
     BINDINGS = [
         Binding("enter", "done", "Continue"),
@@ -131,7 +181,8 @@ class Result(Screen[None]):
             body += [Text(""), *[Text(f"! {w}", style="yellow") for w in self.warnings]]
         with Vertical(classes="dialog wide " + ("ok" if self.ok else "failed")):
             yield Label(("✓ " if self.ok else "✗ ") + self.title_text, classes="dialog-title")
-            yield Static(Group(*body))
+            with VerticalScroll(id="result-text", can_focus=True):
+                yield Static(Group(*body))
             with Horizontal(classes="buttons"):
                 yield Button("Continue", id="done", variant="primary")
                 if self.log_path:
@@ -139,6 +190,20 @@ class Result(Screen[None]):
                 if self.copy:
                     yield Button("Copy paths", id="copy")
         yield Footer()
+
+    def on_mount(self) -> None:
+        self.call_after_refresh(self._fit)
+
+    def on_resize(self) -> None:
+        self.call_after_refresh(self._fit)
+
+    def _fit(self, again: bool = True) -> None:
+        # Below this, the buttons cost more rows than the result itself has;
+        # the same three keys are in the footer.
+        self.query_one(".buttons").display = self.size.height >= 20
+        fit_to_window(self, self.query_one("#result-text"))
+        if again:  # the first pass measured a clipped box; settle on the second
+            self.call_after_refresh(self._fit, False)
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         if action == "log":

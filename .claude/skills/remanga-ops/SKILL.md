@@ -116,9 +116,19 @@ One JSON block, two sections (user request - NOT two blocks):
   to zero height still draws scrollbars (user saw it in VS Code's short terminal panel) - output boxes
   are wrapping `RichLog`s with `overflow-x: hidden`, and the task screen hides its box when too short.
   Test small sizes too (116x18, 116x12).
+- **Small windows must still scroll** (user hit this in VS Code's terminal panel): a Textual box
+  with `height: auto` clips its overflow and CANNOT be scrolled, so every dialog caps its scrolling
+  part to the window in `dialogs.fit_to_window` (called after a refresh, twice - the first pass
+  measures a clipped box). It measures what is around the box instead of guessing, skips hidden
+  children, scrolls the box home (a stale offset hides the title) and `refresh(layout=True)`s it (a
+  stale scrollbar otherwise stays on). Under 14 rows `.cramped` drops the border/padding and goes
+  full width; the Result screen hides its buttons under 20 rows (the keys are in the footer) and
+  focuses `#result-text` so arrows scroll it while Enter still continues.
 - Test the UI with Textual's `app.run_test()` Pilot (keys, `click(times=2)`) and once in a real pty
   (TERM=xterm-256color, pyte via `bin/uv run --no-project --with pyte`, SGR mouse `\x1b[<0;x;yM`)
   from a scratch cwd; a test that presses Enter without an arrow first "hangs" - that is the rule.
+  Check 100x12 and 40x10 too: `virtual_size.height > region.height and not allow_vertical_scroll`
+  on any visible widget means content nobody can reach.
 - Decimal chapters are chapters of their own: `1-5` takes 4.5, not 5.1 (`chapters.expand_chapter_selection`).
 - MangaDex chapter list is cached 24h in manifest.json.
 
