@@ -8,6 +8,7 @@
     remanga pdf      -p NAME -c 1-5
     remanga video    -p NAME -c 1-5 [--force]
     remanga chapters -p NAME
+    remanga voices                              (one line in every voice, to listen to)
     remanga setup
 
 Exit status: 0 done, 1 failed, 130 stopped with Ctrl+C."""
@@ -53,6 +54,8 @@ def build_parser() -> argparse.ArgumentParser:
     v = with_project("video", "Make each chapter's video from the narration pasted into narration.json")
     v.add_argument("--force", action="store_true", help="narrate, mix and render again from scratch")
     with_project("chapters", "Show where each chapter is", chapters=False)
+    sub.add_parser("voices", help="Read one line in each of the narrator engine's voices, into "
+                                  "global/voice/samples/")
     sub.add_parser("setup", help="install MAGI v3 and the chosen narrator (their environments and weights)")
     return parser
 
@@ -68,6 +71,11 @@ def _run(args: argparse.Namespace) -> None:
         return
     if args.command == "setup":
         setup()
+        return
+    if args.command == "voices":
+        from remanga.config import RemangaConfig as _Config
+
+        workflow.sample_voices(_Config.load())
         return
     if args.command == "new":
         workflow.create_project(args.source, RemangaConfig.load())

@@ -23,7 +23,10 @@
     "synth_timeout_seconds": 180,
     "hf_repo_id": "hexgrad/Kokoro-82M",
     "model_dir": "checkpoints/kokoro_82m",
-    "sample_rate": 24000
+    "sample_rate": 24000,
+    "qwen": {
+      "instruct": "monotone and unemotional, like reading a technical manual aloud: no rise or fall, no stress on any word"
+    }
   },
   "audio": {
     "sample_rate": 44100,

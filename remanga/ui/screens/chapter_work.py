@@ -121,7 +121,7 @@ class ChapterWork:
 
             outcome = await self.run_task(f"Chapter {chapter}: {'remaking the video' if force else 'video'}", [
                 Step("Check the narration", check),
-                Step("Narrate the panels (Kokoro)",
+                Step(f"Narrate the panels ({config.tts.spec.display_name})",
                      lambda ch=chapter, found=found: workflow.narrate(project, ch, found["panels"], config, force)),
                 Step("Mix with the music", lambda ch=chapter: workflow.mix(project, ch, config, force)),
                 Step("Render the video", lambda ch=chapter: workflow.render(project, ch, config, force)),

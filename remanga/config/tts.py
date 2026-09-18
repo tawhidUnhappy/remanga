@@ -17,7 +17,7 @@ from typing import Any
 from pydantic import BaseModel, Field, model_validator
 
 from remanga.config.base import ConfigModel
-from remanga.config.kokoro_voices import DEFAULT_VOICE, KokoroVoice, lang_code_for, voice_spec
+from remanga.config.kokoro_voices import DEFAULT_VOICE, KOKORO_VOICES, KokoroVoice, lang_code_for, voice_spec
 from remanga.config.tts_engines import TTS_ENGINE_SPECS, TTS_ENGINES, TTSEngineSpec, engine_spec
 
 __all__ = [
@@ -59,6 +59,12 @@ class KokoroConfig(ConfigModel):
     # Kokoro's native output rate; the pipeline resamples from here.
     sample_rate: int = 24000
 
+    def voice_options(self) -> list[tuple[str, str]]:
+        """Every voice this engine can read in: (what it is called in config,
+        what a person should see). The settings list and the voice sampler
+        both read this, so neither can list a voice the other does not."""
+        return [(v.name, f"{v.label} - grade {v.grade}, {v.accent}") for v in KOKORO_VOICES]
+
     @property
     def spec(self) -> KokoroVoice:
         return voice_spec(self.voice)
@@ -96,7 +102,14 @@ class QwenConfig(ConfigModel):
     # Which preset narrates when no voice has been designed.
     speaker: str = "Ryan"
     # How to deliver the lines, in words - optional, and applies to both ways.
-    instruct: str = "a calm narrator telling a story, steady and unhurried"
+    # Deliberately blunt. Asked for "a calm narrator telling a story" the model
+    # ACTS, leaning into every line like someone auditioning (user report), and
+    # asking for "flat, like a documentary voice-over" measured no flatter
+    # (3.98 vs 4.02 semitones of pitch spread on the same line). Asking for a
+    # technical manual does: 3.09 st, and the 5-95% swing down from 10.2 to
+    # 8.6 st. The panels carry the drama; the voice reads.
+    instruct: str = ("monotone and unemotional, like reading a technical manual aloud: "
+                     "no rise or fall, no stress on any word")
     # The description a voice was designed from, empty until one is designed.
     design: str = ""
     # The sample that design produced, and the line spoken in it. Narration
@@ -106,6 +119,12 @@ class QwenConfig(ConfigModel):
     language: str = "English"
     # One directory per model variant, fetched only when that way is used.
     model_root: str = "checkpoints/qwen3_tts"
+
+    def voice_options(self) -> list[tuple[str, str]]:
+        """Qwen3-TTS's preset narrators - see KokoroConfig.voice_options. A
+        designed voice is not in here: there is only ever one, and it is
+        already a sample on disk."""
+        return [(name, hint) for name, hint in QWEN_SPEAKERS]
 
     @property
     def designed(self) -> bool:

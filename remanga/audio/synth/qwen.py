@@ -90,7 +90,7 @@ class QwenSynthesizer(BaseWorkerSynthesizer):
     def _synth_timeout_seconds(self) -> float:
         return self.tts_config.synth_timeout_seconds
 
-    def _build_request(self, text: str, output_wav: Path) -> dict[str, Any]:
+    def _build_request(self, text: str, output_wav: Path, voice: str | None = None) -> dict[str, Any]:
         """One panel's request: the text, and - for a preset - who says it."""
         request: dict[str, Any] = {
             "cmd": "synthesize",
@@ -98,7 +98,7 @@ class QwenSynthesizer(BaseWorkerSynthesizer):
             "output_path": str(output_wav.resolve()),
         }
         if self.mode == "custom":
-            request["speaker"] = self.engine_config.speaker
+            request["speaker"] = voice or self.engine_config.speaker
             request["instruct"] = self.engine_config.instruct
         return request
 

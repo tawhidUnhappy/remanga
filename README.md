@@ -58,6 +58,7 @@ Logs are kept in `projects/<name>/logs/`: `chapter_N.log` for a chapter's PDF an
 ./run.sh mark     -p MyMangaTitle -c 1-5        # the Panel Marker, in your browser
 ./run.sh write    -p MyMangaTitle -c 1          # write the narration yourself
 ./run.sh review   -p MyMangaTitle -c 1          # flag what the LLM got wrong
+./run.sh voices                                 # one line in every voice, to listen to
 ./run.sh pdf      -p MyMangaTitle -c 1-5        # cuts the panels, then their PDF
 # give pdf/chapter_N/panels_*.pdf + prompts/narration.md to the LLM, paste the reply into
 # projects/MyMangaTitle/chapters/chapter_N/narration.json
@@ -96,6 +97,16 @@ back and forth changes nothing else. A chapter narrated by the other one is narr
 |---|---|---|
 | **Kokoro-82M** (default) | its own studio voices, picked from a list | a 60-panel chapter in seconds |
 | **Qwen3-TTS** | nine preset narrators, steered by a line of plain English ("calm and unhurried") - or **a voice you design**: describe the narrator, and one sample is made and kept | about ten minutes for the same chapter |
+
+**Hearing them first:** `./run.sh voices` (or Settings → Hear the voices) reads one line in every
+voice the engine has, into `global/voice/samples/<engine>/`, with a text file saying which is which.
+The model loads once for the whole set.
+
+**Delivery** (Qwen3-TTS): a line of plain English steering how it reads, and it matters more than it
+sounds like it should. Left to itself the model performs; asked for "a calm narrator telling a story"
+it still performs. The default asks for a technical manual, which is what actually reads level -
+measured on one line, pitch swing fell from 5.9 semitones (no instruction) and 4.0 ("calm narrator")
+to 3.1. `global/voice/samples/qwen/delivery/` has the same line in all four, to hear for yourself.
 
 **Designing a voice** (Qwen3-TTS only): Settings → Design a voice, describe the narrator, and one
 sample is generated into `global/voice/designed.wav`. Listen to it; design again if it is not right.
@@ -187,7 +198,7 @@ for every project (`config.json`). Everything else is in `config.json`:
 |---|---|---|
 | `tts.engine` | `kokoro` | who narrates: `kokoro` (fixed voices, seconds a chapter) or `qwen` (preset narrators or a voice you design, minutes a chapter) |
 | `tts.kokoro.voice` / `.speed` | `af_heart` / 1.0 | Kokoro's voice and pace - 1.0 is its own (about 185 words a minute); past about 1.35 it drops the pauses between sentences |
-| `tts.qwen.speaker` / `.instruct` | `Ryan` / a calm narrator... | Qwen3-TTS's preset narrator and how it reads |
+| `tts.qwen.speaker` / `.instruct` | `Ryan` / monotone... | Qwen3-TTS's preset narrator and how it reads - the default asks for a monotone read, because anything warmer makes the model act |
 | `tts.qwen.design` / `.designed_sample` | - | the voice you described, and the sample every panel is then spoken from |
 | `tts.volume_boost_db` | 0 | gain on each clip; leave at 0 when loudness normalization is on |
 | `audio.bgm_enabled` / `bgm_path` | off / - | background music |

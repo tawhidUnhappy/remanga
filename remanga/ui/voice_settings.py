@@ -154,7 +154,22 @@ async def _pick_engine(screen, config: RemangaConfig) -> None:
         config.tts.engine = engine
 
 
+async def _hear_voices(screen, config: RemangaConfig) -> None:
+    """One line read in every voice this engine has, to listen to and choose
+    from - the model loads once for the whole set."""
+    from remanga import workflow
+
+    ok = await screen.run_work("Sampling the voices", f"{config.tts.spec.display_name}: one line per voice",
+                               lambda: workflow.sample_voices(config))
+    if ok:
+        screen.notify(f"The samples are in {workflow.samples_dir(config.tts.spec.name)}/ - listen, then pick "
+                      f"the voice here.", timeout=10)
+
+
 def narrator_rows(config: RemangaConfig) -> list[Row]:
     """The engine, then whatever that engine's voice needs."""
     rows = [Row("Narrator engine", config.tts.spec.display_name, _pick_engine)]
-    return rows + ENGINE_ROWS.get(config.tts.spec.name, kokoro_rows)(config)
+    rows += ENGINE_ROWS.get(config.tts.spec.name, kokoro_rows)(config)
+    if config.tts.engine_block.voice_options():
+        rows.append(Row("Hear the voices", "read one line in each of them", _hear_voices))
+    return rows

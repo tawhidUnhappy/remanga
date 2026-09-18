@@ -147,6 +147,16 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   Settings rows come from `ui/voice_settings.py:ENGINE_ROWS` (a `Row` is label/value/change), so the
   screen itself never changes. Nothing outside asks which engine is running: `audio/tts.py` calls
   `synth.synthesize(text, output_wav)` and `config.tts.identity()`.
+- **Qwen3-TTS acts unless told not to** (user: "like a bad actor trying his best"). Measured on one
+  line, same voice, pitch spread in semitones: no instruct 5.89, "a calm narrator telling a story"
+  3.98, "flat, like a documentary voice-over" 4.02 (no better), "monotone... like reading a technical
+  manual" 3.09 - which is the default now. The VOICE matters as much: Serena and Ono_Anna read at
+  2.66 st, Ryan 4.02 (flattest male), Aiden and Uncle_Fu 5.17. Samples live in
+  global/voice/samples/qwen/ (`remanga voices`, or Settings - Hear the voices), delivery/ has the
+  four registers. Measure flatness rather than guessing: autocorrelation F0 per 40ms frame, spread in
+  semitones about the median.
+- **Nothing in the UI names an engine.** The video step's label is
+  `config.tts.spec.display_name` - it said "(Kokoro)" while Qwen was narrating (user report).
 - **Engines today:** `kokoro` (default, fixed voices, a 60-panel chapter in seconds) and `qwen`
   (Qwen3-TTS 1.7B, Apache 2.0, `.tools/venv-qwen-tts`): preset narrator + `instruct`, or a voice
   DESIGNED from a description. Designed = VoiceDesign model makes one sample once

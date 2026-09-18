@@ -46,12 +46,12 @@ class KokoroSynthesizer(BaseWorkerSynthesizer):
     def _synth_timeout_seconds(self) -> float:
         return self.tts_config.synth_timeout_seconds
 
-    def _build_request(self, text: str, output_wav: Path) -> dict[str, Any]:
+    def _build_request(self, text: str, output_wav: Path, voice: str | None = None) -> dict[str, Any]:
         """One panel's request. Speed is a generation parameter here, so the
         audio comes back already at that rate - no pass afterwards."""
         return {
             "cmd": "synthesize",
-            "voice": self.engine_config.voice,
+            "voice": voice or self.engine_config.voice,
             "text": text,
             "output_path": str(output_wav.resolve()),
             "speed": self.engine_config.speed,

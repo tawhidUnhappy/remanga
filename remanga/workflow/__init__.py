@@ -7,6 +7,7 @@
     panels     marking the panels (the web UI) and cutting them out
     pdf        the panels as PDF parts for the LLM, and the hand-off
     video      the pasted narration -> clips -> mix -> render
+    voices     one line in every voice the engine has, to listen to
     cleanup    resetting or deleting a chapter
 
 Everything is re-exported here, so `workflow.make_pdf(...)` reads the same
@@ -42,6 +43,7 @@ from remanga.workflow.video import (
     quality_warnings,
     render,
 )
+from remanga.workflow.voices import SAMPLE_TEXT, sample_voices, samples_dir
 
 # page_files/panel_files are re-exported with the steps on purpose: a screen
 # asking "does this chapter have pages" should not have to know which module
@@ -49,6 +51,7 @@ from remanga.workflow.video import (
 
 __all__ = [
     "READING_DIRECTION_BY_LANGUAGE",
+    "SAMPLE_TEXT",
     "PdfResult",
     "chapter_state",
     "check_narration",
@@ -74,6 +77,8 @@ __all__ = [
     "render",
     "reset_chapter",
     "review_narration",
+    "sample_voices",
+    "samples_dir",
     "select_chapters",
     "settle_reading_direction",
     "write_narration",
