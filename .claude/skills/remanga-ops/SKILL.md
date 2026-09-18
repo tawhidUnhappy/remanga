@@ -24,6 +24,14 @@ Entry points: `./bootstrap.sh` (idempotent setup) · `./pipeline.sh` (menus) · 
   (everything), `backup/pages-kokoro-2026-09-18` (the page-based light version),
   `backup/chatterbox-2026-09-18`.
 
+## Keep it in small modules (user request, 2026-09-18)
+
+Split a file when it holds two jobs, and re-export from the package `__init__` so callers never
+change (`workflow.make_pdf`, `video.compose.FrameCompositor` both still resolve). Two things that
+bit during the split and are worth checking after any slice-and-move: a decorator left behind on the
+wrong side of the cut (`@dataclass` on `_Page`), and a helper that silently became two copies. Both
+passed ruff and imports - only running a real chapter caught them.
+
 ## The workflow (the whole product)
 
 ```
@@ -36,13 +44,20 @@ video     -> check reply -> Kokoro clip per panel -> mix with BGM -> render pane
              -> projects/P/video/chapter_N/P_chN_recap.mp4
 ```
 
-Code map (`remanga/`): `workflow.py` (download / make_pdf / make_video - the CLI and menus both
-call these), `cli.py`, `ui/` (full-screen menus on Textual: `app.py` styles/quit, `screens.py` projects/chapters/settings, `dialogs.py` choice/ask/result/log, `tasks.py` task screen, `widgets.py` SafeTable/SafeOptionList/TopBar), `activity.py` (progress bars: CLI Rich bar or UI task view),
+Code map (`remanga/`), one module per job after the 2026-09-18 regroup - no file over ~270 lines:
+`workflow/` (the steps both front-ends call: `projects` `chapters` `download` `panels` `pdf` `video`
+`cleanup`, all re-exported from its `__init__`), `cli.py`, `ui/` (Textual menus: `app.py`
+styles/quit, `screens/` = `projects` `chapters` (table + menu) `chapter_work` (what the menu does,
+a mixin) `settings` `common`, `dialogs.py`, `tasks.py`, `widgets.py`, `voice_settings.py`),
+`activity.py` (progress bars: CLI Rich bar or UI task view),
 `narration.py` (reply check, fix request, memory), `chapters.py` (ranges, sort, page naming),
 `webui/` (the Panel Marker: Flask routes, MarkerSession/MarkerState, magi_assist + its worker,
 static/), `cropper/` (crops.json -> panels/: crop_page, panel_boxes, gutter/, seams, trim, dedupe),
-`pdf/` (builder, writer, text page), `downloader/`, `audio/` (tts, mix, master, synth/kokoro),
-`video/` (compose, frame_timeline, render, encoding), `config/`, `paths/`, `tool_envs/` +
+`pdf/` (`encode` one panel -> a PDF page, `pack` panels -> parts under the cap, `builder` wires
+them, `writer` the PDF itself, `manifest_info` the text page), `downloader/`,
+`audio/` (tts, mix, master, clips, synth/ per engine),
+`video/` (`canvas` one panel on one frame, `quality` is this size enough, `frames` the frame cache,
+`compose` re-exports those three, `frame_timeline`, `render`, `encoding`), `config/`, `paths/`, `tool_envs/` +
 `workers/` + `models/` (Kokoro's and MAGI's isolated venvs + weights).
 
 ## Narration reply (prompts/narration.md is the contract)

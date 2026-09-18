@@ -20,7 +20,7 @@ from remanga.paths import (
     get_video_picture_path,
     get_video_work_dir,
 )
-from remanga.video.compose import FrameCompositor
+from remanga.video.compose import FrameCache
 from remanga.video.encoder_probe import EncoderChoiceMixin
 from remanga.video.encoding import (
     AUDIO_CODEC_ARGS,
@@ -36,7 +36,7 @@ class VideoRenderer(EncoderChoiceMixin):
     def __init__(self, system_config: SystemConfig | None = None, video_config: VideoConfig | None = None):
         self.system_config = system_config or SystemConfig()
         self.video_config = video_config or VideoConfig()
-        self.compositor = FrameCompositor(self.video_config)
+        self.compositor = FrameCache(self.video_config)
         self._encoder_choice: tuple[str, str, bool, str] | None = None
 
     def frame_timeline(self, project_name: str, chapter_num: str) -> FrameTimeline:

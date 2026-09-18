@@ -1,4 +1,4 @@
-from .compose import FrameCompositor
+from .compose import FrameCache, FrameCompositor
 from .render import VideoRenderer
 
-__all__ = ["FrameCompositor", "VideoRenderer"]
+__all__ = ["FrameCache", "FrameCompositor", "VideoRenderer"]
