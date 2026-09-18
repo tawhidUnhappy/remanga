@@ -95,6 +95,11 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   `workflow.mark` opens the marker (blocking until the browser saves), `workflow.cut_panels` recuts
   whenever crops.json is newer than panels/, and `make_pdf` calls it first. crops.json and the pasted
   narration are the only things nothing can rebuild - Reset deletes panels/ but keeps crops.json.
+- **A worker thread parked in one `Event.wait()` cannot be stopped:** the menus stop work by raising
+  KeyboardInterrupt into the thread (`PyThreadState_SetAsyncExc`), and that is only delivered when
+  the thread next runs Python - never, inside a single C-level lock acquire. Opening the marker and
+  stopping it left "stopping..." on screen forever. Any blocking wait in work code waits in short
+  steps instead (`webui/launch.py:RunningUI.wait`), and takes its server down on the way out.
 - **The marker needs a browser**; in the Textual UI it runs as a task whose step just waits.
   Headless checks that work: `MarkerSession(project, [ch])` + `webui.detection.run_detection(state,
   config.marker)` + `session.save_chapter(ch)` writes crops.json; `create_app(session,

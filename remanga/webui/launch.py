@@ -31,6 +31,12 @@ from remanga.console import console
 logging.getLogger("werkzeug").setLevel(logging.WARNING)
 
 
+# How long each step of the wait below blocks for. Short enough that a
+# stop is acted on at once, long enough to cost nothing while a tab is open
+# for minutes.
+_WAIT_STEP_SECONDS = 0.2
+
+
 @dataclass
 class RunningUI:
     """A UI that is up and being used: where it is, and the wait for it."""
@@ -38,12 +44,33 @@ class RunningUI:
     url: str
     finished: threading.Event
     thread: threading.Thread
+    httpd: object = None
 
     def wait(self, waiting_for: str) -> None:
         """Blocks until the browser ends the session, saying what it is
-        waiting for - the one line the terminal shows while the UI is open."""
+        waiting for - the one line the terminal shows while the UI is open.
+
+        Waits in short steps rather than one `Event.wait()`: stopping the
+        work (Ctrl+C in the menus) raises into this thread, and an exception
+        raised into a thread parked in a single C-level lock acquire is only
+        delivered when it next runs Python - which for one long wait is
+        never. That is what left "stopping..." on screen forever when the
+        marker was opened and closed straight away."""
         console.print(f"[yellow]Waiting for you to {waiting_for}...[/]")
-        self.finished.wait()
+        try:
+            while not self.finished.wait(_WAIT_STEP_SECONDS):
+                pass
+        except BaseException:
+            self.stop()
+            raise
+        self.thread.join(timeout=5)
+
+    def stop(self) -> None:
+        """Takes the server down and lets the browser tab go: what a stopped
+        session has to do, or the port stays bound for the next run."""
+        self.finished.set()
+        if self.httpd is not None:
+            self.httpd.shutdown()
         self.thread.join(timeout=5)
 
 
@@ -76,4 +103,4 @@ def start_ui(app, config, finished: threading.Event, *, title: str, title_note: 
     else:
         console.print("[dim]Open that URL in your browser to continue.[/]")
 
-    return RunningUI(url, finished, server_thread)
+    return RunningUI(url, finished, server_thread, httpd)
