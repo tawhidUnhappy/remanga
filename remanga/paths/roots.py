@@ -11,7 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 BIN_DIR = REPO_ROOT / "bin"
 UV_BIN = BIN_DIR / "uv"
 
-# Chatterbox's isolated virtualenv (.tools/venv-chatterbox) - see remanga/tool_envs/.
+# Kokoro's isolated virtualenv (.tools/venv-kokoro) - see remanga/tool_envs/.
 TOOLS_DIR = REPO_ROOT / ".tools"
 
 # config.json (the user's live settings) and config.example.json (the

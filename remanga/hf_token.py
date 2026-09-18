@@ -1,4 +1,4 @@
-"""Optional Hugging Face token, for downloading the Chatterbox Turbo
+"""Optional Hugging Face token, for downloading the Kokoro-82M
 weights - config.json's
 `system.hf_token_path` points at a small JSON file:
 

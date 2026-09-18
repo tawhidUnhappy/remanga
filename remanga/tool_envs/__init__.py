@@ -1,5 +1,5 @@
-"""The isolated tool environment remanga provisions: Chatterbox Turbo runs in
-`.tools/venv-chatterbox`, so torch and its pins never touch the main environment.
+"""The isolated tool environment remanga provisions: Kokoro-82M runs in
+`.tools/venv-kokoro`, so torch and its pins never touch the main environment.
 
     spec.py     what an environment entry is (ToolSpec, InstallStep)
     catalog.py  TOOLS - the entries themselves

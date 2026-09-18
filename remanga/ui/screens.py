@@ -21,7 +21,7 @@ from textual.widgets import DataTable, Footer, LoadingIndicator
 
 from remanga import activity, workflow
 from remanga.config import RemangaConfig
-from remanga.config.tts import VOICE_EXTS
+from remanga.config.kokoro_voices import KOKORO_VOICES
 from remanga.console import console
 from remanga.paths import GLOBAL_DIR, get_log_path, list_projects, load_project_metadata
 from remanga.ui.dialogs import Ask, Choice, Confirm, Result, number_check
@@ -382,7 +382,7 @@ class ChaptersScreen(Screen):
 
             outcome = await self.run_task(f"Chapter {chapter}: {'remaking the video' if force else 'video'}", [
                 Step("Check the narration", check),
-                Step("Narrate the pages (Chatterbox)",
+                Step("Narrate the pages (Kokoro)",
                      lambda ch=chapter, found=found: workflow.narrate(project, ch, found["pages"], config, force)),
                 Step("Mix with the music", lambda ch=chapter: workflow.mix(project, ch, config, force)),
                 Step("Render the video", lambda ch=chapter: workflow.render(project, ch, config, force)),
@@ -432,6 +432,7 @@ class SettingsScreen(Screen):
         table.clear()
         for name, value in (
             ("Narrator voice", config.tts.voice_label),
+            ("Speaking speed", f"{config.tts.speed:g}x"),
             ("Background music", music),
             ("Music level", f"{audio.bgm_below_voice_lu:g} LU under the voice"),
             ("Video size", f"{config.video.width}x{config.video.height}"),
@@ -451,19 +452,20 @@ class SettingsScreen(Screen):
     async def change(self, row: int) -> None:
         config, wait = self.config, self.app.push_screen_wait
         if row == 0:
-            folder = GLOBAL_DIR / "voice"
-            files = sorted(p for p in folder.iterdir() if p.suffix.lower() in VOICE_EXTS) if folder.exists() else []
-            if not files:
-                self.notify(f"No recordings in {folder}/ - put a clip of the narrator there first.", severity="warning")
-                return
-            voice = await wait(Choice("Narrator voice", [(p.name, "", str(p)) for p in files],
-                                      current=str(Path(config.tts.voice)),
-                                      note=f"Chatterbox clones the recording: one person speaking, no music, more than "
-                                           f"5 seconds - the first 10-15 seconds matter most. Recordings go in "
-                                           f"{folder}/. A new voice narrates chapters again."))
+            voice = await wait(Choice("Narrator voice", [(v.label, f"grade {v.grade} · {v.accent}", v.name)
+                                                         for v in KOKORO_VOICES], current=config.tts.voice,
+                                      note="Kokoro-82M's voices, best graded first. A new voice narrates "
+                                           "chapters again."))
             if voice:
                 config.tts.voice = voice
         elif row == 1:
+            speed = await wait(Ask("Speaking speed", "Speed (1.0 is normal)", value=f"{config.tts.speed:g}",
+                                   check=number_check(0.5, 2.0),
+                                   note="1.33 is about 237 words a minute; past about 1.35 Kokoro starts "
+                                        "dropping the pauses between sentences."))
+            if speed is not None:
+                config.tts.speed = float(speed)
+        elif row == 2:
             folder = GLOBAL_DIR / "bgm"
             files = sorted(p for p in folder.iterdir() if p.suffix.lower() in MUSIC_EXTS) if folder.exists() else []
             current = config.audio.bgm_path if config.audio.bgm_enabled else "off"
@@ -474,7 +476,7 @@ class SettingsScreen(Screen):
                 config.audio.bgm_enabled = False
             elif picked:
                 config.audio.bgm_path, config.audio.bgm_enabled = picked, True
-        elif row == 2:
+        elif row == 3:
             level = await wait(Choice("Music level", [(f"{lu:g} LU under the voice", hint, lu)
                                                       for lu, hint in MUSIC_LEVELS],
                                       current=config.audio.bgm_below_voice_lu,
@@ -482,12 +484,12 @@ class SettingsScreen(Screen):
                                            "level."))
             if level is not None:
                 config.audio.bgm_below_voice_lu = level
-        elif row == 3:
+        elif row == 4:
             size = await wait(Choice("Video size", [(f"{w}x{h}", label, (w, h)) for w, h, label in RESOLUTIONS],
                                      current=(config.video.width, config.video.height)))
             if size:
                 config.video.width, config.video.height = size
-        elif row == 4:
+        elif row == 5:
             cap = await wait(Ask("PDF size cap", "Largest PDF file, in MB", value=f"{config.pdf.max_mb:g}",
                                  check=number_check(1, 2000),
                                  note="A chapter bigger than this is split into pages_1.pdf, pages_2.pdf, ..."))

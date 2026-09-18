@@ -3,7 +3,7 @@
 BaseWorkerSynthesizer turns synthesize() calls into requests to one
 isolated-venv worker, splitting text an engine can't take in a single call.
 The worker itself - spawn, ready handshake, auto-heal, bounded reads, stderr
-draining, shutdown - is remanga/workers/. The engine subclass (chatterbox.py)
+draining, shutdown - is remanga/workers/. The engine subclass (kokoro.py)
 fills in only the command line and the per-request payload."""
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from remanga.config import AudioConfig
+from remanga.ffmpeg_io import run_ffmpeg
 from remanga.models import ModelManager
 from remanga.workers import ToolWorker
 
@@ -82,6 +83,35 @@ class BaseWorkerSynthesizer(ToolWorker):
     def _synth_timeout_seconds(self) -> float:
         raise NotImplementedError
 
+    def _post_synthesize(self, output_wav: Path, request: dict[str, Any]) -> None:
+        """Optional per-engine post-processing after a successful synthesis
+        (e.g. an ffmpeg-atempo speed fallback). No-op by default."""
+
+    # --- requests to the worker -----------------------------------------
+    def _adjust_audio_speed(self, wav_path: Path, speed: float) -> None:
+        """Adjusts speaking tempo using pitch-preserving FFmpeg atempo filter -
+        the fallback path for an engine/request that couldn't apply speed on
+        the model side itself."""
+        if abs(speed - 1.0) < 0.02 or not wav_path.exists():
+            return
+        temp_wav = wav_path.with_name(f"{wav_path.stem}_speedtmp.wav")
+        wav_path.rename(temp_wav)
+        tempo = max(0.5, min(2.0, speed))
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", str(temp_wav),
+            "-filter:a", f"atempo={tempo}",
+            "-ar", str(self.audio_config.sample_rate),
+            str(wav_path)
+        ]
+        try:
+            run_ffmpeg(cmd, check=True)
+            if temp_wav.exists():
+                temp_wav.unlink()
+        except Exception:
+            if temp_wav.exists() and not wav_path.exists():
+                temp_wav.rename(wav_path)
+
     def synthesize(self, text: str, voice: str, output_wav: Path) -> None:
         """Synthesizes speech via this engine's worker process. Text longer
         than `chunk_max_chars` (when the engine sets one) is split on
@@ -105,10 +135,12 @@ class BaseWorkerSynthesizer(ToolWorker):
             request, self._synth_timeout_seconds(), action="synthesis",
             on_timeout=f" on page text {text[:80]!r}", advice=_TIMEOUT_ADVICE,
         )
+        self._post_synthesize(output_wav, request)
 
     def _synthesize_chunks(self, chunks: list[str], voice: str, output_wav: Path) -> None:
         """Synthesizes each chunk to its own temp WAV via the normal
-        single-call path, concatenates them in order,
+        single-call path (so per-chunk post-processing like the speed
+        ffmpeg-atempo fallback still applies), concatenates them in order,
         and atomically replaces `output_wav` with the joined result. Temp
         parts are always cleaned up, success or failure."""
         from pydub import AudioSegment  # already a hard dependency (see audio/tts.py)

@@ -2,7 +2,7 @@
 
     download   chapters from MangaDex into chapters/chapter_N/pages/
     make_pdf   the pages as PDF parts (pdf/chapter_N/), and what to do with them
-    make_video the pasted narration checked, narrated with Chatterbox, mixed with
+    make_video the pasted narration checked, narrated with Kokoro, mixed with
                background music, and rendered over the pages
 
 The command line (cli.py) and the menus (wizard.py) both call these, so the

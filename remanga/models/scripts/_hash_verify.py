@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Shared post-download SHA256 verification, used by every standalone weight
-downloader in this repo (download_chatterbox.py,
+downloader in this repo (download_kokoro.py,
 download_deepseek_ocr.py, and webui/scripts/download_magi.py).
 
 Why this exists: huggingface_hub's own snapshot_download() only checks that
@@ -46,7 +46,7 @@ def _sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
 
 def _resolve_local_path(model_dir: str, rfilename: str, cache_layout: bool) -> Path | None:
     """Finds where `rfilename` actually landed on disk. `local_dir=` downloads
-    (chatterbox) put it directly at model_dir/rfilename.
+    (kokoro/deepseek_ocr) put it directly at model_dir/rfilename.
     `cache_dir=` downloads (magi) put the real blob under
     <model_dir>/models--<org>--<repo>/blobs/<hash>, symlinked from
     snapshots/<revision>/rfilename - os.path.realpath() follows that straight
@@ -79,8 +79,8 @@ def verify_repo_files(
     not a hard failure, since the download itself already succeeded.
 
     `allow_patterns` is the same list the caller gave snapshot_download: a
-    file it skipped on purpose (download_chatterbox.py leaves out a 1GB
-    checkpoint Turbo never loads) is not "missing", and without the filter
+    file it skipped on purpose (a downloader may leave out a big
+    checkpoint the model never loads) is not "missing", and without the filter
     it would fail verification and send the download round again for it."""
     try:
         from huggingface_hub import HfApi

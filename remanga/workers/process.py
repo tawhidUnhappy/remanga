@@ -1,6 +1,6 @@
 """One long-lived worker subprocess, and the conversation with it.
 
-A heavy engine - Chatterbox synthesizing a page - loads its model once and then answers requests over
+A heavy engine - Kokoro synthesizing a page - loads its model once and then answers requests over
 stdin/stdout, so that cost is paid per session instead of per page. This is
 the side of that conversation remanga owns: spawning the process (heal.py
 handles a dependency its install missed), draining its stderr so a full pipe
@@ -80,7 +80,7 @@ class ToolWorker:
     def _drain_stderr(self, proc: subprocess.Popen) -> None:
         """Runs for the lifetime of one worker process, on its own daemon
         thread, continuously reading its stderr so the pipe can never fill
-        up and block the worker's next write to it - see chatterbox_worker.py's
+        up and block the worker's next write to it - see kokoro_worker.py's
         module docstring for the deadlock this specifically prevents. Only
         the last STDERR_TAIL_LINES lines are kept, for error messages;
         everything older is simply dropped."""

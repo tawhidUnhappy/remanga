@@ -1,5 +1,5 @@
 """The driver side of every isolated-venv worker: one spawn, one auto-heal,
-one request/shutdown lifecycle, used by the Chatterbox synthesizer
+one request/shutdown lifecycle, used by the Kokoro synthesizer
 (audio/synth/).
 
     heal.py     starting a worker, installing what its own install missed

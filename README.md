@@ -6,8 +6,8 @@ Manga pages to recap video, in four steps:
 2. **Make a PDF** of each chapter's pages.
 3. **Give the PDF and `prompts/narration.md` to an LLM** (Gemini, ChatGPT, Claude, ...) and paste its
    reply into the chapter's `narration.json`.
-4. **Make the video**: each page shown whole while Chatterbox Turbo reads that page's narration in
-   your own narrator's voice, with background music underneath.
+4. **Make the video**: each page shown whole while Kokoro-82M reads that page's narration, with
+   background music underneath.
 
 No panel cropping: the LLM narrates each page, telling every panel on it in reading order.
 
@@ -17,10 +17,9 @@ No panel cropping: the LLM narrates each page, telling every panel on it in read
 ./bootstrap.sh
 ```
 
-It sets up everything inside this folder: Python, ffmpeg, and Chatterbox Turbo in its own
-environment (`.tools/venv-chatterbox`) with its weights (about 10GB in total). Linux, macOS or
-Windows (Git Bash); NVIDIA, AMD, Apple Silicon or CPU. Run `./run.sh setup` later to repair the
-install.
+It sets up everything inside this folder: Python, ffmpeg, and Kokoro-82M in its own environment
+(`.tools/venv-kokoro`) with its weights. Linux, macOS or Windows (Git Bash); NVIDIA, AMD, Apple
+Silicon or CPU. Run `./run.sh setup` later to repair the Kokoro install.
 
 ## Use it with the menus
 
@@ -42,7 +41,7 @@ click chooses it** - a single click never starts anything.
 | **Projects** | Your projects. `Enter` opens one, `n` starts a new one: paste the manga's MangaDex URL (or ID, or a title to search). The project is named after the manga's English title, and its reading direction comes from the manga's original language. |
 | **Chapters** | The chapter list, fetched fresh from MangaDex each time, as a table: status (✓ downloaded, ◐ partial, + new), pages, what comes next (PDF ready, narration pasted, video done) and title. `Enter` opens a chapter's actions: download, make PDF, make video, check pages, re-download, reset (deletes the PDF, narration, audio and video, keeps the pages) or delete. `space` (or clicking a row's `·`) picks several chapters to act on together, `a` downloads every new chapter. Reset and delete ask first. |
 | **Work** | Downloads, PDFs and videos run in a task view: the steps, a progress bar and the last few lines of output. `Ctrl+C` stops. When the work ends you get a result: what was made and what to do next (for a PDF: which files to upload, where to paste the reply), or what went wrong. `l` opens the full log, `c` copies the paths to upload. |
-| **Settings** (`s`) | Narrator voice (the recording to clone), background music and volume, video size, PDF size cap - for the open project, or the defaults from the projects screen. |
+| **Settings** (`s`) | Narrator voice and speed, background music and volume, video size, PDF size cap - for the open project, or the defaults from the projects screen. |
 
 Logs are kept in `projects/<name>/logs/`: `chapter_N.log` for a chapter's PDF and video,
 `project.log` for downloads.
@@ -62,16 +61,6 @@ Logs are kept in `projects/<name>/logs/`: `chapter_N.log` for a chapter's PDF an
 
 `-c` takes a chapter, a range, several (`1-5,8`) or `all` (the default). Decimal chapters are
 chapters of their own: `1-5` includes 4.5 but not 5.1.
-
-## The narrator's voice
-
-Chatterbox Turbo has no built-in voices: it clones whoever speaks in the recording at `tts.voice`.
-It runs at the model's own settings - the clips are used exactly as it returns them, with no speed
-change, gain or other processing. What the recording sounds like is what the narration sounds like,
-noise and accent included, so use a clean one. English only.
-
-Changing the recording narrates every chapter again the next time you make its video; editing the
-same file in place counts as a change too.
 
 ## The LLM step
 
@@ -125,7 +114,8 @@ for every project (`config.json`). Everything else is in `config.json`:
 
 | Key | Default | Meaning |
 |---|---|---|
-| `tts.voice` | `global/voice/narrator.wav` | the recording Chatterbox clones: one person speaking, no music, more than 5 seconds - its first 10-15 seconds are what the delivery comes from. Put recordings in `global/voice/` and pick one in Settings |
+| `tts.voice` / `tts.speed` | `af_heart` / 1.0 | Kokoro voice (see Settings for the list) and speaking speed - Kokoro at 1.33 is about 237 words a minute; past about 1.35 it starts dropping the pauses between sentences |
+| `tts.volume_boost_db` | 0 | gain on each clip; leave at 0 when loudness normalization is on |
 | `audio.bgm_enabled` / `bgm_path` | off / - | background music |
 | `audio.bgm_below_voice_lu` | 14 | how far the music sits under the voice, in LU - measured per track and chapter, so every music file sits at the same level (12 energetic, 14 balanced, 18 subtle) |
 | `audio.pause_between_pages_ms` | 350 | silence between pages |

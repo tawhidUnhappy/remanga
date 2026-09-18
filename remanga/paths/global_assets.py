@@ -1,5 +1,5 @@
 """The optional Hugging Face token under global/, used when downloading the
-Chatterbox weights (see remanga/hf_token.py)."""
+Kokoro weights (see remanga/hf_token.py)."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def ensure_hf_token_file() -> Path:
         placeholder = {
             "token": "",
             "_hint": "Optional - a Hugging Face access token ('Read' scope) raises the Hub's rate limit when "
-                     "downloading Chatterbox Turbo. Leave \"token\" blank to download without one.",
+                     "downloading Kokoro-82M. Leave \"token\" blank to download without one.",
         }
         p.write_text(json.dumps(placeholder, indent=2) + "\n", encoding="utf-8")
     return p

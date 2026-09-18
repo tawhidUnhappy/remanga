@@ -5,7 +5,7 @@ The work runs in a thread. While it runs:
   and is shown in the scrollable output box as it arrives;
 - progress bars report here (remanga.activity) and are drawn by the screen;
 - Ctrl+C stops it: KeyboardInterrupt is raised inside the work thread, and
-  the programs it is waiting on (ffmpeg, the Chatterbox worker) are stopped so
+  the programs it is waiting on (ffmpeg, the Kokoro worker) are stopped so
   it isn't stuck waiting for them.
 The screen is dismissed with a TaskOutcome; the caller shows the result."""
 

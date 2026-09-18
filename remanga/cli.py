@@ -46,7 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
     v = with_project("video", "Make each chapter's video from the narration pasted into narration.json")
     v.add_argument("--force", action="store_true", help="narrate, mix and render again from scratch")
     with_project("chapters", "Show where each chapter is", chapters=False)
-    sub.add_parser("setup", help="install Chatterbox Turbo (its environment and weights)")
+    sub.add_parser("setup", help="install Kokoro-82M (its environment and weights)")
     return parser
 
 
@@ -102,16 +102,16 @@ def _run(args: argparse.Namespace) -> None:
 
 
 def setup() -> None:
-    """Chatterbox's environment and weights, ready before the first video."""
+    """Kokoro's environment and weights, ready before the first video."""
     from remanga.audio.synth import create_synthesizer
     from remanga.config import RemangaConfig
     from remanga.tool_envs import provision
 
-    if provision(["chatterbox"], None):
-        raise RuntimeError("Installing Chatterbox's environment failed - see the messages above.")
+    if provision(["kokoro"], None):
+        raise RuntimeError("Installing Kokoro's environment failed - see the messages above.")
     config = RemangaConfig.load()
     create_synthesizer(config.tts, config.audio).model_manager.ensure_model()
-    console.print("[bold green]✓ Chatterbox Turbo is installed and ready.[/]")
+    console.print("[bold green]✓ Kokoro-82M is installed and ready.[/]")
 
 
 def main() -> None:

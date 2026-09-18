@@ -34,7 +34,7 @@ class SystemConfig(ConfigModel):
     log_level: str = "INFO"
 
     # Path to a small JSON file holding {"token": "hf_..."} - used by every
-    # model download (Chatterbox Turbo) to
+    # model download (Kokoro-82M, Chatterbox Turbo, MAGI v3, DeepSeek-OCR-2) to
     # raise Hugging Face Hub's unauthenticated rate limit/speed, if set. See
     # remanga/hf_token.py for the full contract. Defaults to global/hf_token.json
     # - remanga/paths/global_assets.py:ensure_hf_token_file() creates it with
