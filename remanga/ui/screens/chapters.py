@@ -156,6 +156,10 @@ class ChaptersScreen(ChapterWork, Screen):
             options.append(("Mark panels", "open the Panel Marker in the browser - MAGI finds them, you "
                             "fix them", "mark"))
             options += [("Make PDF", "the panels, to give to the LLM with the prompt", "pdf"),
+                        ("Write narration", "type it yourself instead, panel by panel, in the browser",
+                         "write"),
+                        ("Review narration", "go through what the LLM wrote and flag what is wrong",
+                         "review"),
                         ("Make video", "from the narration pasted into narration.json - changed settings "
                          "are picked up, finished work is reused", "video")]
             if any(workflow.has_audio(project, ch) for ch in chapters):
@@ -175,6 +179,8 @@ class ChaptersScreen(ChapterWork, Screen):
             await self.download(chapters)
         elif action == "mark":
             await self.mark(chapters, config)
+        elif action in ("write", "review"):
+            await self.narration_pass(action, chapters, config)
         elif action == "redownload":
             if await self.app.push_screen_wait(Confirm("Re-download", f"Delete the pages of {title.lower()} and "
                                                        f"download them again?", yes="Re-download")):

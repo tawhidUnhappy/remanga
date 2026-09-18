@@ -8,10 +8,12 @@ from .cropper import CropperConfig
 from .downloader import DownloaderConfig
 from .marker import MarkerConfig, ShortcutsConfig
 from .pdf import PdfConfig
+from .reviewer import ReviewerConfig
 from .root import RemangaConfig
 from .system import SystemConfig
 from .tts import TTSConfig
 from .video import VideoConfig
+from .writer import WriterConfig
 
 __all__ = [
     "AudioConfig",
@@ -20,8 +22,10 @@ __all__ = [
     "MarkerConfig",
     "PdfConfig",
     "RemangaConfig",
+    "ReviewerConfig",
     "ShortcutsConfig",
     "SystemConfig",
     "TTSConfig",
     "VideoConfig",
+    "WriterConfig",
 ]

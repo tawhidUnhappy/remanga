@@ -40,9 +40,10 @@ from .projects import (
     get_video_picture_path,
     get_video_work_dir,
 )
+from .review import get_narration_review_history_dir, get_narration_review_path
 from .roots import BIN_DIR, CONFIG_EXAMPLE_PATH, CONFIG_PATH, GLOBAL_DIR, PROMPTS_DIR, REPO_ROOT, TOOLS_DIR, UV_BIN
 from .tools import get_scripts_dir
-from .webui_static import MARKER_STATIC_DIR
+from .webui_static import MARKER_STATIC_DIR, REVIEWER_STATIC_DIR, SHARED_STATIC_DIR, WRITER_STATIC_DIR
 
 __all__ = [
     "BIN_DIR",
@@ -53,8 +54,11 @@ __all__ = [
     "MARKER_STATIC_DIR",
     "PROMPTS_DIR",
     "REPO_ROOT",
+    "REVIEWER_STATIC_DIR",
+    "SHARED_STATIC_DIR",
     "TOOLS_DIR",
     "UV_BIN",
+    "WRITER_STATIC_DIR",
     "chapter_identity_fields",
     "ensure_hf_token_file",
     "get_audio_dir",
@@ -69,6 +73,8 @@ __all__ = [
     "get_master_audio_path",
     "get_modified_audio_dir",
     "get_narration_path",
+    "get_narration_review_history_dir",
+    "get_narration_review_path",
     "get_pages_dir",
     "get_panels_dir",
     "get_pdf_dir",

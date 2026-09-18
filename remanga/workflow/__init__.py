@@ -3,6 +3,7 @@
     projects   making a project from a MangaDex link; the manga's own facts
     chapters   what a project has, what MangaDex lists, where each chapter is
     download   fetching a chapter's pages
+    narration  the two browser passes: writing it by hand, reviewing an LLM's
     panels     marking the panels (the web UI) and cutting them out
     pdf        the panels as PDF parts for the LLM, and the hand-off
     video      the pasted narration -> clips -> mix -> render
@@ -24,6 +25,7 @@ from remanga.workflow.chapters import (
 )
 from remanga.workflow.cleanup import reset_chapter
 from remanga.workflow.download import download, print_chapter_list
+from remanga.workflow.narration import review_narration, write_narration
 from remanga.workflow.panels import cut_panels, mark
 from remanga.workflow.pdf import PdfResult, make_pdf, print_handoff
 from remanga.workflow.projects import (
@@ -71,6 +73,8 @@ __all__ = [
     "quality_warnings",
     "render",
     "reset_chapter",
+    "review_narration",
     "select_chapters",
     "settle_reading_direction",
+    "write_narration",
 ]

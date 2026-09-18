@@ -28,9 +28,11 @@ from .cropper import CropperConfig
 from .downloader import DownloaderConfig
 from .marker import MarkerConfig, ShortcutsConfig
 from .pdf import PdfConfig
+from .reviewer import ReviewerConfig
 from .system import SystemConfig
 from .tts import TTSConfig
 from .video import VideoConfig
+from .writer import WriterConfig
 
 # Where a project's own overrides live inside its project.json.
 PROJECT_SETTINGS_KEY = "settings"
@@ -97,6 +99,8 @@ class RemangaConfig(ConfigModel):
     cropper: CropperConfig = Field(default_factory=CropperConfig)
     marker: MarkerConfig = Field(default_factory=MarkerConfig)
     shortcuts: ShortcutsConfig = Field(default_factory=ShortcutsConfig)
+    reviewer: ReviewerConfig = Field(default_factory=ReviewerConfig)
+    writer: WriterConfig = Field(default_factory=WriterConfig)
     tts: TTSConfig = Field(default_factory=TTSConfig)
     audio: AudioConfig = Field(default_factory=AudioConfig)
     video: VideoConfig = Field(default_factory=VideoConfig)

@@ -37,6 +37,8 @@ passed ruff and imports - only running a real chapter caught them.
 ```
 download  -> projects/P/chapters/chapter_N/pages/          (MangaDex, checksum-verified)
 mark      -> Panel Marker web UI (Flask, browser): Detect = MAGI v3, hand fixes -> crops.json
+[optional: write = Narration Writer (type it yourself), review = Narration Reviewer (flag what is wrong
+ -> narration_review.json + prompts/narration_review.md)]
 pdf       -> cuts panels/ from crops.json, then projects/P/pdf/chapter_N/panels_1.pdf, ...
              (+ empty narration.json to paste into)
 [user uploads prompts/narration.md + the PDF to an LLM, pastes the one JSON reply into narration.json]
@@ -100,6 +102,13 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   the thread next runs Python - never, inside a single C-level lock acquire. Opening the marker and
   stopping it left "stopping..." on screen forever. Any blocking wait in work code waits in short
   steps instead (`webui/launch.py:RunningUI.wait`), and takes its server down on the way out.
+- **Three web UIs, one look:** the Panel Marker (pages, drawing), the Narration Writer (`write`) and
+  the Narration Reviewer (`review`) - the last two brought back on 2026-09-18 and adapted to the
+  current narration shape (`narration.narration_document` / `written_panels` / `read_reply`; the
+  Writer's OCR button went with DeepSeek-OCR). They share `webui/static_shared/`: the logo, the
+  favicon and `css/theme.css`, which holds the terminal menus' palette (Textual textual-dark:
+  #121212/#1e1e1e, accent #fea62b, muted #9a9a9a) - every stylesheet reads those names, so the look
+  changes in one file (user request).
 - **The marker needs a browser**; in the Textual UI it runs as a task whose step just waits.
   Headless checks that work: `MarkerSession(project, [ch])` + `webui.detection.run_detection(state,
   config.marker)` + `session.save_chapter(ch)` writes crops.json; `create_app(session,

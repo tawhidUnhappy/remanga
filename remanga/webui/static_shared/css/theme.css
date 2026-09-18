@@ -1,0 +1,52 @@
+/* remanga's colours, taken from the terminal menus so the browser tabs and
+   the terminal look like one program (user request).
+
+   These are Textual's textual-dark values - the ones the menus resolve at
+   runtime - with a few steps in between for borders and hover states. Every
+   stylesheet in every UI reads these names and nothing else, so changing the
+   look means changing this file.
+
+   The style the menus have, and these UIs follow: near-black, one accent,
+   thin borders instead of boxes and shadows, and nothing coloured unless the
+   colour means something (green done, amber attention, red gone wrong). */
+
+:root {
+  --bg: #121212;            /* the app background */
+  --surface: #1e1e1e;       /* panels, cards, the top bar */
+  --surface-2: #2d2d2d;     /* a raised row: hover, a pressed button */
+  --surface-3: #3a3a3a;     /* the one above that - a selected row */
+  --border: #333333;        /* hairlines; the menus draw single-line borders */
+  --border-strong: #45505a;
+
+  --text: #e0e0e0;          /* foreground */
+  --text-dim: #9a9a9a;      /* 60% - the menus' dim text */
+  --text-faint: #6e6e6e;    /* 38% - disabled */
+
+  --accent: #fea62b;        /* the menus' accent: borders, the cursor, focus */
+  --accent-ink: #1a1206;    /* text on top of the accent */
+  --primary: #0178d4;       /* a link, a selected tab */
+  --ok: #4ebf71;
+  --warn: #fea62b;
+  --danger: #b93c5b;
+
+  /* Kept for the marker's own overlays, in the same family. */
+  --ai: #4ebf71;
+  --ai-ink: #0c1a11;
+  --guide: #0178d4;
+  --grid-dot: rgba(255, 255, 255, 0.04);
+  --shadow: none;           /* the menus have no shadows - borders do that job */
+  color-scheme: dark;
+}
+
+/* The menus are a terminal: one sans for prose, one mono for anything that
+   is a name, a number or an ID. */
+body {
+  font-family: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.mono, code, kbd, .count { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace; }
+
+/* Focus, the way the menus show it: the accent, on the thing itself. */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

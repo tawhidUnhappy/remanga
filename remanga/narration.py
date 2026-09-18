@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -204,6 +205,37 @@ def load_narration(project: str, chapter: str) -> tuple[list[StoryPanel], Check]
     entries = {entry["panel"]: entry for entry in doc["panels"]}
     return [StoryPanel(panel, entries[panel.stem]["text"].strip()) for panel in panels
             if not entries[panel.stem].get("skip")], check
+
+
+def narration_document(chapter: str, entries: Sequence[tuple[str, str]],
+                       memory: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The narration.json document for a chapter, from (panel_id, text) pairs -
+    the same shape the LLM is asked for (prompts/narration.md), so a file
+    written by hand in the Narration Writer and one pasted from a reply are
+    the same file. An empty text is a panel with nothing to say, kept as a
+    skip so the checks do not call it missing."""
+    panels = [{"panel": panel_id, "text": text.strip()} if text and text.strip()
+              else {"panel": panel_id, "skip": "blank", "text": ""}
+              for panel_id, text in entries]
+    document: dict[str, Any] = {"narration": {"chapter": str(chapter), "problems": [], "panels": panels}}
+    if memory:
+        document["memory"] = memory
+    return document
+
+
+def written_panels(path: Path) -> tuple[dict[str, str], dict[str, Any] | None]:
+    """What a narration.json already holds: {panel id: text} and its memory
+    section. Empty when there is nothing readable there yet - a half-written
+    file must not stop the writer from opening."""
+    if not has_real_json_content(path):
+        return {}, None
+    try:
+        doc, memory = read_reply(path)
+        panels = doc.get("panels") if isinstance(doc, dict) else None
+        return {str(e.get("panel")): str(e.get("text") or "") for e in panels or []
+                if isinstance(e, dict) and e.get("panel")}, memory
+    except (json.JSONDecodeError, ValueError, KeyError, TypeError):
+        return {}, None
 
 
 def story_so_far(project: str, chapter: str) -> tuple[dict[str, Any] | None, str | None]:

@@ -58,6 +58,32 @@ class ChapterWork:
             await self.show("Marking stopped" if outcome.stopped else "Marking failed", [outcome.error],
                             ok=False, log=log)
 
+    async def narration_pass(self, which: str, chapters: list[str], config: RemangaConfig) -> None:
+        """The browser passes over the narration: writing it, or reviewing it.
+        One chapter at a time - each is its own tab and its own file."""
+        project = self.project
+        writing = which == "write"
+        title = "Writing the narration" if writing else "Reviewing the narration"
+        step = workflow.write_narration if writing else workflow.review_narration
+        for chapter in chapters:
+            log = get_log_path(project, chapter)
+            outcome = await self.run_task(
+                f"Chapter {chapter}: {title.lower()}",
+                [Step("Waiting for the browser", lambda ch=chapter: step(project, ch, config))], log)
+            if not outcome.ok:
+                await self.show(f"{title} {'stopped' if outcome.stopped else 'failed'}", [outcome.error],
+                                ok=False, log=log)
+                return
+            written = _short(outcome.results[0])
+            lines: list[str | Text] = [f"Chapter {chapter}: {written}"]
+            if writing:
+                lines += ["", Text("Then Make video for the chapter.", style="dim")]
+            else:
+                lines += ["", Text("Give that file to the LLM with prompts/narration_review.md, and paste the "
+                                   "new reply into narration.json.", style="dim")]
+            await self.show("Narration saved" if writing else "Review saved", lines, ok=True, log=log,
+                            copy=[written])
+
     async def make_pdfs(self, chapters: list[str], config: RemangaConfig) -> None:
         project = self.project
         for chapter in chapters:

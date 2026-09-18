@@ -1,25 +1,8 @@
-/* Design tokens (colors, shadows) and page-wide resets shared by every
-   other stylesheet in this directory. Load this one first. */
+/* Page-wide resets, on top of the shared palette (/shared/css/theme.css -
+   the terminal menus' colours). Load this one first. */
 
-:root {
-  --bg: #15131a;
-  --surface: #1c1922;
-  --surface-2: #26212e;
-  --surface-3: #302a3a;
-  --border: #37303f;
-  --text: #ece7f2;
-  --text-dim: #9c93ac;
-  --text-faint: #6b6479;
-  --accent: #ff5d3a;
-  --accent-ink: #2a120c;
-  --ai: #4fd1c5;
-  --ai-ink: #0c211f;
-  --guide: #7cd4ff;
-  --danger: #ff5d5d;
-  --grid-dot: rgba(255, 255, 255, 0.055);
-  --shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
-  color-scheme: dark;
-}
+@import url("/shared/css/theme.css");
+
 
 * { box-sizing: border-box; }
 

@@ -3,6 +3,8 @@
     remanga new      MANGADEX_URL                (names the project after the manga)
     remanga download -p NAME [-c 1-5]           (no -c: shows MangaDex's chapter list)
     remanga mark     -p NAME -c 1-5             (the Panel Marker web UI)
+    remanga write    -p NAME -c 1               (write the narration yourself)
+    remanga review   -p NAME -c 1               (flag what the LLM got wrong)
     remanga pdf      -p NAME -c 1-5
     remanga video    -p NAME -c 1-5 [--force]
     remanga chapters -p NAME
@@ -45,6 +47,8 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--force", action="store_true", help="delete the pages and download them again")
     with_project("mark", "Open the Panel Marker web UI for these chapters - MAGI v3 finds the panels, you fix "
                          "them, saving writes crops.json")
+    with_project("write", "Write the narration yourself, panel by panel, in the browser")
+    with_project("review", "Go through a chapter's narration in the browser and flag what is wrong")
     with_project("pdf", "Make each chapter's PDF of panels to give to the LLM, with prompts/narration.md")
     v = with_project("video", "Make each chapter's video from the narration pasted into narration.json")
     v.add_argument("--force", action="store_true", help="narrate, mix and render again from scratch")
@@ -98,6 +102,11 @@ def _run(args: argparse.Namespace) -> None:
         raise ValueError(f"No downloaded chapter matches '{args.chapters}'.")
     if args.command == "mark":
         workflow.mark(args.project, chapters, config)
+        return
+    if args.command in ("write", "review"):
+        step = workflow.write_narration if args.command == "write" else workflow.review_narration
+        for chapter in chapters:
+            step(args.project, chapter, config)
         return
 
     for chapter in chapters:

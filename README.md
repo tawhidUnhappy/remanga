@@ -9,7 +9,8 @@ Manga panels to recap video, in five steps:
    you fix whatever it got wrong by hand.
 3. **Make a PDF** of the chapter's cut panels, in reading order.
 4. **Give the PDF and `prompts/narration.md` to an LLM** (Gemini, ChatGPT, Claude, ...) and paste its
-   one JSON reply into the chapter's `narration.json`.
+   one JSON reply into the chapter's `narration.json` - or write it yourself in the Narration Writer,
+   and check what the LLM wrote in the Narration Reviewer.
 5. **Make the video**: each panel on screen while Kokoro-82M reads that panel's narration, with
    background music underneath.
 
@@ -55,6 +56,8 @@ Logs are kept in `projects/<name>/logs/`: `chapter_N.log` for a chapter's PDF an
 ./run.sh download -p MyMangaTitle               # MangaDex's chapter list, with what you have
 ./run.sh download -p MyMangaTitle -c 1-5        # or -c new for every chapter you don't have
 ./run.sh mark     -p MyMangaTitle -c 1-5        # the Panel Marker, in your browser
+./run.sh write    -p MyMangaTitle -c 1          # write the narration yourself
+./run.sh review   -p MyMangaTitle -c 1          # flag what the LLM got wrong
 ./run.sh pdf      -p MyMangaTitle -c 1-5        # cuts the panels, then their PDF
 # give pdf/chapter_N/panels_*.pdf + prompts/narration.md to the LLM, paste the reply into
 # projects/MyMangaTitle/chapters/chapter_N/narration.json
@@ -101,6 +104,19 @@ describing the voice again for each panel is what makes a designed voice wander.
 
 An engine's environment and weights download the first time you use it, not at install time.
 
+## The other two web UIs
+
+Both are optional, both work on the same `narration.json`, and both are in a chapter's menu.
+
+**Narration Writer** (`write`) - one card per panel, its image and a field: type the line for that
+panel. It saves in exactly the shape an LLM's reply has, so a chapter written by hand and one pasted
+from a chat go through the same checks.
+
+**Narration Reviewer** (`review`) - the same list, but showing what the narration already says, with
+a field to flag a panel and say what is wrong. Submitting writes `narration_review.json`; give that
+to the LLM with `prompts/narration_review.md` and paste the corrected reply back. Rounds are kept in
+`narration_reviews/`, so a flag you raised last round is still there if the fix missed.
+
 ## The LLM step
 
 Upload **`prompts/narration.md`** and the chapter's PDF (all parts, if it was split) - that's all.
@@ -132,7 +148,8 @@ projects/<name>/
     pages/                downloaded pages
     crops.json            the panel marks from the Panel Marker
     panels/               the panels cut from the pages
-    narration.json        the LLM's reply: narration + memory
+    narration.json        the LLM's reply (or the Writer's): narration + memory
+    narration_review.json what the Reviewer flagged, for the LLM's fix pass
   pdf/chapter_N/          panels_1.pdf, ... and fix_request.md
   audio/chapter_N/        one clip per panel + audio_timing.json
   audio_modified/chapter_N/  the mixed track
@@ -181,6 +198,7 @@ for every project (`config.json`). Everything else is in `config.json`:
 | `video.max_upscale` | 3 | how far a small panel may be enlarged to fill the frame; 0 means no cap |
 | `video.background_style` | `blur` | `blur` (the panel, blurred) or `solid` (`background_color`) |
 | `pdf.max_mb` | 50 | largest PDF file |
+| `marker.port` / `writer.port` / `reviewer.port` | 8765 / 8767 / 8766 | where each web UI listens |
 | `marker.magi_enabled` / `magi_panel_score_threshold` | true / 0.5 | MAGI v3's panel detection in the Panel Marker, and how sure it must be |
 | `cropper.margin_padding_pixels` / `snap_to_gutters` | 8 / true | breathing room around a cut panel, and snapping its edges to the real gutters |
 | `downloader.language` | `en` | MangaDex translation language |
