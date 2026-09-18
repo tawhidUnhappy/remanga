@@ -1,3 +1,5 @@
+<img src="assets/logo.png" alt="remanga" width="96" align="left" hspace="14" vspace="4">
+
 # remanga
 
 Manga panels to recap video, in five steps:

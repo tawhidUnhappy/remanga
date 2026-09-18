@@ -60,6 +60,11 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
     def index():
         return send_from_directory(STATIC_DIR, "index.html")
 
+    @app.get("/favicon.ico")
+    def favicon():
+        # Browsers ask for this at the root whatever the page links to.
+        return send_from_directory(STATIC_DIR / "img", "favicon.ico")
+
     @app.get("/api/chapter")
     def get_chapter():
         return jsonify(chapter_payload())

@@ -22,19 +22,22 @@
   padding-right: 16px;
   border-right: 1px solid var(--border);
 }
-.brand .mark-icon {
-  width: 20px; height: 20px;
-  border: 2px solid var(--accent);
-  border-radius: 4px;
-  position: relative;
+.brand .logo {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
   flex: none;
+  /* A photo-ish logo next to flat UI: a hairline ring settles it down. */
+  box-shadow: 0 0 0 1px var(--border);
 }
-.brand .mark-icon::after {
-  content: "";
-  position: absolute; inset: 4px;
-  border: 2px solid var(--accent);
-  opacity: 0.55;
-  border-radius: 2px;
+.brand-name { letter-spacing: 0.2px; }
+.brand-sub {
+  font-weight: 600;
+  font-size: 13px;
+  opacity: 0.62;
+  padding-left: 9px;
+  margin-left: 2px;
+  border-left: 1px solid var(--border);
 }
 
 /* The chapter arrows, for a session covering more than one chapter (mark-all).
