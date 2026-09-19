@@ -209,6 +209,7 @@ for every project (`config.json`). Everything else is in `config.json`:
 | `audio.bgm_enabled` / `bgm_path` | off / - | background music |
 | `audio.bgm_below_voice_lu` | 14 | how far the music sits under the voice, in LU - measured per track and chapter, so every music file sits at the same level (12 energetic, 14 balanced, 18 subtle) |
 | `audio.pause_between_panels_ms` | 350 | silence between panels |
+| `audio.edge_fade_ms` | 35 | fade at each clip's edges, applied when the chapter is mixed (Settings - Edge fade). The start is only ever faded across the silence the clip already has, so the first word is never ramped; the end may ramp up to 15% into the speech, which is what stops a line sounding cut off. Changing it re-mixes, it does not narrate again |
 | `audio.enable_loudnorm` / `loudness_target_lufs` | true / -14 | normalize the finished audio (two-pass, linear) to YouTube's -14 LUFS |
 | `video.width` / `height` / `fps` | 1920 / 1080 / 24 | video size - 2560x1440 and 3840x2160 keep big panels sharp (see the quality warning), at a slower render |
 | `video.max_upscale` | 3 | how far a small panel may be enlarged to fill the frame; 0 means no cap |

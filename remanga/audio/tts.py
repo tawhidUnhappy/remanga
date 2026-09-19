@@ -13,7 +13,7 @@ from typing import Any
 from pydub import AudioSegment
 
 from remanga import activity
-from remanga.audio.clips import apply_edge_fades, atomic_export
+from remanga.audio.clips import atomic_export
 from remanga.audio.narration_voice import voice_changed_from
 from remanga.audio.resample import load_audio
 from remanga.audio.resume import clip_is_complete, clips_to_redo
@@ -79,7 +79,6 @@ class TTSEngine:
                     # Through resample.load_audio: pydub's own resampler folds
                     # imaging noise into the clip going from 24 kHz to 44.1 kHz.
                     segment = load_audio(raw, self.audio_config.sample_rate, channels=1)
-                    segment = apply_edge_fades(segment, self.audio_config.edge_fade_ms)
                     atomic_export(segment, clip)
                     raw.unlink(missing_ok=True)
                 timing.append(panel_timing(index, panel.panel_id, panel.text, clip.name, start_ms=timeline_ms,

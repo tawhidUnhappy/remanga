@@ -28,6 +28,11 @@ UPSCALE_CAPS = ((2.0, "sharpest - small panels sit noticeably small"),
 RESOLUTIONS = ((1920, 1080, "1080p widescreen"), (2560, 1440, "1440p - keeps bigger panels sharp"),
                (3840, 2160, "4K - slowest to render"), (1280, 720, "720p widescreen"),
                (1080, 1920, "1080p vertical"), (1440, 2560, "1440p vertical"))
+EDGE_FADES = ((0, "off - clips start and stop at the sample"),
+              (15, "barely there - just enough to stop a click"),
+              (35, "recommended"),
+              (80, "softer - the end of each line eases out"),
+              (150, "soft - noticeable on a line that ends abruptly"))
 MUSIC_LEVELS = ((12.0, "energetic - music clearly felt"), (14.0, "balanced - recommended"),
                 (18.0, "subtle - a quiet bed"))
 
@@ -64,6 +69,7 @@ class SettingsScreen(Screen):
             *voice_settings.narrator_rows(config),
             Row("Background music", music, _change_music),
             Row("Music level", f"{audio.bgm_below_voice_lu:g} LU under the voice", _change_music_level),
+            Row("Edge fade", f"{audio.edge_fade_ms} ms" if audio.edge_fade_ms else "off", _change_edge_fade),
             Row("Video size", f"{video.width}x{video.height}", _change_video_size),
             Row("Enlarge panels", f"up to {video.max_upscale:g}x" if video.max_upscale > 0 else "to fill the frame",
                 _change_max_upscale),
@@ -126,6 +132,18 @@ async def _change_music_level(screen: SettingsScreen, config: RemangaConfig) -> 
         note="Measured per track and chapter, so any music file sits at the same level."))
     if level is not None:
         config.audio.bgm_below_voice_lu = level
+
+
+async def _change_edge_fade(screen: SettingsScreen, config: RemangaConfig) -> None:
+    fade = await screen.app.push_screen_wait(Choice(
+        "Edge fade", [(f"{ms} ms" if ms else "off", hint, ms) for ms, hint in EDGE_FADES],
+        current=config.audio.edge_fade_ms,
+        note="How each panel's clip starts and stops. The start is only ever faded over the silence "
+             "the clip already has, so the first word is never ramped; the end may ease out through "
+             "the last of the speech, which is what stops a line sounding cut off. Changing this "
+             "re-mixes the chapter - it does not narrate it again."))
+    if fade is not None:
+        config.audio.edge_fade_ms = fade
 
 
 async def _change_video_size(screen: SettingsScreen, config: RemangaConfig) -> None:

@@ -17,7 +17,7 @@ from pathlib import Path
 
 from remanga.config import RemangaConfig
 from remanga.config.kokoro_voices import KOKORO_VOICES
-from remanga.config.tts import QWEN_SPEAKERS
+from remanga.config.tts import QWEN_SPEAKERS, RECORDING_PREFIX
 from remanga.config.tts_engines import TTS_ENGINE_SPECS
 from remanga.paths import GLOBAL_DIR
 from remanga.ui.dialogs import Ask, Choice, number_check
@@ -109,7 +109,7 @@ async def _pick_qwen_voice(screen, config: RemangaConfig) -> None:
         # A recording of someone real: no transcript, so the clone works from
         # the speaker embedding (see audio/synth/qwen.py).
         path = picked[len("clone:"):]
-        qwen.design, qwen.designed_sample, qwen.designed_text = f"recording: {Path(path).name}", path, ""
+        qwen.design, qwen.designed_sample, qwen.designed_text = RECORDING_PREFIX + Path(path).name, path, ""
     elif picked:
         qwen.speaker, qwen.design = picked, ""
 

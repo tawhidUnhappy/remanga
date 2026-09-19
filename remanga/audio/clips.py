@@ -13,6 +13,13 @@ from pathlib import Path
 from pydub import AudioSegment
 from pydub.silence import detect_leading_silence
 
+# How much of a clip the fade-out may ramp when the clip has no silence to
+# fade over: a voice that stops dead at the last sample clicks and sounds cut
+# off, and a few tens of milliseconds at the end is inaudible as a fade but
+# audible as its absence. The START is never treated this way - ramping the
+# first phoneme is what swallowed the opening of nearly every line once.
+TAIL_INTO_SPEECH = 0.15
+
 # A fade this short is inaudible even when it lands directly on a consonant,
 # and it's already all it takes to stop a clip that begins on a non-zero
 # sample from clicking. It's the floor every clip gets; anything longer has
@@ -28,15 +35,21 @@ EDGE_SILENCE_DBFS = -50.0
 def apply_edge_fades(segment: AudioSegment, edge_fade_ms: int) -> AudioSegment:
     """De-clicks a clip's edges without ever ramping its speech.
 
-    `edge_fade_ms` is a ceiling, not a fixed length: each edge is faded over
-    at most the silence that edge actually has, so the fade shapes the
-    clip's own lead-in and tail rather than its first and last phonemes.
-    That distinction is the whole point. A TTS engine returns audio that
-    starts within a few milliseconds of the first phoneme, so applying the
-    configured 35ms flat - as this used to - ramped the opening consonant
-    itself: across a finished chapter the first 35ms of 52 of 60 clips
-    came back ~36x quieter than the speech immediately following it, which
-    is what swallowed the start of nearly every line."""
+    `edge_fade_ms` is the length asked for, and the two edges treat it
+    differently.
+
+    At the START it is a ceiling: the fade is at most the silence the clip
+    actually has there, so it shapes the lead-in and never the first phoneme.
+    Applying the configured 35ms flat - as this once did - ramped the opening
+    consonant itself: across a finished chapter the first 35ms of 52 of 60
+    clips came back ~36x quieter than the speech right after them, which
+    swallowed the start of nearly every line.
+
+    At the END it may ramp speech, up to TAIL_INTO_SPEECH of the clip. Clips
+    often end within ten milliseconds of the last word (measured across a
+    real chapter), and a voice that stops at the last sample clicks and
+    sounds cut off; a few tens of milliseconds of ramp there is inaudible in
+    itself."""
     if edge_fade_ms <= 0 or len(segment) < 4 * DECLICK_FADE_MS:
         return segment
 
@@ -44,7 +57,8 @@ def apply_edge_fades(segment: AudioSegment, edge_fade_ms: int) -> AudioSegment:
     trail_ms = detect_leading_silence(segment.reverse(), silence_threshold=EDGE_SILENCE_DBFS)
 
     fade_in_ms = max(DECLICK_FADE_MS, min(edge_fade_ms, lead_ms))
-    fade_out_ms = max(DECLICK_FADE_MS, min(edge_fade_ms, trail_ms))
+    room_at_end = max(trail_ms, int(len(segment) * TAIL_INTO_SPEECH))
+    fade_out_ms = max(DECLICK_FADE_MS, min(edge_fade_ms, room_at_end))
     return segment.fade_in(int(fade_in_ms)).fade_out(int(fade_out_ms))
 
 

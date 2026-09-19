@@ -10,6 +10,7 @@ from typing import Any
 
 from pydub import AudioSegment
 
+from remanga.audio.clips import apply_edge_fades
 from remanga.audio.resample import load_audio
 from remanga.console import console, escape as _esc
 from remanga.ffmpeg_io import run_ffmpeg
@@ -24,14 +25,18 @@ LOUDNORM_LRA = 11
 LOUDNORM_TRUE_PEAK = -1.0
 
 
-def panel_segments(audio_dir: Path, panel: dict[str, Any], sample_rate: int) -> list[AudioSegment]:
+def panel_segments(audio_dir: Path, panel: dict[str, Any], sample_rate: int,
+                   edge_fade_ms: int = 0) -> list[AudioSegment]:
     """One panel's place in the narration track: its synthesized clip - or
     silence of the same length, for a panel whose clip is missing, so the
     track stays true to audio_timing.json either way - plus the pause held
     after it."""
     clip_file = audio_dir / panel["audio_file"]
     if clip_file.exists():
-        segments = [AudioSegment.from_file(clip_file)]
+        # Faded here rather than baked into the clip on disk: the fade is how
+        # the chapter is put together, not part of what was synthesized, so
+        # changing it costs a re-mix instead of narrating everything again.
+        segments = [apply_edge_fades(AudioSegment.from_file(clip_file), edge_fade_ms)]
     else:
         segments = [AudioSegment.silent(duration=panel["duration_ms"], frame_rate=sample_rate)]
 

@@ -89,6 +89,12 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
 - **Caching chain:** audio_timing.json is rewritten only when content changes; mix fingerprints its
   mtime + BGM file stat + settings; render compares master_audio mtime and a picture fingerprint. A
   gratuitous rewrite anywhere upstream re-mixes and re-renders everything.
+- **Edge fade** (`audio.edge_fade_ms`, `audio/clips.py:apply_edge_fades`) is applied in
+  `audio/master.py:panel_segments` at mix time, never baked into the clip on disk - it is part of the
+  fingerprint, so changing it re-mixes without re-narrating. It is asymmetric on purpose: at the
+  start it is capped by the clip's own leading silence (a flat 35 ms once ramped the opening
+  consonant of 52 of 60 clips in a chapter, ~36x down), at the end it may ramp speech up to
+  `TAIL_INTO_SPEECH` (15%) because clips often end within 10 ms of the last word.
 - **Resampling:** clips go 24 kHz -> 44.1 kHz through `audio/resample.load_audio` (ffmpeg), never
   pydub's `set_frame_rate` (folds imaging noise above 12 kHz).
 - **Frame cuts** snap into the pause between pages (`video/frame_timeline.py`) so a picture changes

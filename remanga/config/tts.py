@@ -45,6 +45,11 @@ QWEN_SPEAKERS: tuple[tuple[str, str], ...] = (
 )
 QWEN_SPEAKER_NAMES = tuple(name for name, _ in QWEN_SPEAKERS)
 
+# What `design` says when the voice is a recording someone supplied rather
+# than a description the model built a voice from - the two take different
+# paths in audio/synth/qwen.py (a recording has no transcript).
+RECORDING_PREFIX = "recording: "
+
 
 class KokoroConfig(ConfigModel):
     """hexgrad/Kokoro-82M in `.tools/venv-kokoro`: fixed, named voices
@@ -133,11 +138,17 @@ class QwenConfig(ConfigModel):
 
     @property
     def voice_label(self) -> str:
-        return f"designed: {self.design[:40]}" if self.designed else self.speaker.replace("_", " ")
+        if not self.designed:
+            return self.speaker.replace("_", " ")
+        if self.design.startswith(RECORDING_PREFIX):
+            return f"clone of {Path(self.designed_sample).name}"
+        return f"designed: {self.design[:40]}"
 
     @property
     def voice_detail(self) -> str:
         if self.designed:
+            if self.design.startswith(RECORDING_PREFIX):
+                return f"cloned from {self.designed_sample}"
             return f"designed voice - {self.design}"
         return f"{self.speaker.replace('_', ' ')} ({self.instruct})" if self.instruct else self.speaker
 
