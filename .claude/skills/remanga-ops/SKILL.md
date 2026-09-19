@@ -215,6 +215,10 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   `TaskScreen`'s thread worker: `console.file` redirected to `projects/P/logs/chapter_N.log` (or
   `project.log`), progress via `remanga.activity` (never create a Rich Progress directly), Ctrl+C =
   async KeyboardInterrupt into the thread + SIGTERM to child processes (`pgrep -P`).
+- **Settings stay a flat list of rows, never a wizard** (user request, asked directly whether the
+  Qwen rows should fold into a pick-how-you-want-a-voice walkthrough: "better this way as a simple
+  settings instead of a walkthrough"). One row per thing, each opening one dialog. A row that does
+  not apply hides itself - as Delivery does for a cloned voice - rather than becoming a step.
 - **Nothing is highlighted until an arrow key or click; single click only highlights, double click
   (or Enter) chooses** (user request). `SafeTable`/`SafeOptionList` enforce it. Textual gotchas hit:
   a subclass `_on_click` must call `event.prevent_default()` or the base class handler still runs
