@@ -14,6 +14,7 @@ from pydub import AudioSegment
 
 from remanga import activity
 from remanga.audio.clips import atomic_export, speech_bounds
+from remanga.audio.manifest import verify_audio_manifest, write_audio_manifest
 from remanga.audio.narration_voice import voice_changed_from
 from remanga.audio.resample import load_audio
 from remanga.audio.resume import clip_is_complete, clips_to_redo
@@ -43,6 +44,14 @@ class TTSEngine:
 
         console.print(f"[cyan]Narrating {len(panels)} panel(s) with {self._synth.display_name}[/] "
                       f"[dim]({escape(self.tts_config.voice_detail)})[/]")
+
+        # Zero trust on what's actually in the folder before reusing any of
+        # it: a clip the last run finished with but that is gone now is not
+        # something to quietly resynthesize around - it means the folder was
+        # touched by something other than remanga, and the safe answer is to
+        # stop and say so, not guess which files still mean what they did.
+        if not force:
+            verify_audio_manifest(audio_dir, chapter_num)
 
         timing_path = get_audio_timing_path(project_name, chapter_num)
         previous_timing = read_json_or(timing_path, {})
@@ -99,6 +108,10 @@ class TTSEngine:
         for old in audio_dir.glob("*.wav"):
             if old.name not in wanted:
                 old.unlink(missing_ok=True)
+
+        # Written last, once every clip this run needed is actually on disk -
+        # a manifest is only ever a record of a complete, finished set.
+        write_audio_manifest(audio_dir, chapter_num, sorted(wanted))
 
         if reused:
             console.print(f"[dim cyan](Reused {reused} panel clip(s) already synthesized)[/]")

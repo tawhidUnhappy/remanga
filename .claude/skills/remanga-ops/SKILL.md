@@ -57,7 +57,7 @@ a mixin) `settings` `common`, `dialogs.py`, `tasks.py`, `widgets.py`, `voice_set
 static/), `cropper/` (crops.json -> panels/: crop_page, panel_boxes, gutter/, seams, trim, dedupe),
 `pdf/` (`encode` one panel -> a PDF page, `pack` panels -> parts under the cap, `builder` wires
 them, `writer` the PDF itself, `manifest_info` the text page), `downloader/`,
-`audio/` (tts, mix, master, clips, synth/ per engine),
+`audio/` (tts, mix, master, clips, manifest, synth/ per engine),
 `video/` (`canvas` one panel on one frame, `quality` is this size enough, `frames` the frame cache,
 `compose` re-exports those three, `frame_timeline`, `render`, `encoding`), `config/`, `paths/`, `tool_envs/` +
 `workers/` + `models/` (Kokoro's and MAGI's isolated venvs + weights).
@@ -105,6 +105,14 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     `duration_ms`, which slices to the whole file - old chapters play as they did.
   - The edge fade is what keeps a tight join clean: worst sample step at a join measured -46.2 dBFS
     with the 35 ms fade against -35.7 dBFS without it.
+- **audio_manifest.json** (`audio/manifest.py`) is zero trust on the audio folder, not on remanga's
+  own bookkeeping: written once, at the end of a finished narration run, listing exactly the clip
+  files that run needed. Checked before anything downstream reads the folder again - resuming a
+  narration run and mixing both call `verify_audio_manifest` first - and raises `AudioManifestError`
+  (tells the user to use Remake video) if a listed clip is no longer on disk, rather than silently
+  narrating around it or mixing a chapter with lines missing. No manifest on disk (an older chapter)
+  is not an error - there is nothing yet to check against. A panel remanga itself stops narrating
+  removes its clip and rewrites the manifest in the same run, so that never trips it.
 - **Edge fade** (`audio.edge_fade_ms`, `audio/clips.py:apply_edge_fades`) is applied in
   `audio/master.py:panel_segments` at mix time, never baked into the clip on disk - it is part of the
   fingerprint, so changing it re-mixes without re-narrating. It is asymmetric on purpose: at the

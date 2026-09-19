@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from remanga.audio.join import join_segments
+from remanga.audio.manifest import verify_audio_manifest
 from remanga.audio.master import (
     integrated_loudness,
     load_bgm,
@@ -81,6 +82,10 @@ def mix_master_audio(project_name: str, chapter_num: str, config: AudioConfig, f
 
     console.print(f"[cyan]Mixing chapter {chapter_num}'s audio...[/]")
     audio_dir = get_audio_dir(project_name, chapter_num)
+    # Zero trust on the folder before reading a single clip out of it - the
+    # mix is exactly the point where "some of the raw audio" would otherwise
+    # quietly become "a chapter missing a few lines" with nothing to say so.
+    verify_audio_manifest(audio_dir, chapter_num)
     segments = []
     for panel in read_json(timing_path).get("panels", []):
         segments.extend(panel_segments(audio_dir, panel, config.sample_rate, config.edge_fade_ms))
