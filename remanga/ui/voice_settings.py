@@ -72,6 +72,21 @@ def kokoro_rows(config: RemangaConfig) -> list[Row]:
 
 # --- Qwen3-TTS ----------------------------------------------------------------
 
+VOICE_EXTS = (".wav", ".mp3", ".flac", ".m4a", ".ogg", ".opus")
+
+
+def _recordings() -> list[Path]:
+    """The recordings in global/voice/ a voice can be cloned from. Skips what
+    remanga wrote there itself: its own samples, and the trimmed copy it makes
+    of a long reference."""
+    folder = GLOBAL_DIR / "voice"
+    if not folder.is_dir():
+        return []
+    return sorted(path for path in folder.iterdir()
+                  if path.is_file() and path.suffix.lower() in VOICE_EXTS
+                  and not path.stem.startswith("sample_") and ".first" not in path.stem)
+
+
 DESIGN_EXAMPLES = ("a calm middle-aged man telling a story by a fire, warm and unhurried",
                    "a young woman narrating an adventure, bright and quick")
 
@@ -79,6 +94,9 @@ DESIGN_EXAMPLES = ("a calm middle-aged man telling a story by a fire, warm and u
 async def _pick_qwen_voice(screen, config: RemangaConfig) -> None:
     qwen = config.tts.qwen
     options = [(name.replace("_", " "), hint, name) for name, hint in QWEN_SPEAKERS]
+    recordings = _recordings()
+    options += [(f"Clone {path.name}", "read every panel in that recording's voice", f"clone:{path}")
+                for path in recordings]
     if qwen.design:
         options.insert(0, (f"Designed: {qwen.design[:40]}", "the voice you described", "__designed__"))
     picked = await _wait(screen)(Choice(
@@ -87,6 +105,11 @@ async def _pick_qwen_voice(screen, config: RemangaConfig) -> None:
              "chapters again."))
     if picked == "__designed__":
         qwen.designed_sample = qwen.designed_sample or ""
+    elif picked and picked.startswith("clone:"):
+        # A recording of someone real: no transcript, so the clone works from
+        # the speaker embedding (see audio/synth/qwen.py).
+        path = picked[len("clone:"):]
+        qwen.design, qwen.designed_sample, qwen.designed_text = f"recording: {Path(path).name}", path, ""
     elif picked:
         qwen.speaker, qwen.design = picked, ""
 
@@ -118,8 +141,10 @@ async def _design_qwen_voice(screen, config: RemangaConfig) -> None:
                                     lambda: design_voice(qwen, description, sample))
     if not outcome:
         return
+    from remanga.audio.synth.qwen import DESIGN_SAMPLE_TEXT
+
     qwen.design, qwen.designed_sample = description, str(sample)
-    qwen.designed_text = ""
+    qwen.designed_text = DESIGN_SAMPLE_TEXT   # what that sample says - see the clone mode
     screen.notify(f"The designed voice is in {sample} - listen to it, and design again if it is not right.",
                   timeout=8)
 

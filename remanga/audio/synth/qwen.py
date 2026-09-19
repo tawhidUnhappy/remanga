@@ -45,12 +45,36 @@ VARIANTS = {
 # loads. The download script checks the small files itself.
 EXPECTED_FILES = ("model.safetensors", "config.json")
 
+# How much of a reference recording the clone is built from. Qwen conditions
+# on the start of the clip anyway, and a long one makes every generation
+# slower - a 31-second reference pushed one chunk past the three-minute
+# timeout, where 15 seconds of the same recording reads it comfortably.
+REFERENCE_MAX_SECONDS = 15.0
+
 # The line a designed voice says in its sample. Long enough for the clone to
 # have something to work with, and dull on purpose - it is never in a video.
 DESIGN_SAMPLE_TEXT = (
     "Evening falls over the quiet capital, and the traveller stops at the well to drink, "
     "thinking that he has walked further today than he meant to."
 )
+
+
+def _reference_clip(path: Path) -> Path:
+    """The recording the clone is built from, no longer than
+    REFERENCE_MAX_SECONDS. A longer one is trimmed into a cached copy beside
+    it rather than in place - it is the user's file."""
+    from pydub import AudioSegment
+
+    audio = AudioSegment.from_file(path)
+    limit_ms = int(REFERENCE_MAX_SECONDS * 1000)
+    if len(audio) <= limit_ms:
+        return path.resolve()
+    trimmed = path.with_name(f"{path.stem}.first{int(REFERENCE_MAX_SECONDS)}s.wav")
+    if not trimmed.exists() or trimmed.stat().st_mtime < path.stat().st_mtime:
+        audio[:limit_ms].export(trimmed, format="wav")
+        console.print(f"[dim]Cloning from the first {REFERENCE_MAX_SECONDS:g}s of "
+                      f"{_esc(path.name)} - a longer reference only slows every line down.[/]")
+    return trimmed.resolve()
 
 
 def _model_manager(config: QwenConfig, variant: str) -> ModelManager:
@@ -69,9 +93,10 @@ class QwenSynthesizer(BaseWorkerSynthesizer):
     display_name = SPEC.display_name
 
     # Qwen3-TTS generates speech tokens autoregressively, so a very long line
-    # costs proportionally; this keeps one call to a few sentences, the same
-    # reason every worker engine has a ceiling.
-    chunk_max_chars = 400
+    # costs proportionally - and a cloned voice carries the reference in its
+    # context too, which makes it slower again. 260 characters is two or three
+    # sentences, which lands well inside the synthesis timeout on a 3060.
+    chunk_max_chars = 260
 
     def __init__(self, tts_config: TTSConfig, audio_config: AudioConfig):
         self.tts_config = tts_config
@@ -83,8 +108,13 @@ class QwenSynthesizer(BaseWorkerSynthesizer):
         config = self.engine_config
         args = ["--model_dir", str(model_dir.resolve()), "--mode", self.mode, "--language", config.language]
         if self.mode == "clone":
-            args += ["--ref_audio", str(Path(config.designed_sample).resolve()),
-                     "--ref_text", config.designed_text or DESIGN_SAMPLE_TEXT]
+            # `designed_text` is what the reference is KNOWN to say - set when
+            # remanga made the sample itself. A recording someone supplied has
+            # none, and guessing one is worse than none: the model is asked to
+            # reconcile a recording with words that are not in it, which took
+            # one line past a five-minute timeout before this was understood.
+            args += ["--ref_audio", str(_reference_clip(Path(config.designed_sample))),
+                     "--ref_text", config.designed_text]
         return spawn_script_worker(self.tool_name, "audio", "qwen_tts_worker.py", *args)
 
     def _synth_timeout_seconds(self) -> float:
@@ -105,6 +135,9 @@ class QwenSynthesizer(BaseWorkerSynthesizer):
 
 def design_voice(config: QwenConfig, description: str, out_wav: Path, text: str = DESIGN_SAMPLE_TEXT) -> Path:
     """One sample of the voice `description` asks for, written to `out_wav`.
+    The caller records `text` as the sample's transcript (QwenConfig.
+    designed_text): knowing what the reference says lets the clone use it in
+    context, which sounds closer than the speaker embedding alone.
 
     A single run of the VoiceDesign model rather than a long-lived worker:
     designing happens once, in the settings screen, and holding a second

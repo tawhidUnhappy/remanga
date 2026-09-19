@@ -108,6 +108,11 @@ it still performs. The default asks for a technical manual, which is what actual
 measured on one line, pitch swing fell from 5.9 semitones (no instruction) and 4.0 ("calm narrator")
 to 3.1. `global/voice/samples/qwen/delivery/` has the same line in all four, to hear for yourself.
 
+**Cloning a recording** (Qwen3-TTS): put a clean recording of one person in `global/voice/` and pick
+`Clone <file>` in Settings → Narrator voice. Every panel is then read in that voice. Ten to fifteen
+seconds of speech is plenty - a longer file is trimmed to its first 15 seconds, because the whole
+reference rides along in the model's context and only slows every line down.
+
 **Designing a voice** (Qwen3-TTS only): Settings → Design a voice, describe the narrator, and one
 sample is generated into `global/voice/designed.wav`. Listen to it; design again if it is not right.
 Every panel is then spoken *from that sample*, which is what keeps one voice across a chapter -

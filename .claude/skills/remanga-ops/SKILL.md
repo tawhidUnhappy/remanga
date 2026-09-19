@@ -147,6 +147,15 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   Settings rows come from `ui/voice_settings.py:ENGINE_ROWS` (a `Row` is label/value/change), so the
   screen itself never changes. Nothing outside asks which engine is running: `audio/tts.py` calls
   `synth.synthesize(text, output_wav)` and `config.tts.identity()`.
+- **Cloning a recording needs NO transcript - and must not be given a wrong one.** Qwen's
+  `create_voice_clone_prompt` refuses in-context mode without `ref_text`, so a supplied recording
+  clones with `x_vector_only_mode=True` (speaker embedding). Passing a transcript that is not what
+  the clip says (remanga did: it handed the designed-voice line to a user's recording) makes
+  generation crawl - one 260-char line blew a 300s timeout; with the fix the same line is 19s.
+  A sample remanga designed itself DOES know its text (`designed_text`), and uses it. References
+  over 15s are trimmed to a cached `*.first15s.wav` copy: the reference sits in the context of every
+  generation. Verified by cloning a 31s recording: median pitch 146Hz against the reference's 147Hz,
+  pitch spread 3.91 vs 3.90 st.
 - **Qwen3-TTS acts unless told not to** (user: "like a bad actor trying his best"). Measured on one
   line, same voice, pitch spread in semitones: no instruct 5.89, "a calm narrator telling a story"
   3.98, "flat, like a documentary voice-over" 4.02 (no better), "monotone... like reading a technical

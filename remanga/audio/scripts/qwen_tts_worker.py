@@ -10,8 +10,9 @@ kokoro_worker.py doesn't.
 each is a different checkpoint (`--model_dir`):
 
   custom  a preset narrator (`speaker`), optionally steered by `instruct`
-  clone   the voice in `--ref_audio` - remanga uses it to speak every panel
-          in a designed voice's own sample, so a chapter is one voice. The
+  clone   the voice in `--ref_audio`, with `--ref_text` when what it says is
+          known (a designed voice's own sample) and from the speaker
+          embedding alone when it is not (a recording someone supplied). The
           clone prompt is built once, here, not per request: rebuilding it
           per panel is both slower and what makes the voice wander.
   design  one sample of the voice an `instruct` description asks for. Used
@@ -79,8 +80,15 @@ def main() -> None:
             )
             clone_prompt = None
             if args.mode == "clone":
+                # With a transcript the model can use the reference in context,
+                # which sounds closer. Without one it must work from the
+                # speaker embedding alone (x_vector_only_mode): upstream
+                # refuses in-context mode with no text, and handing it the
+                # wrong text is worse than handing it none - it tries to
+                # reconcile a recording with words that are not in it.
                 clone_prompt = model.create_voice_clone_prompt(
                     ref_audio=args.ref_audio, ref_text=args.ref_text or None,
+                    x_vector_only_mode=not args.ref_text,
                 )
     except Exception as e:
         send({"event": "error", "error": f"Failed to load Qwen3-TTS: {e}"})
