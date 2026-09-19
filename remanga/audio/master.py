@@ -33,10 +33,18 @@ def panel_segments(audio_dir: Path, panel: dict[str, Any], sample_rate: int,
     after it."""
     clip_file = audio_dir / panel["audio_file"]
     if clip_file.exists():
+        # Exactly the slice audio_timing.json names - the clip's speech, with
+        # the silence the synthesizer baked around it trimmed back to an even
+        # margin. Taking the whole file instead would put an unchosen and
+        # uneven pause before every panel, and would make the master longer
+        # than the timeline the video is cut to.
+        clip = AudioSegment.from_file(clip_file)
+        start_ms = panel.get("clip_start_ms", 0)
+        clip = clip[start_ms:start_ms + panel["duration_ms"]]
         # Faded here rather than baked into the clip on disk: the fade is how
         # the chapter is put together, not part of what was synthesized, so
         # changing it costs a re-mix instead of narrating everything again.
-        segments = [apply_edge_fades(AudioSegment.from_file(clip_file), edge_fade_ms)]
+        segments = [apply_edge_fades(clip, edge_fade_ms)]
     else:
         segments = [AudioSegment.silent(duration=panel["duration_ms"], frame_rate=sample_rate)]
 

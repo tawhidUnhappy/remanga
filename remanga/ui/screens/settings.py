@@ -33,6 +33,11 @@ EDGE_FADES = ((0, "off - clips start and stop at the sample"),
               (35, "recommended"),
               (80, "softer - the end of each line eases out"),
               (150, "soft - noticeable on a line that ends abruptly"))
+PANEL_GAPS = ((0, "continuous - recommended; the trimmed margins still leave about 50 ms"),
+              (120, "a beat between panels"),
+              (250, "a breath between panels"),
+              (350, "unhurried"),
+              (600, "slow, with room to look at the panel"))
 MUSIC_LEVELS = ((12.0, "energetic - music clearly felt"), (14.0, "balanced - recommended"),
                 (18.0, "subtle - a quiet bed"))
 
@@ -69,6 +74,9 @@ class SettingsScreen(Screen):
             *voice_settings.narrator_rows(config),
             Row("Background music", music, _change_music),
             Row("Music level", f"{audio.bgm_below_voice_lu:g} LU under the voice", _change_music_level),
+            Row("Gap between panels",
+                f"{audio.pause_between_panels_ms} ms" if audio.pause_between_panels_ms else "continuous",
+                _change_panel_gap),
             Row("Edge fade", f"{audio.edge_fade_ms} ms" if audio.edge_fade_ms else "off", _change_edge_fade),
             Row("Video size", f"{video.width}x{video.height}", _change_video_size),
             Row("Enlarge panels", f"up to {video.max_upscale:g}x" if video.max_upscale > 0 else "to fill the frame",
@@ -132,6 +140,19 @@ async def _change_music_level(screen: SettingsScreen, config: RemangaConfig) -> 
         note="Measured per track and chapter, so any music file sits at the same level."))
     if level is not None:
         config.audio.bgm_below_voice_lu = level
+
+
+async def _change_panel_gap(screen: SettingsScreen, config: RemangaConfig) -> None:
+    gap = await screen.app.push_screen_wait(Choice(
+        "Gap between panels", [(f"{ms} ms" if ms else "continuous", hint, ms) for ms, hint in PANEL_GAPS],
+        current=config.audio.pause_between_panels_ms,
+        note="The silence between one panel's narration and the next, and now the whole of it: the "
+             "uneven lead-in the narrator leaves on each clip is trimmed back to an even margin, so "
+             "this is the gap you actually hear. Changing it lays the chapter out again from the "
+             "clips already on disk - nothing is narrated again, but the chapter is mixed and "
+             "rendered again."))
+    if gap is not None:
+        config.audio.pause_between_panels_ms = gap
 
 
 async def _change_edge_fade(screen: SettingsScreen, config: RemangaConfig) -> None:

@@ -36,7 +36,8 @@
     "bgm_path": "",
     "bgm_below_voice_lu": 14.0,
     "enable_loudnorm": true,
-    "loudness_target_lufs": -14.0
+    "loudness_target_lufs": -14.0,
+    "pause_between_panels_ms": 0
   },
   "video": {
     "width": 3840,

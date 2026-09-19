@@ -32,6 +32,34 @@ DECLICK_FADE_MS = 6
 EDGE_SILENCE_DBFS = -50.0
 
 
+# What a clip is allowed to keep of its own silence at each end. The
+# synthesizer bakes in whatever it feels like - measured across a finished
+# 137-panel chapter, the lead ran from 0 to 460ms with a median of 370 and a
+# standard deviation of 164 - so a clip used as it comes carries a pause
+# nobody chose and that changes every panel. That unevenness is what makes a
+# chapter sound like someone recording each panel separately rather than
+# reading it through. Trimmed to this, the gap between panels is
+# `pause_between_panels_ms` and nothing else, which is what that setting has
+# always claimed to be. Not zero: the fades need somewhere to land, and a
+# join with no silence at all on either side clicks.
+SILENCE_KEEP_MS = 25
+
+
+def speech_bounds(segment: AudioSegment, keep_ms: int = SILENCE_KEEP_MS) -> tuple[int, int]:
+    """Where in a clip its speech starts and stops, leaving `keep_ms` of the
+    clip's own silence either side of it.
+
+    Returned as offsets rather than a trimmed clip on purpose: they are
+    written into audio_timing.json, and everything downstream lays itself out
+    from that file. The clip on disk is never cut - it is what the model
+    returned, and re-deciding this is a re-mix, not a re-narration."""
+    lead = detect_leading_silence(segment, silence_threshold=EDGE_SILENCE_DBFS)
+    tail = detect_leading_silence(segment.reverse(), silence_threshold=EDGE_SILENCE_DBFS)
+    if lead + tail >= len(segment):     # nothing but silence - leave it alone
+        return 0, len(segment)
+    return max(0, lead - keep_ms), min(len(segment), len(segment) - tail + keep_ms)
+
+
 def apply_edge_fades(segment: AudioSegment, edge_fade_ms: int) -> AudioSegment:
     """De-clicks a clip's edges without ever ramping its speech.
 

@@ -13,7 +13,7 @@ from typing import Any
 from pydub import AudioSegment
 
 from remanga import activity
-from remanga.audio.clips import atomic_export
+from remanga.audio.clips import atomic_export, speech_bounds
 from remanga.audio.narration_voice import voice_changed_from
 from remanga.audio.resample import load_audio
 from remanga.audio.resume import clip_is_complete, clips_to_redo
@@ -81,9 +81,15 @@ class TTSEngine:
                     segment = load_audio(raw, self.audio_config.sample_rate, channels=1)
                     atomic_export(segment, clip)
                     raw.unlink(missing_ok=True)
+                # Measured here because the clip is already in hand, whether
+                # it was just synthesized or reused - so re-deciding the gap
+                # costs a pass over the clips on disk, never the model.
+                clip_start_ms, clip_end_ms = speech_bounds(segment)
+                duration_ms = clip_end_ms - clip_start_ms
                 timing.append(panel_timing(index, panel.panel_id, panel.text, clip.name, start_ms=timeline_ms,
-                                          duration_ms=len(segment), pause_after_ms=pause_ms))
-                timeline_ms += len(segment) + pause_ms
+                                          duration_ms=duration_ms, pause_after_ms=pause_ms,
+                                          clip_start_ms=clip_start_ms))
+                timeline_ms += duration_ms + pause_ms
                 bar.advance()
 
         write_timing(timing_path, chapter_num, timing, total_ms=timeline_ms, voice=voice_identity)

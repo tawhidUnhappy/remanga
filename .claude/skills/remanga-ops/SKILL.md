@@ -89,6 +89,22 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
 - **Caching chain:** audio_timing.json is rewritten only when content changes; mix fingerprints its
   mtime + BGM file stat + settings; render compares master_audio mtime and a picture fingerprint. A
   gratuitous rewrite anywhere upstream re-mixes and re-renders everything.
+- **The gap between panels is trimmed, not just padded.** Qwen bakes an uneven lead-in into every
+  clip - measured over a finished 137-panel chapter: lead median 370 ms, range 0-460, stdev 164;
+  tail median 60 ms. Added to a 350 ms pause that was a median 780 ms gap that wobbled by panel,
+  which the user heard as "a person separately speaking each panel". `audio/clips.py:speech_bounds`
+  now finds the speech and leaves `SILENCE_KEEP_MS` (25) either side; `audio/tts.py` records the
+  slice as `clip_start_ms` + `duration_ms` in audio_timing.json and `audio/master.py` takes exactly
+  that slice. Measured after: 780 -> 50 ms median at gap 0, join stdev 164 -> 100 ms, master length
+  equal to the timeline within 6 ms over 14 minutes.
+  - **Never trim the clip on disk** - it is what the model returned. The offsets live in the
+    manifest, so re-deciding the gap is a pass over existing clips (a re-layout + re-mix + re-render)
+    and never a re-narration.
+  - **`duration_ms` is now the trimmed length**, so anything reading audio_timing.json gets a
+    timeline that matches the master. Rows written before this have no `clip_start_ms` and a full
+    `duration_ms`, which slices to the whole file - old chapters play as they did.
+  - The edge fade is what keeps a tight join clean: worst sample step at a join measured -46.2 dBFS
+    with the 35 ms fade against -35.7 dBFS without it.
 - **Edge fade** (`audio.edge_fade_ms`, `audio/clips.py:apply_edge_fades`) is applied in
   `audio/master.py:panel_segments` at mix time, never baked into the clip on disk - it is part of the
   fingerprint, so changing it re-mixes without re-narrating. It is asymmetric on purpose: at the

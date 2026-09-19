@@ -15,10 +15,18 @@ from remanga.json_io import read_json_or, write_json
 
 
 def panel_timing(index: int, panel_id: str, text: str, clip_name: str, *, start_ms: int,
-                 duration_ms: int, pause_after_ms: int) -> dict[str, Any]:
+                 duration_ms: int, pause_after_ms: int, clip_start_ms: int = 0) -> dict[str, Any]:
     """One panel's row: where it starts, how long it sounds, and how long its
     slot is once the pause after it is counted. Milliseconds are what the
-    mix works in; the seconds are there for reading."""
+    mix works in; the seconds are there for reading.
+
+    `clip_start_ms` and `duration_ms` are the part of the clip file that is
+    used - the mix takes exactly that slice (audio/clips.py:speech_bounds
+    chose it), so the master's length is what this file says it is and the
+    video's frame timeline stays in step with the voice. A row from before
+    this existed has no `clip_start_ms` and a `duration_ms` covering the whole
+    file, which slices to the whole file: older chapters keep playing as they
+    were until they are narrated again."""
     end_ms = start_ms + duration_ms
     total_slot_ms = duration_ms + pause_after_ms
     return {
@@ -28,6 +36,7 @@ def panel_timing(index: int, panel_id: str, text: str, clip_name: str, *, start_
         "audio_file": clip_name,
         "start_time_ms": start_ms,
         "end_time_ms": end_ms,
+        "clip_start_ms": clip_start_ms,
         "duration_ms": duration_ms,
         "pause_after_ms": pause_after_ms,
         "total_slot_ms": total_slot_ms,
