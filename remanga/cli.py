@@ -53,6 +53,8 @@ def build_parser() -> argparse.ArgumentParser:
     with_project("pdf", "Make each chapter's PDF of panels to give to the LLM, with prompts/narration.md")
     v = with_project("video", "Make each chapter's video from the narration pasted into narration.json")
     v.add_argument("--force", action="store_true", help="narrate, mix and render again from scratch")
+    v.add_argument("--audio-only", action="store_true",
+                   help="narrate, mix and render as usual, then keep only the raw narration clips")
     with_project("chapters", "Show where each chapter is", chapters=False)
     sub.add_parser("voices", help="Read one line in each of the narrator engine's voices, into "
                                   "global/voice/samples/")
@@ -122,7 +124,8 @@ def _run(args: argparse.Namespace) -> None:
         if args.command == "pdf":
             workflow.print_handoff(workflow.make_pdf(args.project, chapter, config))
         else:
-            workflow.make_video(args.project, chapter, config, force=args.force)
+            workflow.make_video(args.project, chapter, config, force=args.force,
+                                audio_only=getattr(args, "audio_only", False))
 
 
 def setup() -> None:

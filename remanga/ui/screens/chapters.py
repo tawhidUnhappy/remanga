@@ -165,6 +165,8 @@ class ChaptersScreen(ChapterWork, Screen):
             if any(workflow.has_audio(project, ch) for ch in chapters):
                 options.append(("Remake video", "narrate, mix and render again from scratch, even if nothing "
                                 "changed", "revideo"))
+                options.append(("Remake audio", "the same, but keep only the raw narration clips after - no "
+                                "mix or video left on disk", "reaudio"))
             options += [("Check pages", "fix any missing or broken page", "download"),
                         ("Re-download", "delete the pages and fetch them all again", "redownload")]
         if some_on_disk:
@@ -195,6 +197,12 @@ class ChaptersScreen(ChapterWork, Screen):
                     f"the slow part - Make video already redoes whatever a changed setting affects.",
                     yes="Remake")):
                 await self.make_videos(chapters, config, force=True)
+        elif action == "reaudio":
+            if await self.app.push_screen_wait(Confirm(
+                    "Remake audio", f"Narrate, mix and render {title.lower()} again from scratch to prove the "
+                    f"narration is good, then delete the mix and video and keep only the raw clips? Make video "
+                    f"redoes the mix and render from them later.", yes="Remake")):
+                await self.make_videos(chapters, config, force=True, audio_only=True)
         elif action in ("reset", "delete"):
             what = ("everything, pages and marks included" if action == "delete"
                     else "the cut panels, PDF, pasted narration, audio and video")

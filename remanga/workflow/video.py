@@ -51,11 +51,23 @@ def render(project: str, chapter: str, config: RemangaConfig, force: bool = Fals
     return VideoRenderer(config.system, config.video).render_video(project, chapter, force=force)
 
 
-def make_video(project: str, chapter: str, config: RemangaConfig, force: bool = False) -> Path:
+def make_video(project: str, chapter: str, config: RemangaConfig, force: bool = False,
+              audio_only: bool = False) -> Path:
     panels, warnings = check_narration(project, chapter)
     console.print(f"[bold]Chapter {chapter}:[/] narration checked - {len(panels)} panel(s) to narrate")
     for warning in warnings + quality_warnings(project, chapter, config, panels):
         console.print(f"  [yellow]- {_esc(warning)}[/]")
     narrate(project, chapter, panels, config, force)
     mix(project, chapter, config, force)
-    return render(project, chapter, config, force)
+    video = render(project, chapter, config, force)
+    if audio_only:
+        # Mixed and rendered anyway - it is how the narration is proven good
+        # end to end - but only the raw clips are worth keeping: the mix and
+        # the render come back later from them (make_video, unforced) rather
+        # than sitting on disk twice.
+        from remanga.paths import get_audio_dir
+        from remanga.workflow.cleanup import drop_mix_and_video
+
+        drop_mix_and_video(project, chapter)
+        return get_audio_dir(project, chapter, create=False)
+    return video

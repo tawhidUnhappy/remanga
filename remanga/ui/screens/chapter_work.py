@@ -15,7 +15,7 @@ from rich.text import Text
 
 from remanga import workflow
 from remanga.config import RemangaConfig
-from remanga.paths import get_log_path
+from remanga.paths import get_audio_dir, get_log_path
 from remanga.ui.dialogs import Result
 from remanga.ui.screens.common import _short
 from remanga.ui.tasks import Step, TaskOutcome, TaskScreen
@@ -108,8 +108,10 @@ class ChapterWork:
             await self.show(f"Chapter {chapter}: PDF ready", lines, ok=True, warnings=result.warnings(), log=log,
                             copy=[*files, _short(result.narration)])
 
-    async def make_videos(self, chapters: list[str], config: RemangaConfig, force: bool = False) -> None:
+    async def make_videos(self, chapters: list[str], config: RemangaConfig, force: bool = False,
+                         audio_only: bool = False) -> None:
         project = self.project
+        verb = "remaking the audio" if audio_only else ("remaking the video" if force else "video")
         for chapter in chapters:
             log = get_log_path(project, chapter)
             found: dict[str, Any] = {}
@@ -119,17 +121,32 @@ class ChapterWork:
                 found["warnings"] += workflow.quality_warnings(project, ch, config, found["panels"])
                 return found["panels"]
 
-            outcome = await self.run_task(f"Chapter {chapter}: {'remaking the video' if force else 'video'}", [
+            steps = [
                 Step("Check the narration", check),
                 Step(f"Narrate the panels ({config.tts.spec.display_name})",
                      lambda ch=chapter, found=found: workflow.narrate(project, ch, found["panels"], config, force)),
                 Step("Mix with the music", lambda ch=chapter: workflow.mix(project, ch, config, force)),
                 Step("Render the video", lambda ch=chapter: workflow.render(project, ch, config, force)),
-            ], log)
+            ]
+            if audio_only:
+                # Mixing and rendering run anyway - it's how a changed voice
+                # or narration is proven good end to end - but only the raw
+                # clips are worth keeping afterwards; the mix and the render
+                # come back later from them (Make video, unforced) rather
+                # than sitting on disk twice.
+                steps.append(Step("Keep the narration, drop the mix and video",
+                                  lambda ch=chapter: workflow.drop_mix_and_video(project, ch)))
+            outcome = await self.run_task(f"Chapter {chapter}: {verb}", steps, log)
             if not outcome.ok:
-                await self.show(f"Chapter {chapter}: video {'stopped' if outcome.stopped else 'failed'}",
+                await self.show(f"Chapter {chapter}: {'audio' if audio_only else 'video'} "
+                                f"{'stopped' if outcome.stopped else 'failed'}",
                                 outcome.error.splitlines(), ok=False, log=log)
                 return
-            video = _short(outcome.results[-1])
-            await self.show(f"Chapter {chapter}: video ready", [video], ok=True,
-                            warnings=found.get("warnings", []), log=log, copy=[video])
+            if audio_only:
+                audio_dir = _short(get_audio_dir(project, chapter))
+                await self.show(f"Chapter {chapter}: narration ready", [audio_dir], ok=True,
+                                warnings=found.get("warnings", []), log=log, copy=[audio_dir])
+            else:
+                video = _short(outcome.results[-1])
+                await self.show(f"Chapter {chapter}: video ready", [video], ok=True,
+                                warnings=found.get("warnings", []), log=log, copy=[video])

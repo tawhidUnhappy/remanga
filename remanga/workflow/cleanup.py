@@ -45,6 +45,25 @@ def _chapter_paths(project: str, chapter: str, *, with_pages: bool) -> list[Path
     return [path for path in paths if path.exists()]
 
 
+def drop_mix_and_video(project: str, chapter: str) -> list[Path]:
+    """Deletes a chapter's mixed master and rendered video, keeping the raw
+    synthesized clips (audio/) and audio_timing.json - what Remake audio
+    leaves behind after narrating, mixing and rendering once to prove the
+    narration is good, so the mix and the render can be redone later (Make
+    video, unforced) from the clips already on disk rather than kept twice
+    over."""
+    project_dir = get_project_dir(project)
+    paths = [get_generated_dir(project, kind, chapter, create=False) for kind in ("audio_modified", "video")]
+    for path in paths:
+        if not _inside(path, project_dir) or not path.name.startswith("chapter_"):
+            raise ValueError(f"Refusing to delete {path} - it isn't one chapter's file inside {project_dir}.")
+    removed = [path for path in paths if path.exists()]
+    import shutil
+    for path in removed:
+        shutil.rmtree(path)
+    return removed
+
+
 def reset_chapter(project: str, chapter: str, *, delete_pages: bool = False) -> list[Path]:
     """Deletes a chapter's PDF, cut panels, pasted narration, audio and video
     - and, with `delete_pages`, its downloaded pages and marks too, removing
