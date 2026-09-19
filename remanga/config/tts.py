@@ -106,7 +106,11 @@ class QwenConfig(ConfigModel):
 
     # Which preset narrates when no voice has been designed.
     speaker: str = "Ryan"
-    # How to deliver the lines, in words - optional, and applies to both ways.
+    # How to deliver the lines, in words. PRESETS ONLY: upstream's
+    # generate_voice_clone takes no `instruct` at all, so a cloned or designed
+    # voice cannot be steered this way - it carries whatever delivery its
+    # recording or its description already had. The settings screen hides this
+    # row for those voices rather than letting it be set and ignored.
     # Deliberately blunt. Asked for "a calm narrator telling a story" the model
     # ACTS, leaning into every line like someone auditioning (user report), and
     # asking for "flat, like a documentary voice-over" measured no flatter
