@@ -24,6 +24,18 @@ _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 _TIMEOUT_ADVICE = (" Safe to just re-run; already-synthesized pages are cached and this "
                    "one regenerates automatically.")
 
+# How much wall clock one character of text is worth, used to give a long
+# call a timeout of its own. Measured on this machine: Qwen clone mode runs
+# at 1.4x real time and about 22.5 characters per second of speech, so a
+# character costs roughly 0.062s - doubled here, because a timeout that fires
+# on a take that was merely slow throws away the whole take, while one set
+# too high only delays a failure nobody was waiting on.
+#
+# It only ever RAISES the configured timeout (see _timeout_for), so a chunked
+# per-panel call is unaffected: 117 characters of narration asks for 15s and
+# keeps the configured 300.
+SECONDS_PER_CHAR = 0.125
+
 
 def _split_text_into_chunks(text: str, max_chars: int) -> list[str]:
     """Greedily packs sentences into chunks of at most `max_chars`, so a
@@ -74,6 +86,23 @@ class BaseWorkerSynthesizer(ToolWorker):
         self._init_worker_state()
 
     # --- subclass hooks -----------------------------------------------
+    def use_whole_text(self) -> None:
+        """Stop splitting long text into several bounded calls.
+
+        Chunking exists because a fixed generation budget silently truncates
+        (see chunk_max_chars). Batched narration asks for the opposite: the
+        whole batch has to be ONE generation, because the continuity of the
+        voice across it is the entire point - split it back into 260-character
+        pieces and every seam it was meant to remove comes straight back, just
+        somewhere else."""
+        self.chunk_max_chars = None
+
+    def _timeout_for(self, text: str) -> float:
+        """How long this particular call may take: the configured timeout, or
+        what the text is worth if that is longer. A batch of ten thousand
+        characters cannot be held to a number chosen for one panel."""
+        return max(self._synth_timeout_seconds(), len(text) * SECONDS_PER_CHAR)
+
     def _build_request(self, text: str, output_wav: Path, voice: str | None = None) -> dict[str, Any]:
         """One synthesize request. Which voice it is in comes from the
         engine's own settings block, so nothing above has to know whether
@@ -134,7 +163,7 @@ class BaseWorkerSynthesizer(ToolWorker):
         chunk goes through in the chunked path below."""
         request = self._build_request(text, output_wav, voice)
         self._request(
-            request, self._synth_timeout_seconds(), action="synthesis",
+            request, self._timeout_for(text), action="synthesis",
             on_timeout=f" on page text {text[:80]!r}", advice=_TIMEOUT_ADVICE,
         )
         self._post_synthesize(output_wav, request)

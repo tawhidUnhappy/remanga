@@ -15,6 +15,18 @@ class AudioConfig(ConfigModel):
     # run into each other; a narrator reading aloud takes 300-600ms.
     pause_between_panels_ms: int = Field(350, validation_alias=AliasChoices("pause_between_panels_ms",
                                                                             "pause_between_pages_ms"))
+    # Narrate several panels in one generation instead of one each. A panel
+    # synthesized alone is a take of its own - Qwen reads it with no idea what
+    # came before, so the tone resets every panel, which is audible in a way
+    # no amount of trimming the joins can fix. Off by default while it proves
+    # itself; the per-panel path is unchanged underneath it.
+    batch_narration: bool = False
+    # About how long one of those generations should be. Qwen3-TTS is
+    # benchmarked past ten minutes and stops mid-sentence at about eleven
+    # (audio/batching.py:MAX_BATCH_SECONDS caps it well under that). Longer
+    # means fewer seams; it also means one edited line re-renders more audio,
+    # since the whole batch comes back with subtly different prosody.
+    batch_target_minutes: float = 9.0
     # Background music: off until a file is chosen.
     bgm_enabled: bool = False
     bgm_path: str = ""

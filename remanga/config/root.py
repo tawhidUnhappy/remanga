@@ -29,6 +29,7 @@ from .downloader import DownloaderConfig
 from .marker import MarkerConfig, ShortcutsConfig
 from .pdf import PdfConfig
 from .reviewer import ReviewerConfig
+from .subtitles import SubtitlesConfig
 from .system import SystemConfig
 from .tts import TTSConfig
 from .video import VideoConfig
@@ -103,6 +104,7 @@ class RemangaConfig(ConfigModel):
     writer: WriterConfig = Field(default_factory=WriterConfig)
     tts: TTSConfig = Field(default_factory=TTSConfig)
     audio: AudioConfig = Field(default_factory=AudioConfig)
+    subtitles: SubtitlesConfig = Field(default_factory=SubtitlesConfig)
     video: VideoConfig = Field(default_factory=VideoConfig)
 
     # The manga this instance is scoped to, if any. Set by for_project() and

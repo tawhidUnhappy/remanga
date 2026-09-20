@@ -125,8 +125,16 @@ def speech_bounds(segment: AudioSegment, keep_ms: int = SILENCE_KEEP_MS) -> tupl
     return max(0, speech_start_ms - keep_ms), min(len(segment), speech_end_ms + keep_ms)
 
 
-def apply_edge_fades(segment: AudioSegment, edge_fade_ms: int) -> AudioSegment:
+def apply_edge_fades(segment: AudioSegment, edge_fade_ms: int, *,
+                     fade_in: bool = True, fade_out: bool = True) -> AudioSegment:
     """De-clicks a clip's edges without ever ramping its speech.
+
+    `fade_in`/`fade_out` turn an edge off, for an edge that is not really an
+    edge: consecutive panels of one batched take are slices of the same
+    generation, so laying them end to end joins samples that were already
+    adjacent. There is nothing there to click, and fading every panel's last
+    35ms would put an audible dip in the middle of a sentence the model read
+    straight through.
 
     `edge_fade_ms` is the length asked for, and the two edges treat it
     differently.
@@ -143,16 +151,18 @@ def apply_edge_fades(segment: AudioSegment, edge_fade_ms: int) -> AudioSegment:
     real chapter), and a voice that stops at the last sample clicks and
     sounds cut off; a few tens of milliseconds of ramp there is inaudible in
     itself."""
-    if edge_fade_ms <= 0 or len(segment) < 4 * DECLICK_FADE_MS:
+    if edge_fade_ms <= 0 or len(segment) < 4 * DECLICK_FADE_MS or not (fade_in or fade_out):
         return segment
 
-    lead_ms = detect_leading_silence(segment, silence_threshold=EDGE_SILENCE_DBFS)
-    trail_ms = detect_leading_silence(segment.reverse(), silence_threshold=EDGE_SILENCE_DBFS)
-
-    fade_in_ms = max(DECLICK_FADE_MS, min(edge_fade_ms, lead_ms))
-    room_at_end = max(trail_ms, int(len(segment) * TAIL_INTO_SPEECH))
-    fade_out_ms = max(DECLICK_FADE_MS, min(edge_fade_ms, room_at_end))
-    return segment.fade_in(int(fade_in_ms)).fade_out(int(fade_out_ms))
+    faded = segment
+    if fade_in:
+        lead_ms = detect_leading_silence(segment, silence_threshold=EDGE_SILENCE_DBFS)
+        faded = faded.fade_in(int(max(DECLICK_FADE_MS, min(edge_fade_ms, lead_ms))))
+    if fade_out:
+        trail_ms = detect_leading_silence(segment.reverse(), silence_threshold=EDGE_SILENCE_DBFS)
+        room_at_end = max(trail_ms, int(len(segment) * TAIL_INTO_SPEECH))
+        faded = faded.fade_out(int(max(DECLICK_FADE_MS, min(edge_fade_ms, room_at_end))))
+    return faded
 
 
 def atomic_export(segment: AudioSegment, final_path: Path) -> None:

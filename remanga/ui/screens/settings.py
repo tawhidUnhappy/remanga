@@ -40,6 +40,13 @@ PANEL_GAPS = ((0, "continuous - recommended; the trimmed margins still leave abo
               (600, "slow, with room to look at the panel"))
 MUSIC_LEVELS = ((12.0, "energetic - music clearly felt"), (14.0, "balanced - recommended"),
                 (18.0, "subtle - a quiet bed"))
+# How much of a chapter the narrator reads in one go. 0 is a take per panel;
+# anything else is that many minutes of narration read straight through. One
+# row rather than a switch and a number, because "off" is just the shortest
+# take there is.
+NARRATION_TAKES = ((0.0, "one take per panel - the voice restarts each panel"),
+                   (4.0, "about 4 minutes - fewer restarts, quick to re-do one"),
+                   (9.0, "about 9 minutes - fewest restarts; a whole chapter is a take or two"))
 
 
 class SettingsScreen(Screen):
@@ -78,6 +85,10 @@ class SettingsScreen(Screen):
                 f"{audio.pause_between_panels_ms} ms" if audio.pause_between_panels_ms else "continuous",
                 _change_panel_gap),
             Row("Edge fade", f"{audio.edge_fade_ms} ms" if audio.edge_fade_ms else "off", _change_edge_fade),
+            Row("Narration takes",
+                f"about {audio.batch_target_minutes:g} min each" if audio.batch_narration
+                else "one per panel",
+                _change_narration_takes),
             Row("Video size", f"{video.width}x{video.height}", _change_video_size),
             Row("Enlarge panels", f"up to {video.max_upscale:g}x" if video.max_upscale > 0 else "to fill the frame",
                 _change_max_upscale),
@@ -165,6 +176,24 @@ async def _change_edge_fade(screen: SettingsScreen, config: RemangaConfig) -> No
              "re-mixes the chapter - it does not narrate it again."))
     if fade is not None:
         config.audio.edge_fade_ms = fade
+
+
+async def _change_narration_takes(screen: SettingsScreen, config: RemangaConfig) -> None:
+    current = config.audio.batch_target_minutes if config.audio.batch_narration else 0.0
+    minutes = await screen.app.push_screen_wait(Choice(
+        "Narration takes",
+        [(f"about {m:g} min" if m else "one per panel", hint, m) for m, hint in NARRATION_TAKES],
+        current=current,
+        note="How much of the chapter the narrator reads without stopping. A panel read on its own "
+             "is a performance of its own, so the tone resets at every panel - reading several "
+             "minutes straight through is what keeps one voice across a scene. Where each panel "
+             "falls inside a long take is found by listening to it afterwards, so the pictures are "
+             "still cut to the words. Longer takes mean fewer restarts to hear, and more audio to "
+             "make again when you change one line."))
+    if minutes is not None:
+        config.audio.batch_narration = minutes > 0
+        if minutes > 0:
+            config.audio.batch_target_minutes = minutes
 
 
 async def _change_video_size(screen: SettingsScreen, config: RemangaConfig) -> None:

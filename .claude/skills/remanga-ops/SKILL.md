@@ -131,6 +131,35 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     clip rewritten to the same length, which nothing else can see). Measured at ~1.3 GB/s, so a
     137-panel chapter costs about 55 ms per verify. Rows from before this are bare name strings and
     are still checked for existence - an older chapter is checked as far as its manifest allows.
+- **Batched narration** (`audio.batch_narration`, settings row "Narration takes") is the answer to
+  the tone resetting at every panel: a panel synthesized alone is a take of its own, so Qwen picks
+  its pitch and pace from that line and nothing else. Trimming the joins did not touch it - it was
+  never a gap. `audio/batching.py` joins panels into takes of about `batch_target_minutes`,
+  **breaking only between pages** (not for how it sounds: greedy packing means one inserted panel
+  shifts every later boundary and re-synthesizes the chapter). `remanga/subtitles/` then reads each
+  take back with faster-whisper and matches the known script against it, so every panel still gets
+  its own audio_timing row - pointing into its batch with `clip_start_ms`/`duration_ms` - and the
+  mix, frame timeline and render never learn anything changed.
+  - **Whisper is trusted for WHEN, never WHAT.** A misheard word just fails to match; mangled
+    proper nouns, not numbers, are the common error in manga narration. It REFUSES below 90% match
+    or with too many panels unanchored, because a misalignment is silent: the audio sounds perfect
+    and the pictures are cut to the wrong words.
+  - **Silence cannot find the boundaries** - measured, don't retry it: a 24-panel take needing 23
+    boundaries had 46 pauses over 150 ms, because Qwen pauses between sentences inside a panel too,
+    at the same 430-790 ms. That is why whisper is here and not a silence detector.
+  - **`chunk_max_chars` must be off for a batch** (`synth.use_whole_text()`). It exists because a
+    fixed generation budget truncates silently, but splitting a batch back into 260-char calls puts
+    back every seam batching removes. The timeout has to rise with it (`_timeout_for`, 0.125 s per
+    character): Qwen clone mode measured **RTF 1.40** on the 3060, so a 9-minute take is ~12.6 min
+    of wall clock and the flat 300 s would kill it four times over.
+  - **Numbers:** `subtitles/normalize.py` spells digits on BOTH sides rather than picking one, so
+    it is right whichever side wrote the digit - chapters narrated before the prompt asked for
+    words still align.
+  - Measured end to end, 12 real panels in 3 takes: 99/100/100% matched, slices contiguous inside
+    every batch, fades only at take edges. A real 142 s take of 24 panels matched 98.8% with every
+    panel anchored. Whisper runs at RTF 0.10, free next to synthesis.
+  - Rates worth not re-deriving: **22.5 chars per second** of generated speech (a batch, untrimmed);
+    18.9 is the per-panel figure AFTER trimming and is the wrong one for planning batches.
 - **Edge fade** (`audio.edge_fade_ms`, `audio/clips.py:apply_edge_fades`) is applied in
   `audio/master.py:panel_segments` at mix time, never baked into the clip on disk - it is part of the
   fingerprint, so changing it re-mixes without re-narrating. It is asymmetric on purpose: at the

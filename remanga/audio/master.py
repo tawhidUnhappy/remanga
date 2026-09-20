@@ -44,7 +44,14 @@ def panel_segments(audio_dir: Path, panel: dict[str, Any], sample_rate: int,
         # Faded here rather than baked into the clip on disk: the fade is how
         # the chapter is put together, not part of what was synthesized, so
         # changing it costs a re-mix instead of narrating everything again.
-        segments = [apply_edge_fades(clip, edge_fade_ms)]
+        #
+        # A panel in the middle of a batched take asks for neither edge - its
+        # neighbours are the same generation, already adjacent samples. Rows
+        # written before batching existed carry neither key and get both,
+        # which is what they have always had.
+        segments = [apply_edge_fades(clip, edge_fade_ms,
+                                     fade_in=panel.get("fade_in", True),
+                                     fade_out=panel.get("fade_out", True))]
     else:
         segments = [AudioSegment.silent(duration=panel["duration_ms"], frame_rate=sample_rate)]
 

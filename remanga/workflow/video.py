@@ -36,7 +36,8 @@ def quality_warnings(project: str, chapter: str, config: RemangaConfig, panels: 
 def narrate(project: str, chapter: str, panels: list, config: RemangaConfig, force: bool = False) -> Path:
     from remanga.audio import TTSEngine
 
-    return TTSEngine(config.tts, config.audio).generate_narration_audio(project, chapter, panels, force=force)
+    return TTSEngine(config.tts, config.audio, config.subtitles).generate_narration_audio(
+        project, chapter, panels, force=force)
 
 
 def mix(project: str, chapter: str, config: RemangaConfig, force: bool = False) -> Path:

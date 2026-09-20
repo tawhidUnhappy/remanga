@@ -15,10 +15,18 @@ from remanga.json_io import read_json_or, write_json
 
 
 def panel_timing(index: int, panel_id: str, text: str, clip_name: str, *, start_ms: int,
-                 duration_ms: int, pause_after_ms: int, clip_start_ms: int = 0) -> dict[str, Any]:
+                 duration_ms: int, pause_after_ms: int, clip_start_ms: int = 0,
+                 fade_in: bool = True, fade_out: bool = True) -> dict[str, Any]:
     """One panel's row: where it starts, how long it sounds, and how long its
     slot is once the pause after it is counted. Milliseconds are what the
     mix works in; the seconds are there for reading.
+
+    `fade_in`/`fade_out` say whether this panel's edges are real edges. In a
+    batched chapter they are not: consecutive panels are slices of one
+    generation, already adjacent samples, and fading each one would dip the
+    middle of a sentence (audio/clips.py:apply_edge_fades). Written only when
+    false, so a per-panel chapter's rows are byte-identical to what they were
+    and nothing downstream re-mixes over a key that says what it assumed.
 
     `clip_start_ms` and `duration_ms` are the part of the clip file that is
     used - the mix takes exactly that slice (audio/clips.py:speech_bounds
@@ -29,7 +37,7 @@ def panel_timing(index: int, panel_id: str, text: str, clip_name: str, *, start_
     were until they are narrated again."""
     end_ms = start_ms + duration_ms
     total_slot_ms = duration_ms + pause_after_ms
-    return {
+    row: dict[str, Any] = {
         "index": index,
         "panel_id": panel_id,
         "text": text,
@@ -44,10 +52,16 @@ def panel_timing(index: int, panel_id: str, text: str, clip_name: str, *, start_
         "end_time_sec": round(end_ms / 1000.0, 3),
         "total_slot_sec": round(total_slot_ms / 1000.0, 3),
     }
+    if not fade_in:
+        row["fade_in"] = False
+    if not fade_out:
+        row["fade_out"] = False
+    return row
 
 
 def write_timing(path: Path, chapter_num: str, panels: list[dict[str, Any]], *, total_ms: int,
-                 voice: dict[str, Any] | None) -> dict[str, Any]:
+                 voice: dict[str, Any] | None,
+                 batches: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Writes the manifest, skipping the write entirely when the content is
     identical to what is already there.
 
@@ -73,6 +87,11 @@ def write_timing(path: Path, chapter_num: str, panels: list[dict[str, Any]], *, 
     }
     if voice is not None:
         document["voice"] = voice
+    # What each batch was made from, so a re-run can tell "this take is still
+    # the one this text asks for" from "this text changed". Absent for a
+    # per-panel chapter, which resumes clip by clip instead.
+    if batches is not None:
+        document["batches"] = batches
 
     if read_json_or(path, None) != document:
         write_json(path, document)

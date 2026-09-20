@@ -13,6 +13,7 @@ from typing import Any
 from pydub import AudioSegment
 
 from remanga import activity
+from remanga.audio.batched import narrate_in_batches
 from remanga.audio.clips import atomic_export, speech_bounds
 from remanga.audio.manifest import verify_audio_manifest, write_audio_manifest
 from remanga.audio.narration_voice import voice_changed_from
@@ -20,7 +21,7 @@ from remanga.audio.resample import load_audio
 from remanga.audio.resume import clip_is_complete, clips_to_redo
 from remanga.audio.synth import create_synthesizer
 from remanga.audio.timing import panel_timing, write_timing
-from remanga.config import AudioConfig, TTSConfig
+from remanga.config import AudioConfig, SubtitlesConfig, TTSConfig
 from remanga.console import console, escape
 from remanga.json_io import read_json_or
 from remanga.narration import StoryPanel
@@ -28,15 +29,30 @@ from remanga.paths import get_audio_dir, get_audio_timing_path
 
 
 class TTSEngine:
-    def __init__(self, tts_config: TTSConfig, audio_config: AudioConfig):
+    def __init__(self, tts_config: TTSConfig, audio_config: AudioConfig,
+                 subtitles_config: SubtitlesConfig | None = None):
         self.tts_config = tts_config
         self.audio_config = audio_config
+        # Only batched narration needs it, and only to read its own takes
+        # back; a per-panel chapter never builds one.
+        self.subtitles_config = subtitles_config or SubtitlesConfig()
         self._synth = create_synthesizer(tts_config, audio_config)
 
     def generate_narration_audio(self, project_name: str, chapter_num: str, panels: list[StoryPanel],
                                  force: bool = False) -> Path:
         if not panels:
             raise ValueError(f"Chapter {chapter_num} has no panels to narrate.")
+
+        if self.audio_config.batch_narration:
+            # A different enough job to be its own module: the panels are
+            # joined, the takes are read back to find them again, and nothing
+            # of the panel-by-panel resume applies. audio_timing.json comes
+            # out in the same shape either way, which is why nothing
+            # downstream knows which path made it.
+            return narrate_in_batches(
+                self._synth, self.tts_config, self.audio_config, self.subtitles_config,
+                project_name, chapter_num, panels, force=force,
+            )
 
         audio_dir = get_audio_dir(project_name, chapter_num)
         for stray_tmp in audio_dir.glob("*.wav.tmp"):

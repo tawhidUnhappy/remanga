@@ -10,6 +10,7 @@ from .marker import MarkerConfig, ShortcutsConfig
 from .pdf import PdfConfig
 from .reviewer import ReviewerConfig
 from .root import RemangaConfig
+from .subtitles import SubtitlesConfig
 from .system import SystemConfig
 from .tts import TTSConfig
 from .video import VideoConfig
@@ -24,6 +25,7 @@ __all__ = [
     "RemangaConfig",
     "ReviewerConfig",
     "ShortcutsConfig",
+    "SubtitlesConfig",
     "SystemConfig",
     "TTSConfig",
     "VideoConfig",
