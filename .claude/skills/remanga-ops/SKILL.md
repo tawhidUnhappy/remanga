@@ -172,12 +172,26 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
       estimate is good enough for that - a healthy take asked for ~205s and came back 203s.
     - It then **splits at a page boundary and retries**, up to `MAX_SPLIT_DEPTH` (3). A collapse is
       the model losing the thread on a long text, so the answer is a shorter text.
-    - **Worth trying if longer takes are wanted again:** the clone runs in `x_vector_only_mode`
-      because `designed_text` is empty (the user's reference recording has no transcript). Whisper
-      is now installed and could transcribe that reference, which would put the clone in in-context
-      mode - stronger conditioning, and possibly stable over longer takes.
+    - **In-context cloning helps a lot and does NOT fix it (tested 2026-09-21).** The clone used to
+      run in `x_vector_only_mode` because `designed_text` was empty. Whisper now reads the reference
+      recording once and caches it beside the file (`audio/reference_text.py`,
+      `<sample>.transcript.txt`), so the clone gets `--ref_text` and uses the recording IN CONTEXT.
+      Same collapsing take, both ways: embedding-only gave 98 words and 2.2% matched; in-context
+      gave **863 words and 39.8%**, 41 of 99 panels anchored instead of 3. Nine times the content -
+      and still 655.28s, still the token ceiling, still refused. Adopted for the voice quality, not
+      as a way to lengthen takes. Never fatal: no whisper, or an unreadable recording, falls back to
+      the embedding exactly as before.
   - Rates worth not re-deriving: **22.5 chars per second** of generated speech (a batch, untrimmed);
     18.9 is the per-panel figure AFTER trimming and is the wrong one for planning batches.
+- **Make video and Remake video both start from nothing (user request, 2026-09-21).**
+  `workflow/cleanup.py:drop_audio_and_video` deletes `audio/`, `audio_modified/`, `subtitles/` and
+  `video/` for that chapter before every run, forced or not, so a run means the same thing every
+  time and what is on disk after it is what it produced. The user chose this knowing it costs the
+  reuse - a chapter is narrated again (~20 min) whether or not anything changed. **The PDF is never
+  touched**, and neither is anything under `chapters/` (pages, panels, crops.json, narration.json) -
+  see `REMADE_KINDS`. It also solves folders left mixed by a change of approach: the per-panel clips
+  hung around after the switch to batched takes. Side effect: Remake video now does exactly what
+  Make video does, and the menu says so.
 - **Edge fade** (`audio.edge_fade_ms`, `audio/clips.py:apply_edge_fades`) is applied in
   `audio/master.py:panel_segments` at mix time, never baked into the clip on disk - it is part of the
   fingerprint, so changing it re-mixes without re-narrating. It is asymmetric on purpose: at the

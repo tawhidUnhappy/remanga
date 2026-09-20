@@ -160,11 +160,11 @@ class ChaptersScreen(ChapterWork, Screen):
                          "write"),
                         ("Review narration", "go through what the LLM wrote and flag what is wrong",
                          "review"),
-                        ("Make video", "from the narration pasted into narration.json - changed settings "
-                         "are picked up, finished work is reused", "video")]
+                        ("Make video", "from the narration pasted into narration.json - the audio and "
+                         "video already there are deleted first, so it is narrated again", "video")]
             if any(workflow.has_audio(project, ch) for ch in chapters):
-                options.append(("Remake video", "narrate, mix and render again from scratch, even if nothing "
-                                "changed", "revideo"))
+                options.append(("Remake video", "the same as Make video, which already starts from "
+                                "nothing", "revideo"))
                 options.append(("Remake audio", "the same, but keep only the raw narration clips after - no "
                                 "mix or video left on disk", "reaudio"))
             options += [("Check pages", "fix any missing or broken page", "download"),
@@ -193,9 +193,9 @@ class ChaptersScreen(ChapterWork, Screen):
             await self.make_videos(chapters, config)
         elif action == "revideo":
             if await self.app.push_screen_wait(Confirm(
-                    "Remake video", f"Narrate, mix and render {title.lower()} again from scratch? Narrating is "
-                    f"the slow part - Make video already redoes whatever a changed setting affects.",
-                    yes="Remake")):
+                    "Remake video", f"Narrate, mix and render {title.lower()} again from scratch? Narrating "
+                    f"is the slow part, and Make video does the same thing - both delete the audio and video "
+                    f"already there first.", yes="Remake")):
                 await self.make_videos(chapters, config, force=True)
         elif action == "reaudio":
             if await self.app.push_screen_wait(Confirm(

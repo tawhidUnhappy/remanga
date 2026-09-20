@@ -77,6 +77,32 @@ def _reference_clip(path: Path) -> Path:
     return trimmed.resolve()
 
 
+def reference_text_path(sample: Path) -> Path:
+    """Where a reference recording's transcript is kept once something has
+    worked it out - beside the recording, named after it."""
+    return sample.with_name(f"{sample.stem}.transcript.txt")
+
+
+def reference_text(config: QwenConfig) -> str:
+    """What the reference recording is known to say, or "" when nothing
+    knows. `designed_text` when remanga wrote the sample itself and therefore
+    chose the words; otherwise a transcript cached beside the recording
+    (audio/reference_text.py writes it).
+
+    Worth having rather than "": with the text, the clone uses the recording
+    IN CONTEXT instead of the speaker embedding alone. Measured on a take
+    that collapses either way, in-context read 863 words where embedding-only
+    managed 98, and 40% of the script was findable in it against 2%. It does
+    not make a long take work - both still stop at the token ceiling - but it
+    is a great deal more of the voice."""
+    if config.designed_text.strip():
+        return config.designed_text.strip()
+    cached = reference_text_path(Path(config.designed_sample))
+    if cached.exists():
+        return cached.read_text(encoding="utf-8").strip()
+    return ""
+
+
 def _model_manager(config: QwenConfig, variant: str) -> ModelManager:
     repo_id, folder = VARIANTS[variant]
     return ModelManager(
@@ -108,13 +134,15 @@ class QwenSynthesizer(BaseWorkerSynthesizer):
         config = self.engine_config
         args = ["--model_dir", str(model_dir.resolve()), "--mode", self.mode, "--language", config.language]
         if self.mode == "clone":
-            # `designed_text` is what the reference is KNOWN to say - set when
-            # remanga made the sample itself. A recording someone supplied has
-            # none, and guessing one is worse than none: the model is asked to
-            # reconcile a recording with words that are not in it, which took
-            # one line past a five-minute timeout before this was understood.
+            # What the reference is KNOWN to say - the words remanga chose
+            # when it made the sample itself, or a transcript read off a
+            # supplied recording (see reference_text). Guessing is still
+            # worse than nothing: the model is asked to reconcile a recording
+            # with words that are not in it, which took one line past a
+            # five-minute timeout before this was understood. A transcript is
+            # not a guess, which is why reading one is worth the trouble.
             args += ["--ref_audio", str(_reference_clip(Path(config.designed_sample))),
-                     "--ref_text", config.designed_text]
+                     "--ref_text", reference_text(config)]
         return spawn_script_worker(self.tool_name, "audio", "qwen_tts_worker.py", *args)
 
     def _synth_timeout_seconds(self) -> float:

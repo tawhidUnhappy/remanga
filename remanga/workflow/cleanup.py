@@ -14,6 +14,14 @@ from remanga.paths import (
     get_project_dir,
 )
 
+# What making a video produces, and nothing else. The PDF is deliberately
+# not in here: it is slow to make, it is what the user hands to the LLM, and
+# nothing about narrating or rendering can invalidate it. Neither is anything
+# under chapters/ - the pages, the cut panels, crops.json and the pasted
+# narration are what a run is made FROM, and losing the narration would mean
+# going back to the LLM.
+REMADE_KINDS = ("audio", "audio_modified", "subtitles", "video")
+
 
 def _inside(path: Path, root: Path) -> bool:
     try:
@@ -59,6 +67,36 @@ def drop_mix_and_video(project: str, chapter: str) -> list[Path]:
             raise ValueError(f"Refusing to delete {path} - it isn't one chapter's file inside {project_dir}.")
     removed = [path for path in paths if path.exists()]
     import shutil
+    for path in removed:
+        shutil.rmtree(path)
+    return removed
+
+
+def drop_audio_and_video(project: str, chapter: str) -> list[Path]:
+    """Deletes everything a video run makes - the narration clips, the mix,
+    the word timings and the rendered video - so the run that follows starts
+    from nothing (user request, 2026-09-21).
+
+    Both Make video and Remake video do this, which is what makes a run mean
+    the same thing every time: what is on disk afterwards is what THIS run
+    produced, not a layer over whatever an earlier one left. It costs the
+    reuse - a chapter is narrated again whether or not anything changed - and
+    that was the choice, made knowing narration is the slow part.
+
+    It is also what clears a folder that has been through a change of
+    approach: switching from a clip per panel to batched takes leaves the old
+    clips behind, and they are neither used nor obviously stale.
+
+    The PDF is never touched (see REMADE_KINDS), and neither is anything the
+    run is made from."""
+    project_dir = get_project_dir(project)
+    paths = [get_generated_dir(project, kind, chapter, create=False) for kind in REMADE_KINDS]
+    for path in paths:
+        if not _inside(path, project_dir) or not path.name.startswith("chapter_"):
+            raise ValueError(f"Refusing to delete {path} - it isn't one chapter's file inside {project_dir}.")
+    import shutil
+
+    removed = [path for path in paths if path.exists()]
     for path in removed:
         shutil.rmtree(path)
     return removed

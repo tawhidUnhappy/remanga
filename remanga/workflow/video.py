@@ -54,7 +54,15 @@ def render(project: str, chapter: str, config: RemangaConfig, force: bool = Fals
 
 def make_video(project: str, chapter: str, config: RemangaConfig, force: bool = False,
               audio_only: bool = False) -> Path:
+    # Everything a previous run made goes first, forced or not (user request,
+    # 2026-09-21): a run means the same thing every time, and what is on disk
+    # afterwards is what this run produced rather than a layer over whatever
+    # was there. The PDF and everything under chapters/ are untouched - see
+    # cleanup.REMADE_KINDS.
+    from remanga.workflow.cleanup import drop_audio_and_video
+
     panels, warnings = check_narration(project, chapter)
+    drop_audio_and_video(project, chapter)
     console.print(f"[bold]Chapter {chapter}:[/] narration checked - {len(panels)} panel(s) to narrate")
     for warning in warnings + quality_warnings(project, chapter, config, panels):
         console.print(f"  [yellow]- {_esc(warning)}[/]")

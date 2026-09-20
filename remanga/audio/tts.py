@@ -17,6 +17,7 @@ from remanga.audio.batched import narrate_in_batches
 from remanga.audio.clips import atomic_export, speech_bounds
 from remanga.audio.manifest import verify_audio_manifest, write_audio_manifest
 from remanga.audio.narration_voice import voice_changed_from
+from remanga.audio.reference_text import ensure_reference_text
 from remanga.audio.resample import load_audio
 from remanga.audio.resume import clip_is_complete, clips_to_redo
 from remanga.audio.synth import create_synthesizer
@@ -42,6 +43,12 @@ class TTSEngine:
                                  force: bool = False) -> Path:
         if not panels:
             raise ValueError(f"Chapter {chapter_num} has no panels to narrate.")
+
+        # Before the model loads: a cloned voice matches closer when it is
+        # told what its reference recording says, and finding that out needs
+        # a different tool holding the GPU (audio/reference_text.py). Cached
+        # beside the recording, so this is one transcription ever.
+        ensure_reference_text(self.tts_config, self.subtitles_config)
 
         if self.audio_config.batch_narration:
             # A different enough job to be its own module: the panels are
