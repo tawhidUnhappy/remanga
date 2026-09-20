@@ -124,6 +124,13 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   narrating around it or mixing a chapter with lines missing. No manifest on disk (an older chapter)
   is not an error - there is nothing yet to check against. A panel remanga itself stops narrating
   removes its clip and rewrites the manifest in the same run, so that never trips it.
+  - **Each row is `{name, bytes, sha256}`, not just a name (user request, 2026-09-20).** A name only
+    proves a file is still there: a clip truncated by a full disk, rewritten by another tool or
+    restored from the wrong backup passes a name check and then plays as silence or noise inside a
+    finished chapter. Size is the cheap pre-check, the hash catches the rest (verified against a
+    clip rewritten to the same length, which nothing else can see). Measured at ~1.3 GB/s, so a
+    137-panel chapter costs about 55 ms per verify. Rows from before this are bare name strings and
+    are still checked for existence - an older chapter is checked as far as its manifest allows.
 - **Edge fade** (`audio.edge_fade_ms`, `audio/clips.py:apply_edge_fades`) is applied in
   `audio/master.py:panel_segments` at mix time, never baked into the clip on disk - it is part of the
   fingerprint, so changing it re-mixes without re-narrating. It is asymmetric on purpose: at the
