@@ -25,19 +25,22 @@ from dataclasses import dataclass
 
 from remanga.narration import StoryPanel
 
-# How many characters of narration a second of speech is worth. Measured over
-# a finished 137-panel chapter in the user's own voice: 16,149 characters of
-# narration came back as 854 seconds of audio. Only used to decide where to
-# break - nothing downstream trusts it, because the real durations are read
-# back off the audio.
-CHARS_PER_SECOND = 18.9
+# How many characters of narration a second of speech is worth. Measured by
+# generating real narration as joined batches in the user's own cloned voice:
+# 1,229 characters came back as 55.5s and 3,318 as 142.2s, so 22.1 and 23.3.
+# Deliberately NOT the 18.9 the finished chapter measures - that figure is
+# per-panel audio after its silence is trimmed, and a batch has no per-panel
+# silence to trim. Only used to decide where to break; nothing downstream
+# trusts it, because the real durations are read back off the audio.
+CHARS_PER_SECOND = 22.5
 
 # The hard ceiling, whatever the settings ask for. Qwen3-TTS's shipped
 # generation budget is max_new_tokens 8192 at 12.5 frames/second = 655s, and
-# it does not fail when it runs out - it stops mid-sentence. 85% of that is
-# the most this will ask for, so a batch that speaks slower than
-# CHARS_PER_SECOND expects still has somewhere to land.
-MAX_BATCH_SECONDS = 557.0
+# it does not fail when it runs out - it stops mid-sentence, with no error.
+# This is 80% of it: CHARS_PER_SECOND is an average over two takes, and a
+# batch that happens to be read 20% slower than that still has to finish
+# inside the budget rather than lose its last sentences.
+MAX_BATCH_SECONDS = 520.0
 
 # What goes between two panels' narration in one call. A single space, so the
 # model reads them as consecutive sentences of one paragraph, which is what
