@@ -59,7 +59,7 @@ def get_narration_path(project_name: str, chapter_num: str) -> Path:
     return get_chapter_dir(project_name, chapter_num) / "narration.json"
 
 
-GENERATED_KINDS = ("pdf", "audio", "audio_modified", "video")
+GENERATED_KINDS = ("pdf", "audio", "audio_modified", "subtitles", "video")
 
 
 def get_generated_dir(project_name: str, kind: str, chapter_num=None, create: bool = True) -> Path:
@@ -86,6 +86,14 @@ def get_audio_dir(project_name: str, chapter_num: str, create: bool = True) -> P
 
 def get_audio_timing_path(project_name: str, chapter_num: str, create: bool = True) -> Path:
     return get_audio_dir(project_name, chapter_num, create=create) / "audio_timing.json"
+
+
+def get_subtitles_dir(project_name: str, chapter_num: str, create: bool = True) -> Path:
+    """The word timings faster-whisper read back out of each narration batch,
+    one JSON per batch beside its own manifest. Kept out of audio/ because it
+    is not what the synthesizer made: a batch's clip is expensive and never
+    deleted automatically, while its timings can be read again from it."""
+    return get_generated_dir(project_name, "subtitles", chapter_num, create=create)
 
 
 def get_modified_audio_dir(project_name: str, chapter_num: str, create: bool = True) -> Path:
