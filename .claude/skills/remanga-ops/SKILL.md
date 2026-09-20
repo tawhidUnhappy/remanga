@@ -97,6 +97,17 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   slice as `clip_start_ms` + `duration_ms` in audio_timing.json and `audio/master.py` takes exactly
   that slice. Measured after: 780 -> 50 ms median at gap 0, join stdev 164 -> 100 ms, master length
   equal to the timeline within 6 ms over 14 minutes.
+  - **A median is the wrong way to check this (2026-09-20).** Measured at the same -50 dBFS the trim
+    used, the gap looked solved: median 50 ms, max 60. Measured at an *audible* floor (-40 dBFS) the
+    same chapter had 40 of 136 joins over 120 ms and a worst join of 590 ms. `detect_leading_silence`
+    stops at the FIRST block over the threshold, so one 10 ms tick of room tone at -48 dBFS kept a
+    whole 400 ms lead-in - and it counted as `duration_ms`, so no pause setting could reach it.
+    `speech_bounds` now takes the first/last stretch holding `SUSTAIN_BLOCKS` (3 x 10 ms) above the
+    clip's OWN speech level less `SPEECH_FLOOR_DB` (22), which is engine-independent where -50 was
+    tuned for Kokoro. Measured after, same chapter: p90 440 -> 70 ms, max 590 -> 150, joins over
+    120 ms 40 -> 1, narration 798.9 -> 786.2 s, and no clip got longer. **When a join still sounds
+    wrong, measure at -40 dBFS, not at the trim's own threshold** - the threshold hides its own
+    failures.
   - **Never trim the clip on disk** - it is what the model returned. The offsets live in the
     manifest, so re-deciding the gap is a pass over existing clips (a re-layout + re-mix + re-render)
     and never a re-narration.

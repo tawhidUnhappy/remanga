@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 from pydub import AudioSegment
 from pydub.silence import detect_leading_silence
 
@@ -26,9 +27,12 @@ TAIL_INTO_SPEECH = 0.15
 # to be paid for out of the clip's own silence (see apply_edge_fades).
 DECLICK_FADE_MS = 6
 
-# What counts as silence when measuring how much room a clip has at its
-# edges. Well below speech but above the synthesizer's noise floor, so a
-# near-silent lead-in still reads as silence to fade over.
+# What counts as silence when apply_edge_fades measures how much room a clip
+# has to fade over. Well below speech but above the synthesizer's noise
+# floor, so a near-silent lead-in still reads as silence to fade over. Only
+# the fades use it: deciding where the speech itself begins takes more than a
+# threshold (see SUSTAIN_BLOCKS), while a fade only needs to know roughly how
+# much quiet it has to work with and costs nothing when it guesses low.
 EDGE_SILENCE_DBFS = -50.0
 
 
@@ -44,20 +48,81 @@ EDGE_SILENCE_DBFS = -50.0
 # join with no silence at all on either side clicks.
 SILENCE_KEEP_MS = 25
 
+# How far below a clip's OWN speech level a stretch has to sit to count as
+# silence. Relative rather than the absolute threshold this used, because the
+# level a clip comes back at belongs to the engine, not to us - Kokoro, a
+# Qwen preset narrator and a designed voice all land somewhere different, and
+# a fixed number is only ever right for the one it was measured against.
+# Across a finished 137-panel Qwen chapter, speech blocks sit at about
+# -20 dBFS and the room tone either side of them between -48 and -70.
+SPEECH_FLOOR_DB = 22.0
+
+# A clip with nothing above this has no speech in it to find, and is left
+# whole rather than trimmed against its own noise floor.
+MIN_SPEECH_DBFS = -45.0
+
+# How long a stretch has to hold up before it is called speech, and the block
+# the level is measured in. A SINGLE block was enough before this, and that
+# is what left the gaps: measured over that same chapter, a clip whose very
+# first 10ms of room tone happened to reach -48 dBFS - against a -50
+# threshold - had its entire 400ms lead-in kept as if it were speech, and
+# butted against the previous clip's equally-kept tail it played as a hole of
+# up to 590ms. The pause setting could not close those, because they are not
+# pause: they are inside `duration_ms`. Requiring 30ms of sustained level
+# takes the worst join from 590ms to 110ms and the joins holding more than
+# 120ms of silence from 33 of 136 to none, while the loudest thing trimmed
+# anywhere in the chapter is still 16dB below that clip's own speech.
+SUSTAIN_BLOCKS = 3
+BLOCK_MS = 10
+
+
+def _block_levels(segment: AudioSegment) -> np.ndarray:
+    """The clip as one dBFS reading per BLOCK_MS - the same measure pydub's
+    silence helpers take, in a single pass rather than a slice per block."""
+    samples = np.asarray(segment.get_array_of_samples(), dtype=np.float64)
+    if segment.channels > 1:
+        samples = samples.reshape(-1, segment.channels).mean(axis=1)
+    per_block = max(1, int(segment.frame_rate * BLOCK_MS / 1000))
+    count = len(samples) // per_block
+    if count == 0:
+        return np.empty(0)
+    blocks = samples[:count * per_block].reshape(count, per_block)
+    full_scale = float(1 << (8 * segment.sample_width - 1))
+    rms = np.sqrt((blocks ** 2).mean(axis=1)) / full_scale
+    with np.errstate(divide="ignore"):
+        return 20 * np.log10(rms + 1e-12)
+
 
 def speech_bounds(segment: AudioSegment, keep_ms: int = SILENCE_KEEP_MS) -> tuple[int, int]:
     """Where in a clip its speech starts and stops, leaving `keep_ms` of the
     clip's own silence either side of it.
 
+    Speech is the first and last stretch that holds SUSTAIN_BLOCKS blocks
+    above the clip's own speech level less SPEECH_FLOOR_DB - not the first
+    block over a fixed threshold, which any stray tick of room tone satisfied
+    (see SUSTAIN_BLOCKS for what that cost).
+
     Returned as offsets rather than a trimmed clip on purpose: they are
     written into audio_timing.json, and everything downstream lays itself out
     from that file. The clip on disk is never cut - it is what the model
     returned, and re-deciding this is a re-mix, not a re-narration."""
-    lead = detect_leading_silence(segment, silence_threshold=EDGE_SILENCE_DBFS)
-    tail = detect_leading_silence(segment.reverse(), silence_threshold=EDGE_SILENCE_DBFS)
-    if lead + tail >= len(segment):     # nothing but silence - leave it alone
+    levels = _block_levels(segment)
+    if levels.size < SUSTAIN_BLOCKS:
         return 0, len(segment)
-    return max(0, lead - keep_ms), min(len(segment), len(segment) - tail + keep_ms)
+
+    speech_level = float(np.percentile(levels, 95))
+    if speech_level < MIN_SPEECH_DBFS:      # nothing but silence - leave it alone
+        return 0, len(segment)
+
+    loud = (levels >= speech_level - SPEECH_FLOOR_DB).astype(int)
+    held = np.convolve(loud, np.ones(SUSTAIN_BLOCKS, dtype=int), "valid")
+    starts = np.flatnonzero(held == SUSTAIN_BLOCKS)
+    if starts.size == 0:                    # never holds up - leave it alone
+        return 0, len(segment)
+
+    speech_start_ms = int(starts[0]) * BLOCK_MS
+    speech_end_ms = (int(starts[-1]) + SUSTAIN_BLOCKS) * BLOCK_MS
+    return max(0, speech_start_ms - keep_ms), min(len(segment), speech_end_ms + keep_ms)
 
 
 def apply_edge_fades(segment: AudioSegment, edge_fade_ms: int) -> AudioSegment:
