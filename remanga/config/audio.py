@@ -21,12 +21,15 @@ class AudioConfig(ConfigModel):
     # no amount of trimming the joins can fix. Off by default while it proves
     # itself; the per-panel path is unchanged underneath it.
     batch_narration: bool = False
-    # About how long one of those generations should be. Qwen3-TTS is
-    # benchmarked past ten minutes and stops mid-sentence at about eleven
-    # (audio/batching.py:MAX_BATCH_SECONDS caps it well under that). Longer
-    # means fewer seams; it also means one edited line re-renders more audio,
-    # since the whole batch comes back with subtly different prosody.
-    batch_target_minutes: float = 9.0
+    # About how long one of those generations should be, capped by
+    # audio/batching.py:MAX_BATCH_SECONDS. Qwen3-TTS is benchmarked past ten
+    # minutes, but not in this configuration: asked for 11,673 characters in
+    # one go it read three panels and then produced silence until its token
+    # budget ran out, while 4,611 characters in the same run came back whole.
+    # Longer means fewer seams to hear; it also means one edited line
+    # re-renders more audio, since the whole take comes back with subtly
+    # different prosody.
+    batch_target_minutes: float = 4.0
     # Background music: off until a file is chosen.
     bgm_enabled: bool = False
     bgm_path: str = ""

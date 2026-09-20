@@ -44,9 +44,9 @@ MUSIC_LEVELS = ((12.0, "energetic - music clearly felt"), (14.0, "balanced - rec
 # anything else is that many minutes of narration read straight through. One
 # row rather than a switch and a number, because "off" is just the shortest
 # take there is.
-NARRATION_TAKES = ((0.0, "one take per panel - the voice restarts each panel"),
-                   (4.0, "about 4 minutes - fewer restarts, quick to re-do one"),
-                   (9.0, "about 9 minutes - fewest restarts; a whole chapter is a take or two"))
+NARRATION_TAKES = ((0.0, "one take per panel - the voice restarts at every panel"),
+                   (2.0, "about 2 minutes - safest, and quick to make one again"),
+                   (4.0, "about 4 minutes - the longest that has held together"))
 
 
 class SettingsScreen(Screen):
@@ -189,7 +189,9 @@ async def _change_narration_takes(screen: SettingsScreen, config: RemangaConfig)
              "minutes straight through is what keeps one voice across a scene. Where each panel "
              "falls inside a long take is found by listening to it afterwards, so the pictures are "
              "still cut to the words. Longer takes mean fewer restarts to hear, and more audio to "
-             "make again when you change one line."))
+             "make again when you change one line. Longer is not always better: asked for nine "
+             "minutes at once the narrator lost the thread after a few panels and read nothing for "
+             "the rest, which is caught and re-read as shorter takes."))
     if minutes is not None:
         config.audio.batch_narration = minutes > 0
         if minutes > 0:

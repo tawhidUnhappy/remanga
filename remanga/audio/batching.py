@@ -34,13 +34,23 @@ from remanga.narration import StoryPanel
 # trusts it, because the real durations are read back off the audio.
 CHARS_PER_SECOND = 22.5
 
-# The hard ceiling, whatever the settings ask for. Qwen3-TTS's shipped
-# generation budget is max_new_tokens 8192 at 12.5 frames/second = 655s, and
-# it does not fail when it runs out - it stops mid-sentence, with no error.
-# This is 80% of it: CHARS_PER_SECOND is an average over two takes, and a
-# batch that happens to be read 20% slower than that still has to finish
-# inside the budget rather than lose its last sentences.
-MAX_BATCH_SECONDS = 520.0
+# Where Qwen3-TTS's own generation budget runs out: max_new_tokens 8192 at
+# 12.5 frames per second. Nothing raises this - it is in the checkpoint's
+# generation_config.json - and hitting it is not an error, the take simply
+# stops. A take that comes back this long ran out rather than finished, which
+# is how audio/batched.py recognises a collapse.
+TOKEN_CEILING_SECONDS = 655.36
+
+# The longest take to ask for, whatever the settings say. NOT the token
+# ceiling: measured on a real chapter, a take of 11,673 characters collapsed
+# - the model read about three panels, stopped producing speech, and ran
+# silence until the budget expired 10 minutes later (2% of the script found
+# in it). A take of 4,611 characters in the same run came back complete and
+# matched 97.5%. So the limit that matters is the model's, not the budget's,
+# and it sits somewhere below 11,673 characters; this is just above what has
+# actually been seen to work, and audio/batched.py splits and retries when a
+# take collapses anyway.
+MAX_BATCH_SECONDS = 240.0
 
 # What goes between two panels' narration in one call. A single space, so the
 # model reads them as consecutive sentences of one paragraph, which is what
@@ -68,6 +78,27 @@ class Batch:
     @property
     def estimated_seconds(self) -> float:
         return len(self.text) / CHARS_PER_SECOND
+
+    def split(self) -> tuple[Batch, Batch] | None:
+        """This batch as two, broken at the page boundary nearest its middle
+        - what a collapsed take is retried as. None when there is nothing to
+        split: one panel is already the smallest take there is."""
+        if len(self.panels) < 2:
+            return None
+        grouped = pages(list(self.panels))
+        if len(grouped) < 2:
+            # One page of several panels - break between panels instead,
+            # since a page this long is still worth halving.
+            middle = len(self.panels) // 2
+            return Batch(self.panels[:middle]), Batch(self.panels[middle:])
+        half = len(self.panels) / 2
+        taken, best, seen = 0, 1, 0
+        for index, page in enumerate(grouped[:-1], start=1):
+            seen += len(page)
+            if abs(seen - half) < abs(taken - half):
+                taken, best = seen, index
+        return Batch(tuple(p for page in grouped[:best] for p in page)), \
+               Batch(tuple(p for page in grouped[best:] for p in page))
 
 
 def page_of(panel_id: str) -> str:
@@ -104,7 +135,10 @@ def plan_batches(panels: list[StoryPanel], target_minutes: float) -> list[Batch]
     current_seconds = 0.0
 
     for page in pages(panels):
-        page_seconds = sum(len(panel.text) for panel in page) / CHARS_PER_SECOND
+        # The separators count: a batch's text is what gets generated, and
+        # leaving them out let a plan overshoot its own cap by a second or two.
+        page_chars = sum(len(panel.text) + len(JOIN) for panel in page)
+        page_seconds = page_chars / CHARS_PER_SECOND
         if current and current_seconds + page_seconds > target:
             batches.append(Batch(tuple(current)))
             current, current_seconds = [], 0.0

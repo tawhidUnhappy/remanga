@@ -158,6 +158,24 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   - Measured end to end, 12 real panels in 3 takes: 99/100/100% matched, slices contiguous inside
     every batch, fades only at take edges. A real 142 s take of 24 panels matched 98.8% with every
     panel anchored. Whisper runs at RTF 0.10, free next to synthesis.
+  - **A long take COLLAPSES, and the ten-minute plan does not work (2026-09-20).** Asked for 11,673
+    characters in one go, Qwen read about three panels and then produced nothing but silence until
+    max_new_tokens ran out: the file came back **655.28s, the 8192-token budget exactly**, whisper
+    found 98 words in it (9 words/min against a normal 236), and the transcript tails off into
+    "Thank you. Thank you... Thanks for watching!" - which is what whisper emits for silence. Match
+    2.2%, 96 of 99 panels unanchored. In the SAME run a 4,611-character take came back whole and
+    matched 97.5%. So the limit is the model's, not the token budget's, and it is somewhere below
+    11,673 characters. `MAX_BATCH_SECONDS` is now **240s** and the settings offer 2 and 4 minutes,
+    not 9.
+    - `audio/batched.py:_collapsed` catches it **before transcription**, on two signals: a take at
+      the token ceiling, or one more than `RUNAWAY_FACTOR` (1.4) longer than its own estimate. The
+      estimate is good enough for that - a healthy take asked for ~205s and came back 203s.
+    - It then **splits at a page boundary and retries**, up to `MAX_SPLIT_DEPTH` (3). A collapse is
+      the model losing the thread on a long text, so the answer is a shorter text.
+    - **Worth trying if longer takes are wanted again:** the clone runs in `x_vector_only_mode`
+      because `designed_text` is empty (the user's reference recording has no transcript). Whisper
+      is now installed and could transcribe that reference, which would put the clone in in-context
+      mode - stronger conditioning, and possibly stable over longer takes.
   - Rates worth not re-deriving: **22.5 chars per second** of generated speech (a batch, untrimmed);
     18.9 is the per-panel figure AFTER trimming and is the wrong one for planning batches.
 - **Edge fade** (`audio.edge_fade_ms`, `audio/clips.py:apply_edge_fades`) is applied in
