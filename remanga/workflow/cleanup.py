@@ -32,9 +32,14 @@ def _inside(path: Path, root: Path) -> bool:
 
 
 def _chapter_paths(project: str, chapter: str, *, with_pages: bool) -> list[Path]:
-    """What resetting (or, `with_pages`, deleting) a chapter removes - each
+    """What resetting (or, `with_pages`, deleting) a chapter aims at - each
     one checked to be a chapter folder or file strictly inside this project,
-    so a blank or odd project/chapter name can never widen it."""
+    so a blank or odd project/chapter name can never widen it.
+
+    Everything it aims at, including what isn't there. The caller deletes the
+    ones that exist, and prunes from all of them: a second reset of a chapter
+    whose pdf/chapter_3 went in the first one must still be able to take the
+    empty pdf/ the first one left behind."""
     if not str(project).strip() or not str(chapter).strip():
         raise ValueError("A project and a chapter are needed.")
     project_dir = get_project_dir(project)
@@ -50,7 +55,36 @@ def _chapter_paths(project: str, chapter: str, *, with_pages: bool) -> list[Path
     for path in paths:
         if not _inside(path, project_dir) or not path.name.startswith(("chapter_", "narration.json", "panels")):
             raise ValueError(f"Refusing to delete {path} - it isn't one chapter's file inside {project_dir}.")
-    return [path for path in paths if path.exists()]
+    return paths
+
+
+def _prune_empty_dirs(paths: list[Path], project_dir: Path) -> list[Path]:
+    """Removes the folders a deletion has left empty, walking up from each
+    path it aimed at and stopping below the project's own folder.
+
+    A reset takes a chapter out of pdf/, audio/, audio_modified/, subtitles/
+    and video/, and on the last (often the only) chapter that leaves five
+    empty folders standing in the project - a layout that says work was done
+    here when none of it is left. The chapter folder itself is the same story
+    after a delete: chapters/ stays behind, empty.
+
+    Only ever a folder this call emptied, and only inside the project (_inside
+    excludes the project folder itself, so project.json and a project with no
+    chapters left are never at risk). A folder someone else is writing into
+    while this runs simply isn't empty, and rmdir refusing it is the right
+    answer, so an OSError ends that walk instead of failing the reset that has
+    already happened."""
+    pruned: list[Path] = []
+    for path in paths:
+        parent = path.parent
+        while _inside(parent, project_dir) and parent.is_dir():
+            try:
+                parent.rmdir()   # refuses a folder that isn't empty - the check and the removal in one step
+            except OSError:
+                break
+            pruned.append(parent)
+            parent = parent.parent
+    return pruned
 
 
 def drop_mix_and_video(project: str, chapter: str) -> list[Path]:
@@ -105,13 +139,20 @@ def drop_audio_and_video(project: str, chapter: str) -> list[Path]:
 def reset_chapter(project: str, chapter: str, *, delete_pages: bool = False) -> list[Path]:
     """Deletes a chapter's PDF, cut panels, pasted narration, audio and video
     - and, with `delete_pages`, its downloaded pages and marks too, removing
-    the chapter. Returns what was removed."""
+    the chapter. Returns what was removed, the folders left empty by it
+    included (user request, 2026-09-22): a reset that leaves pdf/, audio/,
+    audio_modified/, subtitles/ and video/ standing there empty hasn't really
+    put the project back as it was.
+
+    Nothing has to recreate them: every folder here is made on demand the
+    next time something is written to it (remanga/paths/projects.py)."""
     import shutil
 
-    removed = _chapter_paths(project, chapter, with_pages=delete_pages)
+    targets = _chapter_paths(project, chapter, with_pages=delete_pages)
+    removed = [path for path in targets if path.exists()]
     for path in removed:
         if path.is_dir():
             shutil.rmtree(path)
         else:
             path.unlink()
-    return removed
+    return removed + _prune_empty_dirs(targets, get_project_dir(project))
