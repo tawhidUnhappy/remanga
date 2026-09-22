@@ -7,7 +7,8 @@ Manga panels to recap video, in five steps:
 1. **Download** chapters from MangaDex.
 2. **Mark the panels** in the Panel Marker, a web UI: MAGI v3 finds them when you press Detect, and
    you fix whatever it got wrong by hand.
-3. **Make a PDF** of the chapter's cut panels, in reading order.
+3. **Make a PDF** of the chapter: every page with its panel marks drawn on it, each followed by the
+   panels cut from it, in reading order.
 4. **Give the PDF and `prompts/narration.md` to an LLM** (Gemini, ChatGPT, Claude, ...) and paste its
    one JSON reply into the chapter's `narration.json` - or write it yourself in the Narration Writer,
    and check what the LLM wrote in the Narration Reviewer.
@@ -136,8 +137,10 @@ to the LLM with `prompts/narration_review.md` and paste the corrected reply back
 ## The LLM step
 
 Upload **`prompts/narration.md`** and the chapter's PDF (all parts, if it was split) - that's all.
-The PDF's first page tells the LLM the manga, the chapter, the reading direction, the panel list, and
-the story so far, so there is nothing to type.
+The PDF's first page tells the LLM the manga, the chapter, the reading direction, which pages it
+holds and the panels cut from each of them, the panel list, and the story so far, so there is
+nothing to type. The images after it are the chapter itself: each page with its panels outlined and
+labelled, then those panels one by one, so the LLM reads a panel knowing the page it came off.
 
 The LLM replies with one JSON block in two sections. Paste all of it into
 `chapters/chapter_N/narration.json` (the code fence can come along):

@@ -6,27 +6,60 @@ panel. The viewers have not read the manga: what they hear is the story.
 
 ## What you receive
 
-A PDF of one chapter's panels, already cut out and in reading order (sometimes split into
-`panels_1.pdf`, `panels_2.pdf`, ...; wait for every part). Each part starts with a text page giving:
+A PDF of one chapter (sometimes split into `panels_1.pdf`, `panels_2.pdf`, ...; wait for every
+part). Each part starts with a text page giving:
 - the manga, the chapter, and `reading_direction` (`right_to_left` for Japanese manga);
+- the pages in this part and, under each, the panels cut from it;
 - the panel IDs in this part and in the whole chapter (`001_001_01`, `001_001_02`, ...), in reading
-  order. The images that follow are those panels, in that order. An ID is
-  `chapter_page_panel`, so `001_004_02` is the second panel of page four;
+  order. An ID is `chapter_page_panel`, so `001_004_02` is the second panel of page four;
 - the story so far - the memory you wrote with the previous chapter's narration: characters, places
   and events to stay consistent with. If there is none, this is the first chapter.
 
+The images after that text page come in reading order, and they are of two kinds:
+
+- **A whole page**, with each of its panels outlined in orange and labelled with that panel's ID.
+  This is the page as it was published - the layout, and everything the layout says.
+- **The panels cut from that page**, one image each, in reading order, straight after it.
+
+So each page is followed by its own panels, then the next page follows. A page labelled `001_004`
+is followed by `001_004_01`, `001_004_02`, and so on.
+
+**Read the page first, then narrate its panels.** The page is context; the panels are what you
+narrate. There is never an entry for a page - only for panels.
+
+### What to take from the page
+
+- **Where a panel sits, and what that means.** A row of small panels is a quick exchange; a panel
+  taking half the page is the moment that matters and can take a longer sentence; a small inset
+  inside a big panel is a detail of that same moment, not a new scene.
+- **Who is where.** A character at the edge of a wide panel is looking across at someone in the
+  next; a bubble whose tail leaves the panel is answered in the one after it.
+- **What a cut panel loses.** A panel cut out of a spread can hide that two panels are one picture,
+  and a caption strip or sound lettering that runs across a page can end up split. If a panel looks
+  half-empty or confusing on its own, look at its page before deciding what it shows.
+- **What is not story.** A title, a credits block or a scanlation notice is recognizable on the page
+  at a glance - and so is a page that is all of that, so its panels get `skip` and no text.
+- **Never narrate from the page what is not in the panel.** Each entry is about its own panel: the
+  page tells you what the panel MEANS, it does not add events to it. A panel's entry never describes
+  what happens in the next one.
+
+A page image may have no panels marked on it at all (the text page says so). It is there for
+context, and there is nothing to narrate for it.
+
 ## How to narrate a panel
 
-Work panel by panel, in order. For each panel:
+Work page by page, and within a page panel by panel, in order. For each panel:
 
 1. **Read everything in it:** every speech bubble, thought bubble, caption and sign, and who says
-   each one (follow the bubble's tail).
+   each one (follow the bubble's tail). Read the panel's own image for this - it is the bigger,
+   clearer copy; the page is there for where it sits.
 2. **Write its narration: what happens in that panel, and everything said in it.** A quiet panel
    gets a sentence; a panel with several bubbles gets as many sentences as its bubbles need. Never
    skip a line of dialogue because the entry is getting long.
 3. **Keep it one continuous account.** Each panel's text carries on from the one before it, because
-   they are heard one after another with only a short pause between. Never announce panels ("in this
-   panel"), and never summarize several panels in one entry - the next panel has its own.
+   they are heard one after another with only a short pause between. Never announce panels or pages
+   ("in this panel", "on this page"), and never summarize several panels in one entry - the next
+   panel has its own.
 
 ### The narrator's voice
 - **Report speech, never quote it.** No quotation marks. "I won't let you have him!" becomes *she
@@ -50,11 +83,13 @@ Work panel by panel, in order. For each panel:
 
 ### Panels that are not story
 A panel holding only credits, a scanlation notice, an ad or the chapter's title gets `"skip"` with
-that reason and no text. Everything else is story, including a panel that is only a face or a
-landscape. Watermarks, page numbers and publisher blurbs are never narrated.
+that reason and no text - the page it sits on usually makes which one obvious. Everything else is
+story, including a panel that is only a face or a landscape. Watermarks, page numbers and publisher
+blurbs are never narrated.
 
 ## Check before replying
 - Every panel ID from the text page appears exactly once, in order.
+- No entry for a page: page IDs (`001_004`) are never panel IDs.
 - Every story panel has its own narration, with every line of dialogue in it reported in full.
 - No quotation marks, `?`, `!`, `...` or contractions anywhere.
 - Heard straight through, the chapter sounds like one person telling the story.

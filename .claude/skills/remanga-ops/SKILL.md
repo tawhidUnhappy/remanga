@@ -39,7 +39,9 @@ download  -> projects/P/chapters/chapter_N/pages/          (MangaDex, checksum-v
 mark      -> Panel Marker web UI (Flask, browser): Detect = MAGI v3, hand fixes -> crops.json
 [optional: write = Narration Writer (type it yourself), review = Narration Reviewer (flag what is wrong
  -> narration_review.json + prompts/narration_review.md)]
-pdf       -> cuts panels/ from crops.json, then projects/P/pdf/chapter_N/panels_1.pdf, ...
+pdf       -> cuts panels/ from crops.json, draws pdf/chapter_N/pages/ (each page with its panel
+             boxes labelled), then projects/P/pdf/chapter_N/panels_1.pdf, ... - a part holds each
+             page followed by the panels cut from it (2026-09-22)
              (+ empty narration.json to paste into)
 [user uploads prompts/narration.md + the PDF to an LLM, pastes the one JSON reply into narration.json]
 video     -> check reply -> Kokoro clip per panel -> mix with BGM -> render panels

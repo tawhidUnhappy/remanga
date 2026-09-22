@@ -30,11 +30,17 @@ _WORKERS = min(8, os.cpu_count() or 1)
 class _Page:
     """One image and every encoding tried for it so far. `level` 0 is
     lossless; level n is the smallest encoding reaching PSNR_FLOORS[n - 1],
-    or the lossless page when none is smaller."""
+    or the lossless page when none is smaller.
+
+    `kind` is what the image IS: a cut panel (the unit the LLM narrates) or a
+    whole page with its marks drawn on it (the context it reads them in). The
+    packer treats both the same - they are bytes to fit under a cap - and only
+    the text page tells them apart."""
 
     stem: str
     path: Path
     lossless: ImagePage
+    kind: str = "panel"
     near: list[tuple[ImagePage, float]] | None = None
     level: int = 0
 
@@ -135,8 +141,10 @@ def _pack_parts(pages: list[_Page], max_bytes: int, render: Render) -> list[_Bui
 
 
 def _quality_note(pages: Sequence[_Page]) -> str:
+    """How the images came out, for the line the crop/PDF step prints.
+    "images", not "panels": a part holds marked pages too."""
     changed = [page.choice(page.level)[1] for page in pages if not page.page.lossless]
     if not changed:
-        return f"all {len(pages)} panels lossless"
-    return (f"{len(pages) - len(changed)} panels lossless, {len(changed)} near-lossless to fit "
+        return f"all {len(pages)} images lossless"
+    return (f"{len(pages) - len(changed)} images lossless, {len(changed)} near-lossless to fit "
             f"(lowest PSNR {min(changed):.1f} dB)")
