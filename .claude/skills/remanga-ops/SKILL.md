@@ -206,6 +206,20 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   `workflow.mark` opens the marker (blocking until the browser saves), `workflow.cut_panels` recuts
   whenever crops.json is newer than panels/, and `make_pdf` calls it first. crops.json and the pasted
   narration are the only things nothing can rebuild - Reset deletes panels/ but keeps crops.json.
+- **Gutter snapping must never reach past the panel it is snapping (2026-09-22, user report):** a
+  panel came out blank in the PDF and the LLM answered `skip: "blank"`, while the mark in the marker
+  looked perfect (ch 1 page 3 panel 5, the black caption banner). The search radius is scaled to the
+  PAGE (`panel_boxes.adaptive_gutter_radius`, a tenth of the longer side = 160px there) and the
+  banner is 150px tall, so `seams.reconcile_adjacent_seams` searched 167px for the border between it
+  and the art below, found the white gutter ABOVE the banner, and moved BOTH facing edges there:
+  918x150 -> 918x4 of blank paper, and the panel below grew to swallow the banner. The old guard
+  (`t1 < mid < b2`) allows a seam anywhere inside either panel, and refine's inversion check passes
+  a 4px box happily. Now the seam search is also bounded by the two panels (`_seam_search_radius`:
+  it must leave half of each standing) and no single edge may search past the middle of its own box
+  (`gutter/refine.py`). **Symptom to remember: a blank or sliver crop under a correct-looking mark is
+  the snapper, not the marker** - compare `resolve_page_panel_boxes`'s marked vs refined boxes before
+  suspecting anything upstream. Over chapter 1's 138 panels the fix changed exactly those two boxes,
+  and the seam pass still moves 47 of them.
 - **A worker thread parked in one `Event.wait()` cannot be stopped:** the menus stop work by raising
   KeyboardInterrupt into the thread (`PyThreadState_SetAsyncExc`), and that is only delivered when
   the thread next runs Python - never, inside a single C-level lock acquire. Opening the marker and

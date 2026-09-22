@@ -106,14 +106,26 @@ def refine_box_to_gutters(
     never cross into one of them (see `_max_radius_before_neighbor`), which is
     what stops a low-content neighbor's own interior whitespace from ever being
     mistaken for a gutter running through - or past - it.
+
+    It is shrunk once more, by the box's own size: no edge may search past the
+    middle of the panel it belongs to. The radius comes in scaled to the page
+    (panel_boxes.adaptive_gutter_radius - 160px on a 1125x1600 scan), which is
+    a reasonable marking error on a half-page tile and more than the whole of a
+    caption strip or a narrow sliver of a panel. Without this bound, a short
+    panel's two facing edges can both reach the same band and meet in the
+    middle, and the only thing standing between that and a crop of blank paper
+    is the inversion check below - which a band a few pixels wide passes.
     """
     h, w = gray.shape
     left, top, right, bottom = box
+    half_h, half_w = (bottom - top) // 2, (right - left) // 2
 
     top_radius = _max_radius_before_neighbor(top, -1, left, right, other_boxes, "y", search_radius)
     bottom_radius = _max_radius_before_neighbor(bottom, 1, left, right, other_boxes, "y", search_radius)
     left_radius = _max_radius_before_neighbor(left, -1, top, bottom, other_boxes, "x", search_radius)
     right_radius = _max_radius_before_neighbor(right, 1, top, bottom, other_boxes, "x", search_radius)
+    top_radius, bottom_radius = min(top_radius, half_h), min(bottom_radius, half_h)
+    left_radius, right_radius = min(left_radius, half_w), min(right_radius, half_w)
 
     top_r = _refine_edge(gray, h, top, left, right, True, bg, tolerance, top_radius, min_run, min_bg_fraction)
     bottom_r = _refine_edge(gray, h, bottom, left, right, True, bg, tolerance, bottom_radius, min_run, min_bg_fraction)
