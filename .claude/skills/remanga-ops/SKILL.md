@@ -207,6 +207,19 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   start it is capped by the clip's own leading silence (a flat 35 ms once ramped the opening
   consonant of 52 of 60 clips in a chapter, ~36x down), at the end it may ramp speech up to
   `TAIL_INTO_SPEECH` (15%) because clips often end within 10 ms of the last word.
+- **A cloned voice drifts off its reference inside a long take (2026-09-22, user report).** Qwen3-TTS
+  clones in context: the reference conditions the start, and the further a single generation runs the
+  more it is conditioned on its own output (upstream calls it ICL speaker inconsistency; every
+  long-form TTS has it, and the fix everywhere is to re-anchor more often = a shorter take).
+  Measured in the user's own clone, as distance from their reference in units of its own spread
+  (their windows 0.09-0.17, a clone 0.20, another narrator 0.7-0.9): one 240s take ran 0.22 -> 0.45
+  with F0 down 12 Hz; three 60s takes stayed 0.16-0.24, drifting 0.01-0.03 each. A seam costs
+  almost nothing (step across one 0.24 vs 0.17 between adjacent windows inside a take) and no time
+  (both generate at 1.4x real time). So `MAX_BATCH_SECONDS` is 60 and `batch_target_minutes`
+  defaults to 1. **A longer reference is not the lever**: 30s instead of 15 blew the 670s timeout on
+  a take the 15s reference finished in 325s. The tooling for this lives in the scratchpad
+  (voiceprint.py: MFCC means over voiced frames + median F0, calibrated before use) - rebuild it the
+  same way if this comes back, and calibrate before trusting any number.
 - **Resampling:** clips go 24 kHz -> 44.1 kHz through `audio/resample.load_audio` (ffmpeg), never
   pydub's `set_frame_rate` (folds imaging noise above 12 kHz).
 - **Frame cuts** snap into the pause between pages (`video/frame_timeline.py`) so a picture changes

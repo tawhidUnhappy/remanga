@@ -22,14 +22,13 @@ class AudioConfig(ConfigModel):
     # itself; the per-panel path is unchanged underneath it.
     batch_narration: bool = False
     # About how long one of those generations should be, capped by
-    # audio/batching.py:MAX_BATCH_SECONDS. Qwen3-TTS is benchmarked past ten
-    # minutes, but not in this configuration: asked for 11,673 characters in
-    # one go it read three panels and then produced silence until its token
-    # budget ran out, while 4,611 characters in the same run came back whole.
-    # Longer means fewer seams to hear; it also means one edited line
-    # re-renders more audio, since the whole take comes back with subtly
-    # different prosody.
-    batch_target_minutes: float = 4.0
+    # audio/batching.py:MAX_BATCH_SECONDS - which is also why the default is a
+    # minute: a cloned voice measurably drifts away from its reference as a
+    # take goes on (see that constant for the numbers), and a minute is where
+    # it still measures as the reference. Longer means fewer seams to hear,
+    # a voice less like the one asked for, and more audio to make again when
+    # one line changes.
+    batch_target_minutes: float = 1.0
     # Background music: off until a file is chosen.
     bgm_enabled: bool = False
     bgm_path: str = ""

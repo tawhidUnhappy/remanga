@@ -41,16 +41,30 @@ CHARS_PER_SECOND = 22.5
 # is how audio/batched.py recognises a collapse.
 TOKEN_CEILING_SECONDS = 655.36
 
-# The longest take to ask for, whatever the settings say. NOT the token
-# ceiling: measured on a real chapter, a take of 11,673 characters collapsed
-# - the model read about three panels, stopped producing speech, and ran
-# silence until the budget expired 10 minutes later (2% of the script found
-# in it). A take of 4,611 characters in the same run came back complete and
-# matched 97.5%. So the limit that matters is the model's, not the budget's,
-# and it sits somewhere below 11,673 characters; this is just above what has
-# actually been seen to work, and audio/batched.py splits and retries when a
-# take collapses anyway.
-MAX_BATCH_SECONDS = 240.0
+# The longest take to ask for, whatever the settings say.
+#
+# Not the token ceiling, and no longer "as long as holds together" either: a
+# take that comes back whole can still stop sounding like the voice it was
+# asked for. Qwen3-TTS clones in context - the reference conditions the start
+# of the generation, and the further in it gets the more it is conditioned on
+# its own output instead (upstream calls this the speaker inconsistency of ICL
+# mode; every long-form TTS has it, and the fix everywhere is to re-anchor on
+# the reference more often, which for remanga means a shorter take).
+#
+# Measured in the user's own cloned voice, as distance from their reference
+# recording in units of its own frame-to-frame spread (their own 12s windows
+# measure 0.09-0.17, a Qwen clone of it 0.20, a different narrator 0.7-0.9):
+#
+#   one 240s take: 0.22 at the start, 0.31 by two minutes, 0.45 by the end -
+#                  twice as far from the reference as it began, pitch down 12 Hz
+#   three 60s takes: 0.16-0.24 throughout, each drifting 0.01-0.03 end to end
+#
+# The seam a shorter take adds costs almost nothing: the step across one
+# measured 0.24 against the 0.17 that adjacent windows INSIDE a take differ by
+# anyway, and the 240s take's own start-to-end step is 0.26 - the same size,
+# just spread out, and it ends up somewhere else entirely. Nor does it cost
+# time: 60s takes generated at 1.4x real time, exactly as the 240s one did.
+MAX_BATCH_SECONDS = 60.0
 
 # What goes between two panels' narration in one call. A single space, so the
 # model reads them as consecutive sentences of one paragraph, which is what

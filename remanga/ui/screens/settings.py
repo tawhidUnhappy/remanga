@@ -45,8 +45,8 @@ MUSIC_LEVELS = ((12.0, "energetic - music clearly felt"), (14.0, "balanced - rec
 # row rather than a switch and a number, because "off" is just the shortest
 # take there is.
 NARRATION_TAKES = ((0.0, "one take per panel - the voice restarts at every panel"),
-                   (2.0, "about 2 minutes - safest, and quick to make one again"),
-                   (4.0, "about 4 minutes - the longest that has held together"))
+                   (0.5, "about 30 seconds - closest to a cloned voice, most restarts"),
+                   (1.0, "about a minute - one voice all through, and still the reference's"))
 
 
 class SettingsScreen(Screen):
@@ -185,13 +185,13 @@ async def _change_narration_takes(screen: SettingsScreen, config: RemangaConfig)
         [(f"about {m:g} min" if m else "one per panel", hint, m) for m, hint in NARRATION_TAKES],
         current=current,
         note="How much of the chapter the narrator reads without stopping. A panel read on its own "
-             "is a performance of its own, so the tone resets at every panel - reading several "
-             "minutes straight through is what keeps one voice across a scene. Where each panel "
-             "falls inside a long take is found by listening to it afterwards, so the pictures are "
-             "still cut to the words. Longer takes mean fewer restarts to hear, and more audio to "
-             "make again when you change one line. Longer is not always better: asked for nine "
-             "minutes at once the narrator lost the thread after a few panels and read nothing for "
-             "the rest, which is caught and re-read as shorter takes."))
+             "is a performance of its own, so the tone resets at every panel - reading straight "
+             "through a scene is what keeps one voice across it. Where each panel falls inside a "
+             "take is found by listening to it afterwards, so the pictures are still cut to the "
+             "words. Longer is not better past a point: a cloned voice holds its reference for "
+             "about a minute and then drifts off it, measurably, and asked for nine minutes at "
+             "once the narrator lost the thread entirely. A minute is the most that has held "
+             "both the thread and the voice."))
     if minutes is not None:
         config.audio.batch_narration = minutes > 0
         if minutes > 0:
