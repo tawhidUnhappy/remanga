@@ -102,4 +102,24 @@ class MarkerConfig(ConfigModel):
     # mark is under the cursor, selected or not, even in Draw mode.
     click_to_select: bool = True
 
+    # The smallest a mark may be, as a fraction of the page's SHORTER side -
+    # the floor under every way of making one shrink: a new box's drag, and a
+    # resize handle dragged past the opposite edge. A drag under it makes no
+    # mark at all (the ghost box says so while it is still being dragged), and
+    # a handle stops rather than collapsing the panel to a sliver.
+    #
+    # Relative, not a pixel count: the same chapter arrives at 800px or 4000px
+    # wide depending on the source, and "too small to be a panel" scales with
+    # the page, not with the scan. The default is far under anything real -
+    # the smallest panel in the chapters marked so far is 9.4% of its page's
+    # shorter side, three times this - and far over the specks an accident
+    # makes: a twitch while clicking, or an 8px drag at 400% zoom, which used
+    # to leave a 2px mark that is invisible at normal zoom and becomes a 2px
+    # crop blown up to fill a 4K frame downstream.
+    #
+    # A mark that is already under the floor (MAGI's, or one from an older
+    # crops.json) is left alone: the floor can stop it shrinking further, but
+    # never grows it on its own.
+    min_mark_ratio: float = 0.03
+
     shortcuts: ShortcutsConfig = Field(default_factory=ShortcutsConfig)

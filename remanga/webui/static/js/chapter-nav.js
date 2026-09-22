@@ -40,6 +40,7 @@ export async function applyChapter(payload, startPage = 0) {
   state.readOnly = !!payload.read_only;
   state.magiEnabled = payload.magi_enabled;
   state.clickToSelect = payload.click_to_select;
+  state.minMarkRatio = payload.min_mark_ratio ?? state.minMarkRatio;
   state.pageMarksCache = {};
   state.touchedPages = new Set(payload.touched || []);
   state.decidedPages = new Set(payload.decided || []);

@@ -4,7 +4,7 @@
 import { stage } from "./dom.js";
 import { state } from "./state.js";
 import { render } from "./render.js";
-import { markDirty, markTouched } from "./marks.js";
+import { markDirty, markTouched, minMarkSize } from "./marks.js";
 import { showGuides, clearGuides } from "./guides.js";
 
 export function onMarkMouseDown(e, m) {
@@ -66,6 +66,17 @@ export function onMarkMouseDown(e, m) {
 
   const startX = e.clientX, startY = e.clientY;
   const orig = { ...m };
+
+  // How small a resize may make this mark, per axis. The floor is the same
+  // one a new box has to clear (marks.js:minMarkSize) - dragging a handle
+  // past the opposite edge used to collapse a panel to a 4px sliver, which is
+  // easy to do by accident on a small mark and easy not to notice until the
+  // crop turns up in a video. Capped at the mark's CURRENT size, so a mark
+  // already under the floor (MAGI's, or one out of an older crops.json) is
+  // only stopped from shrinking further, never silently grown to meet it.
+  const floorW = Math.min(minMarkSize(), orig.w);
+  const floorH = Math.min(minMarkSize(), orig.h);
+
   render();
 
   // render() above just tore down and rebuilt every mark div (needed so a
@@ -93,28 +104,28 @@ export function onMarkMouseDown(e, m) {
     if (handle) {
       // Each side resizes from its FIXED opposite edge (e.g. dragging the
       // west handle keeps the east edge, orig.x + orig.w, anchored) and
-      // clamps the moving edge between that anchor (minus a 4px floor) and
-      // the page bound. Previously the moving edge and the size were
+      // clamps the moving edge between that anchor (minus the minimum-size
+      // floor above) and the page bound. Previously the moving edge and the size were
       // computed independently - once dragging ran past the opposite edge
-      // (or off the page), the size floored at 4px but the position kept
-      // following the cursor unbounded, so the box appeared to detach and
+      // (or off the page), the size floored at a few pixels but the position
+      // kept following the cursor unbounded, so the box appeared to detach and
       // "expand" off the opposite side instead of just stopping in place.
       if (handle.includes("e")) {
-        const right = Math.min(page.width, Math.max(orig.x + 4, orig.x + orig.w + dx));
+        const right = Math.min(page.width, Math.max(orig.x + floorW, orig.x + orig.w + dx));
         w = right - orig.x;
       }
       if (handle.includes("w")) {
         const right = orig.x + orig.w; // fixed
-        x = Math.max(0, Math.min(right - 4, orig.x + dx));
+        x = Math.max(0, Math.min(right - floorW, orig.x + dx));
         w = right - x;
       }
       if (handle.includes("s")) {
-        const bottom = Math.min(page.height, Math.max(orig.y + 4, orig.y + orig.h + dy));
+        const bottom = Math.min(page.height, Math.max(orig.y + floorH, orig.y + orig.h + dy));
         h = bottom - orig.y;
       }
       if (handle.includes("n")) {
         const bottom = orig.y + orig.h; // fixed
-        y = Math.max(0, Math.min(bottom - 4, orig.y + dy));
+        y = Math.max(0, Math.min(bottom - floorH, orig.y + dy));
         h = bottom - y;
       }
     } else {

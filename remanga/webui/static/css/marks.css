@@ -73,3 +73,30 @@
   background: rgba(255, 93, 58, 0.08);
   pointer-events: none;
 }
+
+/* A drag that is still under the minimum panel size (MarkerConfig.
+   min_mark_ratio): it will make no mark at all if let go here, and it says so
+   before that happens rather than after. */
+.draw-ghost.too-small {
+  border-color: var(--danger);
+  background: rgba(185, 60, 91, 0.10);
+}
+
+/* The dragged size, in page pixels, alongside the ghost - same corner and
+   same look as a selected mark's .dim-readout, so a box being drawn and a box
+   being resized report themselves the same way. Outside the box, because the
+   box is at its smallest exactly when this matters most. */
+.ghost-readout {
+  position: absolute;
+  bottom: -21px; right: -2px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.draw-ghost.too-small .ghost-readout { color: var(--danger); border-color: var(--danger); }

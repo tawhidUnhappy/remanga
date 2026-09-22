@@ -4,7 +4,8 @@
 import { stage, canvasWrap } from "./dom.js";
 import { state } from "./state.js";
 import { render } from "./render.js";
-import { markDirty, markTouched, clampBoxToPage } from "./marks.js";
+import { markDirty, markTouched, clampBoxToPage, isTooSmall, minMarkSize } from "./marks.js";
+import { notice } from "./assist-status.js";
 
 let drawing = null, ghostEl = null;
 
@@ -57,6 +58,13 @@ canvasWrap.addEventListener("mousedown", (e) => {
   drawing = { anchorX, anchorY, x: anchorX, y: anchorY, w: 0, h: 0 };
   ghostEl = document.createElement("div");
   ghostEl.className = "draw-ghost";
+  // Says what this drag is worth while it is still happening: its size in
+  // page pixels, or that it is under the floor and will make nothing. The
+  // whole point is that the accident is visible BEFORE the mouse is let go,
+  // rather than being explained after a mark failed to appear.
+  const ghostReadout = document.createElement("div");
+  ghostReadout.className = "ghost-readout";
+  ghostEl.appendChild(ghostReadout);
   stage.appendChild(ghostEl);
 
   function onMove(ev) {
@@ -65,18 +73,38 @@ canvasWrap.addEventListener("mousedown", (e) => {
     const w = Math.abs(cx - drawing.anchorX), h = Math.abs(cy - drawing.anchorY);
     Object.assign(ghostEl.style, { left: x + "px", top: y + "px", width: w + "px", height: h + "px" });
     drawing.x = x; drawing.y = y; drawing.w = w; drawing.h = h;
+
+    // What this drag would actually become - the part of it that lands on the
+    // page, in natural pixels - decided here rather than only at mouseup, so
+    // the ghost can report it. The drag is in DISPLAY pixels; the floor is in
+    // page pixels, and the two differ by the zoom, which is exactly how a
+    // display-pixel floor let a zoomed-in twitch through as a 2px mark.
+    const natural = clampBoxToPage(x / state.scale, y / state.scale, w / state.scale, h / state.scale);
+    drawing.natural = natural;
+    drawing.tooSmall = isTooSmall(natural);
+    ghostEl.classList.toggle("too-small", drawing.tooSmall);
+    ghostReadout.textContent = drawing.tooSmall
+      ? `too small · min ${minMarkSize()} px`
+      : `${Math.round(natural.w)} × ${Math.round(natural.h)} px`;
   }
   function onUp() {
     document.removeEventListener("mousemove", onMove);
     document.removeEventListener("mouseup", onUp);
     ghostEl?.remove();
-    if (drawing.w > 8 && drawing.h > 8) {
-      const natural = clampBoxToPage(drawing.x / state.scale, drawing.y / state.scale, drawing.w / state.scale, drawing.h / state.scale);
+    const natural = drawing.natural;
+    if (natural && !drawing.tooSmall) {
       const m = { id: "local-" + (state.nextLocalId++), ...natural, src: "manual" };
       state.marks.push(m);
       state.selectedId = m.id;
       markDirty();
       render();
+    } else if (natural && (drawing.w > 4 || drawing.h > 4)) {
+      // A drag too small to be a panel makes nothing at all - but it did
+      // happen, and saying why beats leaving someone to wonder where their
+      // box went. Only for something that was actually DRAGGED: a plain click
+      // on the canvas is how you deselect a mark (see above), and it must not
+      // be answered with a complaint.
+      notice(`Too small for a panel — drag at least ${minMarkSize()} px on each side`);
     }
     drawing = null;
   }

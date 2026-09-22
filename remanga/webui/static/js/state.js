@@ -37,6 +37,8 @@ export const state = {
   readOnly: false,          // a `view-marks` session: look, navigate, change nothing.
                             // The server refuses writes too - this only shapes the UI
   clickToSelect: true,      // see MarkerConfig.click_to_select; set from /api/chapter in chapter-nav.js
+  minMarkRatio: 0.03,       // see MarkerConfig.min_mark_ratio; the smallest side a mark may have,
+                            // as a fraction of the page's shorter side (marks.js:minMarkSize)
   pageLoaded: false,        // false until the very first loadPage() has completed
   spaceHeld: false,         // hand-tool (pan) key held down
   panning: null,            // { startX, startY, startPanX, startPanY } while dragging to pan

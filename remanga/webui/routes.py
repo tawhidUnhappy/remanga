@@ -51,6 +51,7 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
             "decided": sorted(state.decided),
             "magi_enabled": config.magi_enabled,
             "click_to_select": config.click_to_select,
+            "min_mark_ratio": config.min_mark_ratio,
             "detect_scope": config.auto_detect_scope,
             "auto_order": session.auto_order,
             "revision": state.revision,

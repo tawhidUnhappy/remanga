@@ -118,15 +118,41 @@ export function deleteMark(id) {
 // keep the box's full dragged size but slide its origin to the page edge,
 // so a drag that started above/left of the page would land bigger than
 // what was actually dragged over the page.
+//
+// The clipped size is reported honestly, down to zero: a drag that barely
+// grazed the page (or missed it) comes back as the sliver it really is, and
+// it's isTooSmall() below - one floor for every way a mark is made - that
+// decides such a box never becomes a mark. Flooring the size at 4px here
+// instead, as this used to, turned a drag that landed entirely off the page
+// into a 4px mark pinned to the page edge.
 export function clampBoxToPage(x, y, w, h) {
   const page = state.chapter.pages[state.pageIndex];
   const left = Math.max(0, x), top = Math.max(0, y);
   const right = Math.min(page.width, x + w), bottom = Math.min(page.height, y + h);
   return {
     x: left, y: top,
-    w: Math.max(4, right - left),
-    h: Math.max(4, bottom - top),
+    w: Math.max(0, right - left),
+    h: Math.max(0, bottom - top),
   };
+}
+
+// The smallest side a mark may have, in natural page pixels: a fraction of
+// the page's shorter side (MarkerConfig.min_mark_ratio, default 3%), not a
+// fixed pixel count, because the same chapter arrives at 800px or 4000px wide
+// depending on the source and "too small to be a panel" scales with the page.
+// Per page, not per chapter: a chapter can mix a spread in with its pages.
+export function minMarkSize() {
+  const page = state.chapter.pages[state.pageIndex];
+  return Math.round(state.minMarkRatio * Math.min(page.width, page.height));
+}
+
+// The one test behind every way a mark can be created or shrunk (draw.js's
+// new box, drag-resize.js's handles): a box under the floor on either side is
+// an accident - a twitch while clicking, a few pixels of drag at 400% zoom, a
+// handle dragged past the opposite edge - not a panel anyone meant to make.
+export function isTooSmall(box) {
+  const min = minMarkSize();
+  return box.w < min || box.h < min;
 }
 
 // Ctrl/Cmd+F: wipe every mark on the current page and replace them with a
