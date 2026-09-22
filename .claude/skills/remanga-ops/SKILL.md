@@ -39,9 +39,7 @@ download  -> projects/P/chapters/chapter_N/pages/          (MangaDex, checksum-v
 mark      -> Panel Marker web UI (Flask, browser): Detect = MAGI v3, hand fixes -> crops.json
 [optional: write = Narration Writer (type it yourself), review = Narration Reviewer (flag what is wrong
  -> narration_review.json + prompts/narration_review.md)]
-pdf       -> cuts panels/ from crops.json, draws pdf/chapter_N/pages/ (each page with its panel
-             boxes labelled), then projects/P/pdf/chapter_N/panels_1.pdf, ... - a part holds each
-             page followed by the panels cut from it (2026-09-22)
+pdf       -> cuts panels/ from crops.json, then projects/P/pdf/chapter_N/panels_1.pdf, ...
              (+ empty narration.json to paste into)
 [user uploads prompts/narration.md + the PDF to an LLM, pastes the one JSON reply into narration.json]
 video     -> check reply -> Kokoro clip per panel -> mix with BGM -> render panels
@@ -72,18 +70,14 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
 (`narration.read_reply` also accepts `panels`+`memory` side by side, and two separate blocks.)
 - One entry per page ID, in order. Story page: `panels` = one note per panel in reading order (forces
   per-panel coverage, never read aloud) + `text`. Non-story: `skip` in credits/ad/blank/duplicate.
-- **The prompt asks for fifteen passes over the draft before the reply** (2026-09-22, user request;
-  ten, then five more on the speaker alone). Each pass is one failure mode and must FIX what it
-  finds: coverage/ids, panel against its art, page against its layout, dialogue completeness, then
-  **five on who is speaking** (every bubble to its tail, only people who are in the panel, bubble
-  reading order in the chapter's own direction, what kind of bubble it is - thought and caption are
-  not speech in the room, and the same person named and pronouned the same way throughout), then
-  reported speech, the voice's mechanics, names and facts, skips both directions, pacing, and the
-  draft against the reference chapter. The speaker got five of its own because a line in the wrong
-  mouth survives every other check: the words are all there and the story is still wrong. They happen in
-  the model's own working - the reply is still exactly one JSON block with no account of them, and
-  anything unresolved goes in `problems`. Keep them concrete and one-per-fault if you edit them: "go
-  over it ten times" without naming what each pass hunts is a glance, not a pass.
+- **Pages in the PDF and self-review passes both made the narration WORSE (2026-09-22, user
+  verdict).** Two things were tried on the user's say-so and taken straight back out on it: the PDF
+  carrying every page with its panel boxes drawn on it beside the cut panels, and the prompt asking
+  for ten (then fifteen) passes over the draft before replying. Both are on
+  `backup/pdf-pages-and-passes-2026-09-22` if they are ever wanted again. **Do not re-suggest either
+  unasked**, and when the next idea for "more context" or "more checking" comes up, remember these
+  two: the quality bar here is what the chapter sounds like, and it is the user's ear that decides,
+  not how thorough the pipeline looks.
 - **The prompt ends with a whole chapter of another manga narrated as the user wants it** (2026-09-22,
   their file /mnt/datadisk/whatIwant/whatIwant.txt, ~2900 words, copied in verbatim and wrapped). It is
   the voice target - the rules above it say what to do, it shows what they sound like - with a short

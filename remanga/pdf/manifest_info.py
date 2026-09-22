@@ -37,12 +37,6 @@ def build_part_info(
 LINE_WIDTH = 95
 MEMORY_KEY = "story_so_far"
 MEMORY_SOURCE_KEY = "story_so_far_from_chapter"
-# The marked pages in this part, and what each one holds: the key to reading
-# the images that follow, since a page image and the panels cut from it look
-# nothing alike until you know which is which. Both are `extra` on
-# build_part_info, filled in by pdf/builder.py.
-PAGES_KEY = "pages_in_this_part"
-PAGE_PANELS_KEY = "panels_per_page"
 
 
 def info_to_text_lines(info: dict[str, Any]) -> list[str]:
@@ -55,26 +49,13 @@ def info_to_text_lines(info: dict[str, Any]) -> list[str]:
 
     lines = []
     for k, v in info.items():
-        if isinstance(v, (list, dict)) or k in (MEMORY_KEY, MEMORY_SOURCE_KEY):
+        if isinstance(v, list) or k in (MEMORY_KEY, MEMORY_SOURCE_KEY):
             continue
         lines.append(f"{k}: {v}")
 
-    pages = info.get(PAGES_KEY) or []
-    panels_per_page = info.get(PAGE_PANELS_KEY) or {}
-    if pages:
-        lines.append("")
-        lines.append(f"Pages in this part ({len(pages)}), in reading order. Each is a whole page of the "
-                     f"chapter with its panels outlined and labelled, and the panels cut from it follow it "
-                     f"as their own images:")
-        for page in pages:
-            held = panels_per_page.get(page) or []
-            lines.append(f"  {page}: " + (", ".join(held) if held
-                                          else "no panels marked - context only, nothing to narrate"))
-
     contents = info.get("contents", [])
     lines.append("")
-    lines.append(f"Panels in this part ({len(contents)}), in reading order - these are what you narrate, "
-                 f"one entry each:")
+    lines.append(f"Panels in this part ({len(contents)}), in reading order:")
     lines.append(", ".join(contents))
 
     full_manifest = info.get("full_manifest", [])

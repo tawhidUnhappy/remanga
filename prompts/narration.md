@@ -6,60 +6,27 @@ panel. The viewers have not read the manga: what they hear is the story.
 
 ## What you receive
 
-A PDF of one chapter (sometimes split into `panels_1.pdf`, `panels_2.pdf`, ...; wait for every
-part). Each part starts with a text page giving:
+A PDF of one chapter's panels, already cut out and in reading order (sometimes split into
+`panels_1.pdf`, `panels_2.pdf`, ...; wait for every part). Each part starts with a text page giving:
 - the manga, the chapter, and `reading_direction` (`right_to_left` for Japanese manga);
-- the pages in this part and, under each, the panels cut from it;
 - the panel IDs in this part and in the whole chapter (`001_001_01`, `001_001_02`, ...), in reading
-  order. An ID is `chapter_page_panel`, so `001_004_02` is the second panel of page four;
+  order. The images that follow are those panels, in that order. An ID is
+  `chapter_page_panel`, so `001_004_02` is the second panel of page four;
 - the story so far - the memory you wrote with the previous chapter's narration: characters, places
   and events to stay consistent with. If there is none, this is the first chapter.
 
-The images after that text page come in reading order, and they are of two kinds:
-
-- **A whole page**, with each of its panels outlined in orange and labelled with that panel's ID.
-  This is the page as it was published - the layout, and everything the layout says.
-- **The panels cut from that page**, one image each, in reading order, straight after it.
-
-So each page is followed by its own panels, then the next page follows. A page labelled `001_004`
-is followed by `001_004_01`, `001_004_02`, and so on.
-
-**Read the page first, then narrate its panels.** The page is context; the panels are what you
-narrate. There is never an entry for a page - only for panels.
-
-### What to take from the page
-
-- **Where a panel sits, and what that means.** A row of small panels is a quick exchange; a panel
-  taking half the page is the moment that matters and can take a longer sentence; a small inset
-  inside a big panel is a detail of that same moment, not a new scene.
-- **Who is where.** A character at the edge of a wide panel is looking across at someone in the
-  next; a bubble whose tail leaves the panel is answered in the one after it.
-- **What a cut panel loses.** A panel cut out of a spread can hide that two panels are one picture,
-  and a caption strip or sound lettering that runs across a page can end up split. If a panel looks
-  half-empty or confusing on its own, look at its page before deciding what it shows.
-- **What is not story.** A title, a credits block or a scanlation notice is recognizable on the page
-  at a glance - and so is a page that is all of that, so its panels get `skip` and no text.
-- **Never narrate from the page what is not in the panel.** Each entry is about its own panel: the
-  page tells you what the panel MEANS, it does not add events to it. A panel's entry never describes
-  what happens in the next one.
-
-A page image may have no panels marked on it at all (the text page says so). It is there for
-context, and there is nothing to narrate for it.
-
 ## How to narrate a panel
 
-Work page by page, and within a page panel by panel, in order. For each panel:
+Work panel by panel, in order. For each panel:
 
 1. **Read everything in it:** every speech bubble, thought bubble, caption and sign, and who says
-   each one (follow the bubble's tail). Read the panel's own image for this - it is the bigger,
-   clearer copy; the page is there for where it sits.
+   each one (follow the bubble's tail).
 2. **Write its narration: what happens in that panel, and everything said in it.** A quiet panel
    gets a sentence; a panel with several bubbles gets as many sentences as its bubbles need. Never
    skip a line of dialogue because the entry is getting long.
 3. **Keep it one continuous account.** Each panel's text carries on from the one before it, because
-   they are heard one after another with only a short pause between. Never announce panels or pages
-   ("in this panel", "on this page"), and never summarize several panels in one entry - the next
-   panel has its own.
+   they are heard one after another with only a short pause between. Never announce panels ("in this
+   panel"), and never summarize several panels in one entry - the next panel has its own.
 
 ### The narrator's voice
 - **Report speech, never quote it.** No quotation marks. "I won't let you have him!" becomes *she
@@ -86,90 +53,20 @@ is the sound to aim for: every rule above is in it, and it shows what they add u
 
 ### Panels that are not story
 A panel holding only credits, a scanlation notice, an ad or the chapter's title gets `"skip"` with
-that reason and no text - the page it sits on usually makes which one obvious. Everything else is
-story, including a panel that is only a face or a landscape. Watermarks, page numbers and publisher
-blurbs are never narrated.
+that reason and no text. Everything else is story, including a panel that is only a face or a
+landscape. Watermarks, page numbers and publisher blurbs are never narrated.
 
-## Fifteen passes before you reply
-
-Write the whole chapter first, then go back over it fifteen times. Each pass looks for one kind of
-mistake, from the first panel to the last, and **fixes what it finds** - a pass that changes nothing
-was not a pass, it was a glance. Do all fifteen before you write a single character of the reply,
-and do them on the draft, not from memory of it.
-
-Five of them are about one thing only: **who is speaking**. Putting a line in the wrong mouth is the
-mistake that survives every other check - the words are all there, the grammar is right, and the
-story is wrong. It is worth five passes of its own.
-
-Do not narrate the passes. They do not appear in the reply, and the reply carries no report of them;
-anything you could not resolve goes in `problems`.
-
-1. **Coverage.** Walk the text page's panel list against your entries, in order. Every panel ID
-   appears exactly once, spelled exactly as the text page spells it. Nothing invented, nothing
-   merged, nothing missing - including panels in a part you received earlier. No entry for a page:
-   page IDs (`001_004`) are never panel IDs.
-2. **Panel by panel against the art.** Look at each panel's own image again beside its entry. The
-   entry describes what is in that panel: the right characters, doing what they are doing. Anything
-   you inferred but cannot see goes.
-3. **Page by page against the layout.** Look at each marked page again with its entries read in
-   order. The page tells you what its panels mean together - a tier read as one exchange, an inset
-   belonging to the panel it sits in, a moment split across a spread. Fix an entry that read its
-   panel out of context; add nothing from the page that is not in the panel.
-4. **Dialogue.** Re-read every bubble, thought bubble, caption and sign in every panel, and follow
-   each tail to its speaker. Every line said is in that panel's entry, attributed to the right
-   person. A dropped line is the most common fault of all - if an entry is shorter than its panel's
-   lettering, it has dropped something.
-5. **Speaker: every tail.** Take each bubble in each panel and follow its tail to the mouth it
-   comes from, then check your entry says that person said it. A tail that leaves the panel belongs
-   to someone outside the frame - report it as an off-panel voice, or as whoever the page shows it
-   to be, never as one of the people standing in the picture.
-6. **Speaker: only who is there.** Nobody speaks a line who is not in that panel or established as
-   just outside it. If a bubble cannot be pinned to anyone, say so plainly - *a voice answers*,
-   *someone calls out* - rather than picking the likeliest character. A guessed speaker reads
-   exactly like a known one, which is what makes it dangerous.
-7. **Speaker: the order they are read in.** Bubbles are read in the reading direction the text page
-   gives (`right_to_left` for Japanese manga), top row first. Check each panel's lines are in that
-   order in your entry: an exchange read backwards makes the answer come before the question and
-   changes who is pressing whom.
-8. **Speaker: what kind of bubble it is.** A pointed bubble is spoken; a cloudy or bubbled one is
-   thought and is never heard by the others - report it as thinking, not saying; a square caption is
-   narration or an inner voice, not speech in the room; a jagged one is a shout; a bubble with no
-   tail may be a voice from off the page. Lettering that is not in a bubble at all is a sound
-   effect: report what happens, never who said it.
-9. **Speaker: the same person all the way through.** Read your entries in order and follow each
-   character: the same person keeps the same name or the same description from first mention to
-   last, and keeps the pronouns the chapter gives them - where it gives none, they stay *they*, not
-   a guess. A two-person exchange alternates; if your entries have one of them answering themselves,
-   a line is in the wrong mouth. Check the names against the story so far on the text page too: a
-   character carried over from an earlier chapter keeps that name.
-10. **Reported speech.** No quotation marks anywhere. Every line is reported - *she refuses*, *he
-    asks*, *they agree* - with the content whole: a threat still threatens, a question is still
-    asked, an insult is still an insult.
-11. **The mechanics of the voice.** No `?`, `!` or `...`. No contractions. No capitals for emphasis,
-    no spelled-out stammers or interjections, no sound-effect lettering, no emoji or symbols. Every
-    sentence ends in a period. Third person, present tense, one calm narrator throughout.
-12. **Names and facts.** No name the chapter has not given yet, and none invented at all. Names,
-    places and relationships match the story so far on the text page, and match each other from the
-    first entry to the last. Where the chapter has not named someone, they stay described.
-13. **Skips.** Every panel that is only credits, a scanlation notice, an ad, a title or a blank gets
-    `skip` with that reason and empty text; every panel that is story has text. Check both
-    directions: a story panel wrongly skipped is silence in the video, and a skipped panel wrongly
-    narrated is a title read aloud.
-14. **Pacing.** Read the entries in order as one account. A quiet panel gets a sentence, a busy one
-    as many as its bubbles need, and nothing is padded to look even. Sentence openings vary. Scene
-    changes are marked. Nothing repeats what the entry before it already said.
-15. **Against the reference.** Read the reference chapter at the end of this file, then read your
-    chapter straight through. They should sound like the same narrator: same register, same level
-    of explanation, same way of moving between moments. Fix anything that drifted out of it.
-
-Then check the reply itself: valid JSON, both sections, `narration` first and `memory` last, one
-entry per panel in reading order, and the memory section written for the next chapter.
+## Check before replying
+- Every panel ID from the text page appears exactly once, in order.
+- Every story panel has its own narration, with every line of dialogue in it reported in full.
+- No quotation marks, `?`, `!`, `...` or contractions anywhere.
+- Heard straight through, the chapter sounds like one person telling the story.
 
 ## Reply
 
-Reply with exactly one ```json code block and nothing else - no greeting, headings or notes, and no
-account of the fifteen passes. Standard JSON: double quotes, no trailing commas, no comments. It has two
-sections: `narration` first, `memory` last.
+Reply with exactly one ```json code block and nothing else - no greeting, headings or notes.
+Standard JSON: double quotes, no trailing commas, no comments. It has two sections: `narration`
+first, `memory` last.
 
 ```json
 {
