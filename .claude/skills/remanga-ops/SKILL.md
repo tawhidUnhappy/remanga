@@ -72,10 +72,15 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
 (`narration.read_reply` also accepts `panels`+`memory` side by side, and two separate blocks.)
 - One entry per page ID, in order. Story page: `panels` = one note per panel in reading order (forces
   per-panel coverage, never read aloud) + `text`. Non-story: `skip` in credits/ad/blank/duplicate.
-- **The prompt asks for ten passes over the draft before the reply** (2026-09-22, user request).
-  Each pass is one failure mode and must FIX what it finds: coverage/ids, panel against its art,
-  page against its layout, dialogue completeness, reported speech, the voice's mechanics, names and
-  facts, skips both directions, pacing, and the draft against the reference chapter. They happen in
+- **The prompt asks for fifteen passes over the draft before the reply** (2026-09-22, user request;
+  ten, then five more on the speaker alone). Each pass is one failure mode and must FIX what it
+  finds: coverage/ids, panel against its art, page against its layout, dialogue completeness, then
+  **five on who is speaking** (every bubble to its tail, only people who are in the panel, bubble
+  reading order in the chapter's own direction, what kind of bubble it is - thought and caption are
+  not speech in the room, and the same person named and pronouned the same way throughout), then
+  reported speech, the voice's mechanics, names and facts, skips both directions, pacing, and the
+  draft against the reference chapter. The speaker got five of its own because a line in the wrong
+  mouth survives every other check: the words are all there and the story is still wrong. They happen in
   the model's own working - the reply is still exactly one JSON block with no account of them, and
   anything unresolved goes in `problems`. Keep them concrete and one-per-fault if you edit them: "go
   over it ten times" without naming what each pass hunts is a glance, not a pass.

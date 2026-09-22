@@ -90,12 +90,16 @@ that reason and no text - the page it sits on usually makes which one obvious. E
 story, including a panel that is only a face or a landscape. Watermarks, page numbers and publisher
 blurbs are never narrated.
 
-## Ten passes before you reply
+## Fifteen passes before you reply
 
-Write the whole chapter first, then go back over it ten times. Each pass looks for one kind of
+Write the whole chapter first, then go back over it fifteen times. Each pass looks for one kind of
 mistake, from the first panel to the last, and **fixes what it finds** - a pass that changes nothing
-was not a pass, it was a glance. Do all ten before you write a single character of the reply, and do
-them on the draft, not from memory of it.
+was not a pass, it was a glance. Do all fifteen before you write a single character of the reply,
+and do them on the draft, not from memory of it.
+
+Five of them are about one thing only: **who is speaking**. Putting a line in the wrong mouth is the
+mistake that survives every other check - the words are all there, the grammar is right, and the
+story is wrong. It is worth five passes of its own.
 
 Do not narrate the passes. They do not appear in the reply, and the reply carries no report of them;
 anything you could not resolve goes in `problems`.
@@ -115,23 +119,46 @@ anything you could not resolve goes in `problems`.
    each tail to its speaker. Every line said is in that panel's entry, attributed to the right
    person. A dropped line is the most common fault of all - if an entry is shorter than its panel's
    lettering, it has dropped something.
-5. **Reported speech.** No quotation marks anywhere. Every line is reported - *she refuses*, *he
-   asks*, *they agree* - with the content whole: a threat still threatens, a question is still
-   asked, an insult is still an insult.
-6. **The mechanics of the voice.** No `?`, `!` or `...`. No contractions. No capitals for emphasis,
-   no spelled-out stammers or interjections, no sound-effect lettering, no emoji or symbols. Every
-   sentence ends in a period. Third person, present tense, one calm narrator throughout.
-7. **Names and facts.** No name the chapter has not given yet, and none invented at all. Names,
-   places and relationships match the story so far on the text page, and match each other from the
-   first entry to the last. Where the chapter has not named someone, they stay described.
-8. **Skips.** Every panel that is only credits, a scanlation notice, an ad, a title or a blank gets
-   `skip` with that reason and empty text; every panel that is story has text. Check both
-   directions: a story panel wrongly skipped is silence in the video, and a skipped panel wrongly
-   narrated is a title read aloud.
-9. **Pacing.** Read the entries in order as one account. A quiet panel gets a sentence, a busy one
-   as many as its bubbles need, and nothing is padded to look even. Sentence openings vary. Scene
-   changes are marked. Nothing repeats what the entry before it already said.
-10. **Against the reference.** Read the reference chapter at the end of this file, then read your
+5. **Speaker: every tail.** Take each bubble in each panel and follow its tail to the mouth it
+   comes from, then check your entry says that person said it. A tail that leaves the panel belongs
+   to someone outside the frame - report it as an off-panel voice, or as whoever the page shows it
+   to be, never as one of the people standing in the picture.
+6. **Speaker: only who is there.** Nobody speaks a line who is not in that panel or established as
+   just outside it. If a bubble cannot be pinned to anyone, say so plainly - *a voice answers*,
+   *someone calls out* - rather than picking the likeliest character. A guessed speaker reads
+   exactly like a known one, which is what makes it dangerous.
+7. **Speaker: the order they are read in.** Bubbles are read in the reading direction the text page
+   gives (`right_to_left` for Japanese manga), top row first. Check each panel's lines are in that
+   order in your entry: an exchange read backwards makes the answer come before the question and
+   changes who is pressing whom.
+8. **Speaker: what kind of bubble it is.** A pointed bubble is spoken; a cloudy or bubbled one is
+   thought and is never heard by the others - report it as thinking, not saying; a square caption is
+   narration or an inner voice, not speech in the room; a jagged one is a shout; a bubble with no
+   tail may be a voice from off the page. Lettering that is not in a bubble at all is a sound
+   effect: report what happens, never who said it.
+9. **Speaker: the same person all the way through.** Read your entries in order and follow each
+   character: the same person keeps the same name or the same description from first mention to
+   last, and keeps the pronouns the chapter gives them - where it gives none, they stay *they*, not
+   a guess. A two-person exchange alternates; if your entries have one of them answering themselves,
+   a line is in the wrong mouth. Check the names against the story so far on the text page too: a
+   character carried over from an earlier chapter keeps that name.
+10. **Reported speech.** No quotation marks anywhere. Every line is reported - *she refuses*, *he
+    asks*, *they agree* - with the content whole: a threat still threatens, a question is still
+    asked, an insult is still an insult.
+11. **The mechanics of the voice.** No `?`, `!` or `...`. No contractions. No capitals for emphasis,
+    no spelled-out stammers or interjections, no sound-effect lettering, no emoji or symbols. Every
+    sentence ends in a period. Third person, present tense, one calm narrator throughout.
+12. **Names and facts.** No name the chapter has not given yet, and none invented at all. Names,
+    places and relationships match the story so far on the text page, and match each other from the
+    first entry to the last. Where the chapter has not named someone, they stay described.
+13. **Skips.** Every panel that is only credits, a scanlation notice, an ad, a title or a blank gets
+    `skip` with that reason and empty text; every panel that is story has text. Check both
+    directions: a story panel wrongly skipped is silence in the video, and a skipped panel wrongly
+    narrated is a title read aloud.
+14. **Pacing.** Read the entries in order as one account. A quiet panel gets a sentence, a busy one
+    as many as its bubbles need, and nothing is padded to look even. Sentence openings vary. Scene
+    changes are marked. Nothing repeats what the entry before it already said.
+15. **Against the reference.** Read the reference chapter at the end of this file, then read your
     chapter straight through. They should sound like the same narrator: same register, same level
     of explanation, same way of moving between moments. Fix anything that drifted out of it.
 
@@ -141,7 +168,7 @@ entry per panel in reading order, and the memory section written for the next ch
 ## Reply
 
 Reply with exactly one ```json code block and nothing else - no greeting, headings or notes, and no
-account of the ten passes. Standard JSON: double quotes, no trailing commas, no comments. It has two
+account of the fifteen passes. Standard JSON: double quotes, no trailing commas, no comments. It has two
 sections: `narration` first, `memory` last.
 
 ```json
