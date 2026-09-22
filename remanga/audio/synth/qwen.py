@@ -48,7 +48,13 @@ EXPECTED_FILES = ("model.safetensors", "config.json")
 # How much of a reference recording the clone is built from. Qwen conditions
 # on the start of the clip anyway, and a long one makes every generation
 # slower - a 31-second reference pushed one chunk past the three-minute
-# timeout, where 15 seconds of the same recording reads it comfortably.
+# timeout, where 15 seconds of the same recording reads it comfortably, and
+# 30 seconds blew a 670s timeout on a take the 15s clip finished in 325s.
+#
+# A ceiling, not the cut: where the clip actually ends is decided with its
+# transcript, at the last sentence that finishes inside this (see
+# audio/reference_text.py). Cutting on the stopwatch instead is what put
+# words in a chapter that nobody wrote.
 REFERENCE_MAX_SECONDS = 15.0
 
 # The line a designed voice says in its sample. Long enough for the clone to
@@ -59,48 +65,56 @@ DESIGN_SAMPLE_TEXT = (
 )
 
 
-def _reference_clip(path: Path) -> Path:
-    """The recording the clone is built from, no longer than
-    REFERENCE_MAX_SECONDS. A longer one is trimmed into a cached copy beside
-    it rather than in place - it is the user's file."""
+def reference_pair_path(sample: Path) -> Path:
+    """Where the clip-and-transcript pair built from a recording is kept -
+    beside the recording, named after it. One file describing both halves, so
+    a transcript can never be read next to a clip it is not of."""
+    return sample.with_name(f"{sample.stem}.reference.json")
+
+
+def _fallback_clip(path: Path) -> Path:
+    """The clone's reference when no pair was built (nothing could read the
+    recording): the first REFERENCE_MAX_SECONDS of it, cut on the stopwatch.
+
+    Safe only because a clip with no transcript is used through
+    x_vector_only_mode - the speaker embedding alone - where the model is
+    given no words at all and so has none to leak. The moment there IS a
+    transcript, the pair decides the cut instead (audio/reference_text.py)."""
     from pydub import AudioSegment
 
     audio = AudioSegment.from_file(path)
     limit_ms = int(REFERENCE_MAX_SECONDS * 1000)
     if len(audio) <= limit_ms:
         return path.resolve()
-    trimmed = path.with_name(f"{path.stem}.first{int(REFERENCE_MAX_SECONDS)}s.wav")
+    trimmed = path.with_name(f"{path.stem}.reference.wav")
     if not trimmed.exists() or trimmed.stat().st_mtime < path.stat().st_mtime:
         audio[:limit_ms].export(trimmed, format="wav")
-        console.print(f"[dim]Cloning from the first {REFERENCE_MAX_SECONDS:g}s of "
-                      f"{_esc(path.name)} - a longer reference only slows every line down.[/]")
     return trimmed.resolve()
 
 
-def reference_text_path(sample: Path) -> Path:
-    """Where a reference recording's transcript is kept once something has
-    worked it out - beside the recording, named after it."""
-    return sample.with_name(f"{sample.stem}.transcript.txt")
+def reference_pair(config: QwenConfig) -> tuple[Path, str]:
+    """The clip the clone is built from and what it says - the pair
+    audio/reference_text.py built, or the embedding-only fallback.
 
-
-def reference_text(config: QwenConfig) -> str:
-    """What the reference recording is known to say, or "" when nothing
-    knows. `designed_text` when remanga wrote the sample itself and therefore
-    chose the words; otherwise a transcript cached beside the recording
-    (audio/reference_text.py writes it).
-
-    Worth having rather than "": with the text, the clone uses the recording
-    IN CONTEXT instead of the speaker embedding alone. Measured on a take
-    that collapses either way, in-context read 863 words where embedding-only
-    managed 98, and 40% of the script was findable in it against 2%. It does
-    not make a long take work - both still stop at the token ceiling - but it
-    is a great deal more of the voice."""
+    The text is worth having rather than "": with it, the clone uses the
+    recording IN CONTEXT instead of the speaker embedding alone. Measured on a
+    take that collapses either way, in-context read 863 words where
+    embedding-only managed 98, and 40% of the script was findable in it
+    against 2%. It is only worth having while it is TRUE of the clip beside
+    it, which is the whole job of reference_text.py."""
+    sample = Path(config.designed_sample)
     if config.designed_text.strip():
-        return config.designed_text.strip()
-    cached = reference_text_path(Path(config.designed_sample))
-    if cached.exists():
-        return cached.read_text(encoding="utf-8").strip()
-    return ""
+        # remanga wrote this sample and chose its words - exact by construction.
+        return sample.resolve(), config.designed_text.strip()
+    try:
+        saved = json.loads(reference_pair_path(sample).read_text(encoding="utf-8"))
+        clip = sample.with_name(saved["clip"])
+        text = str(saved["text"]).strip()
+        if clip.exists() and text:
+            return clip.resolve(), text
+    except (OSError, ValueError, KeyError):
+        pass
+    return _fallback_clip(sample), ""
 
 
 def _model_manager(config: QwenConfig, variant: str) -> ModelManager:
@@ -134,15 +148,15 @@ class QwenSynthesizer(BaseWorkerSynthesizer):
         config = self.engine_config
         args = ["--model_dir", str(model_dir.resolve()), "--mode", self.mode, "--language", config.language]
         if self.mode == "clone":
-            # What the reference is KNOWN to say - the words remanga chose
-            # when it made the sample itself, or a transcript read off a
-            # supplied recording (see reference_text). Guessing is still
-            # worse than nothing: the model is asked to reconcile a recording
-            # with words that are not in it, which took one line past a
-            # five-minute timeout before this was understood. A transcript is
-            # not a guess, which is why reading one is worth the trouble.
-            args += ["--ref_audio", str(_reference_clip(Path(config.designed_sample))),
-                     "--ref_text", reference_text(config)]
+            # The clip and what it is KNOWN to say, from one place so they
+            # cannot disagree (reference_pair). Words the clip does not
+            # actually contain are worse than no words at all: the model is
+            # shown a sentence it never hears finished, and finishes it out
+            # loud in the narration - which is exactly what happened to a
+            # chapter before reference_text.py cut the two together. No
+            # transcript means the embedding alone, which can leak nothing.
+            clip, text = reference_pair(config)
+            args += ["--ref_audio", str(clip), "--ref_text", text]
         return spawn_script_worker(self.tool_name, "audio", "qwen_tts_worker.py", *args)
 
     def _synth_timeout_seconds(self) -> float:

@@ -214,6 +214,19 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   start it is capped by the clip's own leading silence (a flat 35 ms once ramped the opening
   consonant of 52 of 60 clips in a chapter, ~36x down), at the end it may ramp speech up to
   `TAIL_INTO_SPEECH` (15%) because clips often end within 10 ms of the last word.
+- **The clone read a sentence nobody wrote into a chapter (2026-09-22, user report): "It's going to
+  be the danger of the future."** It is the last line of the reference TRANSCRIPT, and it is in no
+  recording anywhere. `_reference_clip` cut the user's 31s recording at a flat 15.000s, mid-sentence
+  ("And that danger is | our contagiously handsome main guy"), whisper invented an ending for the
+  cut, and that went to Qwen as `ref_text`. Qwen clones in context, so a word in ref_text that is
+  not in ref_audio is a sentence it is shown and never hears finished - and it finishes it out loud.
+  **A whisper hallucination has a shape: zero-length words stamped against the clip's last frame**
+  (real words in that recording run 120-300 ms) - that is how `_drop_invented_tail` finds them.
+  `audio/reference_text.py` now builds clip and transcript as ONE pair (cached as
+  `{stem}.reference.json` + `.reference.wav`), cutting both at the last sentence that finishes
+  inside the limit; `synth/qwen.py:reference_pair` is the only way to get them, so a transcript can
+  never sit beside a clip it is not of. No transcript = x_vector_only_mode = nothing to leak.
+  **Rule: never hand a cloning model text you have not proved is in the audio it gets.**
 - **A cloned voice drifts off its reference inside a long take (2026-09-22, user report).** Qwen3-TTS
   clones in context: the reference conditions the start, and the further a single generation runs the
   more it is conditioned on its own output (upstream calls it ICL speaker inconsistency; every
