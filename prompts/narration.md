@@ -81,6 +81,9 @@ Work page by page, and within a page panel by panel, in order. For each panel:
   effect lettering (report what happens), no emoji or symbols.
 - **Suggestive or violent moments** are told plainly and briefly, without dwelling.
 
+**A whole chapter written in this voice is at the end of this file - read it before you start.** It
+is the sound to aim for: every rule above is in it, and it shows what they add up to.
+
 ### Panels that are not story
 A panel holding only credits, a scanlation notice, an ad or the chapter's title gets `"skip"` with
 that reason and no text - the page it sits on usually makes which one obvious. Everything else is
@@ -145,3 +148,196 @@ story so far you were given, keep everything still relevant, and add this chapte
 
 If the user pastes back a list of problems, fix only those, checked against the panels, and reply
 again with the complete JSON - both sections, every panel.
+
+## Reference: a chapter narrated the way yours should sound
+
+Below is one complete chapter of a DIFFERENT manga, narrated as wanted. Read it as the target for
+how yours should read.
+
+**Take from it:**
+- the voice: third person, present tense, one calm narrator, no quotation marks, no `?`, `!` or
+  contractions - all of it is here, in practice rather than as a rule;
+- how speech is reported: every claim, question, threat and refusal turned into reported speech
+  (*she asks the other woman's opinion*, *he urges her to stay hidden*), with nothing dropped;
+- how much is explained: what a look means, who these people are to each other, why a moment
+  matters - not just what is on the page;
+- how much each beat gets: a quiet moment a sentence, a busy one several;
+- how it moves: *however*, *meanwhile*, *just then*, *moments later* - one continuous account that
+  never stalls and never doubles back.
+
+**Do not take from it:**
+- its story. Its characters, places and events are another manga's. Never borrow a name, a plot
+  point or a phrase from it;
+- its shape. It runs as one unbroken account because it was written from a whole chapter. Yours is
+  the same prose cut at the panel boundaries: one entry per panel, each carrying on from the one
+  before, so that reading every entry in order sounds exactly like the text below.
+
+---
+
+The story begins on a fishing boat that is supposed to take the protagonist named Soda on a solo
+camping trip. However, a large wave suddenly hits the boat, throwing him overboard and causing him
+to drift away from it. Unable to swim against the strong ocean current, he begins drowning and
+wonders if he is going to die. He then suddenly regains consciousness and finds himself lying on a
+beach, wondering if he somehow survived. Recalling that he had been tossed into the ocean, he
+assumes that he must have drifted to the shore. After getting up, he looks around but finds no trace
+of anyone. Not only that, but his cell phone has no signal either. This makes him wonder if he is
+really on a deserted island, but since he finds the idea impossible, he awkwardly laughs it off.
+However, as reality begins to sink in, he seriously starts questioning whether he is truly stranded.
+Meanwhile, somewhere nearby, two women are fighting. One of them admits that she has held out for as
+long as she could, but this is as far as she can go. The other woman, who is wielding an axe,
+reveals that she plans to kill her opponent and then have her way with a certain man until he is
+dead. Just imagining it excites her, and she asks the other woman's opinion. The woman Philys, who
+appears to be a knight, refuses to let someone like her have him and calls the axe-wielding woman
+tyrant Ronia. As Philys declares that she has no intention of losing to Ronia, Ronia finds this
+troublesome and gets into a fighting stance. Just then, Ronia suddenly vanishes, shocking Philys as
+she looks around in confusion. However, Ronia suddenly appears in front of her and thrusts her axe
+toward Philys, causing her to fall from the cliff into the river below. As the strong current
+carries Philys away, Ronia laughs hysterically and tells her to die a meaningless death as a virgin.
+Meanwhile, Soda has ventured deep into the forest and realizes how naive he had been, as he never
+expected the forest to be this dense. This makes him wonder if he should simply head back and wait
+to be rescued, since it does not seem like anyone is living on the island. Just as he is thinking
+this, he suddenly hears a voice. Wondering if it belongs to another person, he quickly follows it
+while calling out to see if anyone is there. Following the voice, he comes across a clearing with a
+giant tree in the center. Surprised by the enormous tree, he begins hearing the voice again and
+starts looking around. When he checks behind the tree, he finds Philys lying unconscious on the
+ground. Seeing her, he is mesmerized by her beauty, thinking that she looks like a model from a
+painting. Setting that thought aside, he wonders why she is wearing armor that looks like it came
+from medieval times. Moving closer to wake her up, he notices blood coming from her head. Realizing
+that she is injured, he quickly decides to give her first aid and takes off his bag. Fortunately,
+his first aid kit is still intact, so he quickly takes out a bandage and wraps it around her head to
+stop the bleeding. After cleaning the wound and applying the bandage as best he can, she still does
+not wake up, leading him to believe that she is unconscious. More importantly, he realizes that he
+cannot simply leave her there in that condition, but he is certain that there is no hospital
+anywhere nearby. Just as he notices that his phone has no reception, it suddenly starts raining, so
+he quickly covers Philys's head with a cloth. Then, after gently patting her head, he tells her that
+he will be right back. Since he cannot let her body become cold, he quickly begins searching for a
+place sheltered from the rain. Eventually, he finds a cave that he believes will work. Moments
+later, Soda pants heavily as he finally manages to carry Philys into the cave, though he admits that
+the armor she is wearing is extremely heavy. Moving on, he quickly lights a fire and informs her
+that he is going to remove her armor before starting to do so. As he holds one of the armor pieces
+in his hand, he believes that simply wearing something this heavy would exhaust anyone. This makes
+him wonder if cosplayers like her really wear armor this realistic, as even he would have trouble
+moving around while wearing it. As he removes the armor piece by piece, he eventually reaches the
+final piece, the chest plate, which he manages to remove by lifting her slightly. However, the
+moment he takes it off, what was being squeezed underneath the armor springs free, leaving him
+flustered. Surprised by how large they are, he is snapped out of his days by Philys's groan and
+quickly slaps himself to regain focus. With that, he drenches a piece of cloth in water and places
+it on her forehead as a cold compress. While Philys seems able to open her eyes slightly, she can
+only make out Soda's silhouette before losing consciousness again, but this time she feels strangely
+blissful. In her dreamlike state, she appears to be lying somewhere when she gets up and notices
+someone standing behind her. As she turns around, the boy who resembles Soda places his hand on her
+face. Recognizing that he is a man, she wonders if this is a dream. Since she had lived a life as a
+knight that was completely removed from men, she realizes that this must be the dream of a woman who
+had passed the usual age of marriage and was filled with regret. However, because it is only a
+dream, she decides to indulge in the experience of being with a man as much as she desires. Moments
+later, Soda is still wringing out the wet cloth, resoaking it, and placing it back on Philys's
+forehead. He also brings her some of his clothes and tells her to bear with them for now, as
+otherwise she will catch a cold while wearing that heavy armor. Even though she is unconscious, he
+continues talking to her and asks if she will be all right. Just then, her stomach begins growling,
+making him realize that he needs to find something for her to eat. Philys then turns in her sleep,
+leading him to believe that she is getting better, and he thanks her for hanging on. Later, while
+Soda is searching for food, he suddenly hears something familiar and quickly runs toward it. He
+discovers that it is a river, which makes him extremely happy because he can now collect fresh
+water. While gathering water, he notices that the river is filled with fish. However, they look
+strange to him, making him wonder if they are safe to eat. Since he has no other choice, he decides
+to make a fishing rod later so he can catch them. Just thinking about eating fish makes him drool,
+but now that he has collected enough water, he decides to return to the cave and come back later to
+catch a big one. Meanwhile, somewhere in the forest, Ronia swings her axe around effortlessly,
+cutting through trees as she searches for Philys. She then uses her axe to propel herself upward and
+searches the area from above, frustrated that Philys had dodged the attack at the last second. Ronia
+refuses to believe that Philys drowned in the river. Although she admits that tracking Philys down
+will be a hassle, she remains determined to find her and take her head. She also speaks of a man
+whom she claims belongs to her. Meanwhile, Soda makes it back to the cave, only to find that Philys
+is no longer there, making him wonder if she has already woken up. Just as he is thinking this,
+Philys suddenly grabs him by the back of his t-shirt and pins him to the ground with a knife held
+near his neck, ordering him not to move. In a threatening manner, she asks if he is working for the
+empire and whether they sent him to hunt her down. However, before she can finish, she notices that
+he looks rather unusual for a woman. As she looks at him more carefully, she realizes that the
+reason he looks unusual is because he is not a woman at all. Realizing this, she becomes extremely
+flustered and asks him if he is a man. Moments later, after clearing up the misunderstanding, Philys
+calls herself an idiot. When Soda tries to tell her that it is fine, Philys adds that she cannot
+believe she made a man cook for her, and on top of that, she mistook him for an enemy and did
+something terrible to him. Her imagination causes her to picture the situation very differently,
+making her so flustered that her nose begins to bleed. However, she quickly snaps out of it and,
+embarrassed that Soda has seen this side of her, bows her head and asks him to kill her. Soda
+meanwhile finds her to be quite an interesting person. He then tells her that he is glad she seems
+to be doing well, as he had been worried when he saw how badly she was injured. While Philys is
+still crying, Soda offers her some rice porridge, which she gratefully accepts. The moment she takes
+her first spoonful, her face immediately brightens with happiness. Soda admits that she really
+surprised him earlier, but now that he gets a proper look at her, he thinks she is actually kind of
+cute. He also compliments her on how impressive and incredibly fluent her Japanese is for a
+foreigner, which leaves her confused. She then asks what Japanese is, leaving Soda equally confused.
+Philys continues by explaining that they are simply speaking the common Jelshin language. Hearing
+this, Soda struggles to find the right words as he asks what Jelsha is, admitting that he has never
+heard of it. After a brief pause, Philys asks if he really does not know what Jelsha is, to which he
+nods. She then asks if he also does not know that they are currently in the great forest located
+west of the kingdom of Venda on the Jelsha continent. She asks how he ended up there all by himself,
+and Soda explains that his ship was caught in a storm, causing him to be thrown overboard by the
+crashing waves before he eventually drifted to the island. He admits that he is completely lost and
+has no idea what is happening. Hearing his story, Philys believes that the accident must have left
+his memory in a state of confusion. She assures him not to worry and promises that she will
+personally make sure he gets safely to the royal capital. She then introduces herself as Philys
+Aigol, to which Soda thanks her and introduces himself as Soda Kitsuki. Philys finds his mannerisms
+incredibly cute. However, when Soda reaches out his hand and asks her to treat him well, she becomes
+extremely flustered, nearly jumping from embarrassment. Her body practically seems to steam from how
+overwhelmed she is as she struggles to reach out and take his hand. Soda then grabs her hand and
+shakes it, telling her that he looks forward to working with her, while Philys feels as though she
+might die from pure bliss. Moving on, Soda becomes certain that there are no continents or countries
+on Earth with the names Philys has mentioned. Based on everything she has told him, he realizes that
+this is not only not Japan but not even Earth. He begins wondering if this really is the Jelsha
+continent, and if so, whether that means he has somehow ended up in another world. He recalls the
+concept of being transported to another world, commonly known as an isekai transfer, and starts
+wondering what he is supposed to do now. Just as he is lost in thought, Philys suddenly covers his
+mouth and whispers for him to stay quiet. She then closes her eyes and focuses on her hearing,
+quickly picking up the sound of approaching footsteps, which is bad news for both of them. Not
+understanding why she suddenly did this, Soda asks if the porridge was not good, but Philys assures
+him that this is not the problem and asks him to lend her his knife. He hands it over, and after
+swinging it around a few times to get a feel for it, she admits that it is a really good knife. She
+then tells Soda to gather his things and hide somewhere, prompting him to ask if something is wrong.
+Philys explains that imperial soldiers have come searching for her, which shocks him. She further
+explains that they are currently at war with the Aetia Empire, meaning they will be in serious
+trouble if the soldiers find them. Hearing that there is an actual war going on shocks Soda even
+more, and he asks if the soldiers are going to kill them if they are caught. Philys admits that they
+will probably kill her, but she emphasizes that she is not worried about herself. Instead, she is
+worried about what they might do to Soda. She fears that the soldiers might violate or abuse him,
+along with other things that are better left unsaid. As she imagines what could happen if they are
+captured, her thoughts quickly spiral into an uncomfortable scenario that is better left to the
+imagination. Soda then asks her what is wrong, snapping her out of her thoughts. She quickly brushes
+it off and tells him that there is nothing to worry about. Setting that aside, she once again warns
+him that it would be dangerous if the soldiers find him and urges him to stay hidden no matter what.
+After saying this, she runs toward the cave's entrance and hides nearby, where she notices the
+imperial soldiers approaching. The soldiers chatter among themselves, complaining that they have not
+been paid for years and even wondering if there might be any wild men wandering around the area. One
+of them dismisses the idea as foolish, questioning why anyone would expect to find a man in a place
+like this. However, another soldier mentions that if they capture Philys alive, they will be
+rewarded with men, which immediately gives them something to look forward to. Philys notices that
+there are five soldiers in total and deduces that the imperial army has probably already secured the
+entire area. This makes her wonder what she is supposed to do even if she manages to defeat all five
+of them. Recalling her previous fight against Ronia, she begins questioning whether she is even
+capable of safely taking Soda all the way back to the royal capital. Just then, Soda suddenly
+appears beside her holding a stick and declares that he will fight alongside her. Philys is shocked
+to see him there and asks what he is doing. Soda simply replies that he cannot let a woman face
+something this dangerous by herself while he hides and allows her to risk her life for him. Although
+Soda says this with confidence, Philys can see his hand trembling, making her wonder why he is
+willing to go this far for her. As he argues that there are still things he can help with, Philys
+calls him a fool, pointing out that a man with no training as a warrior has no business stepping
+onto a battlefield. However, she says this loudly enough for the soldiers to hear, and they
+immediately ask if someone is there. Both Soda and Philys quickly cover their mouths and remain
+silent, but one of the soldiers realizes that Philys must be the one hiding nearby. The soldier then
+declares that if Philys surrenders without resisting, they will let her live. Hearing this, Soda
+calls out Philys's name. Philys tells him that he is a really strange man for wanting to fight
+alongside her and thanks him for his courage. She assures him that he does not have to worry,
+prompting him to ask what she intends to do. Deciding not to overthink things and to keep her plan
+simple, Philys picks up a rock and explains that she will break through the soldiers by using
+everything she has. As Philys steps out of the cave, the soldiers mock her for being foolish enough
+to come out unarmed. However, they quickly become confused when Philys begins spinning around.
+Before they can react, she uses her full strength to throw the rock at one of the soldiers, knocking
+her to the ground. Seeing one of their comrades go down and realizing that Philys has no intention
+of surrendering, the remaining soldiers quickly turn around and declare that they will kill her.
+However, Philys is no longer where she was standing. As they wonder where she could have gone,
+Philys suddenly leaps down onto one of them, easily taking her out before disappearing again. One of
+the remaining soldiers then calls Philys nothing more than the kingdom's lapdog. Philys quickly
+appears behind her with a knife pressed against her neck and corrects her, declaring that she is a
+knight of the kingdom. Realizing that she is finished, the soldier begins cursing, but Philys simply
+slits her throat. With three soldiers down, Philys, the kingdom's knight, stands ready for the rest
+of the battle and asks who is next.

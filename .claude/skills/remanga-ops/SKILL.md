@@ -72,6 +72,13 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
 (`narration.read_reply` also accepts `panels`+`memory` side by side, and two separate blocks.)
 - One entry per page ID, in order. Story page: `panels` = one note per panel in reading order (forces
   per-panel coverage, never read aloud) + `text`. Non-story: `skip` in credits/ad/blank/duplicate.
+- **The prompt ends with a whole chapter of another manga narrated as the user wants it** (2026-09-22,
+  their file /mnt/datadisk/whatIwant/whatIwant.txt, ~2900 words, copied in verbatim and wrapped). It is
+  the voice target - the rules above it say what to do, it shows what they sound like - with a short
+  take-this/not-that framing: take the voice, the reported speech, the level of explanation and the
+  connectives; never its names, plot or its one-unbroken-account shape. It passes
+  `narration._style_warnings` as it stands. **If the user changes that file, re-sync the section** -
+  the prompt holds a copy, not a link, because the prompt is what gets uploaded.
 - `narration.load_narration` errors -> nothing synthesized, `pdf/chapter_N/fix_request.md` written.
   Warnings only: <12 words per listed panel; quotes/?/!/.../contractions (the user's narration style:
   reported speech, complete content, no quote marks, no ?/!, no contractions, one steady narrator).
