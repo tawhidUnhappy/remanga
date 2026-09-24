@@ -52,6 +52,38 @@ def render(project: str, chapter: str, config: RemangaConfig, force: bool = Fals
     return VideoRenderer(config.system, config.video).render_video(project, chapter, force=force)
 
 
+def remix_video(project: str, chapter: str, config: RemangaConfig) -> Path:
+    """A new video from the narration clips already on disk - for when only the
+    music, the sound or the video settings changed (user request, 2026-09-24).
+    Nothing is deleted and nothing is narrated: the mix is redone, and the
+    render re-encodes the sound and rebuilds the picture only if its own
+    settings changed.
+
+    Refuses when narration.json no longer says what the clips say - a video
+    whose words and pictures disagree is worse than waiting for Make video."""
+    from remanga.audio.narration_voice import voice_changed_from
+    from remanga.json_io import read_json_or
+    from remanga.paths import get_audio_timing_path
+
+    timing = read_json_or(get_audio_timing_path(project, chapter, create=False), None)
+    if not timing or not timing.get("panels"):
+        raise FileNotFoundError(f"Chapter {chapter} has not been narrated yet - use Make video first.")
+    panels, _ = check_narration(project, chapter)
+    wanted = [(p.panel_id, p.text) for p in panels]
+    recorded = [(row.get("panel_id"), row.get("text")) for row in timing["panels"]]
+    if wanted != recorded:
+        changed = next((w[0] for w, r in zip(wanted, recorded, strict=False) if w != r), None) or "the panel list"
+        raise ValueError(f"Chapter {chapter}'s narration.json has changed since it was narrated (first "
+                         f"difference: {changed}) - use Make video to narrate it again.")
+    console.print(f"[bold]Chapter {chapter}:[/] reusing the {len(panels)} narrated panel(s) - no narrating")
+    other_voice = voice_changed_from(timing, config.tts.identity())
+    if other_voice:
+        console.print(f"  [yellow]- the clips are in {_esc(other_voice)}, not the voice set now - they are "
+                      f"kept as they are; Make video narrates in the new one[/]")
+    mix(project, chapter, config, force=True)
+    return render(project, chapter, config)
+
+
 def make_video(project: str, chapter: str, config: RemangaConfig, force: bool = False,
               audio_only: bool = False) -> Path:
     # Everything a previous run made goes first, forced or not (user request,

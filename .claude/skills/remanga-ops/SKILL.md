@@ -207,6 +207,13 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   see `REMADE_KINDS`. It also solves folders left mixed by a change of approach: the per-panel clips
   hung around after the switch to batched takes. Side effect: Remake video now does exactly what
   Make video does, and the menu says so.
+- **Remix video = the one path that does NOT start from nothing (user request, 2026-09-24).** For a
+  music/sound/video-setting change: `workflow.remix_video` (menu "Remix video", CLI `video --remix`)
+  deletes nothing, narrates nothing - forced mix, then an unforced render (picture reused when its
+  fingerprint holds, so a 14-min chapter is ~50 s). It refuses when narration.json's (panel_id, text)
+  list differs from audio_timing.json's, and only warns when the voice setting changed.
+  **Testing tip:** use `.venv/bin/python`, never `bin/uv run --project <repo>` - that wrote a
+  uv.lock and re-synced the repo's .venv (swapped 4 packages).
 - **Edge fade** (`audio.edge_fade_ms`, `audio/clips.py:apply_edge_fades`) is applied in
   `audio/master.py:panel_segments` at mix time, never baked into the clip on disk - it is part of the
   fingerprint, so changing it re-mixes without re-narrating. It is asymmetric on purpose: at the

@@ -6,7 +6,8 @@
     narration  the two browser passes: writing it by hand, reviewing an LLM's
     panels     marking the panels (the web UI) and cutting them out
     pdf        the panels as PDF parts for the LLM, and the hand-off
-    video      the pasted narration -> clips -> mix -> render
+    video      the pasted narration -> clips -> mix -> render; or a new mix
+               and render from the clips already there
     voices     one line in every voice the engine has, to listen to
     cleanup    resetting or deleting a chapter
 
@@ -41,6 +42,7 @@ from remanga.workflow.video import (
     mix,
     narrate,
     quality_warnings,
+    remix_video,
     render,
 )
 from remanga.workflow.voices import SAMPLE_TEXT, sample_voices, samples_dir
@@ -76,6 +78,7 @@ __all__ = [
     "print_handoff",
     "project_name_from_title",
     "quality_warnings",
+    "remix_video",
     "render",
     "reset_chapter",
     "review_narration",

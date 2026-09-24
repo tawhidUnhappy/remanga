@@ -163,6 +163,8 @@ class ChaptersScreen(ChapterWork, Screen):
                         ("Make video", "from the narration pasted into narration.json - the audio and "
                          "video already there are deleted first, so it is narrated again", "video")]
             if any(workflow.has_audio(project, ch) for ch in chapters):
+                options.append(("Remix video", "keep the narration, redo the music, sound and picture - for "
+                                "after changing the music or sound settings, no re-narrating", "remix"))
                 options.append(("Remake video", "the same as Make video, which already starts from "
                                 "nothing", "revideo"))
                 options.append(("Remake audio", "the same, but keep only the raw narration clips after - no "
@@ -191,6 +193,8 @@ class ChaptersScreen(ChapterWork, Screen):
             await self.make_pdfs(chapters, config)
         elif action == "video":
             await self.make_videos(chapters, config)
+        elif action == "remix":
+            await self.remix_videos(chapters, config)
         elif action == "revideo":
             if await self.app.push_screen_wait(Confirm(
                     "Remake video", f"Narrate, mix and render {title.lower()} again from scratch? Narrating "

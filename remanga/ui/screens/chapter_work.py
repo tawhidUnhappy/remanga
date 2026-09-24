@@ -108,6 +108,22 @@ class ChapterWork:
             await self.show(f"Chapter {chapter}: PDF ready", lines, ok=True, warnings=result.warnings(), log=log,
                             copy=[*files, _short(result.narration)])
 
+    async def remix_videos(self, chapters: list[str], config: RemangaConfig) -> None:
+        """A new mix and render from the narration already on disk."""
+        project = self.project
+        for chapter in chapters:
+            log = get_log_path(project, chapter)
+            outcome = await self.run_task(f"Chapter {chapter}: remixing the video", [
+                Step("Mix the narration with the music and render",
+                     lambda ch=chapter: workflow.remix_video(project, ch, config)),
+            ], log)
+            if not outcome.ok:
+                await self.show(f"Chapter {chapter}: remix {'stopped' if outcome.stopped else 'failed'}",
+                                outcome.error.splitlines(), ok=False, log=log)
+                return
+            video = _short(outcome.results[-1])
+            await self.show(f"Chapter {chapter}: video ready", [video], ok=True, log=log, copy=[video])
+
     async def make_videos(self, chapters: list[str], config: RemangaConfig, force: bool = False,
                          audio_only: bool = False) -> None:
         project = self.project

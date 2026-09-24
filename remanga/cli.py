@@ -6,7 +6,7 @@
     remanga write    -p NAME -c 1               (write the narration yourself)
     remanga review   -p NAME -c 1               (flag what the LLM got wrong)
     remanga pdf      -p NAME -c 1-5
-    remanga video    -p NAME -c 1-5 [--force]
+    remanga video    -p NAME -c 1-5 [--force | --remix]   (--remix: new music/sound, same narration)
     remanga chapters -p NAME
     remanga voices                              (one line in every voice, to listen to)
     remanga setup
@@ -53,6 +53,8 @@ def build_parser() -> argparse.ArgumentParser:
     with_project("pdf", "Make each chapter's PDF of panels to give to the LLM, with prompts/narration.md")
     v = with_project("video", "Make each chapter's video from the narration pasted into narration.json")
     v.add_argument("--force", action="store_true", help="narrate, mix and render again from scratch")
+    v.add_argument("--remix", action="store_true",
+                   help="keep the narration clips; only mix and render again (after a music or sound change)")
     v.add_argument("--audio-only", action="store_true",
                    help="narrate, mix and render as usual, then keep only the raw narration clips")
     with_project("chapters", "Show where each chapter is", chapters=False)
@@ -123,6 +125,8 @@ def _run(args: argparse.Namespace) -> None:
         console.print(f"\n[bold cyan]Chapter {chapter}[/]")
         if args.command == "pdf":
             workflow.print_handoff(workflow.make_pdf(args.project, chapter, config))
+        elif getattr(args, "remix", False):
+            workflow.remix_video(args.project, chapter, config)
         else:
             workflow.make_video(args.project, chapter, config, force=args.force,
                                 audio_only=getattr(args, "audio_only", False))
