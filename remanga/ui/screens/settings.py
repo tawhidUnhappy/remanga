@@ -41,6 +41,10 @@ PANEL_GAPS = ((0, "continuous - recommended; the trimmed margins still leave abo
               (600, "slow, with room to look at the panel"))
 MUSIC_LEVELS = ((12.0, "energetic - music clearly felt"), (14.0, "balanced - recommended"),
                 (18.0, "subtle - a quiet bed"))
+# Reference points for typing a level, loudest music first.
+MUSIC_LADDER = ((8.0, "loud - fights the words, hard to follow"), (12.0, "energetic - clearly felt"),
+                (14.0, "balanced - recommended"), (18.0, "subtle - a quiet bed"),
+                (24.0, "barely there - felt more than heard"))
 # How much of a chapter the narrator reads in one go. 0 is a take per panel;
 # anything else is that many minutes of narration read straight through. One
 # row rather than a switch and a number, because "off" is just the shortest
@@ -95,7 +99,7 @@ class SettingsScreen(Screen):
                 f"music under the voice ({GLOBAL_DIR / 'bgm'}/)", "Sound"),
         ]
         if music_on:  # a level for music that isn't playing would only confuse
-            rows.append(Row("Music level", f"{audio.bgm_below_voice_lu:g} LU under the voice", _change_music_level,
+            rows.append(Row("Music level", f"{audio.bgm_below_voice_lu:g} LU quieter than voice", _change_music_level,
                             "higher = quieter music", "Sound"))
         rows += [
             Row("Intro", Path(video.intro_path).name if video.intro_enabled and video.intro_path else "off",
@@ -176,24 +180,35 @@ async def _change_intro(screen: SettingsScreen, config: RemangaConfig) -> None:
         config.video.intro_path, config.video.intro_enabled = picked, True
 
 
+def _music_guide(current: float) -> str:
+    """What a music level number means, in plain words, with the level in use marked."""
+    lines = ["The number is how much QUIETER the music is than the narrator's voice,",
+             "in loudness units (LU, the same scale as dB). Bigger number = quieter music.", ""]
+    for lu, text in MUSIC_LADDER:
+        lines.append(f"  {lu:>4g}   {text}{'   <- now' if abs(lu - current) < 1e-9 else ''}")
+    if all(abs(lu - current) > 1e-9 for lu, _ in MUSIC_LADDER):
+        lines.append(f"  {current:>4g}   <- now")
+    lines += ["", "About 10 LU more sounds half as loud. Every song is measured, so the same",
+              "number sits at the same level whichever music file is chosen."]
+    return "\n".join(lines)
+
+
 async def _change_music_level(screen: SettingsScreen, config: RemangaConfig) -> None:
     audio = config.audio
-    options = [(f"{lu:g} LU under the voice", hint, lu) for lu, hint in MUSIC_LEVELS]
+    options = [(f"{lu:g} LU quieter than the voice", hint, lu) for lu, hint in MUSIC_LEVELS]
     # A level typed in before is kept and offered again, beside the presets.
     custom = audio.bgm_custom_lu
     if custom is not None and all(custom != lu for lu, _ in MUSIC_LEVELS):
-        options.append((f"{custom:g} LU under the voice", "your custom level", custom))
-    options.append(("Custom...", "type your own level - it's saved for next time", "custom"))
+        options.append((f"{custom:g} LU quieter than the voice", "your custom level", custom))
+    options.append(("Custom...", "type your own number - it's saved for next time", "custom"))
     level = await screen.app.push_screen_wait(Choice(
         "Music level", options, current=audio.bgm_below_voice_lu,
-        note="Measured per track and chapter, so any music file sits at the same level."))
+        note="How much quieter the music plays than the narrator. Bigger number = quieter music."))
     if level == "custom":
         typed = await screen.app.push_screen_wait(Ask(
-            "Music level", "How many LU under the voice",
+            "Music level", "How much quieter than the voice? (a number from 3 to 30)",
             value=f"{custom if custom is not None else audio.bgm_below_voice_lu:g}",
-            check=number_check(3, 30),
-            note="Lower is louder music: 12 energetic, 14 balanced, 18 a quiet bed. "
-                 "Under about 10 the music starts to cover the words."))
+            check=number_check(3, 30), note=_music_guide(audio.bgm_below_voice_lu)))
         if typed is None:
             return
         level = audio.bgm_custom_lu = float(typed)

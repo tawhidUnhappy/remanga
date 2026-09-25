@@ -127,7 +127,11 @@ class Ask(ModalScreen[str | None]):
             yield Label(self.title_text, classes="dialog-title")
             yield Label(self.label)
             yield TextInput(self.value)
-            yield Static(self.note, id="message", classes="note")
+            # The error gets a line of its own, so the guidance stays on
+            # screen exactly when it's needed - after a wrong entry.
+            yield Static("", id="message", classes="note")
+            if self.note:
+                yield Static(self.note, classes="note")
         yield Footer()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
