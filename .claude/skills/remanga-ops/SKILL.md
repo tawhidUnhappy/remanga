@@ -214,6 +214,19 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   list differs from audio_timing.json's, and only warns when the voice setting changed.
   **Testing tip:** use `.venv/bin/python`, never `bin/uv run --project <repo>` - that wrote a
   uv.lock and re-synced the repo's .venv (swapped 4 packages).
+- **"It ignores my settings" = a project override (user report, 2026-09-25).** Defaults said one
+  take per panel, the chapter narrated in 1-minute takes: the project's own `project.json`
+  "settings" had `audio.batch_narration: true` (the project Settings screen saves every value that
+  differs from config.json there). Now the Settings screen marks them: in a project `●` = its own
+  value + a "Use the defaults" row that clears them; on the defaults screen `◆` = some project
+  overrides it (a change there won't reach that project). The batch override was removed from the
+  user's project on request; its music values were left as the user's choice.
+- **Remake from source** (menu, CLI `video --from-source`): `workflow.drop_derived` deletes the cut
+  panels + pdf/audio/audio_modified/subtitles/video for the chapter, keeping pages, crops.json and
+  narration.json; then panels are re-cut and the normal video run follows (intro included).
+- **Testing from a scratch cwd: symlink `checkpoints/` (and `global/`)** - model paths are
+  relative to cwd (`checkpoints/qwen3_tts`, `checkpoints/kokoro_82m`, `checkpoints/magiv3`). Without
+  the link a narration test re-downloaded 5.9 GB of Qwen into /tmp (a 7.5 GB tmpfs) and filled it.
 - **Chapter menu (user report, 2026-09-25):** the user picked "Remake audio" expecting it to KEEP
   the narration and rebuild the video (its last step read "Keep the narration, drop the mix and
   video") - it re-narrates. Now: **Rebuild video** (the old Remix: narration kept, mix + render +

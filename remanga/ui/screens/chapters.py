@@ -172,6 +172,9 @@ class ChaptersScreen(ChapterWork, Screen):
             options.append(("Make video", "narrates the whole chapter from narration.json (the slow part), "
                             "then makes the video" + (" - replaces the narration there now" if narrated else ""),
                             "video"))
+            if any(workflow.has_marks(project, ch) for ch in chapters):
+                options.append(("Remake from source", "deletes everything but the pages, panel marks and "
+                                "narration.json, then makes it all again", "source"))
             if narrated:
                 options.append(("Narrate again, no video", "replaces the narration with a new one and "
                                 "keeps only that - no mix or video", "reaudio"))
@@ -204,6 +207,13 @@ class ChaptersScreen(ChapterWork, Screen):
                     f"Rebuild video instead.", yes="Narrate again")):
                 return
             await self.make_videos(chapters, config)
+        elif action == "source":
+            if await self.app.push_screen_wait(Confirm(
+                    "Remake from source", f"Delete everything made for {title.lower()} - the cut panels, the "
+                    f"PDF, the narration audio and the video - keeping only the pages, the panel marks and "
+                    f"narration.json, then cut, narrate (the slow part) and make the video again?",
+                    yes="Remake from source", danger=True)):
+                await self.make_videos(chapters, config, from_source=True)
         elif action == "remix":
             await self.remix_videos(chapters, config)
         elif action == "reaudio":

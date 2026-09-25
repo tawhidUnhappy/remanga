@@ -84,6 +84,19 @@ def remix_video(project: str, chapter: str, config: RemangaConfig) -> Path:
     return render(project, chapter, config)
 
 
+def remake_from_source(project: str, chapter: str, config: RemangaConfig) -> Path:
+    """The whole video again from the chapter's sources alone - pages, panel
+    marks and narration.json: every derived file deleted first, the panels
+    cut again, then narrated, mixed and rendered (intro included)."""
+    from remanga.workflow.cleanup import drop_derived
+    from remanga.workflow.panels import cut_panels
+
+    for path in drop_derived(project, chapter):
+        console.print(f"[dim]deleted {_esc(str(path))}[/]")
+    cut_panels(project, chapter, config, force=True)
+    return make_video(project, chapter, config)
+
+
 def make_video(project: str, chapter: str, config: RemangaConfig, force: bool = False,
               audio_only: bool = False) -> Path:
     # Everything a previous run made goes first, forced or not (user request,

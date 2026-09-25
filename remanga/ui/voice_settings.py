@@ -39,6 +39,9 @@ class Row:
     # reads without opening every row to find out.
     help: str = ""
     group: str = ""
+    # The config fields (dotted, or a dotted prefix) this row sets - how the
+    # screen tells which rows a project has its own value for.
+    keys: tuple[str, ...] = ()
 
 
 def _wait(screen):
@@ -70,8 +73,10 @@ async def _set_kokoro_speed(screen, config: RemangaConfig) -> None:
 def kokoro_rows(config: RemangaConfig) -> list[Row]:
     kokoro = config.tts.kokoro
     return [
-        Row("Narrator voice", kokoro.voice_label, _pick_kokoro_voice, "the voice that reads every panel"),
-        Row("Speaking speed", f"{kokoro.speed:g}x", _set_kokoro_speed, "how fast it talks (1 = normal)"),
+        Row("Narrator voice", kokoro.voice_label, _pick_kokoro_voice, "the voice that reads every panel",
+            keys=("tts.kokoro.voice",)),
+        Row("Speaking speed", f"{kokoro.speed:g}x", _set_kokoro_speed, "how fast it talks (1 = normal)",
+            keys=("tts.kokoro.speed",)),
     ]
 
 
@@ -158,7 +163,8 @@ def qwen_rows(config: RemangaConfig) -> list[Row]:
     qwen = config.tts.qwen
     rows = [
         Row("Narrator voice", qwen.voice_label, _pick_qwen_voice,
-            "the voice that reads every panel"),
+            "the voice that reads every panel",
+            keys=("tts.qwen.speaker", "tts.qwen.design", "tts.qwen.designed_sample", "tts.qwen.designed_text")),
         # An action, not a second copy of the voice: the voice in use is the
         # row above.
         Row("Design a new voice", "describe one in words", _design_qwen_voice,
@@ -166,7 +172,7 @@ def qwen_rows(config: RemangaConfig) -> list[Row]:
     ]
     if not qwen.designed:
         rows.insert(1, Row("Delivery", qwen.instruct or "the voice's own way", _set_qwen_instruct,
-                           "tone of a preset voice, e.g. calm"))
+                           "tone of a preset voice, e.g. calm", keys=("tts.qwen.instruct",)))
     return rows
 
 
@@ -203,7 +209,7 @@ async def _hear_voices(screen, config: RemangaConfig) -> None:
 def narrator_rows(config: RemangaConfig) -> list[Row]:
     """The engine, then whatever that engine's voice needs."""
     rows = [Row("Narrator engine", config.tts.spec.display_name, _pick_engine,
-                "the text-to-speech system")]
+                "the text-to-speech system", keys=("tts.engine",))]
     rows += ENGINE_ROWS.get(config.tts.spec.name, kokoro_rows)(config)
     if config.tts.engine_block.voice_options():
         rows.append(Row("Hear the voices", "make samples", _hear_voices,

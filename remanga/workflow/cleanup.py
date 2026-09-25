@@ -136,6 +136,25 @@ def drop_audio_and_video(project: str, chapter: str) -> list[Path]:
     return removed
 
 
+def drop_derived(project: str, chapter: str) -> list[Path]:
+    """Deletes everything a chapter's sources produce - the cut panels, the
+    PDF, the narration audio, the mix, the subtitles and the video - keeping
+    only what nothing can rebuild: the pages, the panel marks (crops.json)
+    and the pasted narration.json. The start of Remake from source."""
+    import shutil
+
+    project_dir = get_project_dir(project)
+    paths = [get_generated_dir(project, kind, chapter, create=False) for kind in GENERATED_KINDS]
+    paths.append(get_panels_dir(project, chapter, create=False))
+    for path in paths:
+        if not _inside(path, project_dir) or not path.name.startswith(("chapter_", "panels")):
+            raise ValueError(f"Refusing to delete {path} - it isn't one chapter's file inside {project_dir}.")
+    removed = [path for path in paths if path.exists()]
+    for path in removed:
+        shutil.rmtree(path)
+    return removed + _prune_empty_dirs(paths, project_dir)
+
+
 def reset_chapter(project: str, chapter: str, *, delete_pages: bool = False) -> list[Path]:
     """Deletes a chapter's PDF, cut panels, pasted narration, audio and video
     - and, with `delete_pages`, its downloaded pages and marks too, removing

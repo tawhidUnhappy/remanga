@@ -25,7 +25,7 @@ from remanga.workflow.chapters import (
     mangadex_chapters,
     select_chapters,
 )
-from remanga.workflow.cleanup import drop_audio_and_video, drop_mix_and_video, reset_chapter
+from remanga.workflow.cleanup import drop_audio_and_video, drop_derived, drop_mix_and_video, reset_chapter
 from remanga.workflow.download import download, print_chapter_list
 from remanga.workflow.narration import review_narration, write_narration
 from remanga.workflow.panels import cut_panels, mark
@@ -42,6 +42,7 @@ from remanga.workflow.video import (
     mix,
     narrate,
     quality_warnings,
+    remake_from_source,
     remix_video,
     render,
 )
@@ -61,6 +62,7 @@ __all__ = [
     "cut_panels",
     "download",
     "drop_audio_and_video",
+    "drop_derived",
     "drop_mix_and_video",
     "has_audio",
     "has_marks",
@@ -78,6 +80,7 @@ __all__ = [
     "print_handoff",
     "project_name_from_title",
     "quality_warnings",
+    "remake_from_source",
     "remix_video",
     "render",
     "reset_chapter",

@@ -13,9 +13,11 @@ from textual.screen import Screen
 from textual.widgets import DataTable, Footer
 
 from remanga.config import RemangaConfig
+from remanga.config.root import PROJECT_SETTINGS_KEY
 from remanga.paths import GLOBAL_DIR
+from remanga.paths.metadata import list_projects, load_project_metadata, save_project_metadata
 from remanga.ui import voice_settings
-from remanga.ui.dialogs import Ask, Choice, Result, number_check
+from remanga.ui.dialogs import Ask, Choice, Confirm, Result, number_check
 from remanga.ui.screens.common import _global_log
 from remanga.ui.tasks import Step, TaskScreen
 from remanga.ui.widgets import SafeTable, TopBar
@@ -66,7 +68,11 @@ class SettingsScreen(Screen):
         self.rows: list[voice_settings.Row] = []
 
     def compose(self) -> ComposeResult:
-        scope = "this project only" if self.config.project else "defaults for every project"
+        if self.config.project:
+            scope = "this project only   ● = its own value, the rest follow the defaults"
+        else:
+            scope = "defaults for every project" + ("   ◆ = some projects set their own"
+                                                    if self._overridden_elsewhere() else "")
         yield TopBar(self.path, scope)
         yield SafeTable(id="settings")
         yield Footer()
@@ -74,7 +80,7 @@ class SettingsScreen(Screen):
     def on_mount(self) -> None:
         table = self.query_one(SafeTable)
         table.add_column("", width=9)
-        table.add_column("Setting", width=24)
+        table.add_column("Setting", width=26)
         table.add_column("Value", width=26)
         table.add_column("What it does")
         self.load()
@@ -89,42 +95,73 @@ class SettingsScreen(Screen):
             Row("Narration take length",
                 f"about {audio.batch_target_minutes:g} min each" if audio.batch_narration else "one per panel",
                 _change_narration_takes, "how much is read in one go",
-                "Narration"),
+                "Narration", ("audio.batch_narration", "audio.batch_target_minutes")),
             Row("Pause between panels",
                 f"{audio.pause_between_panels_ms} ms" if audio.pause_between_panels_ms else "none (continuous)",
-                _change_panel_gap, "silence between panels", "Narration"),
+                _change_panel_gap, "silence between panels", "Narration",
+                ("audio.pause_between_panels_ms",)),
             Row("Fade at line edges", f"{audio.edge_fade_ms} ms" if audio.edge_fade_ms else "off",
-                _change_edge_fade, "softens line edges (no clicks)", "Narration"),
+                _change_edge_fade, "softens line edges (no clicks)", "Narration",
+                ("audio.edge_fade_ms",)),
             Row("Background music", Path(audio.bgm_path).name if music_on else "off", _change_music,
-                f"music under the voice ({GLOBAL_DIR / 'bgm'}/)", "Sound"),
+                f"music under the voice ({GLOBAL_DIR / 'bgm'}/)", "Sound",
+                ("audio.bgm_enabled", "audio.bgm_path")),
         ]
         if music_on:  # a level for music that isn't playing would only confuse
             rows.append(Row("Music level", f"{audio.bgm_below_voice_lu:g} LU quieter than voice", _change_music_level,
-                            "higher = quieter music", "Sound"))
+                            "higher = quieter music", "Sound",
+                            ("audio.bgm_below_voice_lu", "audio.bgm_custom_lu")))
         rows += [
             Row("Intro", Path(video.intro_path).name if video.intro_enabled and video.intro_path else "off",
-                _change_intro, f"clip before every recap ({GLOBAL_DIR / 'intro'}/)", "Video"),
+                _change_intro, f"clip before every recap ({GLOBAL_DIR / 'intro'}/)", "Video",
+                ("video.intro_enabled", "video.intro_path")),
             Row("Video size", f"{video.width}x{video.height}", _change_video_size,
-                "resolution of the finished video", "Video"),
+                "resolution of the finished video", "Video", ("video.width", "video.height")),
             Row("Panel enlargement limit",
                 f"up to {video.max_upscale:g}x" if video.max_upscale > 0 else "no limit (fill the frame)",
-                _change_max_upscale, "how far small panels are blown up", "Video"),
+                _change_max_upscale, "how far small panels are blown up", "Video", ("video.max_upscale",)),
             Row("PDF file size limit", f"{config.pdf.max_mb:g} MB per file", _change_pdf_cap,
-                "largest PDF part given to the LLM", "PDF"),
+                "largest PDF part given to the LLM", "PDF", ("pdf.max_mb",)),
         ]
+        own = self._own_values()
+        if config.project and own:
+            rows.append(Row("Use the defaults", f"{len(own)} own value{'s' if len(own) != 1 else ''} here",
+                            _use_defaults, "drop this project's own values", "Project"))
         return rows
+
+    def _own_values(self) -> dict:
+        """This project's own values (project.json "settings"), when scoped to one."""
+        if not self.config.project:
+            return {}
+        own = load_project_metadata(self.config.project).get(PROJECT_SETTINGS_KEY)
+        return own if isinstance(own, dict) else {}
+
+    def _overridden_elsewhere(self) -> dict[str, int]:
+        """On the defaults screen: for each setting, how many projects set their own."""
+        counts: dict[str, int] = {}
+        for project in list_projects():
+            own = load_project_metadata(project["name"]).get(PROJECT_SETTINGS_KEY)
+            for key in own if isinstance(own, dict) else {}:
+                counts[key] = counts.get(key, 0) + 1
+        return counts
 
     def load(self) -> None:
         table = self.query_one(SafeTable)
         at = table.picked_row
         table.clear()
         self.rows = self._rows()
+        # Which rows are not simply the defaults: in a project, the ones it has
+        # its own value for (●); on the defaults screen, the ones some project
+        # overrides (◆) - a change there does not reach that project.
+        marked = set(self._own_values()) if self.config.project else set(self._overridden_elsewhere())
+        mark = "● " if self.config.project else "◆ "
         shown = None
         for row in self.rows:
             # The group name once, on its first row - the list stays one flat list.
             group = row.group if row.group != shown else ""
             shown = row.group
-            table.add_row(group, row.label, row.value, row.help)
+            own = any(key == k or key.startswith(k + ".") for key in marked for k in row.keys)
+            table.add_row(group, (mark if own else "  ") + row.label, row.value, row.help)
         if at is not None and self.rows:
             table.move_cursor(row=min(at, len(self.rows) - 1))
 
@@ -165,6 +202,19 @@ async def _change_music(screen: SettingsScreen, config: RemangaConfig) -> None:
         config.audio.bgm_enabled = False
     elif picked:
         config.audio.bgm_path, config.audio.bgm_enabled = picked, True
+
+
+async def _use_defaults(screen: SettingsScreen, config: RemangaConfig) -> None:
+    project = config.project
+    own = load_project_metadata(project).get(PROJECT_SETTINGS_KEY) or {}
+    names = ", ".join(sorted(own))
+    if await screen.app.push_screen_wait(Confirm(
+            "Use the defaults", f"Drop this project's own values ({names}) so it follows the defaults "
+            f"again? Nothing is re-rendered until you make the video.", yes="Use the defaults")):
+        save_project_metadata(project, {PROJECT_SETTINGS_KEY: {}})
+        # The screen saves its config after this - it must be the defaults now,
+        # or the old values would be written straight back as overrides.
+        screen.config = RemangaConfig.load().for_project(project)
 
 
 async def _change_intro(screen: SettingsScreen, config: RemangaConfig) -> None:

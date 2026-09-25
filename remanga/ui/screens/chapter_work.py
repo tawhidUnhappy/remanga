@@ -125,9 +125,10 @@ class ChapterWork:
             await self.show(f"Chapter {chapter}: video ready", [video], ok=True, log=log, copy=[video])
 
     async def make_videos(self, chapters: list[str], config: RemangaConfig, force: bool = False,
-                         audio_only: bool = False) -> None:
+                         audio_only: bool = False, from_source: bool = False) -> None:
         project = self.project
-        verb = "narrating again" if audio_only else ("narrating and making the video" if force else "video")
+        verb = ("remaking from source" if from_source else "narrating again" if audio_only
+                else "narrating and making the video" if force else "video")
         for chapter in chapters:
             log = get_log_path(project, chapter)
             found: dict[str, Any] = {}
@@ -137,7 +138,14 @@ class ChapterWork:
                 found["warnings"] += workflow.quality_warnings(project, ch, config, found["panels"])
                 return found["panels"]
 
-            steps = [
+            steps = []
+            if from_source:
+                # Everything derived goes; the pages, marks and narration.json stay.
+                steps += [Step("Delete all but the pages, panel marks and narration.json",
+                               lambda ch=chapter: workflow.drop_derived(project, ch)),
+                          Step("Cut the panels from the marks",
+                               lambda ch=chapter: workflow.cut_panels(project, ch, config, force=True))]
+            steps += [
                 Step("Check the narration", check),
                 Step(f"Narrate the panels ({config.tts.spec.display_name})",
                      lambda ch=chapter, found=found: workflow.narrate(project, ch, found["panels"], config, force)),

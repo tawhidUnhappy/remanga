@@ -180,6 +180,12 @@ Narrating is the slow part, so the chapter menu keeps it apart:
 - **Make video** narrates the whole chapter from narration.json, then makes the video - needed only
   when narration.json or the voice changed. On a chapter that already has a narration it asks first.
 - **Narrate again, no video** replaces the narration and keeps only that.
+- **Remake from source** deletes everything but the pages, the panel marks and narration.json, then
+  cuts, narrates and makes the whole video again.
+
+Settings exist twice: the defaults (from the projects screen) and a project's own values (from inside
+it). In a project, `●` marks a value that project sets for itself, and **Use the defaults** clears
+them; on the defaults screen, `◆` marks a setting some project overrides.
 
 Stopping with Ctrl+C is safe.
 

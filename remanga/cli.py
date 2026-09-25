@@ -55,6 +55,8 @@ def build_parser() -> argparse.ArgumentParser:
     v.add_argument("--force", action="store_true", help="narrate, mix and render again from scratch")
     v.add_argument("--remix", action="store_true",
                    help="keep the narration clips; only mix and render again (after a music or sound change)")
+    v.add_argument("--from-source", action="store_true",
+                   help="delete everything but the pages, panel marks and narration.json, then make it all again")
     v.add_argument("--audio-only", action="store_true",
                    help="narrate, mix and render as usual, then keep only the raw narration clips")
     with_project("chapters", "Show where each chapter is", chapters=False)
@@ -125,6 +127,8 @@ def _run(args: argparse.Namespace) -> None:
         console.print(f"\n[bold cyan]Chapter {chapter}[/]")
         if args.command == "pdf":
             workflow.print_handoff(workflow.make_pdf(args.project, chapter, config))
+        elif getattr(args, "from_source", False):
+            workflow.remake_from_source(args.project, chapter, config)
         elif getattr(args, "remix", False):
             workflow.remix_video(args.project, chapter, config)
         else:
