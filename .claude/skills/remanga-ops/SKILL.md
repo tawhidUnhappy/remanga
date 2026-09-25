@@ -214,6 +214,10 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   list differs from audio_timing.json's, and only warns when the voice setting changed.
   **Testing tip:** use `.venv/bin/python`, never `bin/uv run --project <repo>` - that wrote a
   uv.lock and re-synced the repo's .venv (swapped 4 packages).
+- **Custom music level (user request, 2026-09-25):** Settings - Music level has "Custom..."
+  (3-30 LU, number_check); the typed value is kept in `audio.bgm_custom_lu` and offered
+  again beside the presets next time, whatever level is active. Tested with Pilot from a
+  scratch cwd with a copied config.json (the settings screen saves to ./config.json).
 - **Intro (user request, 2026-09-25):** Settings - Intro picks a video from `global/intro/`
   (or "No intro"), exactly like Background music; `video.intro_enabled` + `video.intro_path`,
   default off (the user's config has `global/intro/evil_intro.mp4` on). `video/intro.py`

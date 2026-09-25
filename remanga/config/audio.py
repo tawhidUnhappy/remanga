@@ -39,6 +39,10 @@ class AudioConfig(ConfigModel):
     # present enough to carry energy while every word stays clear; 18+ is a
     # quiet bed, under 12 starts to mask consonants on phone speakers.
     bgm_below_voice_lu: float = 14.0
+    # The level last typed in as "Custom..." (Settings - Music level), kept so
+    # it is offered again next time beside the presets, whichever level is in
+    # use. None until one has been typed.
+    bgm_custom_lu: float | None = None
     # Normalize the finished mix to `loudness_target_lufs` (two-pass, linear -
     # the level changes, the dynamics don't).
     enable_loudnorm: bool = True

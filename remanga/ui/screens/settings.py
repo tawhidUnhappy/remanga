@@ -161,12 +161,28 @@ async def _change_intro(screen: SettingsScreen, config: RemangaConfig) -> None:
 
 
 async def _change_music_level(screen: SettingsScreen, config: RemangaConfig) -> None:
+    audio = config.audio
+    options = [(f"{lu:g} LU under the voice", hint, lu) for lu, hint in MUSIC_LEVELS]
+    # A level typed in before is kept and offered again, beside the presets.
+    custom = audio.bgm_custom_lu
+    if custom is not None and all(custom != lu for lu, _ in MUSIC_LEVELS):
+        options.append((f"{custom:g} LU under the voice", "your custom level", custom))
+    options.append(("Custom...", "type your own level - it's saved for next time", "custom"))
     level = await screen.app.push_screen_wait(Choice(
-        "Music level", [(f"{lu:g} LU under the voice", hint, lu) for lu, hint in MUSIC_LEVELS],
-        current=config.audio.bgm_below_voice_lu,
+        "Music level", options, current=audio.bgm_below_voice_lu,
         note="Measured per track and chapter, so any music file sits at the same level."))
+    if level == "custom":
+        typed = await screen.app.push_screen_wait(Ask(
+            "Music level", "How many LU under the voice",
+            value=f"{custom if custom is not None else audio.bgm_below_voice_lu:g}",
+            check=number_check(3, 30),
+            note="Lower is louder music: 12 energetic, 14 balanced, 18 a quiet bed. "
+                 "Under about 10 the music starts to cover the words."))
+        if typed is None:
+            return
+        level = audio.bgm_custom_lu = float(typed)
     if level is not None:
-        config.audio.bgm_below_voice_lu = level
+        audio.bgm_below_voice_lu = level
 
 
 async def _change_panel_gap(screen: SettingsScreen, config: RemangaConfig) -> None:
