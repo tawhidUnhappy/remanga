@@ -171,11 +171,17 @@ projects/<name>/
   audio_modified/chapter_N/  the mixed track
   video/chapter_N/        the video
 global/bgm/               your background music files
+global/intro/             intro videos (Settings - Intro)
 ```
 
-Every step reuses what is still current: re-running **Make video** after changing the music only
-re-mixes and re-muxes; after changing the voice it narrates again. Stopping with Ctrl+C is safe - run
-it again to carry on.
+Narrating is the slow part, so the chapter menu keeps it apart:
+- **Rebuild video** keeps the narration and remakes the music, intro and video - use it after
+  changing the music, its level, the intro or the video size (about a minute).
+- **Make video** narrates the whole chapter from narration.json, then makes the video - needed only
+  when narration.json or the voice changed. On a chapter that already has a narration it asks first.
+- **Narrate again, no video** replaces the narration and keeps only that.
+
+Stopping with Ctrl+C is safe.
 
 **Panel quality:** panels are cut at the page's full resolution, so their size varies a lot.
 - A panel **bigger than the video** would be shown smaller than it is: making a video says so - how

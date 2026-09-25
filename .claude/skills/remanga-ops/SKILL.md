@@ -214,6 +214,13 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   list differs from audio_timing.json's, and only warns when the voice setting changed.
   **Testing tip:** use `.venv/bin/python`, never `bin/uv run --project <repo>` - that wrote a
   uv.lock and re-synced the repo's .venv (swapped 4 packages).
+- **Chapter menu (user report, 2026-09-25):** the user picked "Remake audio" expecting it to KEEP
+  the narration and rebuild the video (its last step read "Keep the narration, drop the mix and
+  video") - it re-narrates. Now: **Rebuild video** (the old Remix: narration kept, mix + render +
+  intro) is listed first whenever a chapter is narrated; **Make video** says it narrates the whole
+  chapter and asks before replacing an existing narration; "Remake audio" is **Narrate again, no
+  video**; the duplicate "Remake video" is gone. Wording rule: say what is KEPT and what is REDONE,
+  and name the slow part.
 - **Settings layout (user request, 2026-09-25: "clear what does what, no duplicate"):** still one
   flat list (never a wizard), now 4 columns - group (Narration/Sound/Video/PDF, shown once on a
   group's first row), setting, value, and a <=38-char "What it does" (`Row.help`, `Row.group`).

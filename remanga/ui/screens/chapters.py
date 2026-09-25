@@ -150,6 +150,7 @@ class ChaptersScreen(ChapterWork, Screen):
         some_on_disk = any(workflow.page_files(project, ch) for ch in chapters)
         title = f"Chapter {chapters[0]}" if len(chapters) == 1 else f"{len(chapters)} chapters"
         options = []
+        narrated = False
         if not on_disk:
             options.append(("Download", "fetch the pages", "download"))
         else:
@@ -160,15 +161,20 @@ class ChaptersScreen(ChapterWork, Screen):
                          "write"),
                         ("Review narration", "go through what the LLM wrote and flag what is wrong",
                          "review"),
-                        ("Make video", "from the narration pasted into narration.json - the audio and "
-                         "video already there are deleted first, so it is narrated again", "video")]
-            if any(workflow.has_audio(project, ch) for ch in chapters):
-                options.append(("Remix video", "keep the narration, redo the music, sound and picture - for "
-                                "after changing the music or sound settings, no re-narrating", "remix"))
-                options.append(("Remake video", "the same as Make video, which already starts from "
-                                "nothing", "revideo"))
-                options.append(("Remake audio", "the same, but keep only the raw narration clips after - no "
-                                "mix or video left on disk", "reaudio"))
+                        ]
+            narrated = any(workflow.has_audio(project, ch) for ch in chapters)
+            if narrated:
+                # First, because it is what is wanted after almost any change: the
+                # narration is the slow, costly part and nothing but a changed
+                # narration.json needs it made again.
+                options.append(("Rebuild video", "keeps the narration - remakes the music, intro and video "
+                                "(about a minute)", "remix"))
+            options.append(("Make video", "narrates the whole chapter from narration.json (the slow part), "
+                            "then makes the video" + (" - replaces the narration there now" if narrated else ""),
+                            "video"))
+            if narrated:
+                options.append(("Narrate again, no video", "replaces the narration with a new one and "
+                                "keeps only that - no mix or video", "reaudio"))
             options += [("Check pages", "fix any missing or broken page", "download"),
                         ("Re-download", "delete the pages and fetch them all again", "redownload")]
         if some_on_disk:
@@ -192,20 +198,19 @@ class ChaptersScreen(ChapterWork, Screen):
         elif action == "pdf":
             await self.make_pdfs(chapters, config)
         elif action == "video":
+            if narrated and not await self.app.push_screen_wait(Confirm(
+                    "Make video", f"{title} already has a narration. Make video narrates it all again - the "
+                    f"slow part. To keep the narration and only remake the music, intro and video, choose "
+                    f"Rebuild video instead.", yes="Narrate again")):
+                return
             await self.make_videos(chapters, config)
         elif action == "remix":
             await self.remix_videos(chapters, config)
-        elif action == "revideo":
-            if await self.app.push_screen_wait(Confirm(
-                    "Remake video", f"Narrate, mix and render {title.lower()} again from scratch? Narrating "
-                    f"is the slow part, and Make video does the same thing - both delete the audio and video "
-                    f"already there first.", yes="Remake")):
-                await self.make_videos(chapters, config, force=True)
         elif action == "reaudio":
             if await self.app.push_screen_wait(Confirm(
-                    "Remake audio", f"Narrate, mix and render {title.lower()} again from scratch to prove the "
-                    f"narration is good, then delete the mix and video and keep only the raw clips? Make video "
-                    f"redoes the mix and render from them later.", yes="Remake")):
+                    "Narrate again, no video", f"Throw away the narration of {title.lower()} and narrate it all "
+                    f"again (the slow part)? Only the new narration is kept; Rebuild video then makes the video "
+                    f"from it.", yes="Narrate again")):
                 await self.make_videos(chapters, config, force=True, audio_only=True)
         elif action in ("reset", "delete"):
             what = ("everything, pages and marks included" if action == "delete"

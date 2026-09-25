@@ -113,8 +113,8 @@ class ChapterWork:
         project = self.project
         for chapter in chapters:
             log = get_log_path(project, chapter)
-            outcome = await self.run_task(f"Chapter {chapter}: remixing the video", [
-                Step("Mix the narration with the music and render",
+            outcome = await self.run_task(f"Chapter {chapter}: rebuilding the video (narration kept)", [
+                Step("Mix the kept narration with the music, render, add the intro",
                      lambda ch=chapter: workflow.remix_video(project, ch, config)),
             ], log)
             if not outcome.ok:
@@ -127,7 +127,7 @@ class ChapterWork:
     async def make_videos(self, chapters: list[str], config: RemangaConfig, force: bool = False,
                          audio_only: bool = False) -> None:
         project = self.project
-        verb = "remaking the audio" if audio_only else ("remaking the video" if force else "video")
+        verb = "narrating again" if audio_only else ("narrating and making the video" if force else "video")
         for chapter in chapters:
             log = get_log_path(project, chapter)
             found: dict[str, Any] = {}
@@ -148,9 +148,9 @@ class ChapterWork:
                 # Mixing and rendering run anyway - it's how a changed voice
                 # or narration is proven good end to end - but only the raw
                 # clips are worth keeping afterwards; the mix and the render
-                # come back later from them (Make video, unforced) rather
+                # come back later from them (Rebuild video) rather
                 # than sitting on disk twice.
-                steps.append(Step("Keep the narration, drop the mix and video",
+                steps.append(Step("Keep the new narration, delete the test mix and video",
                                   lambda ch=chapter: workflow.drop_mix_and_video(project, ch)))
             outcome = await self.run_task(f"Chapter {chapter}: {verb}", steps, log)
             if not outcome.ok:
