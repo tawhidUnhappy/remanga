@@ -27,5 +27,10 @@ class VideoConfig(ConfigModel):
     # simply sits smaller on screen, sharp, with more of the blurred
     # background around it. 0 or less means no cap (fill the frame).
     max_upscale: float = 3.0
+    # An intro played before every recap (video/intro.py), chosen in Settings
+    # like the background music from global/intro/. Off by default. Not part
+    # of the picture fingerprint - changing it re-joins, never re-encodes.
+    intro_enabled: bool = False
+    intro_path: str = ""
     page_border_width: int = Field(2, validation_alias=_was("page_border_width", "panel_border_width"))
     page_border_color: str = Field("#222222", validation_alias=_was("page_border_color", "panel_border_color"))

@@ -30,6 +30,7 @@ from remanga.video.encoding import (
     picture_filter_args,
 )
 from remanga.video.frame_timeline import FrameTimeline, build_frame_timeline
+from remanga.video.intro import chosen_intro, intro_identity, join as join_intro, leader as intro_leader
 
 
 class VideoRenderer(EncoderChoiceMixin):
@@ -60,7 +61,8 @@ class VideoRenderer(EncoderChoiceMixin):
             "timing_mtime": get_audio_timing_path(project_name, chapter_num).stat().st_mtime,
             "codec": self.encoder()[1],
             "total_frames": timeline.total_frames,
-            "video": self.video_config.model_dump(),
+            # The intro is joined after the picture, so it never makes one stale.
+            "video": self.video_config.model_dump(exclude={"intro_enabled", "intro_path"}),
         }
 
     def _picture_is_fresh(self, project_name: str, chapter_num: str, timeline: FrameTimeline) -> bool:
@@ -171,8 +173,13 @@ class VideoRenderer(EncoderChoiceMixin):
         # after changing the video size doing nothing at all.
         timeline = self.frame_timeline(project_name, chapter_num)
         stale_picture = not self._picture_is_fresh(project_name, chapter_num, timeline)
+        # The intro in front (video/intro.py): switching it, or turning it
+        # off, re-joins - a stream copy, not a re-encode.
+        intro_stamp = get_video_work_dir(project_name, chapter_num) / "final_intro.json"
+        wanted_intro = intro_identity(self.video_config)
+        stale_intro = final_video.exists() and read_json_or(intro_stamp, {}).get("intro") != wanted_intro
         if (not force and final_video.exists() and final_video.stat().st_size > 1000
-                and not stale_audio and not stale_picture):
+                and not stale_audio and not stale_picture and not stale_intro):
             console.print(f"[bold green]✓ Recap video already rendered:[/] {_escape_path(str(final_video))}")
             return final_video
         if stale_audio:
@@ -181,6 +188,8 @@ class VideoRenderer(EncoderChoiceMixin):
                 "video around it.[/]"
             )
 
+        if stale_intro and not stale_audio and not stale_picture:
+            console.print("[dim]the intro setting changed since the last render - joining it again.[/]")
         if stale_picture and final_video.exists() and not force:
             console.print("[dim]the video settings changed since the last render - building the picture again.[/]")
 
@@ -215,7 +224,16 @@ class VideoRenderer(EncoderChoiceMixin):
             partial.unlink(missing_ok=True)
             console.print(f"[red]FFmpeg Error Details:\n{_escape_path(result.stderr)}[/]")
             raise RuntimeError("FFmpeg rendering failed.")
-        partial.replace(final_video)
+        intro = chosen_intro(self.video_config)
+        if intro is not None:
+            joined = work_dir / f"{final_video.stem}.joined.part.mp4"
+            join_intro(self, intro_leader(self, intro, partial, work_dir), partial, joined)
+            partial.unlink(missing_ok=True)
+            joined.replace(final_video)
+            console.print(f"[cyan]Intro added:[/] {_escape_path(intro.name)}")
+        else:
+            partial.replace(final_video)
+        write_json(intro_stamp, {"intro": wanted_intro})
 
         console.print("[bold green]✓ Recap video generated successfully![/]")
         console.print(f"[bold green]Location:[/] {_escape_path(str(final_video))}")

@@ -19,6 +19,7 @@ from remanga.ui.dialogs import Ask, Choice, Result, number_check
 from remanga.ui.screens.common import _global_log
 from remanga.ui.tasks import Step, TaskScreen
 from remanga.ui.widgets import SafeTable, TopBar
+from remanga.video.intro import INTRO_EXTS
 
 MUSIC_EXTS = (".mp3", ".wav", ".m4a", ".ogg", ".opus", ".flac")
 UPSCALE_CAPS = ((2.0, "sharpest - small panels sit noticeably small"),
@@ -81,6 +82,8 @@ class SettingsScreen(Screen):
             *voice_settings.narrator_rows(config),
             Row("Background music", music, _change_music),
             Row("Music level", f"{audio.bgm_below_voice_lu:g} LU under the voice", _change_music_level),
+            Row("Intro", Path(video.intro_path).name if video.intro_enabled and video.intro_path else "off",
+                _change_intro),
             Row("Gap between panels",
                 f"{audio.pause_between_panels_ms} ms" if audio.pause_between_panels_ms else "continuous",
                 _change_panel_gap),
@@ -142,6 +145,19 @@ async def _change_music(screen: SettingsScreen, config: RemangaConfig) -> None:
         config.audio.bgm_enabled = False
     elif picked:
         config.audio.bgm_path, config.audio.bgm_enabled = picked, True
+
+
+async def _change_intro(screen: SettingsScreen, config: RemangaConfig) -> None:
+    folder = GLOBAL_DIR / "intro"
+    files = sorted(p for p in folder.iterdir() if p.suffix.lower() in INTRO_EXTS) if folder.exists() else []
+    current = config.video.intro_path if config.video.intro_enabled else "off"
+    picked = await screen.app.push_screen_wait(Choice(
+        "Intro", [("No intro", "", "off")] + [(p.name, "", str(p)) for p in files],
+        current=current, note=f"Played before every recap. Put intro videos in {folder}/"))
+    if picked == "off":
+        config.video.intro_enabled = False
+    elif picked:
+        config.video.intro_path, config.video.intro_enabled = picked, True
 
 
 async def _change_music_level(screen: SettingsScreen, config: RemangaConfig) -> None:

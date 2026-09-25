@@ -214,6 +214,18 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   list differs from audio_timing.json's, and only warns when the voice setting changed.
   **Testing tip:** use `.venv/bin/python`, never `bin/uv run --project <repo>` - that wrote a
   uv.lock and re-synced the repo's .venv (swapped 4 packages).
+- **Intro (user request, 2026-09-25):** Settings - Intro picks a video from `global/intro/`
+  (or "No intro"), exactly like Background music; `video.intro_enabled` + `video.intro_path`,
+  default off (the user's config has `global/intro/evil_intro.mp4` on). `video/intro.py`
+  re-encodes the intro once per chapter into `_work/intro_leader.mp4` with the SAME encoder
+  args/size/fps/colour tags/sample rate as the recap, then stream-copies it in front
+  (concat demuxer) - only when `encoding.stream_signature` matches byte for byte, else it
+  re-encodes the join. The intro fields are excluded from the picture fingerprint (adding
+  them would have re-encoded every cached picture); `_work/final_intro.json` records which
+  intro the final MP4 carries, so switching it re-joins. Verified on a zz copy of a real
+  4K chapter: 11.0 + 826.83 = 837.83 s, full decode clean, stream-copy path taken, 56 s
+  including the forced remix. The intros themselves are made in AMV_CD
+  (`./amv.sh montage`), copies in /mnt/datadisk/channel_intro/.
 - **Edge fade** (`audio.edge_fade_ms`, `audio/clips.py:apply_edge_fades`) is applied in
   `audio/master.py:panel_segments` at mix time, never baked into the clip on disk - it is part of the
   fingerprint, so changing it re-mixes without re-narrating. It is asymmetric on purpose: at the
