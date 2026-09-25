@@ -34,6 +34,11 @@ class Row:
     label: str
     value: str
     change: Changer
+    # One short line on what the setting does, shown beside it, and the group
+    # it belongs to (shown once, on the group's first row) - so the screen
+    # reads without opening every row to find out.
+    help: str = ""
+    group: str = ""
 
 
 def _wait(screen):
@@ -65,8 +70,8 @@ async def _set_kokoro_speed(screen, config: RemangaConfig) -> None:
 def kokoro_rows(config: RemangaConfig) -> list[Row]:
     kokoro = config.tts.kokoro
     return [
-        Row("Narrator voice", kokoro.voice_label, _pick_kokoro_voice),
-        Row("Speaking speed", f"{kokoro.speed:g}x", _set_kokoro_speed),
+        Row("Narrator voice", kokoro.voice_label, _pick_kokoro_voice, "the voice that reads every panel"),
+        Row("Speaking speed", f"{kokoro.speed:g}x", _set_kokoro_speed, "how fast it talks (1 = normal)"),
     ]
 
 
@@ -130,7 +135,7 @@ async def _design_qwen_voice(screen, config: RemangaConfig) -> None:
 
     qwen = config.tts.qwen
     description = await _wait(screen)(Ask(
-        "Design a voice", "Describe the narrator", value=qwen.design or DESIGN_EXAMPLES[0],
+        "Design a new voice", "Describe the narrator", value=qwen.design or DESIGN_EXAMPLES[0],
         note=f"For example: {DESIGN_EXAMPLES[1]}. One sample is made and kept - every panel is then "
              f"spoken from that sample, so the voice stays the same across a chapter."))
     if not description:
@@ -152,12 +157,16 @@ async def _design_qwen_voice(screen, config: RemangaConfig) -> None:
 def qwen_rows(config: RemangaConfig) -> list[Row]:
     qwen = config.tts.qwen
     rows = [
-        Row("Narrator voice", qwen.voice_label, _pick_qwen_voice),
-        Row("Design a voice", Path(qwen.designed_sample).name if qwen.designed else "describe one in words",
-            _design_qwen_voice),
+        Row("Narrator voice", qwen.voice_label, _pick_qwen_voice,
+            "the voice that reads every panel"),
+        # An action, not a second copy of the voice: the voice in use is the
+        # row above.
+        Row("Design a new voice", "describe one in words", _design_qwen_voice,
+            "make a new voice from a description"),
     ]
     if not qwen.designed:
-        rows.insert(1, Row("Delivery", qwen.instruct or "the voice's own way", _set_qwen_instruct))
+        rows.insert(1, Row("Delivery", qwen.instruct or "the voice's own way", _set_qwen_instruct,
+                           "tone of a preset voice, e.g. calm"))
     return rows
 
 
@@ -193,8 +202,12 @@ async def _hear_voices(screen, config: RemangaConfig) -> None:
 
 def narrator_rows(config: RemangaConfig) -> list[Row]:
     """The engine, then whatever that engine's voice needs."""
-    rows = [Row("Narrator engine", config.tts.spec.display_name, _pick_engine)]
+    rows = [Row("Narrator engine", config.tts.spec.display_name, _pick_engine,
+                "the text-to-speech system")]
     rows += ENGINE_ROWS.get(config.tts.spec.name, kokoro_rows)(config)
     if config.tts.engine_block.voice_options():
-        rows.append(Row("Hear the voices", "read one line in each of them", _hear_voices))
+        rows.append(Row("Hear the voices", "make samples", _hear_voices,
+                        "one sample line per voice, to compare"))
+    for row in rows:
+        row.group = "Narration"
     return rows

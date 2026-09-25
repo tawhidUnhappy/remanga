@@ -44,7 +44,7 @@ click chooses it** - a single click never starts anything.
 | **Projects** | Your projects. `Enter` opens one, `n` starts a new one: paste the manga's MangaDex URL (or ID, or a title to search). The project is named after the manga's English title, and its reading direction comes from the manga's original language. |
 | **Chapters** | The chapter list, fetched fresh from MangaDex each time, as a table: status (✓ downloaded, ◐ partial, + new), pages, what comes next (mark the panels, make the PDF, make the video, video done) and title. `Enter` opens a chapter's actions: download, **mark panels**, make PDF, make video, check pages, re-download, reset (deletes the cut panels, PDF, narration, audio and video, and the folders that leaves empty - the marks and pages stay) or delete. `space` (or clicking a row's `·`) picks several chapters to act on together, `a` downloads every new chapter. Reset and delete ask first. |
 | **Work** | Downloads, panel cutting, PDFs and videos run in a task view: the steps, a progress bar and the last few lines of output. `Ctrl+C` stops. When the work ends you get a result: what was made and what to do next (for a PDF: which files to upload, where to paste the reply), or what went wrong. `l` opens the full log, `c` copies the paths to upload. |
-| **Settings** (`s`) | Narrator engine and its voice, background music and volume, video size, PDF size cap - for the open project, or the defaults from the projects screen. |
+| **Settings** (`s`) | One flat list, grouped (Narration, Sound, Video, PDF), each row with a one-line "What it does": narrator engine and voice, take length, pauses, background music and its level (custom values kept), intro, video size, panel enlargement limit, PDF file size limit - for the open project, or the defaults from the projects screen. |
 
 Logs are kept in `projects/<name>/logs/`: `chapter_N.log` for a chapter's PDF and video,
 `project.log` for downloads.
@@ -182,7 +182,7 @@ it again to carry on.
   many, the worst one, and which video size would show them all whole.
 - A panel **smaller than the video** is enlarged to fill the frame, and past a point that only makes
   it soft - there is nothing in the source to fill those pixels with. `video.max_upscale` (3x by
-  default, Settings - Enlarge panels) caps it: a small panel sits smaller on screen, sharp, with more
+  default, Settings - Panel enlargement limit) caps it: a small panel sits smaller on screen, sharp, with more
   of the blurred background around it.
 
 **PDF pages:** every page is the same size - the chapter's biggest panel - and black: the panels are
@@ -208,8 +208,8 @@ for every project (`config.json`). Everything else is in `config.json`:
 | `tts.volume_boost_db` | 0 | gain on each clip; leave at 0 when loudness normalization is on |
 | `audio.bgm_enabled` / `bgm_path` | off / - | background music |
 | `audio.bgm_below_voice_lu` | 14 | how far the music sits under the voice, in LU - measured per track and chapter, so every music file sits at the same level (12 energetic, 14 balanced, 18 subtle) |
-| `audio.pause_between_panels_ms` | 0 | silence between panels (Settings - Gap between panels), and now the whole of it: each clip's own uneven lead-in is trimmed back to an even 25 ms margin first, so 0 is continuous narration with about 50 ms at each join rather than a hard butt-join |
-| `audio.edge_fade_ms` | 35 | fade at each clip's edges, applied when the chapter is mixed (Settings - Edge fade). The start is only ever faded across the silence the clip already has, so the first word is never ramped; the end may ramp up to 15% into the speech, which is what stops a line sounding cut off. Changing it re-mixes, it does not narrate again |
+| `audio.pause_between_panels_ms` | 0 | silence between panels (Settings - Pause between panels), and now the whole of it: each clip's own uneven lead-in is trimmed back to an even 25 ms margin first, so 0 is continuous narration with about 50 ms at each join rather than a hard butt-join |
+| `audio.edge_fade_ms` | 35 | fade at each clip's edges, applied when the chapter is mixed (Settings - Fade at line edges). The start is only ever faded across the silence the clip already has, so the first word is never ramped; the end may ramp up to 15% into the speech, which is what stops a line sounding cut off. Changing it re-mixes, it does not narrate again |
 | `audio.enable_loudnorm` / `loudness_target_lufs` | true / -14 | normalize the finished audio (two-pass, linear) to YouTube's -14 LUFS |
 | `video.width` / `height` / `fps` | 1920 / 1080 / 24 | video size - 2560x1440 and 3840x2160 keep big panels sharp (see the quality warning), at a slower render |
 | `video.max_upscale` | 3 | how far a small panel may be enlarged to fill the frame; 0 means no cap |

@@ -214,6 +214,12 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   list differs from audio_timing.json's, and only warns when the voice setting changed.
   **Testing tip:** use `.venv/bin/python`, never `bin/uv run --project <repo>` - that wrote a
   uv.lock and re-synced the repo's .venv (swapped 4 packages).
+- **Settings layout (user request, 2026-09-25: "clear what does what, no duplicate"):** still one
+  flat list (never a wizard), now 4 columns - group (Narration/Sound/Video/PDF, shown once on a
+  group's first row), setting, value, and a <=38-char "What it does" (`Row.help`, `Row.group`).
+  "Design a new voice" is an action and no longer repeats the voice name the row above shows;
+  Music level hides while music is off. Checked by exporting a Pilot screenshot
+  (`app.export_screenshot()` -> cairosvg -> PNG) at 116 cols (fits, no scrollbar) and 100.
 - **Custom music level (user request, 2026-09-25):** Settings - Music level has "Custom..."
   (3-30 LU, number_check); the typed value is kept in `audio.bgm_custom_lu` and offered
   again beside the presets next time, whatever level is active. Tested with Pilot from a

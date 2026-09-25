@@ -69,42 +69,58 @@ class SettingsScreen(Screen):
 
     def on_mount(self) -> None:
         table = self.query_one(SafeTable)
-        table.add_column("Setting", width=20)
-        table.add_column("Value")
+        table.add_column("", width=9)
+        table.add_column("Setting", width=24)
+        table.add_column("Value", width=26)
+        table.add_column("What it does")
         self.load()
         table.focus()
 
     def _rows(self) -> list[voice_settings.Row]:
         config = self.config
         audio, video, Row = config.audio, config.video, voice_settings.Row
-        music = Path(audio.bgm_path).name if audio.bgm_enabled and audio.bgm_path else "off"
-        return [
+        music_on = audio.bgm_enabled and bool(audio.bgm_path)
+        rows = [
             *voice_settings.narrator_rows(config),
-            Row("Background music", music, _change_music),
-            Row("Music level", f"{audio.bgm_below_voice_lu:g} LU under the voice", _change_music_level),
-            Row("Intro", Path(video.intro_path).name if video.intro_enabled and video.intro_path else "off",
-                _change_intro),
-            Row("Gap between panels",
-                f"{audio.pause_between_panels_ms} ms" if audio.pause_between_panels_ms else "continuous",
-                _change_panel_gap),
-            Row("Edge fade", f"{audio.edge_fade_ms} ms" if audio.edge_fade_ms else "off", _change_edge_fade),
-            Row("Narration takes",
-                f"about {audio.batch_target_minutes:g} min each" if audio.batch_narration
-                else "one per panel",
-                _change_narration_takes),
-            Row("Video size", f"{video.width}x{video.height}", _change_video_size),
-            Row("Enlarge panels", f"up to {video.max_upscale:g}x" if video.max_upscale > 0 else "to fill the frame",
-                _change_max_upscale),
-            Row("PDF size cap", f"{config.pdf.max_mb:g} MB per file", _change_pdf_cap),
+            Row("Narration take length",
+                f"about {audio.batch_target_minutes:g} min each" if audio.batch_narration else "one per panel",
+                _change_narration_takes, "how much is read in one go",
+                "Narration"),
+            Row("Pause between panels",
+                f"{audio.pause_between_panels_ms} ms" if audio.pause_between_panels_ms else "none (continuous)",
+                _change_panel_gap, "silence between panels", "Narration"),
+            Row("Fade at line edges", f"{audio.edge_fade_ms} ms" if audio.edge_fade_ms else "off",
+                _change_edge_fade, "softens line edges (no clicks)", "Narration"),
+            Row("Background music", Path(audio.bgm_path).name if music_on else "off", _change_music,
+                f"music under the voice ({GLOBAL_DIR / 'bgm'}/)", "Sound"),
         ]
+        if music_on:  # a level for music that isn't playing would only confuse
+            rows.append(Row("Music level", f"{audio.bgm_below_voice_lu:g} LU under the voice", _change_music_level,
+                            "higher = quieter music", "Sound"))
+        rows += [
+            Row("Intro", Path(video.intro_path).name if video.intro_enabled and video.intro_path else "off",
+                _change_intro, f"clip before every recap ({GLOBAL_DIR / 'intro'}/)", "Video"),
+            Row("Video size", f"{video.width}x{video.height}", _change_video_size,
+                "resolution of the finished video", "Video"),
+            Row("Panel enlargement limit",
+                f"up to {video.max_upscale:g}x" if video.max_upscale > 0 else "no limit (fill the frame)",
+                _change_max_upscale, "how far small panels are blown up", "Video"),
+            Row("PDF file size limit", f"{config.pdf.max_mb:g} MB per file", _change_pdf_cap,
+                "largest PDF part given to the LLM", "PDF"),
+        ]
+        return rows
 
     def load(self) -> None:
         table = self.query_one(SafeTable)
         at = table.picked_row
         table.clear()
         self.rows = self._rows()
+        shown = None
         for row in self.rows:
-            table.add_row(row.label, row.value)
+            # The group name once, on its first row - the list stays one flat list.
+            group = row.group if row.group != shown else ""
+            shown = row.group
+            table.add_row(group, row.label, row.value, row.help)
         if at is not None and self.rows:
             table.move_cursor(row=min(at, len(self.rows) - 1))
 
@@ -187,7 +203,7 @@ async def _change_music_level(screen: SettingsScreen, config: RemangaConfig) -> 
 
 async def _change_panel_gap(screen: SettingsScreen, config: RemangaConfig) -> None:
     gap = await screen.app.push_screen_wait(Choice(
-        "Gap between panels", [(f"{ms} ms" if ms else "continuous", hint, ms) for ms, hint in PANEL_GAPS],
+        "Pause between panels", [(f"{ms} ms" if ms else "continuous", hint, ms) for ms, hint in PANEL_GAPS],
         current=config.audio.pause_between_panels_ms,
         note="The silence between one panel's narration and the next, and now the whole of it: the "
              "uneven lead-in the narrator leaves on each clip is trimmed back to an even margin, so "
@@ -200,7 +216,7 @@ async def _change_panel_gap(screen: SettingsScreen, config: RemangaConfig) -> No
 
 async def _change_edge_fade(screen: SettingsScreen, config: RemangaConfig) -> None:
     fade = await screen.app.push_screen_wait(Choice(
-        "Edge fade", [(f"{ms} ms" if ms else "off", hint, ms) for ms, hint in EDGE_FADES],
+        "Fade at line edges", [(f"{ms} ms" if ms else "off", hint, ms) for ms, hint in EDGE_FADES],
         current=config.audio.edge_fade_ms,
         note="How each panel's clip starts and stops. The start is only ever faded over the silence "
              "the clip already has, so the first word is never ramped; the end may ease out through "
@@ -213,7 +229,7 @@ async def _change_edge_fade(screen: SettingsScreen, config: RemangaConfig) -> No
 async def _change_narration_takes(screen: SettingsScreen, config: RemangaConfig) -> None:
     current = config.audio.batch_target_minutes if config.audio.batch_narration else 0.0
     minutes = await screen.app.push_screen_wait(Choice(
-        "Narration takes",
+        "Narration take length",
         [(f"about {m:g} min" if m else "one per panel", hint, m) for m, hint in NARRATION_TAKES],
         current=current,
         note="How much of the chapter the narrator reads without stopping. A panel read on its own "
@@ -242,7 +258,7 @@ async def _change_video_size(screen: SettingsScreen, config: RemangaConfig) -> N
 
 async def _change_max_upscale(screen: SettingsScreen, config: RemangaConfig) -> None:
     cap = await screen.app.push_screen_wait(Choice(
-        "Enlarge panels", [(f"up to {c:g}x" if c else "no cap", hint, c) for c, hint in UPSCALE_CAPS],
+        "Panel enlargement limit", [(f"up to {c:g}x" if c else "no cap", hint, c) for c, hint in UPSCALE_CAPS],
         current=config.video.max_upscale,
         note="A small panel blown up to fill a 4K frame has nothing to fill it with and looks soft. "
              "Capped, it sits smaller and stays sharp."))
@@ -252,7 +268,7 @@ async def _change_max_upscale(screen: SettingsScreen, config: RemangaConfig) -> 
 
 async def _change_pdf_cap(screen: SettingsScreen, config: RemangaConfig) -> None:
     cap = await screen.app.push_screen_wait(Ask(
-        "PDF size cap", "Largest PDF file, in MB", value=f"{config.pdf.max_mb:g}",
+        "PDF file size limit", "Largest PDF file, in MB", value=f"{config.pdf.max_mb:g}",
         check=number_check(1, 2000),
         note="A chapter bigger than this is split into panels_1.pdf, panels_2.pdf, ..."))
     if cap is not None:

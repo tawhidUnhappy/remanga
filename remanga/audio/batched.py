@@ -124,7 +124,7 @@ def _make_take(synth, batch: Batch, audio_dir: Path, audio_config: AudioConfig,
     if halves is None or depth >= MAX_SPLIT_DEPTH:
         raise RuntimeError(
             f"Batch {batch.name} did not come back as its script: {problem}. It cannot be split any "
-            f"further, so narrating it needs a shorter take - lower 'Narration takes' in settings."
+            f"further, so narrating it needs a shorter take - lower 'Narration take length' in settings."
         )
     console.print(f"[yellow]{_esc(batch.name)} did not come back as its script - {problem}. "
                   f"Narrating it as two shorter takes instead.[/]")
