@@ -16,6 +16,7 @@ from remanga.paths import list_projects, load_project_metadata
 from remanga.ui.dialogs import Ask, Result
 from remanga.ui.screens.chapters import ChaptersScreen
 from remanga.ui.screens.common import _global_log
+from remanga.ui.screens.queue import QueueScreen
 from remanga.ui.screens.settings import SettingsScreen
 from remanga.ui.tasks import Step, TaskOutcome, TaskScreen
 from remanga.ui.widgets import SafeTable, TopBar
@@ -24,6 +25,7 @@ from remanga.ui.widgets import SafeTable, TopBar
 class ProjectsScreen(Screen):
     BINDINGS = [
         Binding("n", "new", "New project"),
+        Binding("j", "queue", "Queue"),
         Binding("s", "settings", "Settings"),
         Binding("q", "app.quit", "Quit"),
     ]
@@ -71,6 +73,9 @@ class ProjectsScreen(Screen):
 
     def action_settings(self) -> None:
         self.app.push_screen(SettingsScreen(self.machine, ["remanga", "Settings"]))
+
+    def action_queue(self) -> None:
+        self.app.push_screen(QueueScreen(self.machine, ["remanga"]))
 
     @work(exclusive=True)
     async def action_new(self) -> None:

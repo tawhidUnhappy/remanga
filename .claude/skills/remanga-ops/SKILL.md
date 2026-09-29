@@ -288,6 +288,12 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   a take the 15s reference finished in 325s. The tooling for this lives in the scratchpad
   (voiceprint.py: MFCC means over voiced frames + median F0, calibrated before use) - rebuild it the
   same way if this comes back, and calibrate before trusting any number.
+- **Job queue (user request, 2026-09-29).** `workflow/queue.py` holds jobs (project, chapter,
+  action) in `projects/queue.json`; only unattended actions (download, pdf, video, remix, reaudio,
+  source) - marking and the narration passes need the browser. Menus: a chapter's "Add to queue",
+  `j` opens `ui/screens/queue.py` (r run, x remove, shift+up/down reorder, c clear finished); the
+  run is one TaskScreen with `keep_going=True`, so a failed job is marked and the next starts,
+  Ctrl+C leaves the rest waiting. CLI: `./run.sh queue [--run]`. Jobs are matched back by `id`.
 - **A take can hum between two words (2026-09-29, user report, HimeSama ch1 50-51s).** Qwen samples
   (temp 0.9) and now and then holds a note after a sentence instead of speaking: 0.6s silence, then
   1.2s at -22 dB, ~450 Hz, flatness 0.01, no word in it. Every script word is still there, so the

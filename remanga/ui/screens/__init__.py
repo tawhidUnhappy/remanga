@@ -4,6 +4,7 @@
     chapters.py      one project: every chapter as a table, and its menu
     chapter_work.py  what that menu does - download, mark, PDF, video
     settings.py      the settings table, engine rows included
+    queue.py         jobs lined up across projects, run one after another
     common.py        what more than one of them needs
 
 Lists open with nothing highlighted (remanga/ui/widgets.py). What happens

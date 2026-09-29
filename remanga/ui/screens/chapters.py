@@ -18,14 +18,17 @@ from remanga.config import RemangaConfig
 from remanga.ui.dialogs import Choice, Confirm
 from remanga.ui.screens.chapter_work import ChapterWork
 from remanga.ui.screens.common import _STATUS, _fetch_listing, _merge_rows
+from remanga.ui.screens.queue import QueueScreen
 from remanga.ui.screens.settings import SettingsScreen
 from remanga.ui.widgets import SafeTable, TopBar
+from remanga.workflow.queue import JOBS, add_jobs
 
 
 class ChaptersScreen(ChapterWork, Screen):
     BINDINGS = [
         Binding("space", "pick", "Pick"),
         Binding("a", "download_new", "Download all new"),
+        Binding("j", "queue", "Queue"),
         Binding("s", "settings", "Settings"),
         Binding("escape", "back", "Back"),
         Binding("q", "app.quit", "Quit"),
@@ -120,6 +123,27 @@ class ChaptersScreen(ChapterWork, Screen):
     def action_settings(self) -> None:
         self.app.push_screen(SettingsScreen(self.machine.for_project(self.project), [*self.path, "Settings"]))
 
+    async def queue_chapters(self, project: str, chapters: list[str], on_disk: bool, narrated: bool,
+                             marked: bool, title: str) -> None:
+        """Adds a job per chapter to the queue - only what runs unattended,
+        and only what applies to these chapters now."""
+        wanted = ["download"] if not on_disk else (
+            ["pdf", "video"] + (["remix", "reaudio"] if narrated else []) + (["source"] if marked else [])
+            + ["download"])
+        action = await self.app.push_screen_wait(Choice(
+            f"Queue for {title.lower()}", [(*JOBS[a], a) for a in wanted],
+            note="Marking and the narration passes need you at the browser, so they cannot be queued.",
+            danger=["source"]))
+        if action is None:
+            return
+        added = add_jobs(project, chapters, action)
+        skipped = len(chapters) - added
+        self.notify(f"Queued {JOBS[action][0]} for {added} chapter(s)"
+                    + (f" ({skipped} already waiting)" if skipped else "") + " - j opens the queue.")
+
+    def action_queue(self) -> None:
+        self.app.push_screen(QueueScreen(self.machine, self.path))
+
     def on_screen_resume(self) -> None:
         if self.rows:
             self.load()
@@ -180,6 +204,8 @@ class ChaptersScreen(ChapterWork, Screen):
                                 "keeps only that - no mix or video", "reaudio"))
             options += [("Check pages", "fix any missing or broken page", "download"),
                         ("Re-download", "delete the pages and fetch them all again", "redownload")]
+        options.append(("Add to queue", "line it up to run later with other chapters, from any "
+                        "project - j opens the queue", "queue"))
         if some_on_disk:
             options += [("Reset", "delete the cut panels, PDF, narration, audio and video - the marks and "
                          "pages stay", "reset"),
@@ -188,7 +214,10 @@ class ChaptersScreen(ChapterWork, Screen):
         action = await self.app.push_screen_wait(Choice(title, options, note=note, danger=["reset", "delete"]))
         if action is None:
             return
-        if action == "download":
+        if action == "queue":
+            await self.queue_chapters(project, chapters, on_disk, narrated,
+                             any(workflow.has_marks(project, ch) for ch in chapters), title)
+        elif action == "download":
             await self.download(chapters)
         elif action == "mark":
             await self.mark(chapters, config)

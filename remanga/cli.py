@@ -8,6 +8,7 @@
     remanga pdf      -p NAME -c 1-5
     remanga video    -p NAME -c 1-5 [--force | --remix]   (--remix: new music/sound, same narration)
     remanga chapters -p NAME
+    remanga queue    [--run]                    (the job queue the menus fill; --run runs it)
     remanga voices                              (one line in every voice, to listen to)
     remanga setup
 
@@ -60,6 +61,8 @@ def build_parser() -> argparse.ArgumentParser:
     v.add_argument("--audio-only", action="store_true",
                    help="narrate, mix and render as usual, then keep only the raw narration clips")
     with_project("chapters", "Show where each chapter is", chapters=False)
+    qp = sub.add_parser("queue", help="Show the job queue (filled from the menus: a chapter's Add to queue)")
+    qp.add_argument("--run", action="store_true", help="run every job not done yet, one after another")
     sub.add_parser("voices", help="Read one line in each of the narrator engine's voices, into "
                                   "global/voice/samples/")
     sub.add_parser("setup", help="install MAGI v3 and the chosen narrator (their environments and weights)")
@@ -85,6 +88,12 @@ def _run(args: argparse.Namespace) -> None:
         return
     if args.command == "new":
         workflow.create_project(args.source, RemangaConfig.load())
+        return
+    if args.command == "queue":
+        if args.run:
+            run_queue(RemangaConfig.load())
+        else:
+            show_queue()
         return
 
     config = RemangaConfig.load().for_project(args.project)
@@ -134,6 +143,42 @@ def _run(args: argparse.Namespace) -> None:
         else:
             workflow.make_video(args.project, chapter, config, force=args.force,
                                 audio_only=getattr(args, "audio_only", False))
+
+
+def show_queue() -> None:
+    from remanga.workflow.queue import load_queue
+
+    jobs = load_queue()
+    if not jobs:
+        console.print("[yellow]The queue is empty - add jobs from a chapter's menu (Add to queue).[/]")
+    for number, job in enumerate(jobs, 1):
+        note = f"  [red]{_esc(job.error.splitlines()[0])}[/]" if job.error else ""
+        console.print(f"  {number:>3}  {job.state:<8} {_esc(job.title)}{note}")
+
+
+def run_queue(machine) -> None:
+    """Every job not done yet, in order. A failing job is recorded and the
+    next one starts; the exit status is 1 if any failed."""
+    from remanga.workflow.queue import load_queue, record, run_job, to_run
+
+    jobs = to_run(load_queue())
+    if not jobs:
+        console.print("[green]Nothing to run - every job in the queue is done.[/]")
+        return
+    failed = 0
+    for number, job in enumerate(jobs, 1):
+        console.print(f"\n[bold cyan]Job {number}/{len(jobs)}: {_esc(job.title)}[/]")
+        try:
+            run_job(job, machine)
+        except Exception as error:
+            record(job, str(error) or type(error).__name__)
+            err_console.print(f"[bold red]Failed:[/] {_esc(str(error))}")
+            failed += 1
+            continue
+        record(job, None)
+    if failed:
+        raise RuntimeError(f"{failed} of {len(jobs)} job(s) failed - see above; `remanga queue` lists them.")
+    console.print(f"[bold green]✓ All {len(jobs)} job(s) done.[/]")
 
 
 def setup() -> None:

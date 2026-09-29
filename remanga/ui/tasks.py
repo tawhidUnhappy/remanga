@@ -107,9 +107,14 @@ class _Reporter(activity.Reporter):
 class TaskScreen(Screen[TaskOutcome]):
     BINDINGS = [Binding("ctrl+c", "stop", "Stop", priority=True)]
 
-    def __init__(self, path: list[str], title: str, steps: list[Step], log_path: Path) -> None:
+    def __init__(self, path: list[str], title: str, steps: list[Step], log_path: Path,
+                 keep_going: bool = False) -> None:
         super().__init__()
         self.path, self.title_text, self.steps, self.log_path = path, title, steps, log_path
+        # A queue of unrelated jobs: one failing is no reason to leave the
+        # rest undone. Its step is marked failed and the next one starts;
+        # Ctrl+C still stops everything.
+        self.keep_going = keep_going
         self.states = ["pending"] * len(steps)
         self.sink = _LogSink(log_path)
         self.reporter = _Reporter()
@@ -174,12 +179,24 @@ class TaskScreen(Screen[TaskOutcome]):
         console.file = self.sink
         activity.set_reporter(self.reporter)
         outcome = TaskOutcome(ok=True)
+        failures: list[str] = []
         try:
             for index, step in enumerate(self.steps):
                 self.states[index] = "running"
                 self.sink.note(f"-- {step.label}\n")
-                outcome.results.append(step.run())
+                try:
+                    outcome.results.append(step.run())
+                except Exception as error:
+                    if not self.keep_going:
+                        raise
+                    self.states[index] = "failed"
+                    self.sink.write(f"ERROR in {step.label}: {error}\n")
+                    failures.append(f"{step.label}: {error}")
+                    outcome.results.append(error)
+                    continue
                 self.states[index] = "done"
+            if failures:
+                outcome = TaskOutcome(ok=False, results=outcome.results, error="\n".join(failures))
         except KeyboardInterrupt:
             outcome = TaskOutcome(ok=False, results=outcome.results, error="Stopped.", stopped=True)
             self.sink.write("Stopped by Ctrl+C\n")
