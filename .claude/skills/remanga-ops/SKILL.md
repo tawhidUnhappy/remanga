@@ -288,6 +288,16 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   a take the 15s reference finished in 325s. The tooling for this lives in the scratchpad
   (voiceprint.py: MFCC means over voiced frames + median F0, calibrated before use) - rebuild it the
   same way if this comes back, and calibrate before trusting any number.
+- **A take can hum between two words (2026-09-29, user report, HimeSama ch1 50-51s).** Qwen samples
+  (temp 0.9) and now and then holds a note after a sentence instead of speaking: 0.6s silence, then
+  1.2s at -22 dB, ~450 Hz, flatness 0.01, no word in it. Every script word is still there, so the
+  collapse check and alignment pass it. `audio/hums.py:find_hums` flags a >=0.3s run of loud, tonal
+  frames inside a gap between whisper's words; swept over 26 real takes it fired on that one only.
+  `audio/batched.py:_retake_hums` redoes a humming take under seed 1, 2 (`QwenSynthesizer.seed`,
+  sent per request) and keeps a retake only if it hums less AND still matches its script; each batch
+  row records `retakes` so a reused take is not retaken every run. Retake, never cut: whisper can
+  miss a real word (names), and cutting would drop it. The detector frames go through `load_audio`
+  - pydub's resampler raised flatness 3-5x and nearly hid the hum.
 - **Resampling:** clips go 24 kHz -> 44.1 kHz through `audio/resample.load_audio` (ffmpeg), never
   pydub's `set_frame_rate` (folds imaging noise above 12 kHz).
 - **Frame cuts** snap into the pause between pages (`video/frame_timeline.py`) so a picture changes

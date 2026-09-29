@@ -138,6 +138,12 @@ class QwenSynthesizer(BaseWorkerSynthesizer):
     # sentences, which lands well inside the synthesis timeout on a 3060.
     chunk_max_chars = 260
 
+    # Qwen samples, so a take made again under another seed is a different
+    # reading of the same text - what audio/batched.py asks for when a take
+    # comes back with a hum in it. Kokoro is deterministic and has no use
+    # for one.
+    seed = 0
+
     def __init__(self, tts_config: TTSConfig, audio_config: AudioConfig):
         self.tts_config = tts_config
         self.engine_config: QwenConfig = tts_config.qwen
@@ -169,6 +175,8 @@ class QwenSynthesizer(BaseWorkerSynthesizer):
             "text": text,
             "output_path": str(output_wav.resolve()),
         }
+        if self.seed:
+            request["seed"] = self.seed
         if self.mode == "custom":
             request["speaker"] = voice or self.engine_config.speaker
             request["instruct"] = self.engine_config.instruct

@@ -51,6 +51,9 @@ warnings.filterwarnings("ignore")
 # single panel - which resume does around an interruption - comes back as a
 # different take than the panels either side of it.
 SEED = 0
+# A request may name another: that is how a take that came back with a hum in
+# it is asked for again (audio/batched.py) - the same seed would only give the
+# same hum back.
 
 
 def send(obj: dict) -> None:
@@ -115,7 +118,7 @@ def main() -> None:
             text = req["text"]
 
             with contextlib.redirect_stdout(io.StringIO()), torch.inference_mode():
-                torch.manual_seed(SEED)
+                torch.manual_seed(int(req.get("seed", SEED)))
                 if args.mode == "custom":
                     wavs, sr = model.generate_custom_voice(
                         text=text, speaker=req.get("speaker") or "Ryan", language=args.language,
