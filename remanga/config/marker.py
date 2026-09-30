@@ -29,6 +29,10 @@ class ShortcutsConfig(ConfigModel):
     prev_page: list[str] = Field(default_factory=lambda: ["arrowleft"])
     next_page: list[str] = Field(default_factory=lambda: ["arrowright"])
     delete_mark: list[str] = Field(default_factory=lambda: ["delete", "backspace"])
+    # Cuts the mark under the mouse into a top and a bottom half at the
+    # mouse's height (static/js/marks.js:splitMark) - a webtoon panel that ran
+    # two scenes together, or two stacked panels drawn as one mark.
+    split_mark: list[str] = Field(default_factory=lambda: ["s"])
     # A bare, unmodified key on purpose - not "mod+tab" (reserved by every
     # major browser for switching tabs) or "mod+0" (reserved for resetting
     # the *browser's* page zoom). Both fire a browser-chrome action a page can

@@ -80,7 +80,8 @@ or **Mark panels** in a chapter's menu. It opens one browser tab for every chapt
 - **Detect** runs MAGI v3 over the pages and draws the panels it finds (a GPU takes a few seconds a
   page; without one, mark by hand).
 - Fix what it got wrong: drag a box, resize it, delete it, draw a missing one, mark a full page as
-  one panel. The sidebar lists the pages and what each one has.
+  one panel, or press **S** with the mouse on a mark to split it into top and bottom at that
+  height. The sidebar lists the pages and what each one has.
 - The reading order follows the manga's direction (right to left for Japanese), and the panel
   numbers show it.
 - **Save** writes the chapter's `crops.json` and moves to the next chapter in the tab.
@@ -96,14 +97,18 @@ chose, often straight through a panel. remanga recognises one by MangaDex's "Lon
 without that line, by the chapter's images being several times taller than they are wide. Write
 `"layout": "pages"` or `"long_strip"` in project.json to decide it yourself.
 
-Before marking, such a chapter is re-cut into `strip/`: the images are joined top to bottom and cut
-again only in the blank bands between panels, into pages about the shape of a manga page. A speech
-bubble or sound effect floating in the gutter stays on the page of the panel nearest it. The
-downloaded images in `pages/` are never touched. From there the marker, the PDF and the video work
-as for any manga, and Detect does three more things on these pages:
-- a speech bubble that sits across the line between two panels goes whole into one of them;
-- art no panel covers (a floating bubble, a sound effect) joins the panel nearest it;
-- a box over a plain fade between scenes is dropped.
+MAGI is trained on printed pages, so a webtoon's panels are found another way - mangaEasy's webtoon
+splitter: the images are joined top to bottom, and every band of rows that is almost all one colour
+(the gutter between two scenes) ends a panel. A panel is the full width of the strip, so the speech
+bubbles floating beside the art stay in it. A caption sitting in a gap joins the panel below it,
+and a panel taller than 2.2x the width is cut at the quietest band of rows near the middle, never
+through the inside of a bubble when there is any gutter to be had.
+
+Before marking, the chapter is re-cut into `strip/` along those panels, into pages about the shape
+of a manga page; the downloaded images in `pages/` are never touched. **Detect** on these pages
+puts the splitter's panels on them - no GPU, no MAGI. Where it joined two scenes into one mark,
+point at the line between them and press **S** to split the mark there (in any manga, too). From
+there the PDF and the video work as for any manga.
 
 ## The narrator
 

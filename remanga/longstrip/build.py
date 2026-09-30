@@ -2,38 +2,42 @@
 
 The downloaded images stay exactly as MangaDex sent them (their checksums are
 what says a download is complete). strip/ is built from them: each run of
-same-width images is joined top to bottom, and cut again only in the blank
-bands between panels (gaps.plan_pages), so no panel is ever split across two
-pages. Everything after this - the Panel Marker, MAGI, crops.json, the cut
-panels and their IDs - works on strip/ as it would on any manga's pages.
+same-width images is joined top to bottom, its panels are found by
+mangaEasy's webtoon splitter (split.py), and the run is cut into pages only
+between two panels, packed up to about a manga page's shape. Each page's
+panels are recorded, and they are what Detect puts on that page - no MAGI.
+From there the Panel Marker, crops.json, the cut panels and their IDs work on
+strip/ as on any manga's pages.
 
-chapter_N/strip.json records what it was built from. It is rebuilt when the downloaded
-images change, and otherwise never: crops.json is marks in strip/'s pixels,
-so a strip cut differently under existing marks would put every one of them
-in the wrong place."""
+chapter_N/strip.json records what it was built from. It is rebuilt when the
+downloaded images change, and otherwise never: crops.json is marks in
+strip/'s pixels, so a strip cut differently under existing marks would put
+every one of them in the wrong place."""
 
 from __future__ import annotations
 
 import shutil
-from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
 
-import numpy as np
 from PIL import Image, ImageOps
 
 from remanga import activity
 from remanga.chapters import page_stem
 from remanga.console import console
 from remanga.json_io import read_json_or, write_json
-from remanga.longstrip.gaps import plan_pages, row_spread
 from remanga.longstrip.layout import is_long_strip, source_pages
+from remanga.longstrip.split import Range, split_strip
 from remanga.paths import get_chapter_dir, get_crops_path, get_pages_dir
 
 STRIP_DIR_NAME = "strip"
 STRIP_RECORD_NAME = "strip.json"
 # Bumped when the cutting changes. A strip built by an older version is kept
 # while the chapter has marks (see the module doc), and rebuilt when it has none.
-SLICER_VERSION = 1
+SLICER_VERSION = 2
+# Panels are packed onto a page until it would pass this height / width - about
+# a manga page. A panel taller than that is a page of its own.
+TARGET_ASPECT = 1.45
 
 
 def strip_dir(project: str, chapter: str) -> Path:
@@ -49,6 +53,15 @@ def marking_pages_dir(project: str, chapter: str, build: bool = True) -> Path:
     if build:
         ensure_strip(project, chapter)
     return strip_dir(project, chapter)
+
+
+def strip_panels(pages_dir: Path) -> dict[str, list[list[float]]]:
+    """Each strip page's panels as marks-to-be: full-width [x1, y1, x2, y2]
+    boxes in the page's pixels. Empty for a folder that is not a strip."""
+    record = read_json_or(pages_dir.with_name(STRIP_RECORD_NAME), None) or {}
+    return {page["file"]: [[0.0, float(top), float(page["width"]), float(bottom)]
+                           for top, bottom in page.get("panels", [])]
+            for page in record.get("pages", [])}
 
 
 def _sources_record(paths: list[Path]) -> list[list]:
@@ -69,95 +82,83 @@ def ensure_strip(project: str, chapter: str) -> Path:
     built = same_sources and all((out_dir / page["file"]).exists() for page in record.get("pages", []))
     if built and (record.get("version") == SLICER_VERSION or has_marks):
         return out_dir
-    if has_marks and record:
+    if has_marks and record and not same_sources:
         console.print(f"[yellow]Chapter {chapter}'s downloaded pages changed since its panels were marked - "
                       f"the long strip is cut again, so check the marks in the Panel Marker.[/]")
     _build(chapter, sources, out_dir, record_path)
     return out_dir
 
 
-@dataclass(frozen=True)
-class _Run:
-    """Consecutive downloaded images of one width, read as one tall image."""
-    paths: tuple[Path, ...]
-    tops: tuple[int, ...]  # each image's first row in the run
-    heights: tuple[int, ...]
-    width: int
-    height: int
-
-
-def _runs(sources: list[Path]) -> list[_Run]:
-    runs: list[list[tuple[Path, int, int]]] = []
-    for path in sources:
-        with Image.open(path) as img:
-            w, h = ImageOps.exif_transpose(img).size
-        if runs and runs[-1][0][1] == w:
-            runs[-1].append((path, w, h))
-        else:
-            runs.append([(path, w, h)])
-    out = []
-    for run in runs:
-        tops, y = [], 0
-        for _, _, h in run:
-            tops.append(y)
-            y += h
-        out.append(_Run(tuple(p for p, _, _ in run), tuple(tops), tuple(h for _, _, h in run), run[0][1], y))
-    return out
-
-
 def _open(path: Path) -> Image.Image:
     with Image.open(path) as img:
-        img = ImageOps.exif_transpose(img)
-        return img.convert("RGB" if img.mode not in ("L", "RGB") else img.mode)
+        return ImageOps.exif_transpose(img).convert("RGB")
 
 
-def _run_spread(run: _Run) -> np.ndarray:
-    parts = []
-    for path in run.paths:
+def _runs(sources: list[Path]) -> list[list[Path]]:
+    """Consecutive downloaded images of one width: one strip each. A cover or
+    a credits page of another width stays a run of its own."""
+    runs: list[list[Path]] = []
+    last_width = None
+    for path in sources:
         with Image.open(path) as img:
-            parts.append(row_spread(np.asarray(ImageOps.exif_transpose(img).convert("L"))))
-    return np.concatenate(parts)
+            width = ImageOps.exif_transpose(img).width
+        if runs and width == last_width:
+            runs[-1].append(path)
+        else:
+            runs.append([path])
+        last_width = width
+    return runs
 
 
-def _page_image(run: _Run, top: int, bottom: int, cache: dict[Path, Image.Image]) -> tuple[Image.Image, list]:
-    """Rows [top, bottom) of the run, pasted from the images they fall in,
-    and which rows of which image each piece came from."""
-    pieces = []
-    for path, first, img_h in zip(run.paths, run.tops, run.heights, strict=True):
-        y0, y1 = max(top, first), min(bottom, first + img_h)
-        if y0 < y1:
-            pieces.append((path, first, y0, y1))
-    # Drop images the pages have moved past, so a run holds one or two open.
-    for path in list(cache):
-        if path not in {p for p, *_ in pieces}:
-            del cache[path]
-    for path, *_ in pieces:
-        if path not in cache:
-            cache[path] = _open(path)
-    images = [cache[path] for path, *_ in pieces]
-    mode = "RGB" if any(img.mode == "RGB" for img in images) else "L"
-    page = Image.new(mode, (run.width, bottom - top))
-    for (_, first, y0, y1), img in zip(pieces, images, strict=True):
-        page.paste(img.crop((0, y0 - first, run.width, y1 - first)).convert(mode), (0, y0 - top))
-    return page, [[path.name, y0 - first, y1 - first] for path, first, y0, y1 in pieces]
+def _stitch(paths: list[Path]) -> Image.Image:
+    images = [_open(p) for p in paths]
+    strip = Image.new("RGB", (images[0].width, sum(im.height for im in images)))
+    y = 0
+    for im in images:
+        strip.paste(im, (0, y))
+        y += im.height
+    return strip
+
+
+def plan_pages(panels: list[Range], height: int, width: int) -> list[tuple[int, int, list[Range]]]:
+    """The strip as pages that tile it top to bottom, each (top, bottom, its
+    panels in page rows). Whole panels only, and a page is cut only halfway
+    across a real gutter - never on an auto-split cut, where two panels
+    touch: that cut may have gone through a bubble (a forced cut), and on one
+    page the two halves can still be joined in the marker; on two they could
+    not."""
+    if not panels:
+        return [(0, height, [])]
+    groups: list[list[Range]] = [[panels[0]]]
+    for panel in panels[1:]:
+        touching = panel[0] <= groups[-1][-1][1]
+        if not touching and panel[1] - groups[-1][0][0] > width * TARGET_ASPECT:
+            groups.append([panel])
+        else:
+            groups[-1].append(panel)
+    cuts = [0] + [(prev[-1][1] + nxt[0][0]) // 2 for prev, nxt in pairwise(groups)] + [height]
+    return [(top, bottom, [(t - top, b - top) for t, b in group])
+            for (top, bottom), group in zip(pairwise(cuts), groups, strict=True)]
 
 
 def _build(chapter: str, sources: list[Path], out_dir: Path, record_path: Path) -> None:
-    runs = _runs(sources)
     work = out_dir.with_name(out_dir.name + ".part")
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
     pages_out = []
-    with activity.progress(f"Cutting chapter {chapter}'s long strip into pages", total=len(sources),
+    forced = 0
+    with activity.progress(f"Finding the panels in chapter {chapter}'s long strip", total=len(sources),
                            unit="images") as bar:
-        for run in runs:
-            cache: dict[Path, Image.Image] = {}
-            for top, bottom in plan_pages(_run_spread(run), run.width):
-                page, came_from = _page_image(run, top, bottom, cache)
+        for run in _runs(sources):
+            strip = _stitch(run)
+            found = split_strip(strip)
+            forced += len(found.forced_cuts)
+            for top, bottom, panels in plan_pages(found.panels, strip.height, strip.width):
                 name = f"{page_stem(chapter, len(pages_out) + 1)}.png"
-                page.save(work / name, "PNG", compress_level=6)
-                pages_out.append({"file": name, "width": page.width, "height": page.height, "from": came_from})
-            bar.advance(len(run.paths))
+                strip.crop((0, top, strip.width, bottom)).save(work / name, "PNG", compress_level=6)
+                pages_out.append({"file": name, "width": strip.width, "height": bottom - top,
+                                  "panels": [list(p) for p in panels]})
+            bar.advance(len(run))
     shutil.rmtree(out_dir, ignore_errors=True)
     work.replace(out_dir)
     # Beside strip/, not in it: everything that reads pages lists the folder.
@@ -166,5 +167,8 @@ def _build(chapter: str, sources: list[Path], out_dir: Path, record_path: Path) 
         "sources": _sources_record(sources),
         "pages": pages_out,
     })
-    console.print(f"[green]✓ Long strip: {len(sources)} downloaded image(s) -> {len(pages_out)} page(s), "
-                  f"cut only between panels[/]")
+    panels = sum(len(page["panels"]) for page in pages_out)
+    console.print(f"[green]✓ Long strip: {len(sources)} downloaded image(s) -> {panels} panel(s) on "
+                  f"{len(pages_out)} page(s)[/]"
+                  + (f"\n[yellow]  {forced} very tall panel(s) had to be cut where there was no gutter - "
+                     f"check those in the Panel Marker (s splits a mark, drag an edge to join).[/]" if forced else ""))

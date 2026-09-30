@@ -26,6 +26,7 @@ export const ACTIONS = [
   { id: "prev_page", label: "Previous page" },
   { id: "next_page", label: "Next page" },
   { id: "delete_mark", label: "Delete selected mark" },
+  { id: "split_mark", label: "Split the mark under the mouse (top / bottom)" },
   { id: "reset_view", label: "Reset zoom & position" },
 ];
 

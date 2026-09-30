@@ -470,24 +470,29 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
 - **Long-strip manga / webtoons (user request, 2026-09-30)** - `remanga/longstrip/`. A webtoon
   chapter is ~15 images of 720x5000-9900 cut through panels. `layout.is_long_strip`: project.json
   `layout` (set from MangaDex tag Long Strip `3e2b8dae-...` at create) else median image h/w >= 2.5.
-  `build.ensure_strip` joins each run of SAME-WIDTH images (covers/credits of other widths stay
-  separate runs) and `gaps.plan_pages` cuts only at blank bands (row grey std <= 4, >= 1.5% of width
-  tall; a per-row gradient/fade counts as blank - good cut). Blocks under 0.45x width (bubbles, SFX
-  tails) are glued to the neighbour across the narrower gap first, or they became pages of their own.
-  Pages packed to ~1.45 h/w. `marking_pages_dir` is what the marker, outline and cropper read -
-  **pages/ stays pristine** (download checksums). `chapter_N/strip.json` sits BESIDE strip/, never
-  in it: the marker lists every file in its pages dir and tried to open strip.json as an image.
-  strip/ is rebuilt only when pages/ changes, never under existing marks for a slicer change
-  (`SLICER_VERSION`) - crops.json is in strip/'s pixels.
-  - **MAGI on webtoon pages** (`longstrip/boxes.fit_boxes`, only when `MarkerState.long_strip`):
-    drops boxes over blank rows (MAGI boxed a black-to-white fade), gives uncovered art rows to the
-    nearest box (or a box of their own when >= 0.45x width tall), then `keep_texts_whole` using
-    MAGI's own `texts` (the worker now sends them): a bubble crossing two panels went half into each.
-    Measured ch 25 of a real webtoon: 15 images -> 74 pages -> 79 panels, every bubble whole.
-  - Not done (ask first): a vertical pan over very tall panels - a 720x2400 panel is a narrow
-    column on the 4K frame. The renderer is a still-frame concat, so that is a new render path.
+  - **No MAGI for webtoons (user verdict, same day): "magi is trained for pages type of manga".** A
+    first version ran MAGI on re-cut pages and patched its boxes (bubble attach, MAGI text boxes kept
+    whole); the user rejected it and asked for mangaEasy's logic instead. Don't bring MAGI back
+    for long strips. `split.py` is a port of /mnt/datadisk/mangaEasy mangaeasy/panels/gutter.py +
+    webtoon.py (CPU path): gutter split (rows >= 97% one colour, >= 12 tall, one >= 99.5%) over the
+    likely gutter colours, recursive -> rescue content gaps 40-700 rows into the panel below -> auto
+    split > 2.2x width at the quietest +/-24-row BAND. Verified identical to mangaEasy's own
+    functions on a real 720x88011 strip (79 ranges, same 3 forced cuts, 13 s). One addition:
+    panels with no row std > 4 (a black-to-white fade) are dropped.
+  - `build.ensure_strip` stitches each run of SAME-WIDTH images, splits it, packs whole panels into
+    `strip/` pages (~1.45 h/w) and records each page's panels in `chapter_N/strip.json` (BESIDE
+    strip/, never in it - the marker opens every file in its pages dir). **A page is cut only in a
+    real gutter, never on an auto-split cut**: a forced cut can go through a bubble, and across two
+    pages the halves could not be rejoined in the marker. Detect on a long strip = `strip_panels`
+    (full-width boxes from strip.json), instant, no GPU. **pages/ stays pristine** (checksums);
+    strip/ is rebuilt only when pages/ changes or `SLICER_VERSION` moves with no crops.json.
+  - Panel Marker **`s` = split the mark under the mouse** into top/bottom at the mouse's height
+    (`marks.js:splitMark`, `ShortcutsConfig.split_mark`). Shift+S cannot be a second binding:
+    shortcuts.js lowercases printable keys, so it normalizes to "s". Verified in headless Chromium
+    (Playwright into the scratchpad - no node on this box): 315-1307 -> 315-711 + 711-1307, autosaved.
+  - Not done (ask first): a vertical pan over very tall panels, and a "join two marks" key.
   - MangaDex lists officially licensed chapters with `externalUrl` and 0 pages; downloading one
-    prints "All 0 pages verified" and gets nothing. Test webtoons: Skeleton Soldier
+    prints "All 0 pages verified" and gets nothing. Test webtoon: Skeleton Soldier
     (d993f789-e7e5-4832-92fd-37614220b427) ch 25 is hosted.
 
 ## Verified 2026-09-17 (light version)
