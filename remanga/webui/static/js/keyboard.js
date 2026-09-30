@@ -5,7 +5,9 @@
 
 import { stage, toolDrawBtn, toolAdjustBtn } from "./dom.js";
 import { state } from "./state.js";
-import { deleteMark, markFullPage, splitMark, undo } from "./marks.js";
+import { deleteMark, markFullPage } from "./marks.js";
+import { undo } from "./history.js";
+import { splitMark } from "./split.js";
 import { stepPage } from "./page-nav.js";
 import { saveAndExit } from "./chapter-nav.js";
 import { resetView } from "./zoom-pan.js";

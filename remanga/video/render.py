@@ -5,14 +5,12 @@ Which ffmpeg and codec it encodes with is encoder_probe.py."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 from remanga.config import SystemConfig, VideoConfig
 from remanga.console import console, escape as _escape_path
 from remanga.ffmpeg_io import run_ffmpeg
-from remanga.json_io import read_json, read_json_or, write_json
+from remanga.json_io import read_json_or, write_json
 from remanga.paths import (
-    get_audio_timing_path,
     get_final_video_path,
     get_master_audio_path,
     get_video_concat_path,
@@ -25,58 +23,22 @@ from remanga.video.encoder_probe import EncoderChoiceMixin
 from remanga.video.encoding import (
     AUDIO_CODEC_ARGS,
     MUX_ARGS,
-    PICTURE_FORMAT_VERSION,
     picture_codec_args,
     picture_filter_args,
 )
-from remanga.video.frame_timeline import FrameTimeline, build_frame_timeline
+from remanga.video.frame_timeline import FrameTimeline
 from remanga.video.intro import chosen_intro, intro_identity, join as join_intro, leader as intro_leader
+from remanga.video.picture_cache import PictureCacheMixin
 
 
-class VideoRenderer(EncoderChoiceMixin):
+class VideoRenderer(PictureCacheMixin, EncoderChoiceMixin):
     def __init__(self, system_config: SystemConfig | None = None, video_config: VideoConfig | None = None):
         self.system_config = system_config or SystemConfig()
         self.video_config = video_config or VideoConfig()
         self.compositor = FrameCache(self.video_config)
         self._encoder_choice: tuple[str, str, bool, str] | None = None
 
-    def frame_timeline(self, project_name: str, chapter_num: str) -> FrameTimeline:
-        """This chapter's panels on the configured frame grid (video/frame_timeline.py)."""
-        panels = read_json(get_audio_timing_path(project_name, chapter_num)).get("panels", [])
-        return build_frame_timeline(panels, self.video_config.fps)
-
     # --- the picture stream: video only, cached apart from the final MP4 ---
-
-    @staticmethod
-    def _picture_fingerprint_path(picture: Path) -> Path:
-        return picture.with_name(f"{picture.stem}_fingerprint.json")
-
-    def _picture_fingerprint(self, project_name: str, chapter_num: str, timeline: FrameTimeline) -> dict[str, Any]:
-        """Everything that decides what picture.mp4 contains: the timing it
-        was laid out from (audio_timing.json is only rewritten when its
-        content changes - see audio/tts.py), every video setting, the encoder,
-        and the encode recipe itself."""
-        return {
-            "format": PICTURE_FORMAT_VERSION,
-            "timing_mtime": get_audio_timing_path(project_name, chapter_num).stat().st_mtime,
-            "codec": self.encoder()[1],
-            "total_frames": timeline.total_frames,
-            # The intro is joined after the picture, so it never makes one stale.
-            "video": self.video_config.model_dump(exclude={"intro_enabled", "intro_path"}),
-        }
-
-    def _picture_is_fresh(self, project_name: str, chapter_num: str, timeline: FrameTimeline) -> bool:
-        picture = get_video_picture_path(project_name, chapter_num)
-        if not picture.exists() or picture.stat().st_size <= 1000:
-            return False
-        recorded = read_json_or(self._picture_fingerprint_path(picture), None)
-        if recorded != self._picture_fingerprint(project_name, chapter_num, timeline):
-            return False
-        # A frame composited since - deleted and rebuilt - is a different
-        # picture even under identical settings.
-        built = picture.stat().st_mtime
-        frames = get_video_frames_dir(project_name, chapter_num).glob("frame_*.png")
-        return not any(frame.stat().st_mtime > built for frame in frames)
 
     def ensure_picture(self, project_name: str, chapter_num: str, force: bool = False) -> tuple[Path, FrameTimeline]:
         """This chapter's encoded picture stream, encoded only if it's missing

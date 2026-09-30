@@ -2,7 +2,7 @@
 page by page against the checksums MangaDex names them after (see
 download_chapter). A page file is described in pages.py, the chapter listing
 with local status is chapter_list.py, and resolving IDs, feeds and retries is
-resolve.py."""
+resolve.py, and each step of a chapter's download chapter_pages.py."""
 
 from __future__ import annotations
 
@@ -12,18 +12,22 @@ from pathlib import Path
 import requests
 
 from remanga import activity
-from remanga.chapters import chapter_key, page_stem
+from remanga.chapters import chapter_key
 from remanga.config import DownloaderConfig
 from remanga.console import console, escape as _esc
 from remanga.downloader.chapter_list import ChapterListMixin
+from remanga.downloader.chapter_pages import (
+    pages_to_fetch,
+    planned_pages,
+    record_pages,
+    remember_manga,
+    sweep_strays,
+)
 from remanga.downloader.pages import IMAGE_QUALITY, PageFile, remove_paths
 from remanga.downloader.resolve import BASE_URL, MangaDexResolver
 from remanga.paths import (
     get_chapter_dir,
     load_project_metadata,
-    read_manifest,
-    save_project_metadata,
-    update_manifest_chapter,
 )
 
 
@@ -65,119 +69,55 @@ class MangaDexDownloader(ChapterListMixin):
                 f"re-downloading.[/]"
             )
 
-        manga_id_or_url = self._manga_source(project_name, manga_id_or_url)
-        manga_id = self.resolver.parse_manga_id(manga_id_or_url)
-
-        # Resolving an ID/URL directly (as opposed to a title search - see
-        # MangaDexResolver.parse_manga_id) never otherwise learns the manga's
-        # actual title along the way, but the PDF's text page names the manga
-        # for the LLM, so fetch and cache it here. Only re-fetched when missing or the manga
-        # ID changed, to avoid an extra API call on every re-run of an
-        # already-downloaded chapter.
-        existing_meta = load_project_metadata(project_name)
-        manga_title = existing_meta.get("manga_title", "")
-        original_language = existing_meta.get("original_language", "")
-        if not manga_title or not original_language or existing_meta.get("manga_id") != manga_id:
-            info = self.resolver.get_manga_info(manga_id)
-            manga_title = info["title"] or manga_title
-            original_language = info["original_language"] or original_language
-
-        save_project_metadata(project_name, {
-            "project_name": project_name,
-            "manga_url": manga_id_or_url,
-            "manga_id": manga_id,
-            "manga_title": manga_title,
-            # Where the wizard derives reading_direction from instead of
-            # asking - see remanga/workflow.py.
-            "original_language": original_language,
-            "last_chapter": str(chapter_num)
-        })
+        source = self._manga_source(project_name, manga_id_or_url)
+        manga_id = self.resolver.parse_manga_id(source)
+        remember_manga(self.resolver, project_name, source, manga_id, chapter_num)
 
         dest_dir.mkdir(parents=True, exist_ok=True)
         chapter_id = self.resolver.find_chapter_id(manga_id, chapter_num, chapter_ids)
-
         console.print(f"[cyan]Retrieving MangaDex node for chapter {chapter_num}...[/]")
         server_info = self.resolver.request_with_retry("GET", f"{BASE_URL}/at-home/server/{chapter_id}").json()
-        base_url = server_info["baseUrl"]
         chapter_data = server_info["chapter"]
-        quality_key = self.config.image_quality
-        response_key, url_path = IMAGE_QUALITY.get(quality_key, (quality_key, quality_key))
-        pages = [
-            PageFile(dest_dir / f"{page_stem(chapter_num, idx)}{Path(fn).suffix or '.png'}", fn)
-            for idx, fn in enumerate(chapter_data[response_key], start=1)
-        ]
+        quality = self.config.image_quality
+        response_key, url_path = IMAGE_QUALITY.get(quality, (quality, quality))
+        pages = planned_pages(dest_dir, chapter_num, chapter_data[response_key])
 
-        # pages/ holds exactly this chapter's pages and nothing else - a stray
-        # file from an interrupted run, a manual copy, a folder, an old naming
-        # scheme. Anything else is removed, and named, so it's visible.
-        expected = {page.path.name for page in pages}
-        strays = sorted(p for p in dest_dir.iterdir() if p.name not in expected)
-        if strays:
-            names = ", ".join(p.name + ("/" if p.is_dir() else "") for p in strays)
-            remove_paths(strays)
-            console.print(
-                f"[yellow]Removed {len(strays)} item(s) from pages/ that aren't chapter {_esc(chapter_num)}'s "
-                f"pages:[/] [dim]{_esc(names)}[/]"
-            )
+        sweep_strays(dest_dir, pages, chapter_num)
+        todo = pages_to_fetch(project_name, chapter_num, pages, chapter_id, quality)
 
-        # This chapter's record from the previous attempt, stored in the
-        # project's shared manifest.json. Only consulted for a page MangaDex
-        # gave no checksum for (never seen in practice): such a page is
-        # trusted when nothing says it's for a different chapter_id, quality
-        # or page count - a missing or interrupted record is still the same
-        # chapter, and re-fetching on a hunch is worse than trusting it.
-        cached_meta = read_manifest(project_name).get("chapters", {}).get(str(chapter_num), {}).get("pages")
-        trust_unchecked = not cached_meta or (
-            cached_meta.get("chapter_id") == chapter_id
-            and cached_meta.get("quality") == quality_key
-            and cached_meta.get("total_pages") == len(pages)
-        )
-        failed = [page for page in pages if page.path.exists() and not page.valid_on_disk(trust_unchecked)]
-        if failed:
-            remove_paths(page.path for page in failed)
-            console.print(
-                f"[yellow]{len(failed)} page(s) didn't match MangaDex's checksum - fetching them again.[/]"
-            )
-        todo = [page for page in pages if not page.path.exists()]
-
-        def record_pages(verified: bool) -> None:
-            # Replaced on every attempt, from the at-home response this
-            # attempt resolved. `verified` is written False before the first
-            # page is fetched and True only once every page is on disk and
-            # checked, so a run killed mid-download leaves a record saying so
-            # - the chapter listing reads it. No per-page
-            # list: pages/ itself already shows that.
-            update_manifest_chapter(project_name, chapter_num, "pages", {
-                "chapter_id": chapter_id,
-                "manga_id": manga_id,
-                "total_pages": len(pages),
-                "quality": quality_key,
-                "timestamp": time.time(),
-                "verified": verified,
-            })
+        def record(verified: bool) -> None:
+            record_pages(project_name, chapter_num, chapter_id, manga_id, len(pages), quality, verified)
 
         if not todo:
-            record_pages(True)
+            record(True)
             console.print(
                 f"[bold green]✓ All {len(pages)} pages verified against MangaDex's checksums - "
                 f"nothing to download.[/]"
             )
             return dest_dir
 
-        record_pages(False)
+        record(False)
         console.print(
             f"[green]Downloading {len(todo)} of {len(pages)} page(s) politely to:[/] {_esc(str(dest_dir))}"
         )
+        base = f"{server_info['baseUrl']}/{url_path}/{chapter_data['hash']}"
+        self._fetch(todo, base, chapter_num, len(pages))
+        record(True)
+        console.print(
+            f"[bold green]✓ Downloaded {len(todo)} page(s) - all {len(pages)} verified against "
+            f"MangaDex's checksums.[/]"
+        )
+        return dest_dir
 
-        with activity.progress(f"Downloading chapter {chapter_num}", total=len(pages),
-                               completed=len(pages) - len(todo), unit="pages") as bar:
+    def _fetch(self, todo: list[PageFile], base: str, chapter_num: str, total: int) -> None:
+        """The missing pages, one at a time and politely. Each is checked before
+        it is written: a page that arrives damaged gets one more try, and a
+        second bad copy stops the chapter rather than being recorded as verified."""
+        with activity.progress(f"Downloading chapter {chapter_num}", total=total,
+                               completed=total - len(todo), unit="pages") as bar:
             for page in todo:
-                url = f"{base_url}/{url_path}/{chapter_data['hash']}/{page.source}"
-                # Checked before it's written: a page that arrives damaged
-                # gets one more try, and a second bad copy stops the chapter
-                # rather than being recorded as verified.
                 for _attempt in range(2):
-                    content = self.resolver.request_with_retry("GET", url).content
+                    content = self.resolver.request_with_retry("GET", f"{base}/{page.source}").content
                     if page.matches(content):
                         break
                 else:
@@ -186,20 +126,9 @@ class MangaDexDownloader(ChapterListMixin):
                         f"checksum twice in a row - try again later."
                     )
                 page.path.write_bytes(content)
-
                 if self.config.request_delay_seconds > 0:
                     time.sleep(self.config.request_delay_seconds)
                 bar.advance()
-
-        record_pages(True)
-
-        console.print(
-            f"[bold green]✓ Downloaded {len(todo)} page(s) - all {len(pages)} verified against "
-            f"MangaDex's checksums.[/]"
-        )
-
-
-        return dest_dir
 
     @staticmethod
     def _manga_source(project_name: str, manga_id_or_url: str | None) -> str:

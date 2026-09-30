@@ -7,19 +7,8 @@ import { state, currentFilename } from "./state.js";
 import { api } from "./api.js";
 import { render } from "./render.js";
 import { renderOutline } from "./outline.js";
-import { stage } from "./dom.js";
-import { notice } from "./assist-status.js";
+import { recordChange, settleHistory } from "./history.js";
 
-// Where the mouse last was over the page, in natural page pixels - the line
-// `s` (splitMark) cuts along. Null while it is off the page.
-let pointer = null;
-document.addEventListener("mousemove", (e) => {
-  const page = state.chapter?.pages[state.pageIndex];
-  if (!page) return;
-  const rect = stage.getBoundingClientRect();
-  const x = (e.clientX - rect.left) / state.scale, y = (e.clientY - rect.top) / state.scale;
-  pointer = x >= 0 && y >= 0 && x <= page.width && y <= page.height ? { x, y } : null;
-});
 
 // Flags the current page as user-touched, synchronously, with none of
 // markDirty()'s other side effects (caching, debounced autosave). Call this
@@ -40,55 +29,8 @@ export function markTouched() {
   state.touchedPages.add(currentFilename());
 }
 
-// --- undo (Ctrl+Z) ---------------------------------------------------------
-// Per page: the states it was in before each change, oldest first, and the
-// state it was last left in. Every edit goes through markDirty, so recording
-// there makes every kind of edit undoable without each gesture knowing about
-// it. Marks that arrive from outside (Detect, Remark, a server reorder) go
-// through settleHistory, which records them as a step of their own - so an
-// undo can take back a Detect as well as a drag. A page seen for the first
-// time only starts its history there.
-const HISTORY_LIMIT = 100;
-const history = {};   // filename -> [JSON of marks], oldest first
-const settled = {};   // filename -> JSON of the marks as last left
-
-export function settleHistory(filename = currentFilename()) {
-  const now = JSON.stringify(state.pageMarksCache[filename] || []);
-  const before = settled[filename];
-  // Marks the server put on this page are a step of their own: undoable,
-  // like an edit.
-  if (before !== undefined && before !== now) remember(filename, before);
-  settled[filename] = now;
-}
-
-function remember(filename, snapshot) {
-  const stack = (history[filename] ||= []);
-  stack.push(snapshot);
-  if (stack.length > HISTORY_LIMIT) stack.shift();
-}
-
-export function undo() {
-  if (state.readOnly) return;
-  const filename = currentFilename();
-  const stack = history[filename];
-  if (!stack?.length) { notice("Nothing to undo on this page"); return; }
-  state.marks = JSON.parse(stack.pop());
-  state.pageMarksCache[filename] = state.marks;
-  if (!state.marks.some(m => m.id === state.selectedId)) state.selectedId = null;
-  // Settled first, so the markDirty below saves this state without
-  // recording it as a new change to undo.
-  settled[filename] = JSON.stringify(state.marks);
-  markDirty();
-  render();
-}
-
 export function markDirty() {
-  const filename = currentFilename();
-  const now = JSON.stringify(state.marks);
-  // A click on a mark that moved nothing still ends in markDirty; only a real
-  // change becomes an undo step.
-  if (settled[filename] !== undefined && settled[filename] !== now) remember(filename, settled[filename]);
-  settled[filename] = now;
+  recordChange(currentFilename());
   state.pageMarksCache[currentFilename()] = state.marks;
   state.editSeq[currentFilename()] = (state.editSeq[currentFilename()] || 0) + 1;
   markTouched();
@@ -100,6 +42,8 @@ export function markDirty() {
   clearTimeout(state.saveDebounce);
   state.saveDebounce = setTimeout(() => flushSave(false), 400);
 }
+
+export { settleHistory, undo } from "./history.js";
 
 export async function flushSave(immediate) {
   // A read-only session has nothing to flush, and the server would refuse it
@@ -228,44 +172,6 @@ export function markFullPage() {
   state.marks = [full];
   state.pageMarksCache[currentFilename()] = state.marks;
   state.selectedId = full.id;
-  markDirty();
-  render();
-}
-
-// `s`: cuts the mark under the mouse in two where the mouse is - top and
-// bottom (a line across, for a webtoon panel that ran two scenes together) or
-// left and right (a line down, two panels side by side), as the Options'
-// "S splits a mark" says. The selected mark wins where marks overlap. Both
-// halves must clear the size floor, so a cut an inch from an edge is refused
-// rather than leaving a sliver. Left/right halves are numbered in the manga's
-// reading direction: right first for right-to-left.
-export function splitMark() {
-  if (state.readOnly) return;
-  if (!pointer) { notice("Point at a mark on the page to split it there"); return; }
-  const { x, y } = pointer;
-  const inside = m => x > m.x && x < m.x + m.w && y > m.y && y < m.y + m.h;
-  const selected = state.marks.find(m => m.id === state.selectedId);
-  const target = selected && inside(selected) ? selected : state.marks.filter(inside).at(-1);
-  if (!target) { notice("Point at a mark on the page to split it there"); return; }
-  const vertical = state.chapter.split_direction === "vertical";
-  const first = { ...target, src: "manual" };
-  const second = { ...target, id: "local-" + (state.nextLocalId++), src: "manual" };
-  if (vertical) {
-    first.w = x - target.x;
-    Object.assign(second, { x, w: target.x + target.w - x });
-  } else {
-    first.h = y - target.y;
-    Object.assign(second, { y, h: target.y + target.h - y });
-  }
-  if (isTooSmall(first) || isTooSmall(second)) {
-    notice(`Too close to the edge — each half needs at least ${minMarkSize()} px`);
-    return;
-  }
-  const halves = vertical && state.chapter.reading_direction === "right_to_left" ? [second, first] : [first, second];
-  markTouched();
-  state.marks.splice(state.marks.indexOf(target), 1, ...halves);
-  state.pageMarksCache[currentFilename()] = state.marks;
-  state.selectedId = null;
   markDirty();
   render();
 }

@@ -41,7 +41,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from remanga.audio.synth.qwen import REFERENCE_MAX_SECONDS, reference_pair_path
+from remanga.audio.synth.qwen_reference import REFERENCE_MAX_SECONDS, reference_pair_path
 from remanga.config import SubtitlesConfig, TTSConfig
 from remanga.console import console, escape as _esc
 

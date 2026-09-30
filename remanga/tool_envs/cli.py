@@ -9,7 +9,8 @@ from __future__ import annotations
 import argparse
 import shutil
 
-from remanga.tool_envs.install import orphan_envs, provision, say, status_rows, warn
+from remanga.tool_envs.install import provision, say, warn
+from remanga.tool_envs.status import orphan_envs, status_rows
 
 
 def main() -> int:

@@ -32,6 +32,27 @@ bit during the split and are worth checking after any slice-and-move: a decorato
 wrong side of the cut (`@dataclass` on `_Page`), and a helper that silently became two copies. Both
 passed ruff and imports - only running a real chapter caught them.
 
+**Refactor 2026-09-30 (user request: "no too big files, all module based and small so an LLM
+can easily update them").** Every file that held two jobs was split, re-exported so callers never
+changed: `audio/batched.py` -> `takes` (making/halving takes) + `retakes` (hums, whisper) +
+`batched` (orchestration); `ui/dialogs/` package (fit, choice, ask, result); `narration/` package
+(files, check, document); `pdf/writer.py` -> `streams` + `textpage` + `writer`;
+`workflow/deletables.py`; `downloader/feed.py` (chapter feed mixin) + `chapter_pages.py` (the steps
+of download_chapter, which was one 165-line method); `video/picture_cache.py`; `ui/task_io.py`;
+`tool_envs/status.py`; `cli_commands.py`; `config/tts_kokoro.py` + `tts_qwen.py`;
+`cropper/cut.py`; `audio/synth/qwen_reference.py`; the Panel Marker's `history.js`, `split.js`,
+`shortcuts-menu.js`; the Writer/Reviewer CSS out of their index.html. **`hardware.py` stays one
+file on purpose**: bootstrap.sh runs it as a bare script before any env exists, so it cannot
+import siblings. Verified after: 198 modules import, ruff clean, and a real run of each path -
+MangaDex download + re-verify, MAGI detect, PDF (pdfimages 79+35, text page), Kokoro 114 panels ->
+4K render, Qwen clone in batched takes (whisper 100%), webtoon strip -> exact crops, Panel Marker
+S/Ctrl+Z/Shortcuts in Chromium, Settings dialogs in Pilot. Also fixed on the way: a chapter
+MangaDex only links to (0 pages) now says so instead of "All 0 pages verified".
+**How it was done, for next time:** scratchpad `movedefs.py` (top-level blocks, verbatim, via ast)
+and `movemethods.py` (class members -> a mixin), then `ruff check --fix --select F401,I001`.
+**ruff F401 deletes a re-export line** the source module does not itself use (`from .x import Y`
+kept only for callers) - point the callers at the new module instead, or list it in `__all__`.
+
 ## The workflow (the whole product)
 
 ```
@@ -49,8 +70,8 @@ video     -> check reply -> Kokoro clip per panel -> mix with BGM -> render pane
 Code map (`remanga/`), one module per job after the 2026-09-18 regroup - no file over ~270 lines:
 `workflow/` (the steps both front-ends call: `projects` `chapters` `download` `panels` `pdf` `video`
 `cleanup`, all re-exported from its `__init__`), `cli.py`, `ui/` (Textual menus: `app.py`
-styles/quit, `screens/` = `projects` `chapters` (table + menu) `chapter_work` (what the menu does,
-a mixin) `settings` `common`, `dialogs.py`, `tasks.py`, `widgets.py`, `voice_settings.py`),
+styles/quit, `screens/` = `projects` `chapters` (the table) `chapter_menu` (the menu) `chapter_work` +
+`video_work` (what it does, mixins) `settings` (+ `settings_sound`/`settings_video` rows) `settings` `common`, `dialogs.py`, `tasks.py`, `widgets.py`, `voice_settings.py`),
 `activity.py` (progress bars: CLI Rich bar or UI task view),
 `narration.py` (reply check, fix request, memory), `chapters.py` (ranges, sort, page naming),
 `webui/` (the Panel Marker: Flask routes, MarkerSession/MarkerState, magi_assist + its worker,
@@ -182,7 +203,7 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     matched 97.5%. So the limit is the model's, not the token budget's, and it is somewhere below
     11,673 characters. `MAX_BATCH_SECONDS` is now **240s** and the settings offer 2 and 4 minutes,
     not 9.
-    - `audio/batched.py:_collapsed` catches it **before transcription**, on two signals: a take at
+    - `audio/takes.py:collapsed` catches it **before transcription**, on two signals: a take at
       the token ceiling, or one more than `RUNAWAY_FACTOR` (1.4) longer than its own estimate. The
       estimate is good enough for that - a healthy take asked for ~205s and came back 203s.
     - It then **splits at a page boundary and retries**, up to `MAX_SPLIT_DEPTH` (3). A collapse is
@@ -272,7 +293,7 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   (real words in that recording run 120-300 ms) - that is how `_drop_invented_tail` finds them.
   `audio/reference_text.py` now builds clip and transcript as ONE pair (cached as
   `{stem}.reference.json` + `.reference.wav`), cutting both at the last sentence that finishes
-  inside the limit; `synth/qwen.py:reference_pair` is the only way to get them, so a transcript can
+  inside the limit; `synth/qwen_reference.py:reference_pair` is the only way to get them, so a transcript can
   never sit beside a clip it is not of. No transcript = x_vector_only_mode = nothing to leak.
   **Rule: never hand a cloning model text you have not proved is in the audio it gets.**
 - **A cloned voice drifts off its reference inside a long take (2026-09-22, user report).** Qwen3-TTS
@@ -306,7 +327,7 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   1.2s at -22 dB, ~450 Hz, flatness 0.01, no word in it. Every script word is still there, so the
   collapse check and alignment pass it. `audio/hums.py:find_hums` flags a >=0.3s run of loud, tonal
   frames inside a gap between whisper's words; swept over 26 real takes it fired on that one only.
-  `audio/batched.py:_retake_hums` redoes a humming take under seed 1, 2 (`QwenSynthesizer.seed`,
+  `audio/retakes.py:retake_hums` redoes a humming take under seed 1, 2 (`QwenSynthesizer.seed`,
   sent per request) and keeps a retake only if it hums less AND still matches its script; each batch
   row records `retakes` so a reused take is not retaken every run. Retake, never cut: whisper can
   miss a real word (names), and cutting would drop it. The detector frames go through `load_audio`
@@ -357,7 +378,7 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   config.marker).run(port=…)` then GET `/`, `/api/chapter`, `/api/pages/<file>`, `/api/outline`.
 - **Every page of a chapter's PDF is one size and black** - the chapter's biggest panel, panels
   centred on it, and the text page white-on-black with its type scaled to the page
-  (`pdf/writer.py:build_pdf(canvas=...)` + `_text_layout`, canvas passed from `builder.py`) - panels
+  (`pdf/writer.py:build_pdf(canvas=...)` + `pdf/textpage.py:text_layout`, canvas passed from `builder.py`) - panels
   are all different shapes, and a PDF that changes shape per page reads badly (user request).
   Geometry only: the image streams, the JPEG passthrough and the file size are unchanged, and the
   text still extracts with pdftotext.
@@ -380,7 +401,7 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   pieces and nothing else: a `*Config` block in `config/tts.py` (with `voice_label`, `voice_detail`,
   `identity()`), a `TTSEngineSpec` in `config/tts_engines.py`, a Synthesizer in `audio/synth/` +
   worker in `audio/scripts/` registered in `SYNTHESIZERS`, and a `ToolSpec` in `tool_envs/catalog.py`.
-  Settings rows come from `ui/voice_settings.py:ENGINE_ROWS` (a `Row` is label/value/change), so the
+  Settings rows come from `ui/voice_settings.py:ENGINE_ROWS` (Qwen's in `voice_settings_qwen.py`, `Row` in `voice_rows.py`) (a `Row` is label/value/change), so the
   screen itself never changes. Nothing outside asks which engine is running: `audio/tts.py` calls
   `synth.synthesize(text, output_wav)` and `config.tts.identity()`.
 - **Cloning a recording needs NO transcript - and must not be given a wrong one.** Qwen's

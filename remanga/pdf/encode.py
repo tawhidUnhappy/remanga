@@ -19,13 +19,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from remanga.pdf.writer import (
-    ImagePage,
-    PngStream,
-    decode_predictor2,
-    encode_predictor2,
-    png_idat_stream,
-)
+from remanga.pdf.streams import PngStream, decode_predictor2, encode_predictor2, png_idat_stream
+from remanga.pdf.writer import ImagePage
 
 # The quality floors a panel may step down through, best first, when its PDF
 # would otherwise go over the cap - PSNR in dB against the panel's own

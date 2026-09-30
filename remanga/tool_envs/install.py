@@ -204,25 +204,3 @@ def provision(names: list[str] | None = None, torch_backend: str | None = None,
     return failed
 
 
-def orphan_envs() -> list[Path]:
-    """`.tools/venv-*` directories no tool claims any more - what a removed
-    TOOLS entry leaves behind. Reported rather than deleted: several GB that
-    somebody may still want is not this function's call to make."""
-    if not TOOLS_DIR.is_dir():
-        return []
-    known = {f"venv-{name}" for name in TOOL_NAMES}
-    return sorted(p for p in TOOLS_DIR.glob("venv-*") if p.is_dir() and p.name not in known)
-
-
-def status_rows() -> list[tuple[str, str, str]]:
-    """(name, display name, state) for every tool, for the setup screens."""
-    rows = []
-    for spec in TOOLS:
-        if not venv_python(spec.venv_dir):
-            state = "not installed"
-        elif is_current(spec):
-            state = "ready"
-        else:
-            state = "needs updating"
-        rows.append((spec.name, spec.display_name, state))
-    return rows

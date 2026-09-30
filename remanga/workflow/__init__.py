@@ -26,13 +26,12 @@ from remanga.workflow.chapters import (
     select_chapters,
 )
 from remanga.workflow.cleanup import (
-    deletable_items,
-    delete_items,
     drop_audio_and_video,
     drop_derived,
     drop_mix_and_video,
     reset_chapter,
 )
+from remanga.workflow.deletables import deletable_items, delete_items
 from remanga.workflow.download import download, print_chapter_list
 from remanga.workflow.narration import review_narration, write_narration
 from remanga.workflow.panels import cut_panels, mark

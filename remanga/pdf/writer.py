@@ -29,24 +29,14 @@ implements. Not a general-purpose PDF library.
 
 from __future__ import annotations
 
-import zlib
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-import numpy as np
+from remanga.pdf.textpage import TEXT_FONT, text_layout, text_page_content
 
-# US Letter in points (1/72 inch): what the text page's type was sized for,
-# and the page size when a PDF has no panels at all. Every page of a real
-# chapter is the biggest panel's size instead (1 image pixel = 1 PDF point),
-# so no image is ever rescaled.
-_TEXT_PAGE_SIZE = (612, 792)
-_TEXT_FONT = "Helvetica"
-_TEXT_SIZE = 11
-_TEXT_LEADING = 15
-_TEXT_MARGIN = 54
 # The base layout for the text page, in points. A bigger page (the image
 # pages set the size - see build_pdf) scales all of it by the same factor,
-# and how many lines fit follows from that - see _text_layout.
+# and how many lines fit follows from that - see text_layout.
 
 
 @dataclass
@@ -70,123 +60,11 @@ class ImagePage:
     lossless: bool = True
 
 
-@dataclass
-class PngStream:
-    width: int
-    height: int
-    colors: int
-    bits: int
-    palette: bytes | None
-    data: bytes
-
-
-def png_idat_stream(png: bytes) -> PngStream:
-    """The image data of a non-interlaced 8-bit grayscale or RGB PNG, or a
-    palette PNG of any bit depth: its IDAT chunks joined, which PDF reads as
-    FlateDecode with /Predictor 15 (PNG filters, chosen per row) - the same
-    trick img2pdf uses - plus the palette. Raises ValueError for any other
-    kind of PNG."""
-    if png[:8] != b"\x89PNG\r\n\x1a\n":
-        raise ValueError("not a PNG")
-    pos, idat, header, palette = 8, bytearray(), None, None
-    while pos < len(png):
-        length = int.from_bytes(png[pos:pos + 4], "big")
-        kind = png[pos + 4:pos + 8]
-        body = png[pos + 8:pos + 8 + length]
-        if kind == b"IHDR":
-            header = body
-        elif kind == b"IDAT":
-            idat += body
-        elif kind == b"PLTE":
-            palette = bytes(body)
-        elif kind == b"IEND":
-            break
-        pos += 12 + length
-    if header is None or not idat:
-        raise ValueError("PNG has no IHDR or IDAT")
-    width, height = int.from_bytes(header[0:4], "big"), int.from_bytes(header[4:8], "big")
-    depth, color_type, interlace = header[8], header[9], header[12]
-    colors = {0: 1, 2: 3, 3: 1}.get(color_type)
-    indexed = color_type == 3
-    if colors is None or interlace != 0 or (depth != 8 and not indexed) or (indexed and not palette):
-        raise ValueError(f"unsupported PNG (depth {depth}, color type {color_type}, interlace {interlace})")
-    return PngStream(width, height, colors, depth, palette if indexed else None, bytes(idat))
-
-
-def encode_predictor2(arr: np.ndarray) -> bytes:
-    """TIFF Predictor 2 (per-row, per-component horizontal differencing,
-    matching the PDF/TIFF6 spec exactly) then zlib - PDF's own native
-    lossless image representation, and what `ImagePage.data` should
-    hold when `predictor=2`. `arr` is (H, W, colors) uint8. Any standards-
-    compliant PDF reader decodes this back exactly; `decode_predictor2`
-    (below) implements the same inverse purely so a caller can self-verify a
-    round-trip before trusting the encoded bytes (see builder.py)."""
-    diff = arr.copy()
-    diff[:, 1:, :] = arr[:, 1:, :] - arr[:, :-1, :]
-    return zlib.compress(diff.astype(np.uint8).tobytes(), 9)
-
-
-def decode_predictor2(flate_data: bytes, shape: tuple[int, int, int]) -> np.ndarray:
-    """Inverse of encode_predictor2 - decompresses and reverses the
-    per-row horizontal differencing via a cumulative sum (mod 256) along the
-    column axis, which telescopes back to the original values exactly."""
-    diff = np.frombuffer(zlib.decompress(flate_data), dtype=np.uint8).reshape(shape)
-    return (np.cumsum(diff.astype(np.int32), axis=1) % 256).astype(np.uint8)
-
-
-def encode_flate_raw(arr: np.ndarray) -> bytes:
-    """Plain zlib over the raw bitmap, no predictor - a simpler, strictly more
-    robust fallback `ImagePage(..., predictor=None)` can use if
-    encode_predictor2 ever fails to round-trip (see builder.py). Produces a
-    noticeably larger stream (no horizontal decorrelation), but every step is
-    just zlib, nothing left to get subtly wrong."""
-    return zlib.compress(arr.astype(np.uint8).tobytes(), 9)
-
-
-def decode_flate_raw(flate_data: bytes, shape: tuple[int, int, int]) -> np.ndarray:
-    return np.frombuffer(zlib.decompress(flate_data), dtype=np.uint8).reshape(shape)
-
-
-def _escape_pdf_text(s: str) -> str:
-    return s.replace("\\", r"\\").replace("(", r"\(").replace(")", r"\)")
-
-
-def _text_layout(page_w: int, page_h: int) -> tuple[int, int, int, int]:
-    """Type size, leading, margin and lines per page for a page this big.
-
-    The base is the letter-sized page these numbers were chosen for; a bigger
-    page scales them by the same factor rather than leaving 11pt text adrift
-    in a corner of it."""
-    scale = max(1.0, min(page_w / _TEXT_PAGE_SIZE[0], page_h / _TEXT_PAGE_SIZE[1]))
-    size, leading, margin = round(_TEXT_SIZE * scale), round(_TEXT_LEADING * scale), round(_TEXT_MARGIN * scale)
-    return size, leading, margin, max(1, (page_h - 2 * margin) // leading)
-
-
-def _text_page_content(lines: Sequence[str], page_w: int, page_h: int) -> bytes:
-    """A text page: black, like the panel pages, with the text in white."""
-    size, leading, margin, _ = _text_layout(page_w, page_h)
-    x, y = margin, page_h - margin - size
-    parts = [f"0 0 0 rg 0 0 {page_w} {page_h} re f",  # the same black as the panel pages
-             "1 1 1 rg",                              # so the text has to be white
-             f"BT /F1 {size} Tf {leading} TL {x} {y} Td"]
-    for i, line in enumerate(lines):
-        if i > 0:
-            parts.append("T*")
-        # Standard-14 Helvetica only covers Latin-1 - this text page is
-        # metadata (chapter identity, story so far), not the pages, so a
-        # non-Latin-1 character here becomes "?" rather than pulling in a
-        # Unicode-capable embedded font for one info page. Never affects the
-        # page images, which stay exact regardless.
-        parts.append(f"({_escape_pdf_text(line)}) Tj")
-    parts.append("ET")
-    return "\n".join(parts).encode("latin-1", errors="replace")
-
-
 def build_pdf(image_pages: Sequence[ImagePage], info_lines: Sequence[str],
               canvas: tuple[int, int] | None = None) -> bytes:
     """Assembles one complete PDF file: one or more leading text pages
     rendering `info_lines` as real, extractable text (paginated - see
-    _text_layout - so a long manifest still gets a plain flowing
+    text_layout - so a long manifest still gets a plain flowing
     list instead of overflowing a single page), followed by one page per
     `image_pages`, in order.
 
@@ -210,18 +88,18 @@ def build_pdf(image_pages: Sequence[ImagePage], info_lines: Sequence[str],
     catalog_id = add_object(b"")  # filled in once pages_id is known
     pages_id = add_object(b"")    # filled in once every page is built
     font_id = add_object(
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /" + _TEXT_FONT.encode("ascii") + b" >>"
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /" + TEXT_FONT.encode("ascii") + b" >>"
     )
 
     kids: list[int] = []
 
-    lines_per_page = _text_layout(page_w, page_h)[3]
+    lines_per_page = text_layout(page_w, page_h)[3]
     text_pages = [
         info_lines[i:i + lines_per_page]
         for i in range(0, len(info_lines), lines_per_page)
     ] or [[]]
     for page_lines in text_pages:
-        content = _text_page_content(page_lines, page_w, page_h)
+        content = text_page_content(page_lines, page_w, page_h)
         content_id = add_object(
             b"<< /Length " + str(len(content)).encode("ascii") + b" >>\nstream\n" + content + b"\nendstream"
         )

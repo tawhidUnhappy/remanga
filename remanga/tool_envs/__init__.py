@@ -18,15 +18,14 @@ from remanga.tool_envs.install import (
     ensure_tool,
     install_tool,
     is_current,
-    orphan_envs,
     provision,
     say,
-    status_rows,
     uv_bin,
     venv_python,
     warn,
 )
 from remanga.tool_envs.spec import MARKER_NAME, PYTHON_VERSION, REPO_ROOT, TOOLS_DIR, InstallStep, ToolSpec
+from remanga.tool_envs.status import orphan_envs, status_rows
 
 __all__ = [
     "MARKER_NAME",
