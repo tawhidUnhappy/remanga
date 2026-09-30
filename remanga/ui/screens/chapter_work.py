@@ -15,10 +15,15 @@ from rich.text import Text
 
 from remanga import workflow
 from remanga.config import RemangaConfig
+from remanga.humanize import fmt_size
 from remanga.paths import get_audio_dir, get_log_path
-from remanga.ui.dialogs import Result
+from remanga.ui.dialogs import Checklist, Confirm, Result
 from remanga.ui.screens.common import _short
 from remanga.ui.tasks import Step, TaskOutcome, TaskScreen
+
+# What remanga cannot rebuild on its own: the pages need MangaDex (a download),
+# the marks and the narration are the user's (and the LLM's) work.
+UNREBUILDABLE = ("pages", "marks", "narration", "review")
 
 
 class ChapterWork:
@@ -107,6 +112,35 @@ class ChapterWork:
                 lines[:0] = [Text(f"Story so far carried from chapter {result.story_from}.", style="dim"), ""]
             await self.show(f"Chapter {chapter}: PDF ready", lines, ok=True, warnings=result.warnings(), log=log,
                             copy=[*files, _short(result.narration)])
+
+    async def delete_chosen(self, chapters: list[str], title: str) -> None:
+        """A checklist of what these chapters have on disk, with sizes; what
+        is ticked is deleted after one more question. Red rows are the ones
+        remanga cannot make again by itself."""
+        project = self.project
+        items = workflow.deletable_items(project, chapters)
+        if not items:
+            self.notify(f"{title} has nothing on disk to delete.")
+            return
+        rows = []
+        for item, size, having in items:
+            where = f"  · {having} of {len(chapters)}" if len(chapters) > 1 else ""
+            rows.append((item.label, fmt_size(size), item.hint + where, item.key))
+        picked = await self.app.push_screen_wait(Checklist(
+            f"Delete from {title.lower()}", rows, danger=UNREBUILDABLE,
+            note="Tick what to delete: Enter or Space ticks the highlighted row, a ticks all, d deletes. "
+                 "Red = remanga can't make it again by itself."))
+        if not picked:
+            return
+        labels = [label for label, _, _, key in rows if key in picked]
+        lost = [label for label, _, _, key in rows if key in picked and key in UNREBUILDABLE]
+        message = f"Delete {', '.join(labels)} for {title.lower()}?"
+        if lost:
+            message += f" {', '.join(lost)} can't be made again by remanga."
+        if not await self.app.push_screen_wait(Confirm("Delete chosen", message, yes="Delete", danger=True)):
+            return
+        removed = [path for chapter in chapters for path in workflow.delete_items(project, chapter, picked)]
+        self.notify(f"Deleted {', '.join(labels)} ({len(removed)} file(s) and folder(s)).")
 
     async def remix_videos(self, chapters: list[str], config: RemangaConfig) -> None:
         """A new mix and render from the narration already on disk."""

@@ -207,11 +207,13 @@ class ChaptersScreen(ChapterWork, Screen):
         options.append(("Add to queue", "line it up to run later with other chapters, from any "
                         "project - j opens the queue", "queue"))
         if some_on_disk:
-            options += [("Reset", "delete the cut panels, PDF, narration, audio and video - the marks and "
+            options += [("Delete chosen...", "pick from a list what to delete - marks, narration, audio, "
+                         "video, ...", "pick"),
+                        ("Reset", "delete the cut panels, PDF, narration, audio and video - the marks and "
                          "pages stay", "reset"),
                         ("Delete", "delete everything, pages included", "delete")]
         note = ", ".join(chapters) if len(chapters) > 1 else (chosen[0].get("title") or "")
-        action = await self.app.push_screen_wait(Choice(title, options, note=note, danger=["reset", "delete"]))
+        action = await self.app.push_screen_wait(Choice(title, options, note=note, danger=["pick", "reset", "delete"]))
         if action is None:
             return
         if action == "queue":
@@ -251,6 +253,8 @@ class ChaptersScreen(ChapterWork, Screen):
                     f"again (the slow part)? Only the new narration is kept; Rebuild video then makes the video "
                     f"from it.", yes="Narrate again")):
                 await self.make_videos(chapters, config, force=True, audio_only=True)
+        elif action == "pick":
+            await self.delete_chosen(chapters, title)
         elif action in ("reset", "delete"):
             what = ("everything, pages and marks included" if action == "delete"
                     else "the cut panels, PDF, pasted narration, audio and video")

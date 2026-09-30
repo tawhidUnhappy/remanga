@@ -288,6 +288,13 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   a take the 15s reference finished in 325s. The tooling for this lives in the scratchpad
   (voiceprint.py: MFCC means over voiced frames + median F0, calibrated before use) - rebuild it the
   same way if this comes back, and calibrate before trusting any number.
+- **Delete chosen (user request, 2026-09-30)** - chapter menu "Delete chosen...":
+  `workflow.cleanup.DELETABLES` (pages, strip, marks, panels, pdf, narration, review, audio, mix,
+  subtitles, video) -> `deletable_items` (only what exists, sizes, "n of m" chapters) ->
+  `ui/dialogs.Checklist` (SafeOptionList rules kept: Enter/Space/double click tick, `a` all, `d`
+  done - Enter never proceeds) -> Confirm -> `delete_items`, every path checked to be that
+  chapter's own inside the project, empty folders pruned. Red = can't be rebuilt (pages, marks,
+  narration, review). Verified with Pilot on a zz project, screenshot at 116 cols fits one line/row.
 - **Job queue (user request, 2026-09-29).** `workflow/queue.py` holds jobs (project, chapter,
   action) in `projects/queue.json`; only unattended actions (download, pdf, video, remix, reaudio,
   source) - marking and the narration passes need the browser. Menus: a chapter's "Add to queue",
