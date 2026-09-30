@@ -20,6 +20,7 @@ from remanga.console import console
 from remanga.cropper.crop_page import crop_page
 from remanga.cropper.crop_report import print_crop_summary, write_manifest
 from remanga.json_io import has_real_json_content, read_json
+from remanga.longstrip import marking_pages_dir
 from remanga.paths import get_chapter_dir, read_manifest
 
 
@@ -55,7 +56,7 @@ class CoordinateCropper:
         """
         chapter_dir = get_chapter_dir(project_name, chapter_num)
         crops_json_path = chapter_dir / "crops.json"
-        pages_dir = chapter_dir / "pages"
+        pages_dir = marking_pages_dir(project_name, chapter_num)
         panels_dir = chapter_dir / "panels"
 
         if not has_real_json_content(crops_json_path):

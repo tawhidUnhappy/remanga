@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from remanga.json_io import has_real_json_content, read_json
+from remanga.longstrip import marking_pages_dir
 from remanga.paths import get_chapter_dir
 from remanga.webui.marks_file import DECIDED_KEY
 
@@ -23,7 +24,7 @@ class SessionOutlineMixin:
         paying an image decode per page for every chapter in a project just
         to draw a sidebar is how a hundred-chapter session would take a
         minute to open."""
-        pages_dir = get_chapter_dir(self.project, chapter_num) / "pages"
+        pages_dir = marking_pages_dir(self.project, chapter_num, build=False)
         if not pages_dir.is_dir():
             return []
         return sorted(p.name for p in pages_dir.iterdir() if p.is_file())

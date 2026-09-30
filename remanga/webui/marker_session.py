@@ -30,6 +30,7 @@ from typing import Any
 
 from remanga.console import console, escape as _esc
 from remanga.json_io import write_json
+from remanga.longstrip import is_long_strip, marking_pages_dir
 from remanga.paths import get_chapter_dir, load_project_metadata
 from remanga.webui.marker_state import MarkerState
 from remanga.webui.session_detection import DetectionQueueMixin
@@ -136,7 +137,9 @@ class MarkerSession(DetectionQueueMixin, MarkEditsMixin, SessionOutlineMixin):
         with self._states_lock:
             state = self._states.get(chapter_num)
             if state is None:
-                state = MarkerState(get_chapter_dir(self.project, chapter_num), chapter_num)
+                state = MarkerState(get_chapter_dir(self.project, chapter_num), chapter_num,
+                                    pages_dir=marking_pages_dir(self.project, chapter_num),
+                                    long_strip=is_long_strip(self.project, chapter_num))
                 self._states[chapter_num] = state
             return state
 

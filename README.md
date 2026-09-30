@@ -88,6 +88,23 @@ or **Mark panels** in a chapter's menu. It opens one browser tab for every chapt
 The marks are yours: nothing overwrites them, and Reset keeps them. Making the PDF cuts the panels
 again whenever the marks are newer than them.
 
+### Long-strip manga (webtoons)
+
+A webtoon chapter arrives from MangaDex as a few very tall images, sliced wherever the uploader
+chose, often straight through a panel. remanga recognises one by MangaDex's "Long Strip" tag
+(recorded as `"layout": "long_strip"` in project.json when the project is made) or, for a project
+without that line, by the chapter's images being several times taller than they are wide. Write
+`"layout": "pages"` or `"long_strip"` in project.json to decide it yourself.
+
+Before marking, such a chapter is re-cut into `strip/`: the images are joined top to bottom and cut
+again only in the blank bands between panels, into pages about the shape of a manga page. A speech
+bubble or sound effect floating in the gutter stays on the page of the panel nearest it. The
+downloaded images in `pages/` are never touched. From there the marker, the PDF and the video work
+as for any manga, and Detect does three more things on these pages:
+- a speech bubble that sits across the line between two panels goes whole into one of them;
+- art no panel covers (a floating bubble, a sound effect) joins the panel nearest it;
+- a box over a plain fade between scenes is dropped.
+
 ## The narrator
 
 Two engines, switchable in **Settings → Narrator engine**; each keeps its own voice, so switching
@@ -162,6 +179,7 @@ projects/<name>/
   project.json            the manga, its reading direction, per-project settings
   chapters/chapter_N/
     pages/                downloaded pages
+    strip/, strip.json    a long strip's pages, re-cut between its panels (what gets marked)
     crops.json            the panel marks from the Panel Marker
     panels/               the panels cut from the pages
     narration.json        the LLM's reply (or the Writer's): narration + memory

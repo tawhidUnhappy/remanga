@@ -94,8 +94,10 @@ class ProjectsScreen(Screen):
             return
         name = outcome.results[0]
         meta = load_project_metadata(name)
+        strip = meta.get("layout") == "long_strip"
         await self.app.push_screen_wait(Result(path, f"Project {name}", [
             meta.get("manga_title", ""),
-            f"Reads {meta.get('reading_direction', 'right_to_left').replace('_', ' ')}.",
+            f"Reads {meta.get('reading_direction', 'right_to_left').replace('_', ' ')}"
+            + (", a long strip: its chapters are cut into pages between the panels." if strip else "."),
         ], ok=True))
         self.app.push_screen(ChaptersScreen(self.machine, name))

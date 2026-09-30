@@ -136,12 +136,15 @@ def detect_panels_for_pages(
     page_paths: list[Path],
     config: MarkerConfig,
     on_page_done=None,
+    texts: dict[str, list[list[float]]] | None = None,
 ) -> dict[str, list[list[float]]]:
     """Runs MAGI v3 panel detection over a batch of page images via the
     `.venv-magi` worker subprocess. Returns {page_filename: [[x1, y1, x2, y2],
     ...]} in pixel space. Calls `on_page_done(filename, boxes)` after each page
     if given, so a caller (the web server) can stream progress to the UI
-    instead of blocking until the whole chapter finishes.
+    instead of blocking until the whole chapter finishes. `texts`, when
+    given, is filled with each page's text boxes (MAGI's speech bubbles and
+    captions) before that page's on_page_done.
     """
     proc = _spawn_worker_with_auto_heal(config)
     console.print("[bold green]✓ MAGI v3 loaded.[/]")
@@ -156,6 +159,8 @@ def detect_panels_for_pages(
             event = json.loads(line)
             if "filename" in event and "boxes" in event:
                 results[event["filename"]] = event["boxes"]
+                if texts is not None:
+                    texts[event["filename"]] = event.get("texts") or []
                 if on_page_done:
                     on_page_done(event["filename"], event["boxes"])
             elif event.get("event") == "page_error":

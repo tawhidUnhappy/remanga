@@ -12,6 +12,7 @@ from remanga import activity
 from remanga.chapters import chapter_key
 from remanga.config import DownloaderConfig
 from remanga.console import console, escape as _esc
+from remanga.longstrip.layout import LONG_STRIP_TAG
 
 BASE_URL = "https://api.mangadex.org"
 
@@ -116,6 +117,8 @@ class MangaDexResolver:
             "title": self._pick_title(titles),
             "english_title": english,
             "original_language": str(attrs.get("originalLanguage") or "").lower(),
+            # MangaDex's "Long Strip" format tag: a webtoon, read by scrolling.
+            "long_strip": any(tag.get("id") == LONG_STRIP_TAG for tag in attrs.get("tags", [])),
         }
 
     def get_manga_title(self, manga_id: str) -> str:

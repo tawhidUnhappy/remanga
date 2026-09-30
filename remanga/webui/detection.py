@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from remanga.config import MarkerConfig
 from remanga.console import console, escape as _esc
+from remanga.longstrip.boxes import fit_boxes
 from remanga.webui.marker_state import MarkerState
 
 
@@ -72,15 +73,25 @@ def run_detection(state: MarkerState, config: MarkerConfig,
         state.detect_running = False
         return
 
+    page_texts: dict[str, list[list[float]]] = {}
+
+    def fitted(filename: str, boxes: list[list[float]]) -> list[list[float]]:
+        # A long strip floats its words between the panels, where MAGI
+        # doesn't look - see longstrip/boxes.py.
+        if not state.long_strip:
+            return boxes
+        return fit_boxes(state.pages_dir / filename, boxes, page_texts.get(filename, []))
+
     def on_page_done(filename: str, boxes: list[list[float]]) -> None:
         if not replace:
-            state.apply_detected(filename, boxes, force=force, order_direction=order_direction)
+            state.apply_detected(filename, fitted(filename, boxes), force=force, order_direction=order_direction)
         state.detect_done += 1
 
     try:
         page_paths = [state.pages_dir / p["filename"] for p in pending_pages]
-        results = detect_panels_for_pages(page_paths, config, on_page_done=on_page_done)
+        results = detect_panels_for_pages(page_paths, config, on_page_done=on_page_done, texts=page_texts)
         if replace:
+            results = {filename: fitted(filename, boxes) for filename, boxes in results.items()}
             state.replace_with_detected(results, order_direction=order_direction)
     except Exception as e:
         state.detect_error = str(e)

@@ -10,7 +10,8 @@ immediately, is a valid "just verify the model loads" invocation). Output,
 one JSON line per event, on stdout:
   {"event": "ready"}                                     once the model is loaded
   {"event": "error", "error": "..."}                     load failure - exits 1
-  {"filename": "...", "boxes": [[x1,y1,x2,y2], ...]}      once per page processed
+  {"filename": "...", "boxes": [[x1,y1,x2,y2], ...],
+   "texts": [[x1,y1,x2,y2], ...]}                         once per page processed
   {"event": "page_error", "filename": "...", "error": "..."}  one page failed - continues
 """
 
@@ -86,7 +87,10 @@ def main() -> int:
                 raw = model.predict_detections_and_associations([image], processor)
             page_result = raw[0] if isinstance(raw, list) else raw
             boxes = extract_panel_boxes(page_result, args.score_threshold)
-            send({"filename": path.name, "boxes": boxes})
+            # The text boxes too: a long strip's bubbles float between the
+            # panels, and remanga keeps each one whole inside one panel.
+            texts = [[float(v) for v in box] for box in page_result.get("texts") or []]
+            send({"filename": path.name, "boxes": boxes, "texts": texts})
         except Exception as e:
             send({"event": "page_error", "filename": path.name, "error": str(e)})
 

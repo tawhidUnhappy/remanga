@@ -467,6 +467,29 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
 - Decimal chapters are chapters of their own: `1-5` takes 4.5, not 5.1 (`chapters.expand_chapter_selection`).
 - MangaDex chapter list is cached 24h in manifest.json.
 
+- **Long-strip manga / webtoons (user request, 2026-09-30)** - `remanga/longstrip/`. A webtoon
+  chapter is ~15 images of 720x5000-9900 cut through panels. `layout.is_long_strip`: project.json
+  `layout` (set from MangaDex tag Long Strip `3e2b8dae-...` at create) else median image h/w >= 2.5.
+  `build.ensure_strip` joins each run of SAME-WIDTH images (covers/credits of other widths stay
+  separate runs) and `gaps.plan_pages` cuts only at blank bands (row grey std <= 4, >= 1.5% of width
+  tall; a per-row gradient/fade counts as blank - good cut). Blocks under 0.45x width (bubbles, SFX
+  tails) are glued to the neighbour across the narrower gap first, or they became pages of their own.
+  Pages packed to ~1.45 h/w. `marking_pages_dir` is what the marker, outline and cropper read -
+  **pages/ stays pristine** (download checksums). `chapter_N/strip.json` sits BESIDE strip/, never
+  in it: the marker lists every file in its pages dir and tried to open strip.json as an image.
+  strip/ is rebuilt only when pages/ changes, never under existing marks for a slicer change
+  (`SLICER_VERSION`) - crops.json is in strip/'s pixels.
+  - **MAGI on webtoon pages** (`longstrip/boxes.fit_boxes`, only when `MarkerState.long_strip`):
+    drops boxes over blank rows (MAGI boxed a black-to-white fade), gives uncovered art rows to the
+    nearest box (or a box of their own when >= 0.45x width tall), then `keep_texts_whole` using
+    MAGI's own `texts` (the worker now sends them): a bubble crossing two panels went half into each.
+    Measured ch 25 of a real webtoon: 15 images -> 74 pages -> 79 panels, every bubble whole.
+  - Not done (ask first): a vertical pan over very tall panels - a 720x2400 panel is a narrow
+    column on the 4K frame. The renderer is a still-frame concat, so that is a new render path.
+  - MangaDex lists officially licensed chapters with `externalUrl` and 0 pages; downloading one
+    prints "All 0 pages verified" and gets nothing. Test webtoons: Skeleton Soldier
+    (d993f789-e7e5-4832-92fd-37614220b427) ch 25 is hosted.
+
 ## Verified 2026-09-17 (light version)
 
 `download -c 1 --url ...` (40 pages, checksums) -> `pdf` (29.6MB, all lossless, text page ok) ->

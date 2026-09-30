@@ -9,6 +9,7 @@ import re
 
 from remanga.config import RemangaConfig
 from remanga.console import console, escape as _esc
+from remanga.longstrip import LONG_STRIP
 from remanga.paths import list_projects, load_project_metadata, save_project_metadata
 
 # MangaDex's originalLanguage -> how that market's comics are read.
@@ -60,18 +61,24 @@ def create_project(source: str, config: RemangaConfig) -> str:
     while name.casefold() in taken:
         name, n = f"{base}{n}", n + 1
     direction = READING_DIRECTION_BY_LANGUAGE.get(info["original_language"], "right_to_left")
-    save_project_metadata(name, {
+    meta = {
         "project_name": name,
         "manga_url": source.strip(),
         "manga_id": manga_id,
         "manga_title": info["title"],
         "original_language": info["original_language"],
         "reading_direction": direction,
-    })
+    }
+    if info["long_strip"]:
+        # Only when MangaDex says so; otherwise each chapter's own images
+        # decide (remanga.longstrip.layout).
+        meta["layout"] = LONG_STRIP
+    save_project_metadata(name, meta)
     console.print(f"[bold green]✓ New project:[/] {_esc(name)}\n"
                   f"  {_esc(info['english_title'] or info['title'])}\n"
                   f"  [dim]reads {direction.replace('_', '-')}"
                   + (f" (original language '{info['original_language']}')" if info["original_language"] else "")
+                  + (", a long strip - cut into pages between its panels" if info["long_strip"] else "")
                   + "[/]")
     return name
 

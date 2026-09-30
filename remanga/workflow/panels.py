@@ -8,6 +8,7 @@ from pathlib import Path
 from remanga.config import RemangaConfig
 from remanga.console import console
 from remanga.cropper import CoordinateCropper
+from remanga.longstrip import marking_pages_dir
 from remanga.narration import page_files, panel_files
 from remanga.paths import get_crops_path
 from remanga.workflow.chapters import has_marks
@@ -22,6 +23,10 @@ def mark(project: str, chapters: list[str], config: RemangaConfig) -> list[str]:
     marked = [c for c in chapters if page_files(project, c)]
     if not marked:
         raise FileNotFoundError("None of the chosen chapters have pages yet - download them first.")
+    # A long strip is re-cut into pages between its panels before anything is
+    # shown, so the browser opens on the pages it will be marking.
+    for chapter in marked:
+        marking_pages_dir(project, chapter)
     saved = launch_and_wait_all(project, marked, config.marker)
     console.print(f"[bold green]✓ Marks saved for {len(saved)} chapter(s)[/]")
     return saved
