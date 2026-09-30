@@ -1,0 +1,17 @@
+{
+ "hime": {"project": "HimeSamaGoranshinTheGeniusTutorSMy", "chapter": "1",
+  "tiles": [{"panel": "001_012_01", "w": 0.55, "zoom": 1.25, "cx": 0.5, "cy": 0.35},
+            {"panel": "001_018_02", "w": 0.45, "zoom": 1.6, "cx": 0.3, "cy": 0.45}],
+  "labels": [{"text": "SADIST\nPRINCESS", "at": [0.15, 0.74], "to": [0.29, 0.38], "size": 84},
+             {"text": "DOOMED\nTUTOR", "at": [0.67, 0.8], "to": [0.79, 0.4], "size": 84}]},
+ "idied": {"project": "IDiedProtectingMyComradesAndWasReborn", "chapter": "1",
+  "tiles": [{"panel": "001_019_01", "w": 0.6, "zoom": 1.9, "cx": 0.5, "cy": 0.3},
+            {"panel": "001_018_02", "w": 0.4, "zoom": 1.15, "cx": 0.5, "cy": 0.55}],
+  "labels": [{"text": "VAMPIRE\nMOM", "at": [0.13, 0.22], "to": [0.33, 0.45], "size": 84},
+             {"text": "LEGENDARY\nHERO", "at": [0.83, 0.12], "to": [0.8, 0.38], "size": 72}]},
+ "ireinc": {"project": "IReincarnatedAsTheLeaderOfAVillainParty", "chapter": "1",
+  "tiles": [{"panel": "001_032_05", "w": 0.55, "zoom": 1.0, "cx": 0.4, "cy": 0.5},
+            {"panel": "001_025_03", "w": 0.45, "zoom": 1.0, "cx": 0.6, "cy": 0.5}],
+  "labels": [{"text": "VILLAIN", "at": [0.4, 0.08], "to": [0.27, 0.32], "size": 90},
+             {"text": "REAL\nHERO", "at": [0.92, 0.42], "to": [0.77, 0.13], "size": 76}]}
+}
