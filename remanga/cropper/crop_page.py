@@ -157,6 +157,14 @@ def crop_page(
 
     result = PageCropResult()
 
+    # A page whose marks are exact (a long strip's, from the Strip Marker -
+    # edges placed by hand, marks allowed to overlap) is cut exactly as marked:
+    # snapping would pull overlapping edges apart, and trimming would shave a
+    # margin someone chose to keep.
+    if page_entry.get("exact"):
+        config = config.model_copy(update={"snap_to_gutters": False, "trim_panel_whitespace": False,
+                                           "margin_padding_pixels": 0})
+
     # Safety net for an accidental double-mark: drop any panel entry whose box
     # is near-identical in both position and size to an earlier one on this
     # page (same bordered frame marked twice), keeping the earliest occurrence

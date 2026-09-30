@@ -477,34 +477,34 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
 - **Long-strip manga / webtoons (user request, 2026-09-30)** - `remanga/longstrip/`. A webtoon
   chapter is ~15 images of 720x5000-9900 cut through panels. `layout.is_long_strip`: project.json
   `layout` (set from MangaDex tag Long Strip `3e2b8dae-...` at create) else median image h/w >= 2.5.
-  - **No MAGI for webtoons (user verdict, same day): "magi is trained for pages type of manga".** A
-    first version ran MAGI on re-cut pages and patched its boxes (bubble attach, MAGI text boxes kept
-    whole); the user rejected it and asked for mangaEasy's logic instead. Don't bring MAGI back
-    for long strips. `split.py` is a port of /mnt/datadisk/mangaEasy mangaeasy/panels/gutter.py +
-    webtoon.py (CPU path): gutter split (rows >= 97% one colour, >= 12 tall, one >= 99.5%) over the
-    likely gutter colours, recursive -> rescue content gaps 40-700 rows into the panel below -> auto
-    split > 2.2x width at the quietest +/-24-row BAND. Verified identical to mangaEasy's own
-    functions on a real 720x88011 strip (79 ranges, same 3 forced cuts, 13 s). One addition:
-    panels with no row std > 4 (a black-to-white fade) are dropped.
-  - `build.ensure_strip` stitches each run of SAME-WIDTH images, splits it, packs whole panels into
-    `strip/` pages (~1.45 h/w) and records each page's panels in `chapter_N/strip.json` (BESIDE
-    strip/, never in it - the marker opens every file in its pages dir). **A page is cut only in a
-    real gutter, never on an auto-split cut**: a forced cut can go through a bubble, and across two
-    pages the halves could not be rejoined in the marker. Detect on a long strip = `strip_panels`
-    (full-width boxes from strip.json), instant, no GPU. **pages/ stays pristine** (checksums);
-    strip/ is rebuilt only when pages/ changes or `SLICER_VERSION` moves with no crops.json.
-  - **Strip Marker (user request, 2026-09-30: "mangaEasy's webtoon marker was better - scroll through
-    all of it as if reading").** Ported from mangaEasy's REMOVED GUI (commit 71dd592^:
-    mangaeasy/web/panel_editor.py + assets/static/js/editor.js - mangaEasy HEAD has no GUI, look in
-    history). `webui/strip_server.py` + `static_strip/`: all downloaded images stacked, panels = bands
-    of whole-strip rows; click-click / N / drag edge / S / right-click / R / C, plus Ctrl+Z + autosave.
-    `workflow.mark` sends long-strip chapters there (one tab per chapter), others to the Panel Marker.
-    Marks -> `chapter_N/strip_marks.json` (with the download fingerprint - marks never apply to other
-    images) -> `ensure_strip` rebuilds strip/ AND crops.json from them when their digest changes (also
-    called by cut_panels, so a closed-without-Finish tab is still applied). Verified in headless
-    Chromium: split/undo/drag/undo/delete/click-click/finish, 87 marks = 87 strip panels = 87 crops;
-    then mark() -> Finish over HTTP -> PDF cut 87. **Testing footgun:** an img's offsetTop inside
-    `.page` (position: relative) is 0 - position by getBoundingClientRect or the mouse misses.
+  - **No MAGI for webtoons (user verdict):** "magi is trained for pages type of manga". Don't bring it
+    back for long strips. The mangaEasy port (recursive gutter split) is gone too (2026-09-30): it
+    re-guessed the gutter colour inside every piece - **425 colours** on one chapter, 89% of 15.5 s -
+    and scored by MOST panels, so a flat sky inside a panel cut it. Now `gutters.py` VERIFIES colours
+    first: solid rows (median colour, 97% within 8) -> runs >= 12 rows with one 99.5% row -> grouped
+    by colour (within 16) -> a gutter only if its colour separates the strip 3x ("strong") or 2x within
+    6000 rows ("local": black flashbacks, coloured scenes). **A repeat only counts with art between**:
+    the steps of one black-to-white fade "verified" each other as six gutters until that rule. Then
+    `detect.py`: blocks between gutters, small ones (< 0.45 w) glued across the narrower gap,
+    featureless dropped, mangaEasy's auto-split > 2.2 w kept (forced cuts reported). Measured ch 25:
+    2.4 s vs 15.6, 84 panels vs 87, differences looked at - same quality, no colour guessing. GPU
+    considered and declined (user agreed): torch + CUDA init alone is 3.8 s.
+  - Package is one job per module: runs, gutters, detect, marks, pages, crops, tiles, build (see the
+    package docstring). Marks = [top, bottom, left, right] (sides as width shares), **overlap
+    allowed**; `pages.py` never splits touching/overlapping marks across pages. `crops.py` writes
+    `box_pixel` + page `"exact": true` -> `cropper/crop_page.py` turns off snapping, trim and padding
+    for that page (snapping pulled overlapping edges apart). **Footgun fixed:** panel_boxes guessed
+    thousandths from `max(box) <= 1000`, so a pixel box on a page under 1000 px tall was misread -
+    now the key decides.
+  - **Strip Marker v2** (`webui/strip_session.py` state, `strip_server.py` routes, `static_strip/js/`
+    = api state geometry history viewport hit gestures keys sidebar actions status main): tiles of
+    run-width x 2 rows (<= 900 px wide JPEG) mounted only within +/-1 screen, marks as DOM bands only
+    in that window; Panel Marker rules (click selects, only the selected moves, drag elsewhere draws,
+    Alt = narrow, Shift = no snap to gutters/other marks), Tab/arrows nudge, J/K, undo/redo,
+    autosave. Measured: load 3.3 s (was 19), 2-3 tiles mounted anywhere in the chapter, 10 MB JS heap;
+    every gesture verified in headless Chromium, overlap carried to exact crops (869 + 284 rows cut
+    exactly). **CSS footgun:** `.forced` was both the strip's dashed line (position absolute) and the
+    sidebar flag - the flags flew to the window's left edge; the line is `.forced-cut` now.
   - Panel Marker **`s` = split the mark under the mouse** into top/bottom at the mouse's height
     (`marks.js:splitMark`, `ShortcutsConfig.split_mark`). Shift+S cannot be a second binding:
     shortcuts.js lowercases printable keys, so it normalizes to "s". Verified in headless Chromium

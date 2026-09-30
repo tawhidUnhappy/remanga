@@ -99,25 +99,33 @@ chose, often straight through a panel. remanga recognises one by MangaDex's "Lon
 without that line, by the chapter's images being several times taller than they are wide. Write
 `"layout": "pages"` or `"long_strip"` in project.json to decide it yourself.
 
-MAGI is trained on printed pages, so a webtoon's panels are found another way - mangaEasy's webtoon
-splitter: the images are joined top to bottom, and every band of rows that is almost all one colour
-(the gutter between two scenes) ends a panel. A panel is the full width of the strip, so the speech
-bubbles floating beside the art stay in it. A caption sitting in a gap joins the panel below it,
-and a panel taller than 2.2x the width is cut at the quietest band of rows near the middle, never
-through the inside of a bubble when there is any gutter to be had.
+MAGI is trained on printed pages, so a webtoon's panels are found from its gutters instead: rows
+that are almost all one colour. A colour only counts as a gutter once the strip proves it - it has
+to separate the chapter at least three times, or twice within a few thousand rows (a black
+flashback, a scene with its own coloured gutters) - so a flat sky or a plain background inside a
+panel never cuts it, and a webtoon can use as many gutter colours as it likes. A panel taller than
+2.2x the width is cut at the quietest band of rows near its middle; where no band is quiet the cut
+went through art, and the marker shows it in red.
 
-**Mark panels** on such a chapter opens the **Strip Marker** instead of the Panel Marker (ported from
-mangaEasy's webtoon editor): the whole chapter as one strip in your browser, scrolled top to bottom
-as you would read it, every panel a band across it - numbered, and first proposed by the splitter
-above. Click twice to mark a panel from one line to another, **N** starts a line right after the
-last panel, drag a band's top or bottom edge to move it, **S** splits the panel under the mouse,
-right-click deletes one, **R** proposes them all again, **C** clears, **Ctrl+Z** undoes, and
-**Finish** (Ctrl+S) saves. Every change is saved as you go (`strip_marks.json`), so a closed tab
-loses nothing.
+**Mark panels** on such a chapter opens the **Strip Marker**: the whole chapter as one strip,
+scrolled top to bottom as you would read it (only the part near the screen is loaded, so a long
+chapter stays smooth), every panel a numbered band across it, the verified gutter colours and the
+panel list beside it.
 
-The strip is then cut into `strip/` pages between those panels and `crops.json` is written from
-them; the downloaded images in `pages/` are never touched. From there the PDF and the video work as
-for any manga.
+- **Drag** on the strip draws a panel (full width; hold **Alt** for only as wide as the drag).
+  Panels may overlap - a bubble can belong to two.
+- **Click** a panel to select it; drag it to move, drag an edge (top, bottom or a side) to resize.
+  Edges snap to gutters and to other panels (hold **Shift** not to).
+- **↑/↓** nudge the selected edge (**Shift** ×10, **Tab** picks top / bottom / the whole panel),
+  **S** splits the panel under the mouse, **N** starts a line after the last panel, **J/K** step
+  through the panels, **Delete** or right-click removes one, **R** proposes them all again, **C**
+  clears, **+/-/0** zoom, **G** shows or hides the gutters.
+- **Ctrl+Z / Ctrl+Y** undo and redo, every change is saved as you go (`strip_marks.json`), and
+  **Finish** (Ctrl+S) cuts the strip.
+
+The strip is then cut into `strip/` pages between the panels (overlapping ones always on one page)
+and `crops.json` is written from them, cut exactly as marked; the downloaded images in `pages/` are
+never touched. From there the PDF and the video work as for any manga.
 
 ## The narrator
 

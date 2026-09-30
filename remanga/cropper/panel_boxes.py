@@ -60,7 +60,9 @@ def resolve_page_panel_boxes(
             console.print(f"[yellow]Skipping invalid panel coordinate entry: {_esc(str(panel))}[/]")
             continue
 
-        is_normalized = "box_1000" in panel or max(box) <= 1000
+        # The key says which it is. Guessing from the size (max <= 1000) read
+        # a pixel box on a page under 1000px tall as thousandths.
+        is_normalized = "box_1000" in panel or ("box_pixel" not in panel and max(box) <= 1000)
         valid_panels.append(panel)
         original_boxes.append(calculate_pixel_bounds(box, img_w, img_h, is_1000=is_normalized))
 

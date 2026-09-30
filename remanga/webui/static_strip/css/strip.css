@@ -1,0 +1,84 @@
+/* The Strip Marker. Colours come from /shared/css/theme.css. */
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; display: flex; flex-direction: column; user-select: none; -webkit-user-select: none; overflow: hidden; }
+
+header { display: flex; align-items: center; gap: 10px; padding: 9px 14px;
+         background: var(--surface); border-bottom: 1px solid var(--border); }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 15px;
+         padding-right: 14px; border-right: 1px solid var(--border); }
+.brand .logo { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 1px var(--border); }
+.brand-sub { font-weight: 600; font-size: 13px; opacity: 0.62; padding-left: 9px; border-left: 1px solid var(--border); }
+.where { font-size: 13px; color: var(--text-dim); max-width: 30ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.count { font-size: 12px; padding: 2px 9px; border: 1px solid var(--border-strong); border-radius: 999px; }
+.count b { color: var(--accent); }
+#status { font-size: 12.5px; color: var(--text-dim); flex: 1; min-width: 0; overflow: hidden;
+          text-overflow: ellipsis; white-space: nowrap; }
+button { background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong); border-radius: 7px;
+         padding: 5px 10px; font: inherit; font-size: 13px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+button:hover { background: var(--surface-3); }
+button:disabled { opacity: 0.4; cursor: default; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+kbd { font-size: 10.5px; padding: 0 4px; border-radius: 4px; border: 1px solid var(--border-strong); opacity: 0.85; }
+button.primary kbd { border-color: var(--accent-ink); }
+
+main { flex: 1; display: flex; min-height: 0; }
+#reader { flex: 1; overflow: auto; background: var(--bg); padding: 16px 24px 40vh; }
+#stage { position: relative; margin: 0 auto; touch-action: none; }
+#tiles img { position: absolute; left: 0; width: 100%; display: block; pointer-events: none; }
+#gutters, #marks { position: absolute; inset: 0; pointer-events: none; }
+
+.gutter { position: absolute; left: -10px; width: 6px; border-radius: 2px; background: var(--ok); opacity: 0.75; }
+.gutter.local { background: var(--warn); }
+.forced-cut { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--danger); }
+
+.band { position: absolute; border: 2px solid rgba(78, 191, 113, 0.9); background: rgba(78, 191, 113, 0.08); }
+.band.hover { border-color: #7fe0a0; background: rgba(78, 191, 113, 0.14); }
+.band.selected { border-color: var(--accent); background: rgba(254, 166, 43, 0.12); z-index: 2; }
+.band .label { position: absolute; left: 6px; top: 4px; font-size: 11px; font-weight: 700; padding: 1px 6px;
+               border-radius: 4px; background: rgba(78, 191, 113, 0.95); color: #0c1a11; }
+.band.selected .label { background: var(--accent); color: var(--accent-ink); }
+.handle { position: absolute; background: var(--accent); border-radius: 3px; }
+.handle.top, .handle.bottom { left: 50%; width: 46px; height: 6px; margin-left: -23px; }
+.handle.top { top: -4px; } .handle.bottom { bottom: -4px; }
+.handle.left, .handle.right { top: 50%; height: 46px; width: 6px; margin-top: -23px; }
+.handle.left { left: -4px; } .handle.right { right: -4px; }
+.handle.active { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
+
+.line { position: absolute; left: -12px; right: -12px; display: none; pointer-events: none; }
+#guide { border-top: 1px solid var(--primary); }
+#pendingLine { border-top: 2px dashed var(--accent); }
+#readout { position: absolute; display: none; pointer-events: none; z-index: 5; font-size: 11.5px; padding: 3px 7px;
+           border-radius: 5px; background: var(--surface); border: 1px solid var(--border-strong); white-space: nowrap; }
+
+aside { width: 290px; flex: none; display: flex; flex-direction: column; background: var(--surface);
+        border-left: 1px solid var(--border); min-height: 0; }
+aside section { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+aside section.grow { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+aside h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim);
+           display: flex; justify-content: space-between; gap: 6px; }
+.legend { text-transform: none; letter-spacing: 0; font-weight: 400; display: flex; gap: 4px; align-items: center; }
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.swatch { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; padding: 2px 6px; border-radius: 6px;
+          border: 1px solid var(--ok); }
+.swatch.local { border-color: var(--warn); }
+.swatch i { width: 14px; height: 14px; border-radius: 3px; box-shadow: 0 0 0 1px var(--border-strong); }
+.switch { font-size: 12px; color: var(--text-dim); display: flex; gap: 6px; align-items: center; cursor: pointer; }
+#panelList { overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.panel-row { display: grid; grid-template-columns: 30px 1fr 44px auto auto auto; gap: 6px; text-align: left;
+             padding: 4px 8px; font-size: 12px; background: transparent; border-color: transparent; }
+.panel-row.selected { border-color: var(--accent); background: var(--surface-2); }
+.panel-row .num { color: var(--accent); }
+.panel-row .height { color: var(--text-dim); text-align: right; }
+.flag { display: inline-block; width: 9px; height: 9px; border-radius: 50%; align-self: center; }
+.flag.forced { background: var(--danger); } .flag.overlap { background: var(--primary); } .flag.sides { background: var(--warn); }
+.keys { font-size: 11.5px; color: var(--text-dim); display: flex; flex-direction: column; gap: 3px; }
+.keys b { color: var(--text); font-weight: 600; }
+
+.overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+           background: rgba(0, 0, 0, 0.72); z-index: 10; }
+.overlay.visible { display: flex; }
+.overlay .card { background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px;
+                 padding: 26px 34px; text-align: center; max-width: 440px; }
+.overlay h2 { margin: 0 0 8px; }
+.overlay p { margin: 0; color: var(--text-dim); font-size: 14px; }
