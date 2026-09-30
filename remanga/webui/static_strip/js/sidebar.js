@@ -1,8 +1,11 @@
 // The side panel: the gutter colours that verified, and every panel - its rows,
-// and flags for what deserves a look: a forced cut (no gutter there), an
-// overlap, sides dragged in. A click selects the panel and scrolls to it.
+// and flags for what deserves a look: a tall panel (no calm place to split
+// it), an overlap, sides dragged in. A click selects the panel and scrolls to it.
 
 import { state, select } from "./state.js";
+import { colorOf } from "./overlay.js";
+
+const runWidth = (row) => (state.runs.find(r => row < r.top + r.height) || state.runs[0]).width;
 import { draw, scrollToRow } from "./viewport.js";
 
 const list = document.getElementById("panelList"), colors = document.getElementById("gutterColors");
@@ -19,8 +22,7 @@ export function renderColors() {
 
 function flags(m, i) {
   const out = [];
-  const near = (row) => state.chapter.forced.some(f => Math.abs(f - row) <= 3);
-  if (near(m.top) || near(m.bottom)) out.push(["forced", "cut through art - check"]);
+  if (m.bottom - m.top > 1.8 * runWidth(m.top)) out.push(["tall", "tall - no calm place to split it; check it"]);
   const prev = state.marks[i - 1], next = state.marks[i + 1];
   if ((prev && prev.bottom > m.top) || (next && next.top < m.bottom)) out.push(["overlap", "overlaps a neighbour"]);
   if (m.left > 0 || m.right < 1) out.push(["sides", "narrower than the strip"]);
@@ -32,6 +34,7 @@ export function renderList() {
   list.replaceChildren(...state.marks.map((m, i) => {
     const row = document.createElement("button");
     row.className = "panel-row" + (m.id === state.selected ? " selected" : "");
+    row.style.setProperty("--c", colorOf(i));
     row.innerHTML = `<span class="num mono">${i + 1}</span><span class="rows mono">${m.top}–${m.bottom}</span>`
       + `<span class="height mono">${m.bottom - m.top}</span>`
       + flags(m, i).map(([cls, title]) => `<span class="flag ${cls}" title="${title}"></span>`).join("");

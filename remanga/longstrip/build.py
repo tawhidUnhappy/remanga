@@ -59,7 +59,7 @@ def strip_panels(pages_dir: Path) -> dict[str, list[list[float]]]:
 
 def proposed_marks(view: StripView) -> tuple[list[Mark], list]:
     """detect.py's panels for every run, as full-width marks in chapter rows,
-    and the detections themselves (gutters and forced cuts, in run rows)."""
+    and the detections themselves (gutters, borders and tall panels, in run rows)."""
     detections = view.detect()
     marks = [(run.top + top, run.top + bottom, 0.0, 1.0)
              for run, found in zip(view.runs, detections, strict=True) for top, bottom in found.panels]

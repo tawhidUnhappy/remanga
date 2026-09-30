@@ -99,27 +99,30 @@ chose, often straight through a panel. remanga recognises one by MangaDex's "Lon
 without that line, by the chapter's images being several times taller than they are wide. Write
 `"layout": "pages"` or `"long_strip"` in project.json to decide it yourself.
 
-MAGI is trained on printed pages, so a webtoon's panels are found from its gutters instead: rows
-that are almost all one colour. A colour only counts as a gutter once the strip proves it - it has
-to separate the chapter at least three times, or twice within a few thousand rows (a black
-flashback, a scene with its own coloured gutters) - so a flat sky or a plain background inside a
-panel never cuts it, and a webtoon can use as many gutter colours as it likes. A panel taller than
-2.2x the width is cut at the quietest band of rows near its middle; where no band is quiet the cut
-went through art, and the marker shows it in red.
+MAGI is trained on printed pages, so a webtoon's panels are found by several methods voting
+together: gutters (rows of one colour - trusted only once the strip proves that colour separates
+panels, so a flat sky never cuts one), borders with no gutter (a straight cut across the width, a
+new picture starting, two scenes' colours meeting), small pieces such as a floating bubble glued to
+the nearest panel, plain fades dropped, and a picture taller than 1.8x the width split only at a
+genuinely calm stretch - never through a face. A tall picture with no calm place stays whole and is
+flagged in the list. On a real chapter this matched the user's own marks at F1 0.86, against 0.69
+for the gutter splitter it replaced.
 
 **Mark panels** on such a chapter opens the **Strip Marker**: the whole chapter as one strip,
 scrolled top to bottom as you would read it (only the part near the screen is loaded, so a long
-chapter stays smooth), every panel a numbered band across it, the verified gutter colours and the
-panel list beside it.
+chapter stays smooth). Every panel is a band in its own colour with a big number; rows no panel
+covers are hatched, so you can see what would be left out.
 
-- **Drag** on the strip draws a panel (full width; hold **Alt** for only as wide as the drag).
-  Panels may overlap - a bubble can belong to two.
-- **Click** a panel to select it; drag it to move, drag an edge (top, bottom or a side) to resize.
-  Edges snap to gutters and to other panels (hold **Shift** not to).
-- **↑/↓** nudge the selected edge (**Shift** ×10, **Tab** picks top / bottom / the whole panel),
-  **S** splits the panel under the mouse, **N** starts a line after the last panel, **J/K** step
-  through the panels, **Delete** or right-click removes one, **R** proposes them all again, **C**
-  clears, **+/-/0** zoom, **G** shows or hides the gutters.
+- **＋ New panel** (or **A**), then drag down the strip over its art - or just drag on bare strip
+  (hold **Alt** for only as wide as the drag). **Double-click** art no panel covers to fit a panel
+  to it. Panels may overlap - a bubble can belong to two.
+- **Click** a panel to focus it: everything else dims and a bar shows its rows, with **Split**
+  (**S**, at the mouse), **Merge with next** (**M** - the fix for a panel cut in half) and
+  **Delete**. Drag it to move, drag an edge (top, bottom or a side) to resize; edges snap to gutters
+  and other panels (hold **Shift** not to).
+- **↑/↓** nudge the selected edge (**Shift** ×10, **Tab** picks top / bottom / whole), **J/K**
+  step through the panels, **N** starts a line after the last one, **R** proposes them all again,
+  **C** clears, **+/-/0** zoom, **G** shows or hides the gutters, **Esc** leaves focus.
 - **Ctrl+Z / Ctrl+Y** undo and redo, every change is saved as you go (`strip_marks.json`), and
   **Finish** (Ctrl+S) cuts the strip.
 

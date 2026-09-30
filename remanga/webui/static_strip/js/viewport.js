@@ -4,10 +4,11 @@
 
 import { state } from "./state.js";
 import { layout, rowToY } from "./geometry.js";
+import { drawGutters, drawMarks } from "./overlay.js";
 
 const $ = (id) => document.getElementById(id);
 const reader = $("reader"), stage = $("stage");
-const tilesLayer = $("tiles"), guttersLayer = $("gutters"), marksLayer = $("marks");
+const tilesLayer = $("tiles");
 const mounted = new Map();   // "run-number" -> <img>
 let frame = null;
 
@@ -61,57 +62,8 @@ function drawTiles(lo, hi) {
   for (const [key, img] of mounted) if (!wanted.has(key)) { img.remove(); mounted.delete(key); }
 }
 
-function drawGutters(lo, hi) {
-  guttersLayer.replaceChildren();
-  if (!state.showGutters || !state.chapter) return;
-  for (const g of state.chapter.gutters) {
-    const top = rowToY(g.top), bottom = rowToY(g.bottom);
-    if (bottom < lo || top > hi) continue;
-    const el = document.createElement("div");
-    el.className = `gutter ${g.strength}`;
-    Object.assign(el.style, { top: top + "px", height: Math.max(2, bottom - top) + "px" });
-    el.title = `${g.strength} gutter, rgb(${g.color.join(", ")}) - rows ${g.top}-${g.bottom}`;
-    guttersLayer.appendChild(el);
-  }
-  for (const row of state.chapter.forced) {
-    const y = rowToY(row);
-    if (y < lo || y > hi) continue;
-    const el = document.createElement("div");
-    el.className = "forced-cut";
-    el.style.top = y + "px";
-    el.title = `Cut through art at row ${row} (no gutter near) - check it`;
-    guttersLayer.appendChild(el);
-  }
-}
-
-function drawMarks(lo, hi) {
-  marksLayer.replaceChildren();
-  state.marks.forEach((m, i) => {
-    const top = rowToY(m.top), bottom = rowToY(m.bottom);
-    if (bottom < lo || top > hi) return;
-    const el = document.createElement("div");
-    const selected = m.id === state.selected;
-    el.className = "band" + (selected ? " selected" : "") + (m.id === state.hover ? " hover" : "");
-    Object.assign(el.style, {
-      top: top + "px", height: bottom - top + "px",
-      left: m.left * state.width + "px", width: (m.right - m.left) * state.width + "px",
-    });
-    const label = document.createElement("span");
-    label.className = "label mono";
-    label.textContent = `Panel ${i + 1}`;
-    el.appendChild(label);
-    if (selected) {
-      for (const edge of ["top", "bottom", "left", "right"]) {
-        const h = document.createElement("div");
-        h.className = `handle ${edge}` + (state.activeEdge === edge ? " active" : "");
-        el.appendChild(h);
-      }
-    }
-    marksLayer.appendChild(el);
-  });
-}
-
 function drawLines() {
+  document.getElementById("stage").classList.toggle("new-mode", state.mode === "new");
   const line = (id, row) => {
     const el = $(id);
     el.style.display = row === null ? "none" : "block";

@@ -1,26 +1,15 @@
 // The keyboard. Arrow keys move the selected mark's active edge (Tab picks
 // top / bottom / the whole mark) one row, ten with Shift.
 
-import { state, newMark, markById, select, MIN_ROWS } from "./state.js";
+import { state, markById, select, MIN_ROWS } from "./state.js";
 import { commit, undo, redo } from "./history.js";
 import { draw, relayout, scrollToRow } from "./viewport.js";
-import { markAt } from "./hit.js";
 import { status } from "./status.js";
 import { autoMarks, finish } from "./actions.js";
+import { deleteSelected, mergeWithNext, splitAtPointer } from "./edits.js";
+import { setMode } from "./gestures.js";
 
 const EDGES = ["move", "top", "bottom"];
-
-export function splitAtPointer() {
-  const p = state.pointer;
-  const selected = markById(state.selected);
-  const m = p && (selected && p.row > selected.top && p.row < selected.bottom ? selected : markAt(p));
-  if (!m) { status("Point at a panel to split it there."); return; }
-  const row = p.row;
-  if (row - m.top < MIN_ROWS || m.bottom - row < MIN_ROWS) { status("Too close to the edge to split."); return; }
-  const lower = newMark(row, m.bottom, m.left, m.right);
-  commit([...state.marks.filter(x => x !== m), { ...m, bottom: row }, lower]);
-  status("Panel split.");
-}
 
 function nudge(amount) {
   const m = markById(state.selected);
@@ -66,6 +55,8 @@ document.addEventListener("keydown", (evt) => {
   if (mod || evt.altKey) return;
   switch (key) {
     case "s": splitAtPointer(); break;
+    case "m": mergeWithNext(); break;
+    case "a": setMode(state.mode === "new" ? "select" : "new"); break;
     case "n": lineAfterLast(); break;
     case "r": autoMarks(); break;
     case "c": commit([]); status("Cleared - Ctrl+Z brings them back."); break;
@@ -78,11 +69,7 @@ document.addEventListener("keydown", (evt) => {
     case "+": case "=": zoom(1.25); break;
     case "-": zoom(0.8); break;
     case "0": zoom(0); break;
-    case "delete": case "backspace": {
-      const m = markById(state.selected);
-      if (m) { select(null); commit(state.marks.filter(x => x !== m)); status("Panel deleted."); }
-      break;
-    }
+    case "delete": case "backspace": deleteSelected(); break;
     case "tab":
       if (state.selected === null) return;
       state.activeEdge = EDGES[(EDGES.indexOf(state.activeEdge) + (evt.shiftKey ? 2 : 1)) % 3];
@@ -91,7 +78,8 @@ document.addEventListener("keydown", (evt) => {
     case "arrowup": nudge(evt.shiftKey ? -10 : -1); break;
     case "arrowdown": nudge(evt.shiftKey ? 10 : 1); break;
     case "escape":
-      if (state.pending !== null) { state.pending = null; status("Line dropped."); }
+      if (state.mode === "new") setMode("select");
+      else if (state.pending !== null) { state.pending = null; status("Line dropped."); }
       else select(null);
       draw(); break;
     default: return;

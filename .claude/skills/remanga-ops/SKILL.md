@@ -507,9 +507,32 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     6000 rows ("local": black flashbacks, coloured scenes). **A repeat only counts with art between**:
     the steps of one black-to-white fade "verified" each other as six gutters until that rule. Then
     `detect.py`: blocks between gutters, small ones (< 0.45 w) glued across the narrower gap,
-    featureless dropped, mangaEasy's auto-split > 2.2 w kept (forced cuts reported). Measured ch 25:
+    featureless dropped, (superseded by detector v3 below). Measured ch 25:
     2.4 s vs 15.6, 84 panels vs 87, differences looked at - same quality, no colour guessing. GPU
     considered and declined (user agreed): torch + CUDA init alone is 3.8 s.
+  - **Detector v3, 2026-09-30 (user: "cuts panels in half most of the time", "drop my logic, apply
+    yours, multiple methods at once").** On their manhua (1000 px wide, zh) the panels are mostly
+    STACKED art with a hard edge and no white gutter, so gutters alone saw 2-3 panels as one block and
+    the mangaEasy auto-split then cut every tall block at fixed points through faces (13 forced cuts).
+    Now votes: `gutters.py` (unchanged) + `signals.py` (edge = share of width changing > 40 grey
+    levels; decor = 1 - adjacent-row correlation; band = colour of 16 rows above vs below; energy =
+    rolling max of row spread +/-30) fused in `borders.py` (0.5 edge + 0.3 band + 0.2 decor >= 0.5, a
+    lone peak, >= 40 rows apart) + glue small + drop blank + `quiet.py` (split > 1.8 w only at a stretch
+    under 0.25 x the picture's median energy, middle half, never forced; else flagged `tall`).
+    **Scored against the user's own strip_marks.json** (57 panels): F1 0.86 vs 0.69 for the old
+    detector (46-48 of their panels found, 48 of 54 proposed right); thresholds swept on a coarse grid
+    and stable across border scores 0.45-0.55. 6 of their 16 art-to-art borders have NO signal at all:
+    they are editorial splits of one continuous picture, at rows quieter than 92-99% of the rows
+    around - which is what quiet.py imitates. Visually checked on Skeleton Soldier too (sword + SFX
+    kept together, bubbles attached, fade dropped). Evaluation scripts were in the scratchpad
+    (proto/evalnew/compare/signals.py) - rebuild them the same way: score IoU >= 0.8 both ways.
+  - **Strip Marker visibility (same day, user):** "hard to see what I'm marking, no focus, no option
+    to make a new mark". Now: per-panel colours (overlay.js PALETTE) with a dark double edge (reads on
+    white and black art) and no tint, big number badge, hatched rows no panel covers; the selected
+    panel is spotlit (box-shadow 100000px dim) with a selection bar (`selbar.js`: rows, Split, Merge,
+    Delete); **＋ New panel** button/A (`state.mode = "new"`, next drag draws even over panels);
+    **double-click fits** a panel between the nearest gutter/border/panel edges (`fit.js`); **M merges**
+    with the next (`edits.js`). All verified in headless Chromium on a copy of the user's chapter.
   - Package is one job per module: runs, gutters, detect, marks, pages, crops, tiles, build (see the
     package docstring). Marks = [top, bottom, left, right] (sides as width shares), **overlap
     allowed**; `pages.py` never splits touching/overlapping marks across pages. `crops.py` writes

@@ -12,6 +12,7 @@ export const state = {
   hover: null,          // id of the mark under the mouse
   pointer: null,        // {row, frac} under the mouse, or null off the strip
   pending: null,        // a started line (N), in rows
+  mode: "select",       // "new" after the New panel button: the next drag draws
   zoom: 1,
   width: 760,           // display width of the strip, px
   showGutters: true,

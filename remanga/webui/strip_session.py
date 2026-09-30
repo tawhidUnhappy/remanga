@@ -4,7 +4,8 @@ that proposes and snaps its marks, and the marks themselves - no HTTP here
 
 Detection runs once, when the tab first asks for the chapter (~2-4 s), and is
 kept: the verified gutters are what an edge snaps to while marking, and the
-forced cuts are what the tab flags for checking."""
+borders found with no gutter (and panels left tall) are what the tab uses to
+fit a new panel on a double click and flags for a look."""
 
 from __future__ import annotations
 
@@ -35,12 +36,13 @@ class StripSession:
             if self._found is not None:
                 return
             self._proposed, detections = proposed_marks(self.view)
-            gutters, forced = [], []
+            gutters, borders, tall = [], [], []
             for run, found in zip(self.view.runs, detections, strict=True):
                 gutters += [{"top": run.top + g.top, "bottom": run.top + g.bottom, "color": list(g.color),
                              "strength": g.strength} for g in found.gutters]
-                forced += [run.top + y for y in found.forced]
-            self._found = {"gutters": gutters, "forced": forced}
+                borders += [run.top + y for y in found.borders]
+                tall += [[run.top + a, run.top + b] for a, b in found.tall]
+            self._found = {"gutters": gutters, "borders": borders, "tall": tall}
 
     def proposed(self) -> list[Mark]:
         self._detect()
@@ -78,6 +80,7 @@ class StripSession:
             "panels": [list(m) for m in marks],
             "proposed": proposed,
             "gutters": self._found["gutters"],
-            "forced": self._found["forced"],
+            "borders": self._found["borders"],
+            "tall": self._found["tall"],
             "colors": sorted(colors.values(), key=lambda c: -c["count"]),
         }

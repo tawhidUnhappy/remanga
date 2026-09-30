@@ -9,10 +9,13 @@ import { status } from "./status.js";
 import { autoMarks, finish, fromRows } from "./actions.js";
 import "./gestures.js";
 import "./keys.js";
+import { renderSelbar } from "./selbar.js";
+import { setMode } from "./gestures.js";
 
 const $ = (id) => document.getElementById(id);
 
 function refresh() {
+  renderSelbar();
   $("undoBtn").disabled = !canUndo();
   $("redoBtn").disabled = !canRedo();
   renderList();
@@ -33,17 +36,18 @@ async function load() {
   refresh();
   const weak = data.gutters.filter(g => g.strength === "local").length;
   status((data.proposed ? "Proposed from the gutters - scroll through and fix what is wrong." : "Your saved marks.")
-    + (data.forced.length ? ` ${data.forced.length} cut(s) went through art (red lines).` : "")
+    + (data.tall.length ? ` ${data.tall.length} tall panel(s) had no calm place to split - flagged in the list.` : "")
     + (weak ? ` ${weak} gutter(s) verified only locally (amber).` : ""));
 }
 
 onChange(refresh);
-document.addEventListener("strip:select", () => { renderList(); draw(); });
+document.addEventListener("strip:select", () => { renderSelbar(); renderList(); draw(); });
 $("undoBtn").addEventListener("click", () => undo());
 $("redoBtn").addEventListener("click", () => redo());
 $("autoBtn").addEventListener("click", autoMarks);
 $("clearBtn").addEventListener("click", () => { commit([]); status("Cleared - Ctrl+Z brings them back."); });
 $("finishBtn").addEventListener("click", finish);
+$("newBtn").addEventListener("click", () => setMode(state.mode === "new" ? "select" : "new"));
 $("gutterToggle").addEventListener("change", (e) => { state.showGutters = e.target.checked; draw(); });
 document.addEventListener("dragstart", (e) => e.preventDefault());
 

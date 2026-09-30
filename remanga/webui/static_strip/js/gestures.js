@@ -10,6 +10,7 @@ import { at, edgeAt, markAt, snap } from "./hit.js";
 import { commit, snapshot } from "./history.js";
 import { draw } from "./viewport.js";
 import { status } from "./status.js";
+import { fitAt } from "./fit.js";
 
 const stage = document.getElementById("stage");
 const DRAG_START_PX = 4;
@@ -26,7 +27,7 @@ stage.addEventListener("pointerdown", (evt) => {
   if (evt.button !== 0 || state.finished) return;
   const p = at(evt);
   stage.setPointerCapture(evt.pointerId);
-  const selected = markById(state.selected);
+  const selected = state.mode === "new" ? null : markById(state.selected);
   const edge = selected && edgeAt(selected, p);
   const before = snapshot();
   if (selected && edge) {
@@ -100,8 +101,13 @@ stage.addEventListener("pointerup", (evt) => {
   drag = null;
   state.guide = null;
   state.readout = null;
-  if (d.kind === "press") click(p, evt);
-  else if (commit(state.marks, d.before)) status(d.kind === "draw" ? "Panel drawn." : "Panel adjusted.");
+  if (d.kind === "press") {
+    if (state.mode === "new") status("Drag down (or up) the strip to mark the new panel - Esc cancels.");
+    else click(p, evt);
+  } else {
+    if (d.kind === "draw") setMode("select");
+    if (commit(state.marks, d.before)) status(d.kind === "draw" ? "Panel drawn." : "Panel adjusted.");
+  }
   draw();
 });
 
@@ -142,4 +148,24 @@ stage.addEventListener("contextmenu", (evt) => {
   commit(state.marks.filter(x => x !== m));
   if (state.selected === m.id) select(null);
   status("Panel deleted - Ctrl+Z brings it back.");
+});
+
+// The New panel button (and A): the next drag draws a panel, even over others.
+export function setMode(mode) {
+  state.mode = mode;
+  document.getElementById("newBtn")?.classList.toggle("active", mode === "new");
+  if (mode === "new") status("New panel: drag down (or up) the strip over its art - Esc cancels.");
+  draw();
+}
+
+// Double click on art no panel covers: a panel fitted to it.
+stage.addEventListener("dblclick", (evt) => {
+  const p = at(evt);
+  if (markAt(p)) return;
+  const fit = fitAt(p.row);
+  if (!fit) { status("Nothing to fit there - that is gutter. Drag to draw a panel instead."); return; }
+  const m = newMark(fit[0], fit[1]);
+  commit([...state.marks, m]);
+  select(m.id);
+  status(`Panel fitted to rows ${fit[0]}-${fit[1]}.`);
 });
