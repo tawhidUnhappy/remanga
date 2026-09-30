@@ -194,7 +194,7 @@ class Deletable:
 DELETABLES = (
     Deletable("pages", "Downloaded pages", "pages/ - download again to get back"),
     Deletable("strip", "Long-strip pages", "strip/ - re-cut from the download"),
-    Deletable("marks", "Panel marks", "crops.json - your Panel Marker work"),
+    Deletable("marks", "Panel marks", "crops.json (+ strip_marks.json) - your marking"),
     Deletable("panels", "Cut panels", "panels/ - cut again from the marks"),
     Deletable("pdf", "PDF", "pdf/ - Make PDF makes it again"),
     Deletable("narration", "Narration", "narration.json - the LLM's reply"),
@@ -219,7 +219,7 @@ def _deletable_paths(project: str, chapter: str, key: str) -> list[Path]:
         paths = {
             "pages": [chapter_dir / "pages"],
             "strip": [chapter_dir / "strip", chapter_dir / "strip.json"],
-            "marks": [get_crops_path(project, chapter)],
+            "marks": [get_crops_path(project, chapter), chapter_dir / "strip_marks.json"],
             "panels": [get_panels_dir(project, chapter, create=False)],
             "narration": [get_narration_path(project, chapter)],
             "review": [get_narration_review_path(project, chapter), chapter_dir / "narration_reviews"],

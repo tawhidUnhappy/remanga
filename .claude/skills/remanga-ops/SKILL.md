@@ -493,6 +493,18 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     pages the halves could not be rejoined in the marker. Detect on a long strip = `strip_panels`
     (full-width boxes from strip.json), instant, no GPU. **pages/ stays pristine** (checksums);
     strip/ is rebuilt only when pages/ changes or `SLICER_VERSION` moves with no crops.json.
+  - **Strip Marker (user request, 2026-09-30: "mangaEasy's webtoon marker was better - scroll through
+    all of it as if reading").** Ported from mangaEasy's REMOVED GUI (commit 71dd592^:
+    mangaeasy/web/panel_editor.py + assets/static/js/editor.js - mangaEasy HEAD has no GUI, look in
+    history). `webui/strip_server.py` + `static_strip/`: all downloaded images stacked, panels = bands
+    of whole-strip rows; click-click / N / drag edge / S / right-click / R / C, plus Ctrl+Z + autosave.
+    `workflow.mark` sends long-strip chapters there (one tab per chapter), others to the Panel Marker.
+    Marks -> `chapter_N/strip_marks.json` (with the download fingerprint - marks never apply to other
+    images) -> `ensure_strip` rebuilds strip/ AND crops.json from them when their digest changes (also
+    called by cut_panels, so a closed-without-Finish tab is still applied). Verified in headless
+    Chromium: split/undo/drag/undo/delete/click-click/finish, 87 marks = 87 strip panels = 87 crops;
+    then mark() -> Finish over HTTP -> PDF cut 87. **Testing footgun:** an img's offsetTop inside
+    `.page` (position: relative) is 0 - position by getBoundingClientRect or the mouse misses.
   - Panel Marker **`s` = split the mark under the mouse** into top/bottom at the mouse's height
     (`marks.js:splitMark`, `ShortcutsConfig.split_mark`). Shift+S cannot be a second binding:
     shortcuts.js lowercases printable keys, so it normalizes to "s". Verified in headless Chromium

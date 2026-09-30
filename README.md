@@ -106,11 +106,18 @@ bubbles floating beside the art stay in it. A caption sitting in a gap joins the
 and a panel taller than 2.2x the width is cut at the quietest band of rows near the middle, never
 through the inside of a bubble when there is any gutter to be had.
 
-Before marking, the chapter is re-cut into `strip/` along those panels, into pages about the shape
-of a manga page; the downloaded images in `pages/` are never touched. **Detect** on these pages
-puts the splitter's panels on them - no GPU, no MAGI. Where it joined two scenes into one mark,
-point at the line between them and press **S** to split the mark there (in any manga, too). From
-there the PDF and the video work as for any manga.
+**Mark panels** on such a chapter opens the **Strip Marker** instead of the Panel Marker (ported from
+mangaEasy's webtoon editor): the whole chapter as one strip in your browser, scrolled top to bottom
+as you would read it, every panel a band across it - numbered, and first proposed by the splitter
+above. Click twice to mark a panel from one line to another, **N** starts a line right after the
+last panel, drag a band's top or bottom edge to move it, **S** splits the panel under the mouse,
+right-click deletes one, **R** proposes them all again, **C** clears, **Ctrl+Z** undoes, and
+**Finish** (Ctrl+S) saves. Every change is saved as you go (`strip_marks.json`), so a closed tab
+loses nothing.
+
+The strip is then cut into `strip/` pages between those panels and `crops.json` is written from
+them; the downloaded images in `pages/` are never touched. From there the PDF and the video work as
+for any manga.
 
 ## The narrator
 
@@ -186,7 +193,8 @@ projects/<name>/
   project.json            the manga, its reading direction, per-project settings
   chapters/chapter_N/
     pages/                downloaded pages
-    strip/, strip.json    a long strip's pages, re-cut between its panels (what gets marked)
+    strip_marks.json      a long strip's panels, from the Strip Marker (rows of the whole chapter)
+    strip/, strip.json    a long strip's pages, cut between those panels
     crops.json            the panel marks from the Panel Marker
     panels/               the panels cut from the pages
     narration.json        the LLM's reply (or the Writer's): narration + memory

@@ -44,7 +44,13 @@ from .projects import (
 from .review import get_narration_review_history_dir, get_narration_review_path
 from .roots import BIN_DIR, CONFIG_EXAMPLE_PATH, CONFIG_PATH, GLOBAL_DIR, PROMPTS_DIR, REPO_ROOT, TOOLS_DIR, UV_BIN
 from .tools import get_scripts_dir
-from .webui_static import MARKER_STATIC_DIR, REVIEWER_STATIC_DIR, SHARED_STATIC_DIR, WRITER_STATIC_DIR
+from .webui_static import (
+    MARKER_STATIC_DIR,
+    REVIEWER_STATIC_DIR,
+    SHARED_STATIC_DIR,
+    STRIP_STATIC_DIR,
+    WRITER_STATIC_DIR,
+)
 
 __all__ = [
     "BIN_DIR",
@@ -57,6 +63,7 @@ __all__ = [
     "REPO_ROOT",
     "REVIEWER_STATIC_DIR",
     "SHARED_STATIC_DIR",
+    "STRIP_STATIC_DIR",
     "TOOLS_DIR",
     "UV_BIN",
     "WRITER_STATIC_DIR",

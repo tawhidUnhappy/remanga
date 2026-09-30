@@ -10,6 +10,8 @@ from .roots import REPO_ROOT
 MARKER_STATIC_DIR = REPO_ROOT / "remanga" / "webui" / "static"
 REVIEWER_STATIC_DIR = REPO_ROOT / "remanga" / "webui" / "static_review"
 WRITER_STATIC_DIR = REPO_ROOT / "remanga" / "webui" / "static_write"
+# The Strip Marker: a webtoon chapter marked as one strip, scrolled like reading it.
+STRIP_STATIC_DIR = REPO_ROOT / "remanga" / "webui" / "static_strip"
 # Served at /shared by the Writer and the Reviewer, which show the same panel
 # images in the same list layout (the lightbox, and escaping text into it).
 SHARED_STATIC_DIR = REPO_ROOT / "remanga" / "webui" / "static_shared"
