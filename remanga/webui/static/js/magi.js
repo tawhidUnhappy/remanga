@@ -5,7 +5,7 @@
 // What's left here is the wiring - which DOM events call what - and the one
 // call chapter-nav.js makes whenever a chapter is applied.
 
-import { assistBtn, autoOrderToggle, autoSaveToggle, remarkBtn, reorderBtn, scopeSelect } from "./dom.js";
+import { assistBtn, autoOrderToggle, autoSaveToggle, remarkBtn, reorderBtn, scopeSelect, splitDirSelect } from "./dom.js";
 import { runDetect, runRemark, runReorder } from "./assist-actions.js";
 import { fillRangeSelects, syncScopeUi } from "./assist-scope.js";
 import { restoreOptionsFold, saveSetting, syncOptionsSummary } from "./assist-settings.js";
@@ -21,6 +21,7 @@ export function syncAssistCard() {
   autoSaveToggle.checked = state.chapter.auto_save !== false;
   state.autoOrder = !!state.chapter.auto_order;
   autoOrderToggle.checked = state.autoOrder;
+  splitDirSelect.value = state.chapter.split_direction || "horizontal";
   assistBtn.disabled = remarkBtn.disabled = !state.magiEnabled;
   fillRangeSelects();
   syncScopeUi();
@@ -35,3 +36,4 @@ remarkBtn.addEventListener("click", runRemark);
 scopeSelect.addEventListener("change", () => { syncScopeUi(); saveSetting({ scope: scopeSelect.value }); });
 autoSaveToggle.addEventListener("change", () => saveSetting({ auto_save: autoSaveToggle.checked }));
 autoOrderToggle.addEventListener("change", () => saveSetting({ auto_order: autoOrderToggle.checked }));
+splitDirSelect.addEventListener("change", () => saveSetting({ split_direction: splitDirSelect.value }));

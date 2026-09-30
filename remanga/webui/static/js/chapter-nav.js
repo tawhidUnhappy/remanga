@@ -19,7 +19,7 @@ import {
 } from "./dom.js";
 import { state, currentFilename } from "./state.js";
 import { api } from "./api.js";
-import { flushSave } from "./marks.js";
+import { flushSave, settleHistory } from "./marks.js";
 import { loadPage } from "./page-nav.js";
 import { pollDetectStatus, syncAssistCard } from "./magi.js";
 import { loadShortcuts } from "./shortcuts.js";
@@ -123,7 +123,10 @@ export async function reloadChapterMarks() {
   state.touchedPages = new Set(payload.touched || []);
   state.decidedPages = new Set(payload.decided || []);
   state.editSeq = {};
-  for (const p of payload.pages) state.pageMarksCache[p.filename] = payload.marks[p.filename] || [];
+  for (const p of payload.pages) {
+    state.pageMarksCache[p.filename] = payload.marks[p.filename] || [];
+    settleHistory(p.filename);
+  }
   state.marks = state.pageMarksCache[currentFilename()];
   if (state.selectedId !== null && !state.marks.some(m => m.id === state.selectedId)) state.selectedId = null;
   render();

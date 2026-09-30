@@ -1,8 +1,8 @@
-// The Options fold: auto-save, auto-order, and the scope the buttons default
-// to. All three describe how someone works rather than anything about today's
+// The Options fold: auto-save, auto-order, which way S splits, and the scope
+// the buttons default to. All of them describe how someone works rather than anything about today's
 // manga, so they are saved to config.json as well as to this session.
 
-import { actionsOptions, autoOrderToggle, autoSaveToggle, optSummary } from "./dom.js";
+import { actionsOptions, autoOrderToggle, autoSaveToggle, optSummary, splitDirSelect } from "./dom.js";
 import { postJson } from "./api.js";
 import { notice } from "./assist-status.js";
 import { reloadMarks } from "./reload-marks.js";
@@ -17,6 +17,7 @@ export function syncOptionsSummary() {
   const on = [];
   if (autoOrderToggle.checked) on.push("auto-order");
   if (!autoSaveToggle.checked) on.push("auto-save off");
+  if (splitDirSelect.value === "vertical") on.push("S splits left / right");
   optSummary.textContent = on.length ? `· ${on.join(" · ")}` : "";
 }
 
@@ -28,6 +29,7 @@ export async function saveSetting(values) {
     if (state.chapter) Object.assign(state.chapter, {
       auto_save: res.auto_save, auto_order: res.auto_order,
       detect_scope: values.scope ?? state.chapter.detect_scope,
+      split_direction: values.split_direction ?? state.chapter.split_direction,
     });
     syncOptionsSummary();
     if ("auto_order" in values) {

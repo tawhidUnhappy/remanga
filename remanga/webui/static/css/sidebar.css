@@ -42,6 +42,8 @@
 .assist-switch { display: flex; align-items: center; gap: 8px; margin-top: 7px; font-size: 11.5px; color: var(--text-dim); cursor: pointer; user-select: none; }
 .assist-switch input { accent-color: var(--ai); width: 13px; height: 13px; cursor: pointer; flex: none; }
 .assist-switch:hover { color: var(--text); }
+.split-dir-row { justify-content: space-between; }
+.split-dir-row .assist-select { width: auto; padding: 4px 6px; font-size: 11px; }
 
 .sidebar-section-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 14px 8px; }
 .sidebar-section-head h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-faint); font-weight: 700; margin: 0; }

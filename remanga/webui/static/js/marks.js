@@ -40,7 +40,55 @@ export function markTouched() {
   state.touchedPages.add(currentFilename());
 }
 
+// --- undo (Ctrl+Z) ---------------------------------------------------------
+// Per page: the states it was in before each change, oldest first, and the
+// state it was last left in. Every edit goes through markDirty, so recording
+// there makes every kind of edit undoable without each gesture knowing about
+// it. Marks that arrive from outside (Detect, Remark, a server reorder) go
+// through settleHistory, which records them as a step of their own - so an
+// undo can take back a Detect as well as a drag. A page seen for the first
+// time only starts its history there.
+const HISTORY_LIMIT = 100;
+const history = {};   // filename -> [JSON of marks], oldest first
+const settled = {};   // filename -> JSON of the marks as last left
+
+export function settleHistory(filename = currentFilename()) {
+  const now = JSON.stringify(state.pageMarksCache[filename] || []);
+  const before = settled[filename];
+  // Marks the server put on this page are a step of their own: undoable,
+  // like an edit.
+  if (before !== undefined && before !== now) remember(filename, before);
+  settled[filename] = now;
+}
+
+function remember(filename, snapshot) {
+  const stack = (history[filename] ||= []);
+  stack.push(snapshot);
+  if (stack.length > HISTORY_LIMIT) stack.shift();
+}
+
+export function undo() {
+  if (state.readOnly) return;
+  const filename = currentFilename();
+  const stack = history[filename];
+  if (!stack?.length) { notice("Nothing to undo on this page"); return; }
+  state.marks = JSON.parse(stack.pop());
+  state.pageMarksCache[filename] = state.marks;
+  if (!state.marks.some(m => m.id === state.selectedId)) state.selectedId = null;
+  // Settled first, so the markDirty below saves this state without
+  // recording it as a new change to undo.
+  settled[filename] = JSON.stringify(state.marks);
+  markDirty();
+  render();
+}
+
 export function markDirty() {
+  const filename = currentFilename();
+  const now = JSON.stringify(state.marks);
+  // A click on a mark that moved nothing still ends in markDirty; only a real
+  // change becomes an undo step.
+  if (settled[filename] !== undefined && settled[filename] !== now) remember(filename, settled[filename]);
+  settled[filename] = now;
   state.pageMarksCache[currentFilename()] = state.marks;
   state.editSeq[currentFilename()] = (state.editSeq[currentFilename()] || 0) + 1;
   markTouched();
@@ -102,6 +150,7 @@ function adoptStoredOrder(filename, stored, seqAtSend) {
   const byId = new Map(current.map(m => [m.id, m]));
   const reordered = stored.map(m => byId.get(m.id) || m);
   state.pageMarksCache[filename] = reordered;
+  settleHistory(filename);
   if (state.chapter.pages[state.pageIndex]?.filename === filename) {
     state.marks = reordered;
     render();
@@ -183,11 +232,13 @@ export function markFullPage() {
   render();
 }
 
-// `s`: cuts the mark under the mouse in two, top and bottom, at the mouse's
-// height - for a webtoon panel that ran two scenes together, or two stacked
-// panels drawn as one. The selected mark wins where marks overlap. Both
+// `s`: cuts the mark under the mouse in two where the mouse is - top and
+// bottom (a line across, for a webtoon panel that ran two scenes together) or
+// left and right (a line down, two panels side by side), as the Options'
+// "S splits a mark" says. The selected mark wins where marks overlap. Both
 // halves must clear the size floor, so a cut an inch from an edge is refused
-// rather than leaving a sliver.
+// rather than leaving a sliver. Left/right halves are numbered in the manga's
+// reading direction: right first for right-to-left.
 export function splitMark() {
   if (state.readOnly) return;
   if (!pointer) { notice("Point at a mark on the page to split it there"); return; }
@@ -196,14 +247,23 @@ export function splitMark() {
   const selected = state.marks.find(m => m.id === state.selectedId);
   const target = selected && inside(selected) ? selected : state.marks.filter(inside).at(-1);
   if (!target) { notice("Point at a mark on the page to split it there"); return; }
-  const top = { ...target, h: y - target.y, src: "manual" };
-  const bottom = { ...target, id: "local-" + (state.nextLocalId++), y, h: target.y + target.h - y, src: "manual" };
-  if (isTooSmall(top) || isTooSmall(bottom)) {
+  const vertical = state.chapter.split_direction === "vertical";
+  const first = { ...target, src: "manual" };
+  const second = { ...target, id: "local-" + (state.nextLocalId++), src: "manual" };
+  if (vertical) {
+    first.w = x - target.x;
+    Object.assign(second, { x, w: target.x + target.w - x });
+  } else {
+    first.h = y - target.y;
+    Object.assign(second, { y, h: target.y + target.h - y });
+  }
+  if (isTooSmall(first) || isTooSmall(second)) {
     notice(`Too close to the edge — each half needs at least ${minMarkSize()} px`);
     return;
   }
+  const halves = vertical && state.chapter.reading_direction === "right_to_left" ? [second, first] : [first, second];
   markTouched();
-  state.marks.splice(state.marks.indexOf(target), 1, top, bottom);
+  state.marks.splice(state.marks.indexOf(target), 1, ...halves);
   state.pageMarksCache[currentFilename()] = state.marks;
   state.selectedId = null;
   markDirty();

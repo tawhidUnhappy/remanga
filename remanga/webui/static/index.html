@@ -101,6 +101,13 @@
           <input type="checkbox" id="autoOrderToggle">
           <span>Auto-order panels</span>
         </label>
+        <label class="assist-switch split-dir-row">
+          <span><kbd>S</kbd> splits a mark</span>
+          <select class="assist-select" id="splitDirSelect" title="Which way the split key cuts the mark under the mouse">
+            <option value="horizontal">across: top / bottom</option>
+            <option value="vertical">down: left / right</option>
+          </select>
+        </label>
       </details>
     </section>
 
@@ -145,6 +152,7 @@
   <span><b>Click</b> a mark to adjust it</span>
   <span><b>Right-click</b> a mark to delete it</span>
   <span><kbd>S</kbd> split the mark under the mouse</span>
+  <span><kbd>Ctrl+Z</kbd> undo</span>
   <span><kbd id="hintSaveKbd">Ctrl+S</kbd> save all &amp; exit</span>
 </div>
 

@@ -7,6 +7,7 @@ import { currentFilename, state } from "./state.js";
 import { refreshOutline } from "./outline.js";
 import { reloadMarks } from "./reload-marks.js";
 import { render } from "./render.js";
+import { settleHistory } from "./marks.js";
 
 export const MAGI_OFF = "MAGI is off in config.json - Reorder still works";
 
@@ -94,6 +95,7 @@ export async function pollDetectStatus() {
   for (const [filename, serverMarks] of Object.entries(status.marks || {})) {
     if (state.touchedPages.has(filename)) continue;
     state.pageMarksCache[filename] = serverMarks;
+    settleHistory(filename);
     if (state.chapter.pages[state.pageIndex].filename === filename) currentPageChanged = true;
   }
   if (currentPageChanged) {

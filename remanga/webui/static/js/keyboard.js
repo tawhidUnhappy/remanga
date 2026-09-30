@@ -5,7 +5,7 @@
 
 import { stage, toolDrawBtn, toolAdjustBtn } from "./dom.js";
 import { state } from "./state.js";
-import { deleteMark, markFullPage, splitMark } from "./marks.js";
+import { deleteMark, markFullPage, splitMark, undo } from "./marks.js";
 import { stepPage } from "./page-nav.js";
 import { saveAndExit } from "./chapter-nav.js";
 import { resetView } from "./zoom-pan.js";
@@ -29,13 +29,14 @@ const ACTION_HANDLERS = {
   next_page: () => stepPage(1),
   delete_mark: () => { if (state.selectedId !== null) deleteMark(state.selectedId); },
   split_mark: (e) => { e.preventDefault(); splitMark(); },
+  undo: (e) => { e.preventDefault(); undo(); },
   reset_view: (e) => { e.preventDefault(); resetView(); },
 };
 
 // A read-only session keeps every navigation and view binding and drops the
 // three that would change something. Save is dropped too: in a viewer its
 // button means "close", and a reflex Ctrl+S should not end the session.
-const READ_ONLY_BLOCKED = new Set(["save", "mark_full_page", "delete_mark", "split_mark"]);
+const READ_ONLY_BLOCKED = new Set(["save", "mark_full_page", "delete_mark", "split_mark", "undo"]);
 
 document.addEventListener("keydown", (e) => {
   const action = matchAction(e);

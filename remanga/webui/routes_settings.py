@@ -55,6 +55,12 @@ def register_settings_routes(app: Flask, session: MarkerSession, config: MarkerC
             session.set_auto_order(bool(body["auto_order"]))
             config.auto_order = session.auto_order
             saved["auto_order"] = session.auto_order
+        if "split_direction" in body:
+            direction = str(body["split_direction"])
+            if direction not in ("horizontal", "vertical"):
+                return jsonify({"ok": False, "error": f"Unknown split direction {direction!r}"}), 400
+            config.split_direction = direction
+            saved["split_direction"] = direction
         if "scope" in body:
             scope = str(body["scope"])
             if scope not in ("page", "chapter", "range", "all"):

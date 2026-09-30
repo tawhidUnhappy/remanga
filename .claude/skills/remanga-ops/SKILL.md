@@ -490,7 +490,15 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     (`marks.js:splitMark`, `ShortcutsConfig.split_mark`). Shift+S cannot be a second binding:
     shortcuts.js lowercases printable keys, so it normalizes to "s". Verified in headless Chromium
     (Playwright into the scratchpad - no node on this box): 315-1307 -> 315-711 + 711-1307, autosaved.
-  - Not done (ask first): a vertical pan over very tall panels, and a "join two marks" key.
+  - **S direction + Ctrl+Z (user request, 2026-09-30):** Options -> "S splits a mark" = across
+    (top/bottom) or down (left/right), `MarkerConfig.split_direction`, saved via POST
+    /api/settings; left/right halves are numbered in reading order (right first for rtl).
+    `undo` (mod+z) is per page: `markDirty` records the page's previous JSON state (so every
+    gesture is undoable for free, and a click that moved nothing records nothing);
+    `settleHistory` runs wherever marks arrive from outside (page load, poll, reload, server
+    reorder) and records a server change as a step too. No redo. Verified in headless Chromium:
+    split across/down, delete, each undone and autosaved; extra undo -> "Nothing to undo".
+  - Not done (ask first): a vertical pan over very tall panels, a "join two marks" key, redo.
   - MangaDex lists officially licensed chapters with `externalUrl` and 0 pages; downloading one
     prints "All 0 pages verified" and gets nothing. Test webtoon: Skeleton Soldier
     (d993f789-e7e5-4832-92fd-37614220b427) ch 25 is hosted.

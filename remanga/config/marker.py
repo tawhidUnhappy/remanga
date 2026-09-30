@@ -29,10 +29,12 @@ class ShortcutsConfig(ConfigModel):
     prev_page: list[str] = Field(default_factory=lambda: ["arrowleft"])
     next_page: list[str] = Field(default_factory=lambda: ["arrowright"])
     delete_mark: list[str] = Field(default_factory=lambda: ["delete", "backspace"])
-    # Cuts the mark under the mouse into a top and a bottom half at the
-    # mouse's height (static/js/marks.js:splitMark) - a webtoon panel that ran
-    # two scenes together, or two stacked panels drawn as one mark.
+    # Cuts the mark under the mouse in two where the mouse is
+    # (static/js/marks.js:splitMark) - top/bottom or left/right, as
+    # MarkerConfig.split_direction says.
     split_mark: list[str] = Field(default_factory=lambda: ["s"])
+    # Takes back the last change to the page on screen (marks.js:undo).
+    undo: list[str] = Field(default_factory=lambda: ["mod+z"])
     # A bare, unmodified key on purpose - not "mod+tab" (reserved by every
     # major browser for switching tabs) or "mod+0" (reserved for resetting
     # the *browser's* page zoom). Both fire a browser-chrome action a page can
@@ -125,5 +127,11 @@ class MarkerConfig(ConfigModel):
     # crops.json) is left alone: the floor can stop it shrinking further, but
     # never grows it on its own.
     min_mark_ratio: float = 0.03
+
+    # Which way the split-mark key cuts: "horizontal" (a line across - top and
+    # bottom, what a webtoon panel that ran two scenes together needs) or
+    # "vertical" (a line down - left and right, two panels side by side on a
+    # page). Picked in the marker's Options and saved from there.
+    split_direction: str = "horizontal"
 
     shortcuts: ShortcutsConfig = Field(default_factory=ShortcutsConfig)

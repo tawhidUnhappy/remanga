@@ -80,8 +80,10 @@ or **Mark panels** in a chapter's menu. It opens one browser tab for every chapt
 - **Detect** runs MAGI v3 over the pages and draws the panels it finds (a GPU takes a few seconds a
   page; without one, mark by hand).
 - Fix what it got wrong: drag a box, resize it, delete it, draw a missing one, mark a full page as
-  one panel, or press **S** with the mouse on a mark to split it into top and bottom at that
-  height. The sidebar lists the pages and what each one has.
+  one panel, or press **S** with the mouse on a mark to split it there - across (top / bottom) or
+  down (left / right), whichever **Options → S splits a mark** is set to. **Ctrl+Z** undoes the
+  last change on the page, a Detect or Remark included. The sidebar lists the pages and what each
+  one has.
 - The reading order follows the manga's direction (right to left for Japanese), and the panel
   numbers show it.
 - **Save** writes the chapter's `crops.json` and moves to the next chapter in the tab.

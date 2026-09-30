@@ -55,6 +55,8 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
             "detect_scope": config.auto_detect_scope,
             "auto_order": session.auto_order,
             "revision": state.revision,
+            "split_direction": config.split_direction,
+            "reading_direction": session.reading_direction,
         }
 
     @app.get("/")

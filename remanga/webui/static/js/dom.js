@@ -28,6 +28,7 @@ export const rangeFrom = document.getElementById("rangeFrom");
 export const rangeTo = document.getElementById("rangeTo");
 export const autoSaveToggle = document.getElementById("autoSaveToggle");
 export const autoOrderToggle = document.getElementById("autoOrderToggle");
+export const splitDirSelect = document.getElementById("splitDirSelect");
 export const reorderBtn = document.getElementById("reorderBtn");
 export const remarkBtn = document.getElementById("remarkBtn");
 export const orderHint = document.getElementById("orderHint");

@@ -10,7 +10,7 @@
 
 import { pageImg, pageNumEl, prevPageBtn, nextPageBtn } from "./dom.js";
 import { state, currentPage } from "./state.js";
-import { flushSave } from "./marks.js";
+import { flushSave, settleHistory } from "./marks.js";
 import { resetView } from "./zoom-pan.js";
 
 export async function loadPage(idx) {
@@ -24,6 +24,7 @@ export async function loadPage(idx) {
   state.pageIndex = Math.max(0, Math.min(state.chapter.pages.length - 1, idx));
   const page = currentPage();
   state.marks = state.pageMarksCache[page.filename];
+  settleHistory(page.filename);
   state.selectedId = null;
 
   pageNumEl.textContent = String(page.index).padStart(2, "0");
