@@ -1,5 +1,5 @@
 """The command line's commands that are not a pipeline step: the job queue
-(list it, run it) and setup. cli.py parses and dispatches."""
+(list it, run it), setup and the plug-in list. cli.py parses and dispatches."""
 
 from __future__ import annotations
 
@@ -49,8 +49,8 @@ def setup() -> None:
     should not cost a download."""
     from remanga.audio.synth import create_synthesizer
     from remanga.config import RemangaConfig
+    from remanga.plugins.magi.assist import ensure_weights_downloaded
     from remanga.tool_envs import provision
-    from remanga.webui.magi_assist import ensure_weights_downloaded
 
     config = RemangaConfig.load()
     engine = config.tts.spec
@@ -64,3 +64,18 @@ def setup() -> None:
                       "panels marked by hand.[/]")
         return
     ensure_weights_downloaded(config.marker)
+
+
+def show_plugins() -> None:
+    """Every plug-in remanga loaded, by kind, and where each came from - and
+    any that could not load, with why."""
+    from remanga import plugins
+
+    for kind in plugins.KINDS:
+        console.print(f"[bold]{kind}[/]")
+        for item in plugins.items(kind):
+            label = getattr(item, "display_name", None) or getattr(item, "label", "")
+            console.print(f"  {item.name:<16} {_esc(label):<28} [dim]{_esc(plugins.origin(kind, item.name))}[/]")
+    failed = plugins.failures()
+    if failed:   # each one was already reported, with why, as it failed to load
+        err_console.print(f"[red]✗ {len(failed)} plug-in(s) could not load - see above.[/]")

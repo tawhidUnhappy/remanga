@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from remanga.json_io import has_real_json_content, read_json
-from remanga.longstrip import marking_pages_dir
+from remanga.layouts import pages_dir as marking_pages_dir
 from remanga.paths import get_chapter_dir
 from remanga.webui.marks_file import DECIDED_KEY
 

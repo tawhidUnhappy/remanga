@@ -17,8 +17,8 @@ from remanga.audio.takes import collapsed
 from remanga.config import AudioConfig, SubtitlesConfig
 from remanga.console import console, escape as _esc
 from remanga.json_io import read_json_or, write_json
+from remanga.plugins.faster_whisper.transcribe import Transcriber
 from remanga.subtitles.align import align
-from remanga.subtitles.transcribe import Transcriber
 
 # How many times a take with a hum in it (audio/hums.py) is made again under
 # another seed. Only the takes that hummed pay for it: a take's synthesis

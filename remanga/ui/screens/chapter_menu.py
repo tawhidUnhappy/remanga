@@ -8,7 +8,9 @@ from textual import work
 
 from remanga import workflow
 from remanga.ui.dialogs import Choice, Confirm
-from remanga.workflow.queue import JOBS, add_jobs
+from remanga.workflow.queue import add_jobs, jobs
+
+BUILT_IN = ("download", "pdf", "video", "remix", "reaudio", "source")
 
 
 class ChapterMenu:
@@ -21,15 +23,18 @@ class ChapterMenu:
         wanted = ["download"] if not on_disk else (
             ["pdf", "video"] + (["remix", "reaudio"] if narrated else []) + (["source"] if marked else [])
             + ["download"])
+        # Jobs a plug-in of your own adds come after the built-in ones.
+        known = jobs()
+        wanted = [a for a in wanted if a in known] + [a for a in known if on_disk and a not in BUILT_IN]
         action = await self.app.push_screen_wait(Choice(
-            f"Queue for {title.lower()}", [(*JOBS[a], a) for a in wanted],
+            f"Queue for {title.lower()}", [(*known[a], a) for a in wanted],
             note="Marking and the narration passes need you at the browser, so they cannot be queued.",
             danger=["source"]))
         if action is None:
             return
         added = add_jobs(project, chapters, action)
         skipped = len(chapters) - added
-        self.notify(f"Queued {JOBS[action][0]} for {added} chapter(s)"
+        self.notify(f"Queued {known[action][0]} for {added} chapter(s)"
                     + (f" ({skipped} already waiting)" if skipped else "") + " - j opens the queue.")
 
     @work(exclusive=True)

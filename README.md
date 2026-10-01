@@ -59,6 +59,7 @@ Logs are kept in `projects/<name>/logs/`: `chapter_N.log` for a chapter's PDF an
 ./run.sh write    -p MyMangaTitle -c 1          # write the narration yourself
 ./run.sh review   -p MyMangaTitle -c 1          # flag what the LLM got wrong
 ./run.sh voices                                 # one line in every voice, to listen to
+./run.sh plugins                                # the plug-ins loaded: engines, layouts, sources, jobs
 ./run.sh pdf      -p MyMangaTitle -c 1-5        # cuts the panels, then their PDF
 # give pdf/chapter_N/panels_*.pdf + prompts/narration.md to the LLM, paste the reply into
 # projects/MyMangaTitle/chapters/chapter_N/narration.json
@@ -97,7 +98,8 @@ A webtoon chapter arrives from MangaDex as a few very tall images, sliced wherev
 chose, often straight through a panel. remanga recognises one by MangaDex's "Long Strip" tag
 (recorded as `"layout": "long_strip"` in project.json when the project is made) or, for a project
 without that line, by the chapter's images being several times taller than they are wide. Write
-`"layout": "pages"` or `"long_strip"` in project.json to decide it yourself.
+`"layout": "pages"` or `"long_strip"` in project.json to decide it yourself. Both are layout
+plug-ins (`remanga/plugins/pages/`, `remanga/plugins/long_strip/`).
 
 MAGI is trained on printed pages, so a webtoon's panels are found by several methods voting
 together: gutters (rows of one colour - trusted only once the strip proves that colour separates
@@ -132,7 +134,7 @@ never touched. From there the PDF and the video work as for any manga.
 
 ## The narrator
 
-Two engines, switchable in **Settings → Narrator engine**; each keeps its own voice, so switching
+Two engines built in (each a plug-in - see [Plug-ins](#plug-ins)), switchable in **Settings → Narrator engine**; each keeps its own voice, so switching
 back and forth changes nothing else. A chapter narrated by the other one is narrated again.
 
 | Engine | Voice | Speed |
@@ -249,13 +251,35 @@ geometry, not a re-encoding - so it costs no quality and no size.
 big for one file is split into parts. Only a single panel too big for a file on its own is stored
 near-losslessly.
 
+## Plug-ins
+
+Everything that comes in more than one kind is a plug-in, and the rest of remanga never names a
+particular one:
+
+| Kind | What it is | Built in (`remanga/plugins/`) |
+|---|---|---|
+| `tts` | a narrator engine: its settings block, synthesizer, worker, Settings rows | `kokoro/`, `qwen_tts/` |
+| `tool` | an isolated environment (`.tools/venv-<name>`) | registered by `kokoro/`, `qwen_tts/`, `magi/`, `faster_whisper/` |
+| `layout` | how a chapter is marked into panels | `pages/` (Panel Marker + MAGI), `long_strip/` (Strip Marker) |
+| `source` | where manga come from | `mangadex/` |
+| `job` | something the queue can do to a chapter | `jobs/` |
+
+Each built-in is one folder holding all of its own code; its `__init__.py` only registers a short
+description that names that code. `./run.sh plugins` lists what is loaded and where from.
+
+**Your own:** drop a `.py` file or a package into the top-level `plugins/` folder (see
+`plugins/README.md` and `plugins/_example_job.py`), or ship a package with a `remanga.plugins` entry
+point. One with the same kind and name as a built-in replaces it; one that fails to load is reported
+and skipped. A new narrator engine appears in Settings, and in config.json as `tts.<name>`, by
+itself.
+
 ## Settings
 
 Every setting is in `config.json` and applies to every project:
 
 | Key | Default | Meaning |
 |---|---|---|
-| `tts.engine` | `kokoro` | who narrates: `kokoro` (fixed voices, seconds a chapter) or `qwen` (preset narrators or a voice you design, minutes a chapter) |
+| `tts.engine` | `kokoro` | who narrates - any `tts` plug-in: `kokoro` (fixed voices, seconds a chapter) or `qwen` (preset narrators or a voice you design, minutes a chapter) |
 | `tts.kokoro.voice` / `.speed` | `af_heart` / 1.0 | Kokoro's voice and pace - 1.0 is its own (about 185 words a minute); past about 1.35 it drops the pauses between sentences |
 | `tts.qwen.speaker` / `.instruct` | `Ryan` / monotone... | Qwen3-TTS's preset narrator and how it reads - the default asks for a monotone read, because anything warmer makes the model act |
 | `tts.qwen.design` / `.designed_sample` | - | the voice you described, and the sample every panel is then spoken from |

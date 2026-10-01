@@ -25,9 +25,9 @@ def mangadex_chapters(project: str, config: RemangaConfig, url: str | None = Non
     """Every chapter MangaDex lists for the project's manga right now, each
     with its local status (downloaded / partial / missing). Fetched fresh by
     default, so a chapter published since the last run is in it."""
-    from remanga.downloader import MangaDexDownloader
+    from remanga.sources import project_client
 
-    return MangaDexDownloader(config.downloader).list_chapters_with_status(project, url, force_refresh=refresh)
+    return project_client(project, config).list_chapters_with_status(project, url, force_refresh=refresh)
 
 
 def select_chapters(raw: str, available: list[str]) -> list[str]:

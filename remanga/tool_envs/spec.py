@@ -13,7 +13,7 @@ TOOLS_DIR = REPO_ROOT / ".tools"
 PYTHON_VERSION = "3.11"
 
 # Written into an environment once its install finishes, so a later run can
-# tell "up to date with its TOOLS entry" from "half-installed, or built from
+# tell "up to date with its tool plug-in entry" from "half-installed, or built from
 # an older entry". Changing an entry - a new package, a different pin -
 # therefore re-syncs that environment the next time it is used, instead of
 # waiting for somebody to think of re-running bootstrap.

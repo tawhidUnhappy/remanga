@@ -12,7 +12,7 @@ import sys
 import time
 from pathlib import Path
 
-from remanga.tool_envs.catalog import TOOL_NAMES, TOOLS, tool_spec
+from remanga.tool_envs.catalog import tool_names, tool_spec, tools
 from remanga.tool_envs.spec import MARKER_NAME, PYTHON_VERSION, REPO_ROOT, TOOLS_DIR, ToolSpec
 
 
@@ -156,7 +156,7 @@ def ensure_tool(name: str) -> Path:
         if existing:
             return existing
         raise FileNotFoundError(
-            f"'{name}' is not one of remanga's tools ({', '.join(TOOL_NAMES)}), "
+            f"'{name}' is not one of remanga's tools ({', '.join(tool_names())}), "
             f"and {venv_dir} does not exist."
         )
 
@@ -189,10 +189,10 @@ def provision(names: list[str] | None = None, torch_backend: str | None = None,
     """Installs/updates every named tool (all of them by default). Returns
     the names that failed, for the caller's own summary."""
     backend = torch_backend or default_torch_backend()
-    wanted = [spec for spec in TOOLS if not names or spec.name in names]
+    wanted = [spec for spec in tools() if not names or spec.name in names]
     unknown = [name for name in (names or []) if tool_spec(name) is None]
     for name in unknown:
-        warn(f"no tool called '{name}' - known tools: {', '.join(TOOL_NAMES)}")
+        warn(f"no tool called '{name}' - known tools: {', '.join(tool_names())}")
 
     failed = list(unknown)
     for spec in wanted:

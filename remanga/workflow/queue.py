@@ -17,22 +17,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from remanga import plugins
 from remanga.config import RemangaConfig
 from remanga.json_io import read_json_or, write_json
 
 QUEUE_PATH = Path("projects") / "queue.json"
 
-# action -> (what the queue calls it, what it does). The same words as the
-# chapter menu, so a queued job means what choosing it there means.
-JOBS: dict[str, tuple[str, str]] = {
-    "download": ("Download", "fetch the pages (checks the ones already here)"),
-    "pdf": ("Make PDF", "the panels, to give to the LLM with the prompt"),
-    "video": ("Make video", "narrates the whole chapter from narration.json, then makes the video"),
-    "remix": ("Rebuild video", "keeps the narration - remakes the music, intro and video"),
-    "reaudio": ("Narrate again, no video", "replaces the narration and keeps only that"),
-    "source": ("Remake from source", "deletes all but the pages, panel marks and narration.json, "
-                                     "then makes it all again"),
-}
+def jobs() -> dict[str, tuple[str, str]]:
+    """action -> (what the queue calls it, what it does), from the "job"
+    plug-ins (plugins/jobs/ has the built-in ones), in their order."""
+    return {job.name: (job.label, job.help) for job in plugins.items("job")}
+
 
 WAITING, DONE, FAILED = "waiting", "done", "failed"
 
@@ -52,7 +47,7 @@ class Job:
 
     @property
     def label(self) -> str:
-        return JOBS[self.action][0]
+        return plugins.get("job", self.action).label
 
     @property
     def title(self) -> str:
@@ -64,7 +59,7 @@ class Job:
 
 def load_queue() -> list[Job]:
     rows = [row for row in read_json_or(QUEUE_PATH, []) or []
-            if isinstance(row, dict) and row.get("action") in JOBS]
+            if isinstance(row, dict) and plugins.find("job", row.get("action"))]
     jobs = [Job(**row) for row in rows]
     if any("id" not in row for row in rows):
         # A row with no id got a new one just now; kept, or the next load
@@ -101,26 +96,15 @@ def to_run(jobs: list[Job]) -> list[Job]:
 
 
 def run_job(job: Job, machine: RemangaConfig) -> Any:
-    """Does the job, with the project's own settings as they are now."""
+    """Does the job, with the settings as they are now."""
     from remanga import workflow
 
-    config = machine
-    project, chapter = job.project, job.chapter
-    if job.action == "download":
-        return workflow.download(project, [chapter], config)
-    if not workflow.page_files(project, chapter):
-        raise FileNotFoundError(f"{project} chapter {chapter} is not downloaded - queue a Download first.")
-    if job.action == "pdf":
-        return workflow.make_pdf(project, chapter, config)
-    if job.action == "video":
-        return workflow.make_video(project, chapter, config)
-    if job.action == "remix":
-        return workflow.remix_video(project, chapter, config)
-    if job.action == "reaudio":
-        return workflow.make_video(project, chapter, config, force=True, audio_only=True)
-    if job.action == "source":
-        return workflow.remake_from_source(project, chapter, config)
-    raise ValueError(f"Unknown job: {job.action}")
+    action = plugins.find("job", job.action)
+    if action is None:
+        raise ValueError(f"Unknown job: {job.action} - its plug-in is not installed")
+    if action.needs_pages and not workflow.page_files(job.project, job.chapter):
+        raise FileNotFoundError(f"{job.project} chapter {job.chapter} is not downloaded - queue a Download first.")
+    return plugins.call(action.run, job.project, job.chapter, machine)
 
 
 def record(job: Job, error: str | None) -> None:

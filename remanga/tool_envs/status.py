@@ -5,25 +5,25 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from remanga.tool_envs.catalog import TOOL_NAMES, TOOLS
+from remanga.tool_envs.catalog import tool_names, tools
 from remanga.tool_envs.install import is_current, venv_python
 from remanga.tool_envs.spec import TOOLS_DIR
 
 
 def orphan_envs() -> list[Path]:
     """`.tools/venv-*` directories no tool claims any more - what a removed
-    TOOLS entry leaves behind. Reported rather than deleted: several GB that
+    tool plug-in entry leaves behind. Reported rather than deleted: several GB that
     somebody may still want is not this function's call to make."""
     if not TOOLS_DIR.is_dir():
         return []
-    known = {f"venv-{name}" for name in TOOL_NAMES}
+    known = {f"venv-{name}" for name in tool_names()}
     return sorted(p for p in TOOLS_DIR.glob("venv-*") if p.is_dir() and p.name not in known)
 
 
 def status_rows() -> list[tuple[str, str, str]]:
     """(name, display name, state) for every tool, for the setup screens."""
     rows = []
-    for spec in TOOLS:
+    for spec in tools():
         if not venv_python(spec.venv_dir):
             state = "not installed"
         elif is_current(spec):

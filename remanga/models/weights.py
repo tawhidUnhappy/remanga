@@ -26,7 +26,7 @@ class ModelManager:
         model_dir: Path | str,
         repo_id: str,
         tool_name: str,
-        download_script: str,
+        download_script: str | Path,
         expected_files: Sequence[str],
         display_name: str,
     ):
@@ -50,7 +50,11 @@ class ModelManager:
             return self.model_dir
 
         python = get_tool_python(self.tool_name)
-        script = get_scripts_dir("models") / self.download_script
+        # A bare name is one of models/scripts/; a plug-in passes the path of
+        # its own script.
+        script = Path(self.download_script)
+        if not script.is_absolute():
+            script = get_scripts_dir("models") / script
 
         # Optional 3rd positional arg every download script accepts (see
         # remanga/hf_token.py) - None/empty stays fully backward compatible

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Shared post-download SHA256 verification, used by every standalone weight
 downloader in this repo (download_kokoro.py,
-download_deepseek_ocr.py, and webui/scripts/download_magi.py).
+download_deepseek_ocr.py, and plugins/magi/scripts/download_magi.py).
 
 Why this exists: huggingface_hub's own snapshot_download() only checks that
 each downloaded file's *size* matches what the server reported ("Consistency
@@ -16,7 +16,7 @@ hashlib.sha256() of the file actually sitting on disk.
 
 Kept dependency-free beyond `huggingface_hub` (already required by every
 caller) and importable via a plain sys.path insert from a sibling scripts/
-directory (webui/scripts/download_magi.py does this) - none of these
+directory (plugins/magi/scripts/download_magi.py does this) - none of these
 downloaders assume the `remanga` package itself is installed in their
 isolated venv, so this can't import from remanga.* either.
 

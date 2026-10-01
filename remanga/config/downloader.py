@@ -1,4 +1,4 @@
-"""MangaDex downloader settings - see remanga/downloader/."""
+"""MangaDex downloader settings - see remanga/plugins/mangadex/."""
 
 from __future__ import annotations
 

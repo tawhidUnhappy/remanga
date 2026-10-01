@@ -37,10 +37,10 @@ can easily update them").** Every file that held two jobs was split, re-exported
 changed: `audio/batched.py` -> `takes` (making/halving takes) + `retakes` (hums, whisper) +
 `batched` (orchestration); `ui/dialogs/` package (fit, choice, ask, result); `narration/` package
 (files, check, document); `pdf/writer.py` -> `streams` + `textpage` + `writer`;
-`workflow/deletables.py`; `downloader/feed.py` (chapter feed mixin) + `chapter_pages.py` (the steps
+`workflow/deletables.py`; `downloader/feed.py` (now `plugins/mangadex/feed.py`; chapter feed mixin) + `chapter_pages.py` (the steps
 of download_chapter, which was one 165-line method); `video/picture_cache.py`; `ui/task_io.py`;
 `tool_envs/status.py`; `cli_commands.py`; `config/tts_kokoro.py` + `tts_qwen.py`;
-`cropper/cut.py`; `audio/synth/qwen_reference.py`; the Panel Marker's `history.js`, `split.js`,
+`cropper/cut.py`; `audio/synth/qwen_reference.py` (now `plugins/qwen_tts/reference.py`); the Panel Marker's `history.js`, `split.js`,
 `shortcuts-menu.js`; the Writer/Reviewer CSS out of their index.html. **`hardware.py` stays one
 file on purpose**: bootstrap.sh runs it as a bare script before any env exists, so it cannot
 import siblings. Verified after: 198 modules import, ruff clean, and a real run of each path -
@@ -66,6 +66,28 @@ before detection. **De-duplicated:** `webui/shared_routes.py` (favicon + /shared
 `workflow/cleanup.guard`/`delete_paths` (was 5 copies), `static_shared/css/panel-list.css` (31 rules
 identical in Writer + Reviewer CSS). pylint duplicate-code at 4 lines finds nothing left.
 
+**Plug-ins 2026-10-01 (user request: "make remanga most of the codes as plug-ins").** Core is
+`remanga/plugins/` `_registry.py` (register/items/get/find/resolve/call, one registry per kind),
+`_loader.py` (built-in folders = every non-"_" package in remanga/plugins; drop-ins = top-level
+`plugins/*.py|pkg`; entry points group `remanga.plugins`; a later one with the same name replaces;
+a failing drop-in is reported once on stderr and skipped), `_kinds.py` (`TTSEngine`, `Layout`,
+`Source`, `Job`; `tool` = `ToolSpec`). Kinds and built-ins: tts `kokoro` `qwen_tts`; tool (each
+engine's + `magi` + `faster_whisper`); layout `long_strip` (order 50) `pages` (1000, the fallback:
+matches anything); source `mangadex`; job `jobs`. Core asks through `remanga/layouts.py`
+(`layout_for`, `pages_dir` - replaces is_long_strip/marking_pages_dir in workflow, cropper, Panel
+Marker; detection = `layout.detect`), `remanga/sources.py` (`source_for`, `project_client`;
+project.json now records `"source"`, a missing one = default), `workflow/queue.jobs()`,
+`tool_envs.catalog.tools()/tool_names()/tool_spec()` (were TOOLS/TOOL_NAMES constants).
+**The one rule:** a plug-in's `__init__.py` imports only `remanga.plugins` and
+`remanga.tool_envs.spec`, naming its code as `"module:attr"` strings - config/tts.py loads the
+registry while `remanga.config` is still importing, and tool_envs must stay stdlib-only for
+bootstrap. `./run.sh plugins` lists all. Verified: config.json round-trips identically; both
+layouts cut byte-identical panels; MAGI and strip detection through the hook; Strip Marker routes;
+MangaDex new project + list + download (35 pages verified), the long-strip tag -> `layout`;
+queued PDF job; Settings engine switch in Pilot; Kokoro + Qwen clone narration. **Scratch runs:**
+model dirs are relative to cwd - symlink `checkpoints/` (and `global/`) into a scratch cwd, or
+the weights download again (5.6 GB filled /tmp, a RAM disk here).
+
 ## The workflow (the whole product)
 
 ```
@@ -87,14 +109,15 @@ styles/quit, `screens/` = `projects` `chapters` (the table) `chapter_menu` (the 
 `video_work` (what it does, mixins) `settings` (+ `settings_sound`/`settings_video` rows) `settings` `common`, `dialogs.py`, `tasks.py`, `widgets.py`, `voice_settings.py`),
 `activity.py` (progress bars: CLI Rich bar or UI task view),
 `narration.py` (reply check, fix request, memory), `chapters.py` (ranges, sort, page naming),
-`webui/` (the Panel Marker: Flask routes, MarkerSession/MarkerState, magi_assist + its worker,
+`webui/` (the Panel Marker: Flask routes, MarkerSession/MarkerState,
 static/), `cropper/` (crops.json -> panels/: crop_page, panel_boxes, gutter/, seams, trim, dedupe),
 `pdf/` (`encode` one panel -> a PDF page, `pack` panels -> parts under the cap, `builder` wires
-them, `writer` the PDF itself, `manifest_info` the text page), `downloader/`,
-`audio/` (tts, mix, master, clips, manifest, synth/ per engine),
+them, `writer` the PDF itself, `manifest_info` the text page), `plugins/` (see Plug-ins above:
+engines, MAGI, faster-whisper, layouts, MangaDex, jobs - each a folder), `layouts.py`, `sources.py`,
+`audio/` (tts, mix, master, clips, manifest, synth/base = the worker lifecycle),
 `video/` (`canvas` one panel on one frame, `quality` is this size enough, `frames` the frame cache,
 `compose` re-exports those three, `frame_timeline`, `render`, `encoding`), `config/`, `paths/`, `tool_envs/` +
-`workers/` + `models/` (Kokoro's and MAGI's isolated venvs + weights).
+`workers/` + `models/` (isolated venvs + weights; each tool's spec is in its plug-in).
 
 ## Narration reply (prompts/narration.md is the contract)
 
@@ -223,7 +246,7 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
       the model losing the thread on a long text, so the answer is a shorter text.
     - **In-context cloning helps a lot and does NOT fix it (tested 2026-09-21).** The clone used to
       run in `x_vector_only_mode` because `designed_text` was empty. Whisper now reads the reference
-      recording once and caches it beside the file (`audio/reference_text.py`,
+      recording once and caches it beside the file (`plugins/qwen_tts/reference_text.py`,
       `<sample>.transcript.txt`), so the clone gets `--ref_text` and uses the recording IN CONTEXT.
       Same collapsing take, both ways: embedding-only gave 98 words and 2.2% matched; in-context
       gave **863 words and 39.8%**, 41 of 99 panels anchored instead of 3. Nine times the content -
@@ -304,7 +327,7 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   not in ref_audio is a sentence it is shown and never hears finished - and it finishes it out loud.
   **A whisper hallucination has a shape: zero-length words stamped against the clip's last frame**
   (real words in that recording run 120-300 ms) - that is how `_drop_invented_tail` finds them.
-  `audio/reference_text.py` now builds clip and transcript as ONE pair (cached as
+  `plugins/qwen_tts/reference_text.py` now builds clip and transcript as ONE pair (cached as
   `{stem}.reference.json` + `.reference.wav`), cutting both at the last sentence that finishes
   inside the limit; `synth/qwen_reference.py:reference_pair` is the only way to get them, so a transcript can
   never sit beside a clip it is not of. No transcript = x_vector_only_mode = nothing to leak.
@@ -411,13 +434,15 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   composite in 3s, the NVENC encode takes 1m12s, the MP4 is 42MB (still panels compress hard; the
   encoder is CQ 18 VBR, not bitrate-capped) and a rendered frame is 50dB PSNR against its source.
   Frame cache is ~126MB a chapter. Don't trade this back for speed unasked.
-- **TTS engines are plug-ins (user request 2026-09-18: "make this modulous").** Adding one is four
-  pieces and nothing else: a `*Config` block in `config/tts.py` (with `voice_label`, `voice_detail`,
-  `identity()`), a `TTSEngineSpec` in `config/tts_engines.py`, a Synthesizer in `audio/synth/` +
-  worker in `audio/scripts/` registered in `SYNTHESIZERS`, and a `ToolSpec` in `tool_envs/catalog.py`.
-  Settings rows come from `ui/voice_settings.py:ENGINE_ROWS` (Qwen's in `voice_settings_qwen.py`, `Row` in `voice_rows.py`) (a `Row` is label/value/change), so the
-  screen itself never changes. Nothing outside asks which engine is running: `audio/tts.py` calls
-  `synth.synthesize(text, output_wav)` and `config.tts.identity()`.
+- **TTS engines are plug-ins** (2026-09-18, and since 2026-10-01 self-contained folders). An engine
+  is one folder `remanga/plugins/<name>/`: `__init__.py` registers a `TTSEngine` + its `ToolSpec`
+  (references only, no heavy imports), `config.py` (its block: `voice_options()`, `voice_label`,
+  `voice_detail`, `identity()`), `synth.py` (a `BaseWorkerSynthesizer`), `rows.py` (Settings rows),
+  optional `prepare` hook (Qwen: reference_text.py, whisper before the model loads), and `scripts/`
+  (worker + weight download; `spawn_script_worker(tool, "plugins/<name>", script)`,
+  `ModelManager(download_script=<Path>)`). `config/tts.py` BUILDS `TTSConfig` with pydantic
+  `create_model` - one field per registered engine named after it - so `config.tts.kokoro` and
+  config.json are unchanged. Nothing outside asks which engine is running.
 - **Cloning a recording needs NO transcript - and must not be given a wrong one.** Qwen's
   `create_voice_clone_prompt` refuses in-context mode without `ref_text`, so a supplied recording
   clones with `x_vector_only_mode=True` (speaker embedding). Passing a transcript that is not what
@@ -443,7 +468,7 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   (`synth/qwen.py:design_voice`, a one-shot run, not the worker), then the Base model clones THAT
   sample for every panel - re-describing per panel is what makes a designed voice drift. Three
   variants, ~4.3GB each, downloaded only for the way actually used.
-- **Kokoro's voice is a NAME** from `config/kokoro_voices.py` (`tts.kokoro.voice`).
+- **Kokoro's voice is a NAME** from `plugins/kokoro/voices.py` (`tts.kokoro.voice`).
   **Chatterbox voice cloning was tried on 2026-09-18 and rejected the same day** - the user found the
   clone bad and the music too loud under it - so it was removed again; that version is on the branch
   `backup/chatterbox-2026-09-18`. Don't re-propose cloning unasked.
@@ -513,7 +538,7 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
 - Decimal chapters are chapters of their own: `1-5` takes 4.5, not 5.1 (`chapters.expand_chapter_selection`).
 - MangaDex chapter list is cached 24h in manifest.json.
 
-- **Long-strip manga / webtoons (user request, 2026-09-30)** - `remanga/longstrip/`. A webtoon
+- **Long-strip manga / webtoons (user request, 2026-09-30)** - `remanga/plugins/long_strip/` (was `longstrip/`). A webtoon
   chapter is ~15 images of 720x5000-9900 cut through panels. `layout.is_long_strip`: project.json
   `layout` (set from MangaDex tag Long Strip `3e2b8dae-...` at create) else median image h/w >= 2.5.
   - **No MAGI for webtoons (user verdict):** "magi is trained for pages type of manga". Don't bring it
@@ -558,7 +583,7 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     for that page (snapping pulled overlapping edges apart). **Footgun fixed:** panel_boxes guessed
     thousandths from `max(box) <= 1000`, so a pixel box on a page under 1000 px tall was misread -
     now the key decides.
-  - **Strip Marker v2** (`webui/strip_session.py` state, `strip_server.py` routes, `static_strip/js/`
+  - **Strip Marker v2** (`plugins/long_strip/web/`: `session.py` state, `server.py` routes, `static/js/`
     = api state geometry history viewport hit gestures keys sidebar actions status main): tiles of
     run-width x 2 rows (<= 900 px wide JPEG) mounted only within +/-1 screen, marks as DOM bands only
     in that window; Panel Marker rules (click selects, only the selected moves, drag elsewhere draws,

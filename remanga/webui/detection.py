@@ -1,8 +1,8 @@
-"""Runs MAGI v3 panel detection for one chapter, streaming progress into its
+"""Runs panel detection for one chapter, streaming progress into its
 MarkerState so the browser (polling GET /api/detect/status - see routes.py)
-sees pages fill in one at a time instead of blocking on the whole chapter. A
-long strip (webtoon) is the exception: its panels come from the strip's own
-split (remanga/longstrip/), not from MAGI.
+sees pages fill in one at a time instead of blocking on the whole chapter.
+The detector is the chapter's layout plug-in's (remanga.layouts): MAGI v3 for
+pages, the strip's own split for a long strip.
 
 This is the unit of work, not the scheduler: what gets detected, in what
 order, and on which thread is MarkerSession's detection queue
@@ -13,9 +13,9 @@ swapping instead of working.
 
 from __future__ import annotations
 
+from remanga import plugins
 from remanga.config import MarkerConfig
 from remanga.console import console, escape as _esc
-from remanga.longstrip import strip_panels
 from remanga.webui.marker_state import MarkerState
 
 
@@ -41,8 +41,6 @@ def run_detection(state: MarkerState, config: MarkerConfig,
     MAGI's boxes REPLACE what is there - applied only once the whole pass is
     back (MarkerState.replace_with_detected), so a failed pass changes nothing.
     """
-    from remanga.webui.magi_assist import detect_panels_for_pages
-
     # Pages already touched - crops.json was pre-loaded server-side (a
     # "remark" restart, or just reopening the marker on an already-marked
     # chapter; see marks_file.py:_load_existing_crops) - never get MAGI's
@@ -81,21 +79,13 @@ def run_detection(state: MarkerState, config: MarkerConfig,
         state.detect_done += 1
 
     try:
-        if state.long_strip:
-            # A webtoon's panels were already found when its strip was cut
-            # (mangaEasy's splitter, longstrip/split.py) - MAGI, trained on
-            # printed pages, is not asked.
-            found = strip_panels(state.pages_dir)
-            results = {p["filename"]: found.get(p["filename"], []) for p in pending_pages}
-            for filename, boxes in results.items():
-                on_page_done(filename, boxes)
-        else:
-            page_paths = [state.pages_dir / p["filename"] for p in pending_pages]
-            results = detect_panels_for_pages(page_paths, config, on_page_done=on_page_done)
+        layout = state.layout or plugins.get("layout", "pages")
+        page_paths = [state.pages_dir / p["filename"] for p in pending_pages]
+        results = plugins.call(layout.detect, state.pages_dir, page_paths, config, on_page_done)
         if replace:
             state.replace_with_detected(results, order_direction=order_direction)
     except Exception as e:
         state.detect_error = str(e)
-        console.print(f"[bold red]MAGI v3 detection failed:[/] {_esc(str(e))}")
+        console.print(f"[bold red]Panel detection failed:[/] {_esc(str(e))}")
     finally:
         state.detect_running = False

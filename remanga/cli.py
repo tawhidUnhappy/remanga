@@ -10,6 +10,7 @@
     remanga chapters -p NAME
     remanga queue    [--run]                    (the job queue the menus fill; --run runs it)
     remanga voices                              (one line in every voice, to listen to)
+    remanga plugins                             (what is installed: engines, layouts, sources, ...)
     remanga setup
 
 Exit status: 0 done, 1 failed, 130 stopped with Ctrl+C."""
@@ -19,7 +20,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from remanga.cli_commands import run_queue, setup, show_queue
+from remanga.cli_commands import run_queue, setup, show_plugins, show_queue
 from remanga.console import console, err_console, escape as _esc
 
 EXIT_INTERRUPTED = 130
@@ -66,6 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
     qp.add_argument("--run", action="store_true", help="run every job not done yet, one after another")
     sub.add_parser("voices", help="Read one line in each of the narrator engine's voices, into "
                                   "global/voice/samples/")
+    sub.add_parser("plugins", help="List the plug-ins: narrator engines, tools, layouts, sources and jobs")
     sub.add_parser("setup", help="install MAGI v3 and the chosen narrator (their environments and weights)")
     return parser
 
@@ -81,6 +83,9 @@ def _run(args: argparse.Namespace) -> None:
         return
     if args.command == "setup":
         setup()
+        return
+    if args.command == "plugins":
+        show_plugins()
         return
     if args.command == "voices":
         from remanga.config import RemangaConfig as _Config

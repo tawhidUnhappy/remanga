@@ -22,7 +22,7 @@ from remanga.console import console
 from remanga.cropper.crop_page import crop_page
 from remanga.cropper.crop_report import print_crop_summary, write_manifest
 from remanga.json_io import has_real_json_content, read_json
-from remanga.longstrip import marking_pages_dir
+from remanga.layouts import pages_dir as marking_pages_dir
 from remanga.paths import get_chapter_dir, read_manifest
 
 

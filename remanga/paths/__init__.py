@@ -48,7 +48,6 @@ from .webui_static import (
     MARKER_STATIC_DIR,
     REVIEWER_STATIC_DIR,
     SHARED_STATIC_DIR,
-    STRIP_STATIC_DIR,
     WRITER_STATIC_DIR,
 )
 
@@ -63,7 +62,6 @@ __all__ = [
     "REPO_ROOT",
     "REVIEWER_STATIC_DIR",
     "SHARED_STATIC_DIR",
-    "STRIP_STATIC_DIR",
     "TOOLS_DIR",
     "UV_BIN",
     "WRITER_STATIC_DIR",

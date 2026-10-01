@@ -1,17 +1,19 @@
-"""The isolated tool environment remanga provisions: Kokoro-82M runs in
-`.tools/venv-kokoro`, so torch and its pins never touch the main environment.
+"""The isolated tool environments remanga provisions: each engine or model
+(Kokoro-82M, Qwen3-TTS, MAGI v3, faster-whisper) runs in its own
+`.tools/venv-<name>`, so torch and its pins never touch the main environment.
 
     spec.py     what an environment entry is (ToolSpec, InstallStep)
-    catalog.py  TOOLS - the entries themselves
+    catalog.py  tools() - the entries, registered by "tool" plug-ins
     install.py  creating, updating and checking the environments
     cli.py      `python -m remanga.tool_envs install|list`
 
-Stdlib only, so bootstrap.sh can run it on the main environment's python with
-none of remanga's own dependencies involved."""
+Stdlib only (a plug-in's __init__ registers descriptions and imports nothing
+heavy), so bootstrap.sh can run it with none of remanga's own dependencies
+involved."""
 
 from __future__ import annotations
 
-from remanga.tool_envs.catalog import TOOL_NAMES, TOOLS, tool_spec
+from remanga.tool_envs.catalog import tool_names, tool_spec, tools
 from remanga.tool_envs.install import (
     backfill_marker,
     default_torch_backend,
@@ -31,9 +33,7 @@ __all__ = [
     "MARKER_NAME",
     "PYTHON_VERSION",
     "REPO_ROOT",
-    "TOOLS",
     "TOOLS_DIR",
-    "TOOL_NAMES",
     "InstallStep",
     "ToolSpec",
     "backfill_marker",
@@ -45,7 +45,9 @@ __all__ = [
     "provision",
     "say",
     "status_rows",
+    "tool_names",
     "tool_spec",
+    "tools",
     "uv_bin",
     "venv_python",
     "warn",

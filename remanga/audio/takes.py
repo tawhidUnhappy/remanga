@@ -17,7 +17,7 @@ from remanga.audio.resample import load_audio
 from remanga.config import AudioConfig
 from remanga.console import console, escape as _esc
 from remanga.json_io import read_json_or
-from remanga.subtitles.transcribe import audio_seconds
+from remanga.plugins.faster_whisper.transcribe import audio_seconds
 
 # How much longer than its own estimate a take may come back before it is
 # read as a collapse rather than a slow reading. Measured on a good take, the

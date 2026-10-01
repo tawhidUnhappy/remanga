@@ -22,8 +22,8 @@ def print_chapter_list(listing: list[dict]) -> None:
 
 def download(project: str, chapters: list[str], config: RemangaConfig, url: str | None = None,
              force: bool = False) -> list[Path]:
-    from remanga.downloader import MangaDexDownloader
+    from remanga.sources import project_client
 
-    paths = MangaDexDownloader(config.downloader).download_chapters(project, chapters, url, force=force)
+    paths = project_client(project, config).download_chapters(project, chapters, url, force=force)
     settle_reading_direction(project)
     return paths

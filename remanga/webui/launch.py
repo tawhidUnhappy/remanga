@@ -25,7 +25,7 @@ from remanga.console import console
 # frontend polls a couple of status endpoints (page-nav.js) every ~1.2s for
 # as long as the marker UI or MAGI detection is running, so left alone this
 # floods the terminal with access-log lines - including right on top of the
-# "Loading MAGI v3..." spinner (magi_assist.py's console.status()), which is
+# "Loading MAGI v3..." spinner (plugins/magi/assist.py's console.status()), which is
 # what turned a clean progress spinner into a wall of spam. Only warnings/
 # errors (a real 500, a bad request) are worth surfacing here.
 logging.getLogger("werkzeug").setLevel(logging.WARNING)

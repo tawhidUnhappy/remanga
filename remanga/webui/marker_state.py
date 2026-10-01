@@ -25,15 +25,16 @@ class MarkerState(MarksFileMixin):
     """All in-memory state for one chapter's marking."""
 
     def __init__(self, chapter_dir: Path, chapter_num: str, pages_dir: Path | None = None,
-                 long_strip: bool = False):
+                 layout=None):
         # Absolute: Flask's send_from_directory() resolves a relative directory
         # against the app's root_path (remanga/webui/), not the process cwd.
         self.chapter_dir = chapter_dir.resolve()
         self.chapter_num = chapter_num
-        # pages/, or strip/ for a long strip (remanga.longstrip), whose pages
+        # pages/, or strip/ for a long strip (plugins/long_strip), whose pages
         # are the downloaded images re-cut between panels.
         self.pages_dir = (pages_dir or self.chapter_dir / "pages").resolve()
-        self.long_strip = long_strip
+        # The layout plug-in (remanga.layouts) - which detector finds panels.
+        self.layout = layout
         self.pages: list[dict[str, Any]] = []
         self.marks: dict[str, list[dict[str, Any]]] = {}
         # Pages MAGI must not overwrite: anything with marks on it, plus any

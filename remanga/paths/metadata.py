@@ -71,7 +71,7 @@ def read_remote_chapter_cache(project_name: str) -> dict[str, Any]:
     project has actually started downloading): {"manga_id", "fetched_at"
     (epoch seconds), "chapters": [{"chapter", "chapter_id", "pages"}, ...]}.
     Empty dict when nothing's been fetched yet. See
-    downloader/chapter_list.py:list_chapters_with_status for the 24h TTL this
+    plugins/mangadex/chapter_list.py:list_chapters_with_status for the 24h TTL this
     backs and the interactive "refetch" escape hatch."""
     return read_manifest(project_name).get("remote_chapters", {})
 

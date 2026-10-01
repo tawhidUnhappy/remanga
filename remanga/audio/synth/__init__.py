@@ -1,32 +1,21 @@
-"""Speech synthesis: one Synthesizer per engine, each driving its own isolated
-venv worker (remanga/audio/scripts/).
+"""Speech synthesis: the worker lifecycle every engine shares (base.py), and
+building the configured engine's Synthesizer.
 
-    base.py     the worker lifecycle and text chunking every engine shares
-    kokoro.py   Kokoro-82M - fixed voices
-    qwen.py     Qwen3-TTS - preset narrators, or a voice designed from words
-
-Adding an engine: a Synthesizer here and its name in SYNTHESIZERS, plus the
-three pieces named in config/tts_engines.py. Nothing else in the pipeline asks
-which engine is running - see create_synthesizer."""
+The engines themselves are plug-ins (remanga/plugins/, kind "tts"), each with
+its Synthesizer and worker script in its own folder. Nothing else in the
+pipeline asks which engine is running - see create_synthesizer."""
 
 from __future__ import annotations
 
+from remanga import plugins
 from remanga.audio.synth.base import BaseWorkerSynthesizer
-from remanga.audio.synth.kokoro import KokoroSynthesizer
-from remanga.audio.synth.qwen import QwenSynthesizer
 from remanga.config import AudioConfig, TTSConfig
-
-SYNTHESIZERS: dict[str, type[BaseWorkerSynthesizer]] = {
-    "kokoro": KokoroSynthesizer,
-    "qwen": QwenSynthesizer,
-}
 
 
 def create_synthesizer(tts_config: TTSConfig, audio_config: AudioConfig) -> BaseWorkerSynthesizer:
-    """The synthesizer for the configured engine, falling back to the default
-    engine for a name nothing implements (config.json is hand-editable)."""
-    engine = SYNTHESIZERS.get(tts_config.spec.name) or SYNTHESIZERS[tts_config.__class__().spec.name]
-    return engine(tts_config, audio_config)
+    """The synthesizer for the configured engine - the default engine for a
+    name nothing implements (config.json is hand-editable)."""
+    return plugins.resolve(tts_config.spec.synthesizer)(tts_config, audio_config)
 
 
-__all__ = ["SYNTHESIZERS", "BaseWorkerSynthesizer", "KokoroSynthesizer", "QwenSynthesizer", "create_synthesizer"]
+__all__ = ["BaseWorkerSynthesizer", "create_synthesizer"]
