@@ -15,7 +15,9 @@ and the marks. Either changing rebuilds it."""
 
 from __future__ import annotations
 
+import os
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from remanga import activity
@@ -118,12 +120,23 @@ def _build(chapter: str, view: StripView, marks: list[Mark], out_dir: Path) -> l
     return pages
 
 
+# strip/ is a private step between the download and the cut panels (which are
+# compressed properly), so its pages are written fast: level 1 is still
+# lossless, and with the pages saved in parallel Finish went from ~15 s to ~2 s
+# on a 98,000-row chapter (12.5 s of it was level-6 compression, one at a time).
+STRIP_PNG_LEVEL = 1
+
+
 def _write_run(chapter: str, image, run: Run, marks: list[Mark], work: Path, done: int) -> list[dict]:
-    pages = []
-    for top, bottom, page_marks in plan_pages(run_marks(marks, run.top, run.height), run.height, run.width):
-        name = f"{page_stem(chapter, done + len(pages) + 1)}.png"
-        image.crop((0, top, run.width, bottom)).save(work / name, "PNG", compress_level=6)
-        pages.append({"file": name, "width": run.width, "height": bottom - top,
-                      "panels": [list(m) for m in page_marks]})
+    planned = plan_pages(run_marks(marks, run.top, run.height), run.height, run.width)
+    pages = [{"file": f"{page_stem(chapter, done + i + 1)}.png", "width": run.width, "height": bottom - top,
+              "panels": [list(m) for m in page_marks]} for i, (top, bottom, page_marks) in enumerate(planned)]
+
+    def save(i: int) -> None:
+        top, bottom, _ = planned[i]
+        image.crop((0, top, run.width, bottom)).save(work / pages[i]["file"], "PNG", compress_level=STRIP_PNG_LEVEL)
+
+    with ThreadPoolExecutor(max_workers=min(len(planned), os.cpu_count() or 1)) as pool:
+        list(pool.map(save, range(len(planned))))
     return pages
 

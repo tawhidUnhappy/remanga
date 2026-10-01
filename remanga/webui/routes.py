@@ -20,10 +20,11 @@ from __future__ import annotations
 from flask import Flask, jsonify, request, send_from_directory
 
 from remanga.config import MarkerConfig
-from remanga.paths import MARKER_STATIC_DIR as STATIC_DIR, SHARED_STATIC_DIR
+from remanga.paths import MARKER_STATIC_DIR as STATIC_DIR
 from remanga.webui.marker_session import MarkerSession
 from remanga.webui.routes_detect import register_detection_routes
 from remanga.webui.routes_settings import register_settings_routes
+from remanga.webui.shared_routes import add_shared_routes
 
 
 def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
@@ -63,17 +64,8 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
     def index():
         return send_from_directory(STATIC_DIR, "index.html")
 
-    @app.get("/shared/<path:filename>")
-    def shared_asset(filename: str):
-        """The palette, the logo and the bits every remanga web UI shares -
-        served from one folder rather than copied into each (see
-        remanga/webui/static_shared/)."""
-        return send_from_directory(SHARED_STATIC_DIR, filename)
+    add_shared_routes(app)
 
-    @app.get("/favicon.ico")
-    def favicon():
-        # Browsers ask for this at the root whatever the page links to.
-        return send_from_directory(SHARED_STATIC_DIR / "img", "favicon.ico")
 
     @app.get("/api/chapter")
     def get_chapter():

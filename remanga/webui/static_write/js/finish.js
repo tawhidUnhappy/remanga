@@ -2,6 +2,7 @@
 
 import { finishSession, postText } from "./api.js";
 import { panels, textOf, writtenCount } from "./state.js";
+import { hideLoading, showDone, showLoading } from "/shared/js/screens.js";
 
 async function saveNarration() {
   const emptyCount = panels.length - writtenCount();
@@ -16,12 +17,15 @@ async function saveNarration() {
     return;
   }
 
+  showLoading("Saving the narration");
   const result = await finishSession();
   if (result.ok) {
-    document.body.innerHTML = `<main><h1 style="padding-top:60px;text-align:center">
-      ✓ Saved ${result.written}/${result.total_panels} panel(s) to narration.json — you can close this tab.
-    </h1></main>`;
-  }
+    showDone({
+      title: "Narration saved",
+      facts: [["Panels written", `${result.written} of ${result.total_panels}`], ["Saved to", "narration.json"]],
+      next: "Make video in the chapter's menu.",
+    });
+  } else hideLoading();
 }
 
 export function wireFooter() {

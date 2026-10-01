@@ -13,6 +13,8 @@ just wires the stages together in order."""
 from __future__ import annotations
 
 import contextlib
+import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from remanga.config import CropperConfig
@@ -104,8 +106,16 @@ class CoordinateCropper:
         panels_trimmed = 0
         panels_painted = 0
 
-        for page_number, page_entry in enumerate(pages_list, start=1):
-            result = crop_page(page_entry, pages_dir, panels_dir, chapter_num, page_number, self.config)
+        # Pages in parallel: most of a page's time is PNG compression, which
+        # Pillow does outside the GIL (measured: 13.8 of 16 s for 114 panels one
+        # page at a time). map() keeps the results in page order, so panel
+        # numbering and the manifest are exactly what a serial run gives.
+        workers = min(len(pages_list), os.cpu_count() or 1)
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            results = list(pool.map(
+                lambda numbered: crop_page(numbered[1], pages_dir, panels_dir, chapter_num, numbered[0], self.config),
+                enumerate(pages_list, start=1)))
+        for result in results:
             if result is None:
                 continue
 

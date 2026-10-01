@@ -6,6 +6,7 @@
 
 import { finishReview, postFlag } from "./api.js";
 import { flagOf, flaggedCount, panels } from "./state.js";
+import { hideLoading, showDone, showLoading } from "/shared/js/screens.js";
 
 async function submitReview(approved) {
   const generalNote = document.getElementById("general-note").value;
@@ -17,12 +18,13 @@ async function submitReview(approved) {
     return;
   }
 
+  showLoading("Saving the review");
   const result = await finishReview(approved, generalNote);
-  if (result.ok) {
-    document.body.innerHTML = `<main><h1 style="padding-top:60px;text-align:center">
-      ${approved ? "✓ Approved — you can close this tab." : `✓ ${result.flagged_count} issue(s) saved to narration_review.json — you can close this tab.`}
-    </h1></main>`;
-  }
+  if (!result.ok) { hideLoading(); return; }
+  showDone(approved
+    ? { title: "Narration approved", facts: [["Issues", "none"]], next: "Make video in the chapter's menu." }
+    : { title: "Review saved", facts: [["Issues flagged", result.flagged_count], ["Saved to", "narration_review.json"]],
+        next: "Give narration_review.json and prompts/narration_review.md to the LLM, and paste its new reply into narration.json." });
 }
 
 export function wireFooter() {

@@ -17,7 +17,6 @@ from remanga.console import console
 from remanga.json_io import read_json_or, write_json
 from remanga.paths import get_panels_dir, get_video_frames_dir
 from remanga.video.canvas import FrameCompositor
-from remanga.video.quality import quality_warning
 
 # What the frames beside it were composited with. Without this a frame was
 # reused whenever the panel hadn't changed, so a new size or background was
@@ -73,8 +72,7 @@ class FrameCache(FrameCompositor):
 
         if reused_count > 0:
             console.print(f"[dim cyan](Reused {reused_count} existing panel frames)[/]")
-        warning = quality_warning([panel for panel in by_stem.values() if panel.stem in set(panel_ids)], self.config)
-        if warning:
-            console.print(f"[yellow]{warning}[/]")
+        # The panels-too-big warning is said once, when the narration is checked
+        # (workflow/video.py:quality_warnings) - not again here.
         write_json(settings_path, settings)
         return frames_dir

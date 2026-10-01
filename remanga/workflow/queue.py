@@ -104,7 +104,7 @@ def run_job(job: Job, machine: RemangaConfig) -> Any:
     """Does the job, with the project's own settings as they are now."""
     from remanga import workflow
 
-    config = machine.for_project(job.project)
+    config = machine
     project, chapter = job.project, job.chapter
     if job.action == "download":
         return workflow.download(project, [chapter], config)

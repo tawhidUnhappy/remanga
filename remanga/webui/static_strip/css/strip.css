@@ -86,11 +86,3 @@ aside h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: 0.06em; text-transf
 .flag.tall { background: var(--danger); } .flag.overlap { background: var(--primary); } .flag.sides { background: var(--warn); }
 .keys { font-size: 11.5px; color: var(--text-dim); display: flex; flex-direction: column; gap: 3px; }
 .keys b { color: var(--text); font-weight: 600; }
-
-.overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
-           background: rgba(0, 0, 0, 0.72); z-index: 10; }
-.overlay.visible { display: flex; }
-.overlay .card { background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px;
-                 padding: 26px 34px; text-align: center; max-width: 440px; }
-.overlay h2 { margin: 0 0 8px; }
-.overlay p { margin: 0; color: var(--text-dim); font-size: 14px; }

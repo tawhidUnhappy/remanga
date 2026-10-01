@@ -8,6 +8,8 @@ a credits page of another width is a run of its own."""
 
 from __future__ import annotations
 
+import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -48,14 +50,20 @@ def runs_of(sources: list[Path]) -> list[Run]:
     return runs
 
 
+def _decoded(path: Path) -> Image.Image:
+    with Image.open(path) as img:
+        return ImageOps.exif_transpose(img).convert("RGB")
+
+
 def stitch(run: Run) -> Image.Image:
-    """The run as one RGB image."""
+    """The run as one RGB image. The images are decoded in parallel - Pillow
+    decodes outside the GIL, and decoding is most of the time."""
     strip = Image.new("RGB", (run.width, run.height))
+    with ThreadPoolExecutor(max_workers=min(len(run.paths), os.cpu_count() or 1)) as pool:
+        images = list(pool.map(_decoded, run.paths))
     y = 0
-    for path in run.paths:
-        with Image.open(path) as img:
-            img = ImageOps.exif_transpose(img).convert("RGB")
-            strip.paste(img, (0, y))
-            y += img.height
+    for img in images:
+        strip.paste(img, (0, y))
+        y += img.height
     return strip
 

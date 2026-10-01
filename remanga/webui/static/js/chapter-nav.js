@@ -12,7 +12,7 @@
 // one-way from here - never the reverse, so there's no cycle between them.
 
 import {
-  saveOverlay, saveOverlayTitle, saveOverlayText, saveBtn, saveLabel,
+  saveBtn, saveLabel,
   chapterNav, chapterName, chapterPos, prevChapterBtn, nextChapterBtn, pageTotalEl,
   assistCard, assistStatus, assistProgressBar,
   toolbar, viewBadge, hintToast, sidebarFooter,
@@ -23,6 +23,7 @@ import { flushSave, settleHistory } from "./marks.js";
 import { loadPage } from "./page-nav.js";
 import { pollDetectStatus, syncAssistCard } from "./magi.js";
 import { loadShortcuts } from "./shortcuts.js";
+import { hideLoading, showDone, showLoading } from "/shared/js/screens.js";
 import { setMode } from "./keyboard.js";
 import { refreshOutline, renderOutline } from "./outline.js";
 import { render } from "./render.js";
@@ -172,24 +173,23 @@ export async function saveAndExit() {
     return;
   }
   if (state.readOnly) {
-    saveOverlayTitle.textContent = "Closed";
-    saveOverlayText.innerHTML =
-      "Nothing was changed - this was a read-only session.<br>You can close this tab now.";
-  } else {
-    const saved = res.saved_chapters || [];
-    const list = saved.length > 12 ? `${saved.slice(0, 12).join(", ")} and ${saved.length - 12} more` : saved.join(", ");
-    saveOverlayTitle.textContent = state.chapter.chapter_total > 1 ? `Saved — ${saved.length} chapter(s)` : "Saved";
-    saveOverlayText.innerHTML =
-      (state.chapter.chapter_total > 1 && saved.length ? `crops.json written for ch ${list}.<br>` : "crops.json is written.<br>") +
-      "The pipeline will continue in your terminal - you can close this tab now.";
+    showDone({ title: "Closed", facts: [["Changed", "nothing - this was a read-only session"]] });
+    return;
   }
-  saveOverlay.classList.add("visible");
-  setTimeout(() => { try { window.close(); } catch {} }, 400);
+  const saved = res.saved_chapters || [];
+  const list = saved.length > 12 ? `${saved.slice(0, 12).join(", ")} and ${saved.length - 12} more` : saved.join(", ");
+  showDone({
+    title: saved.length > 1 ? `${saved.length} chapters marked` : `Chapter ${saved[0] ?? state.chapter.chapter} is marked`,
+    facts: [["Chapters saved", list || state.chapter.chapter], ["Saved to", "crops.json in each chapter"]],
+    next: "Make PDF in the chapter's menu - the panels are cut from these marks.",
+  });
 }
 
 export async function init() {
+  showLoading("Opening the Panel Marker", "loading the chapter's pages and marks");
   await loadShortcuts();
   await applyChapter(await api("/api/chapter"));
+  hideLoading();
   pollDetectStatus();
   setInterval(pollDetectStatus, 1200);
 }

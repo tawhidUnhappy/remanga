@@ -53,6 +53,19 @@ and `movemethods.py` (class members -> a mixin), then `ruff check --fix --select
 **ruff F401 deletes a re-export line** the source module does not itself use (`from .x import Y`
 kept only for callers) - point the callers at the new module instead, or list it in `__all__`.
 
+**Efficiency pass 2026-10-01 (measured on real chapters, outputs compared):** panel cutting runs pages
+in a thread pool (PNG compression is outside the GIL): 16 -> 2.2 s for 114 panels, every panel
+byte-identical. Mix 24.4 -> 5.4 s (see normalizing). Webtoon: stitch decodes in parallel 2.3 -> 0.6 s,
+signals sample ~256 columns and compare colours in 32 slices (detect 7.3 -> 4.1 s, same 54 panels,
+F1 0.86 unchanged), strip/ pages saved in parallel at PNG level 1 (a private intermediate; pixels
+identical) so Finish went 14.7 -> 2.7 s. **Shared web screens:** `static_shared/js/screens.js` +
+`css/screens.css` - showLoading (spinner, what, seconds) and showDone (counts, Next, terminal carried
+on, close countdown that then says the tab can be closed: window.close only works on script-opened
+tabs) - used by all four UIs; the Strip Marker loads `/api/layout` first so the strip is laid out
+before detection. **De-duplicated:** `webui/shared_routes.py` (favicon + /shared, was in 4 apps),
+`workflow/cleanup.guard`/`delete_paths` (was 5 copies), `static_shared/css/panel-list.css` (31 rules
+identical in Writer + Reviewer CSS). pylint duplicate-code at 4 lines finds nothing left.
+
 ## The workflow (the whole product)
 
 ```
@@ -235,13 +248,13 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   list differs from audio_timing.json's, and only warns when the voice setting changed.
   **Testing tip:** use `.venv/bin/python`, never `bin/uv run --project <repo>` - that wrote a
   uv.lock and re-synced the repo's .venv (swapped 4 packages).
-- **"It ignores my settings" = a project override (user report, 2026-09-25).** Defaults said one
-  take per panel, the chapter narrated in 1-minute takes: the project's own `project.json`
-  "settings" had `audio.batch_narration: true` (the project Settings screen saves every value that
-  differs from config.json there). Now the Settings screen marks them: in a project `●` = its own
-  value + a "Use the defaults" row that clears them; on the defaults screen `◆` = some project
-  overrides it (a change there won't reach that project). The batch override was removed from the
-  user's project on request; its music values were left as the user's choice.
+- **Settings are global - no per-project overrides (user request, 2026-10-01: "avoid confusing
+  users").** History: on 2026-09-25 a project's own `project.json` "settings" made a chapter narrate
+  in 1-minute takes while Settings showed one take per panel; markers (●/◆, "Use the defaults") were
+  added then. Now the whole mechanism is gone: `RemangaConfig.for_project`, scoped `save`, the
+  markers and the row. Every screen edits config.json. Old project.json "settings" blocks are left in
+  the user's files (never modify projects/) and are simply not read. Verified in Pilot: a stale
+  override is ignored, the top bar says "applies to every project", a change writes config.json.
 - **Remake from source** (menu, CLI `video --from-source`): `workflow.drop_derived` deletes the cut
   panels + pdf/audio/audio_modified/subtitles/video for the chapter, keeping pages, crops.json and
   narration.json; then panels are re-cut and the normal video run follows (intro included).
@@ -389,8 +402,9 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   quality warning - see the same number.
 - **Panels bigger than the video are warned about** (user request: don't lose quality silently).
   `video/compose.py:quality_warning` uses the compositor's own `scale_for`, so the number is the real
-  fit scale, and suggests the smallest offered size that fits. It fires twice on purpose: in the
-  pre-check (the result screen / CLI, counting only NARRATED panels) and while compositing. Measured
+  fit scale, and suggests the smallest offered size that fits. Said ONCE (user: "remove duplicates from
+  the terminal", 2026-10-01): in the pre-check (result screen / CLI, NARRATED panels only); the
+  compositing step no longer repeats it. Measured
   on a real chapter: 8 of 60 panels shrink at 1080p, 2 at 1440p, none at 4K.
 - **Video is 4K (3840x2160) since 2026-09-18 - the user asked for best quality** after the panel
   warning showed 8 of 59 panels shrinking at 1080p. Measured on a real 4m23s chapter: frames
@@ -446,8 +460,12 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   looped bed the mix plays (whole-file measurement was ~1 LU off - songs' openings are quieter);
   verified 14.0 LU on all three global/bgm tracks. The tracks are mastered -9.9 to -12.7 LUFS, which
   is why the old fixed `bgm_volume_db` (removed) put them 18-20 LU under = barely audible.
-- Loudnorm is two-pass linear (first pass `print_format=json`, JSON is the last {...} on stderr with
-  ffmpeg summary lines AFTER it - parse to the last `}`). Single-pass dynamic loudnorm pumps music.
+- **Normalizing is measure + one gain, NOT loudnorm (2026-10-01).** Two loudnorm passes took 22 of a
+  7.4-min chapter's 24 s of mixing (loudnorm upsamples to 192 kHz). `audio/master.py:measure_loudness`
+  reads I and true peak with `ebur128=peak=true` (~1 s), then `volume=<target-I>dB`, plus
+  `alimiter` (sample peaks, 0.5 dB under the -1 dBTP ceiling) only when the gain would push peaks
+  over. Measured vs the old master: -14.1 vs -14.0 LUFS, LRA 1.3 both, TP -1.4 vs -1.0, same length;
+  mix 24.4 -> 5.4 s. Never single-pass dynamic loudnorm - it pumps music between sentences.
 - The voice identity in audio_timing.json includes SPEED; before, a speed change silently reused
   clips at the old speed.
 - **Projects are created from a MangaDex URL/ID/title** (`workflow.create_project`): named from the

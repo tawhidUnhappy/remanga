@@ -13,9 +13,7 @@ from textual.screen import Screen
 from textual.widgets import DataTable, Footer
 
 from remanga.config import RemangaConfig
-from remanga.config.root import PROJECT_SETTINGS_KEY
 from remanga.paths import GLOBAL_DIR
-from remanga.paths.metadata import list_projects, load_project_metadata
 from remanga.ui import voice_settings
 from remanga.ui.dialogs import Result
 from remanga.ui.screens.common import _global_log
@@ -31,7 +29,6 @@ from remanga.ui.screens.settings_video import (
     change_max_upscale,
     change_pdf_cap,
     change_video_size,
-    use_defaults,
 )
 from remanga.ui.tasks import Step, TaskScreen
 from remanga.ui.widgets import SafeTable, TopBar
@@ -49,12 +46,7 @@ class SettingsScreen(Screen):
         self.rows: list[voice_settings.Row] = []
 
     def compose(self) -> ComposeResult:
-        if self.config.project:
-            scope = "this project only   ● = its own value, the rest follow the defaults"
-        else:
-            scope = "defaults for every project" + ("   ◆ = some projects set their own"
-                                                    if self._overridden_elsewhere() else "")
-        yield TopBar(self.path, scope)
+        yield TopBar(self.path, "applies to every project")
         yield SafeTable(id="settings")
         yield Footer()
 
@@ -104,45 +96,19 @@ class SettingsScreen(Screen):
             Row("PDF file size limit", f"{config.pdf.max_mb:g} MB per file", change_pdf_cap,
                 "largest PDF part given to the LLM", "PDF", ("pdf.max_mb",)),
         ]
-        own = self._own_values()
-        if config.project and own:
-            rows.append(Row("Use the defaults", f"{len(own)} own value{'s' if len(own) != 1 else ''} here",
-                            use_defaults, "drop this project's own values", "Project"))
         return rows
-
-    def _own_values(self) -> dict:
-        """This project's own values (project.json "settings"), when scoped to one."""
-        if not self.config.project:
-            return {}
-        own = load_project_metadata(self.config.project).get(PROJECT_SETTINGS_KEY)
-        return own if isinstance(own, dict) else {}
-
-    def _overridden_elsewhere(self) -> dict[str, int]:
-        """On the defaults screen: for each setting, how many projects set their own."""
-        counts: dict[str, int] = {}
-        for project in list_projects():
-            own = load_project_metadata(project["name"]).get(PROJECT_SETTINGS_KEY)
-            for key in own if isinstance(own, dict) else {}:
-                counts[key] = counts.get(key, 0) + 1
-        return counts
 
     def load(self) -> None:
         table = self.query_one(SafeTable)
         at = table.picked_row
         table.clear()
         self.rows = self._rows()
-        # Which rows are not simply the defaults: in a project, the ones it has
-        # its own value for (●); on the defaults screen, the ones some project
-        # overrides (◆) - a change there does not reach that project.
-        marked = set(self._own_values()) if self.config.project else set(self._overridden_elsewhere())
-        mark = "● " if self.config.project else "◆ "
         shown = None
         for row in self.rows:
             # The group name once, on its first row - the list stays one flat list.
             group = row.group if row.group != shown else ""
             shown = row.group
-            own = any(key == k or key.startswith(k + ".") for key in marked for k in row.keys)
-            table.add_row(group, (mark if own else "  ") + row.label, row.value, row.help)
+            table.add_row(group, row.label, row.value, row.help)
         if at is not None and self.rows:
             table.move_cursor(row=min(at, len(self.rows) - 1))
 

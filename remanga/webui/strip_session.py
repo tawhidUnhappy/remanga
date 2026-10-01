@@ -59,6 +59,17 @@ class StripSession:
     def save(self, raw) -> list[Mark]:
         return write_marks(self.project, self.chapter, self.sources, raw, self.total_height)
 
+    def layout(self) -> dict:
+        """What the tab needs to put the strip on screen at once - image
+        headers only, no detection (that is payload, a few seconds later)."""
+        return {
+            "project": self.project,
+            "title": load_project_metadata(self.project).get("manga_title", self.project),
+            "chapter": self.chapter,
+            "runs": self.view.layout(),
+            "total_height": self.total_height,
+        }
+
     def payload(self) -> dict:
         marks, proposed = self.marks()
         self._detect()

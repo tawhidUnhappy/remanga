@@ -108,7 +108,7 @@ def make_video(project: str, chapter: str, config: RemangaConfig, force: bool = 
 
     panels, warnings = check_narration(project, chapter)
     drop_audio_and_video(project, chapter)
-    console.print(f"[bold]Chapter {chapter}:[/] narration checked - {len(panels)} panel(s) to narrate")
+    console.print(f"Narration checked - {len(panels)} panel(s) to narrate")
     for warning in warnings + quality_warnings(project, chapter, config, panels):
         console.print(f"  [yellow]- {_esc(warning)}[/]")
     narrate(project, chapter, panels, config, force)

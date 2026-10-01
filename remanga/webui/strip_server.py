@@ -15,9 +15,10 @@ from flask import Flask, Response, abort, jsonify, request, send_from_directory
 
 from remanga.config import MarkerConfig
 from remanga.console import console, escape as _esc
-from remanga.longstrip import ensure_strip
-from remanga.paths import SHARED_STATIC_DIR, STRIP_STATIC_DIR
+from remanga.longstrip import ensure_strip, strip_panels
+from remanga.paths import STRIP_STATIC_DIR
 from remanga.webui.launch import start_ui
+from remanga.webui.shared_routes import add_shared_routes
 from remanga.webui.strip_session import StripSession
 
 
@@ -28,13 +29,12 @@ def create_strip_app(session: StripSession) -> Flask:
     def index():
         return send_from_directory(STRIP_STATIC_DIR, "index.html")
 
-    @app.get("/favicon.ico")
-    def favicon():
-        return send_from_directory(SHARED_STATIC_DIR / "img", "favicon.ico")
+    add_shared_routes(app)
 
-    @app.get("/shared/<path:filename>")
-    def shared_asset(filename: str):
-        return send_from_directory(SHARED_STATIC_DIR, filename)
+
+    @app.get("/api/layout")
+    def layout():
+        return jsonify(session.layout())
 
     @app.get("/api/strip")
     def strip():
@@ -62,10 +62,10 @@ def create_strip_app(session: StripSession) -> Flask:
     @app.post("/api/finish")
     def finish():
         marks = session.save((request.get_json(force=True) or {}).get("panels"))
-        ensure_strip(session.project, session.chapter)
+        pages = len(strip_panels(ensure_strip(session.project, session.chapter)))
         console.print(f"[bold green]✓ Chapter {_esc(session.chapter)}: {len(marks)} panel(s) marked on the strip[/]")
         session.finished.set()
-        return jsonify({"ok": True, "panels": len(marks)})
+        return jsonify({"ok": True, "panels": len(marks), "pages": pages, "chapter": session.chapter})
 
     return app
 

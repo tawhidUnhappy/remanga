@@ -17,7 +17,7 @@ from remanga.paths import (
     get_project_dir,
 )
 from remanga.paths.review import get_narration_review_path
-from remanga.workflow.cleanup import inside, prune_empty_dirs
+from remanga.workflow.cleanup import delete_paths, inside
 
 
 @dataclass(frozen=True)
@@ -97,13 +97,5 @@ def deletable_items(project: str, chapters: list[str]) -> list[tuple[Deletable, 
 def delete_items(project: str, chapter: str, keys: list[str]) -> list[Path]:
     """Deletes the chosen Deletables of one chapter; returns what was removed,
     the folders that left empty included (as reset_chapter does)."""
-    import shutil
-
     targets = [path for key in keys for path in _deletable_paths(project, chapter, key)]
-    removed = [path for path in targets if path.exists()]
-    for path in removed:
-        if path.is_dir():
-            shutil.rmtree(path)
-        else:
-            path.unlink()
-    return removed + prune_empty_dirs(targets, get_project_dir(project))
+    return delete_paths(targets, project)

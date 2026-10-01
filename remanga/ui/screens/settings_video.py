@@ -1,4 +1,4 @@
-"""The settings screen's Video, PDF and Project rows: what each offers and how
+"""The settings screen's Video and PDF rows: what each offers and how
 it changes the config. The screen itself is settings.py."""
 
 from __future__ import annotations
@@ -6,10 +6,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from remanga.config import RemangaConfig
-from remanga.config.root import PROJECT_SETTINGS_KEY
 from remanga.paths import GLOBAL_DIR
-from remanga.paths.metadata import load_project_metadata, save_project_metadata
-from remanga.ui.dialogs import Ask, Choice, Confirm, number_check
+from remanga.ui.dialogs import Ask, Choice, number_check
 from remanga.video.intro import INTRO_EXTS
 
 if TYPE_CHECKING:
@@ -25,19 +23,6 @@ UPSCALE_CAPS = ((2.0, "sharpest - small panels sit noticeably small"),
 RESOLUTIONS = ((1920, 1080, "1080p widescreen"), (2560, 1440, "1440p - keeps bigger panels sharp"),
                (3840, 2160, "4K - slowest to render"), (1280, 720, "720p widescreen"),
                (1080, 1920, "1080p vertical"), (1440, 2560, "1440p vertical"))
-
-
-async def use_defaults(screen: SettingsScreen, config: RemangaConfig) -> None:
-    project = config.project
-    own = load_project_metadata(project).get(PROJECT_SETTINGS_KEY) or {}
-    names = ", ".join(sorted(own))
-    if await screen.app.push_screen_wait(Confirm(
-            "Use the defaults", f"Drop this project's own values ({names}) so it follows the defaults "
-            f"again? Nothing is re-rendered until you make the video.", yes="Use the defaults")):
-        save_project_metadata(project, {PROJECT_SETTINGS_KEY: {}})
-        # The screen saves its config after this - it must be the defaults now,
-        # or the old values would be written straight back as overrides.
-        screen.config = RemangaConfig.load().for_project(project)
 
 
 async def change_intro(screen: SettingsScreen, config: RemangaConfig) -> None:

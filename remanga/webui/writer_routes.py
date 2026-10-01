@@ -11,7 +11,8 @@ from flask import Flask, jsonify, request, send_from_directory
 from remanga.config import WriterConfig
 from remanga.console import console, escape as _esc
 from remanga.json_io import write_json
-from remanga.paths import SHARED_STATIC_DIR, WRITER_STATIC_DIR
+from remanga.paths import WRITER_STATIC_DIR
+from remanga.webui.shared_routes import add_shared_routes
 from remanga.webui.writer_state import WriterState
 
 
@@ -22,16 +23,8 @@ def create_writer_app(state: WriterState, config: WriterConfig, project_name: st
     def index():
         return send_from_directory(WRITER_STATIC_DIR, "index.html")
 
-    @app.get("/favicon.ico")
-    def favicon():
-        return send_from_directory(SHARED_STATIC_DIR / "img", "favicon.ico")
+    add_shared_routes(app)
 
-    @app.get("/shared/<path:filename>")
-    def shared_asset(filename: str):
-        """The bundle this UI shares with the other panel-list UI (see
-        remanga/webui/static_shared/) - served here rather than copied into
-        both static folders."""
-        return send_from_directory(SHARED_STATIC_DIR, filename)
 
     @app.get("/api/narration")
     def get_narration():

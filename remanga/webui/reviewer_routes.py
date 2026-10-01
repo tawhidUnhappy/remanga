@@ -13,11 +13,11 @@ from remanga.console import console, escape as _esc
 from remanga.json_io import write_json
 from remanga.paths import (
     REVIEWER_STATIC_DIR,
-    SHARED_STATIC_DIR,
     get_narration_review_history_dir,
     get_narration_review_path,
 )
 from remanga.webui.reviewer_state import ReviewerState
+from remanga.webui.shared_routes import add_shared_routes
 
 
 def create_reviewer_app(state: ReviewerState, config: ReviewerConfig, project_name: str) -> Flask:
@@ -27,16 +27,8 @@ def create_reviewer_app(state: ReviewerState, config: ReviewerConfig, project_na
     def index():
         return send_from_directory(REVIEWER_STATIC_DIR, "index.html")
 
-    @app.get("/favicon.ico")
-    def favicon():
-        return send_from_directory(SHARED_STATIC_DIR / "img", "favicon.ico")
+    add_shared_routes(app)
 
-    @app.get("/shared/<path:filename>")
-    def shared_asset(filename: str):
-        """The bundle this UI shares with the other panel-list UI (see
-        remanga/webui/static_shared/) - served here rather than copied into
-        both static folders."""
-        return send_from_directory(SHARED_STATIC_DIR, filename)
 
     @app.get("/api/narration")
     def get_narration():

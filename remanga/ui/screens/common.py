@@ -47,7 +47,7 @@ def _fetch_listing(project: str, machine: RemangaConfig, refresh: bool) -> tuple
     activity.set_reporter(activity.Reporter())  # no progress bar drawn anywhere
     try:
         console.file = get_log_path(project).open("a", encoding="utf-8")
-        return workflow.mangadex_chapters(project, machine.for_project(project), refresh=refresh), False
+        return workflow.mangadex_chapters(project, machine, refresh=refresh), False
     except Exception:
         return [], True
     finally:

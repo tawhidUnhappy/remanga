@@ -97,7 +97,7 @@ def _run(args: argparse.Namespace) -> None:
             show_queue()
         return
 
-    config = RemangaConfig.load().for_project(args.project)
+    config = RemangaConfig.load()
     if args.command == "chapters":
         chapters = workflow.local_chapters(args.project)
         if not chapters:

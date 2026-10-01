@@ -46,7 +46,7 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
 
     @property
     def config(self) -> RemangaConfig:
-        return self.machine.for_project(self.project)
+        return self.machine
 
     def compose(self) -> ComposeResult:
         yield TopBar(self.path, "fetching the chapter list from MangaDex…")
@@ -122,7 +122,7 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
         self.dismiss()
 
     def action_settings(self) -> None:
-        self.app.push_screen(SettingsScreen(self.machine.for_project(self.project), [*self.path, "Settings"]))
+        self.app.push_screen(SettingsScreen(self.machine, [*self.path, "Settings"]))
 
     def action_queue(self) -> None:
         self.app.push_screen(QueueScreen(self.machine, self.path))

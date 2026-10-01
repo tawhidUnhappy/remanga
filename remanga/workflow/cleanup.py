@@ -87,6 +87,29 @@ def prune_empty_dirs(paths: list[Path], project_dir: Path) -> list[Path]:
     return pruned
 
 
+def guard(paths: list[Path], project: str, names: tuple[str, ...] = ("chapter_",)) -> None:
+    """Refuses unless every path is strictly inside the project and named like
+    one chapter's own (`names`) - so a blank or odd name can never widen a delete."""
+    project_dir = get_project_dir(project)
+    for path in paths:
+        if not inside(path, project_dir) or not path.name.startswith(names):
+            raise ValueError(f"Refusing to delete {path} - it isn't one chapter's file inside {project_dir}.")
+
+
+def delete_paths(paths: list[Path], project: str, *, prune: bool = True) -> list[Path]:
+    """Deletes the paths that exist (folders and files alike) and, with
+    `prune`, the folders that leaves empty. Returns what went. Callers guard first."""
+    import shutil
+
+    removed = [path for path in paths if path.exists()]
+    for path in removed:
+        if path.is_dir():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+    return removed + (prune_empty_dirs(paths, get_project_dir(project)) if prune else [])
+
+
 def drop_mix_and_video(project: str, chapter: str) -> list[Path]:
     """Deletes a chapter's mixed master and rendered video, keeping the raw
     synthesized clips (audio/) and audio_timing.json - what Remake audio
@@ -94,16 +117,9 @@ def drop_mix_and_video(project: str, chapter: str) -> list[Path]:
     narration is good, so the mix and the render can be redone later (Make
     video, unforced) from the clips already on disk rather than kept twice
     over."""
-    project_dir = get_project_dir(project)
     paths = [get_generated_dir(project, kind, chapter, create=False) for kind in ("audio_modified", "video")]
-    for path in paths:
-        if not inside(path, project_dir) or not path.name.startswith("chapter_"):
-            raise ValueError(f"Refusing to delete {path} - it isn't one chapter's file inside {project_dir}.")
-    removed = [path for path in paths if path.exists()]
-    import shutil
-    for path in removed:
-        shutil.rmtree(path)
-    return removed
+    guard(paths, project)
+    return delete_paths(paths, project, prune=False)
 
 
 def drop_audio_and_video(project: str, chapter: str) -> list[Path]:
@@ -123,17 +139,9 @@ def drop_audio_and_video(project: str, chapter: str) -> list[Path]:
 
     The PDF is never touched (see REMADE_KINDS), and neither is anything the
     run is made from."""
-    project_dir = get_project_dir(project)
     paths = [get_generated_dir(project, kind, chapter, create=False) for kind in REMADE_KINDS]
-    for path in paths:
-        if not inside(path, project_dir) or not path.name.startswith("chapter_"):
-            raise ValueError(f"Refusing to delete {path} - it isn't one chapter's file inside {project_dir}.")
-    import shutil
-
-    removed = [path for path in paths if path.exists()]
-    for path in removed:
-        shutil.rmtree(path)
-    return removed
+    guard(paths, project)
+    return delete_paths(paths, project, prune=False)
 
 
 def drop_derived(project: str, chapter: str) -> list[Path]:
@@ -141,18 +149,10 @@ def drop_derived(project: str, chapter: str) -> list[Path]:
     PDF, the narration audio, the mix, the subtitles and the video - keeping
     only what nothing can rebuild: the pages, the panel marks (crops.json)
     and the pasted narration.json. The start of Remake from source."""
-    import shutil
-
-    project_dir = get_project_dir(project)
     paths = [get_generated_dir(project, kind, chapter, create=False) for kind in GENERATED_KINDS]
     paths.append(get_panels_dir(project, chapter, create=False))
-    for path in paths:
-        if not inside(path, project_dir) or not path.name.startswith(("chapter_", "panels")):
-            raise ValueError(f"Refusing to delete {path} - it isn't one chapter's file inside {project_dir}.")
-    removed = [path for path in paths if path.exists()]
-    for path in removed:
-        shutil.rmtree(path)
-    return removed + prune_empty_dirs(paths, project_dir)
+    guard(paths, project, ("chapter_", "panels"))
+    return delete_paths(paths, project)
 
 
 def reset_chapter(project: str, chapter: str, *, delete_pages: bool = False) -> list[Path]:
@@ -165,16 +165,4 @@ def reset_chapter(project: str, chapter: str, *, delete_pages: bool = False) -> 
 
     Nothing has to recreate them: every folder here is made on demand the
     next time something is written to it (remanga/paths/projects.py)."""
-    import shutil
-
-    targets = _chapter_paths(project, chapter, with_pages=delete_pages)
-    removed = [path for path in targets if path.exists()]
-    for path in removed:
-        if path.is_dir():
-            shutil.rmtree(path)
-        else:
-            path.unlink()
-    return removed + prune_empty_dirs(targets, get_project_dir(project))
-
-
-
+    return delete_paths(_chapter_paths(project, chapter, with_pages=delete_pages), project)

@@ -3,7 +3,6 @@ the music bed under them, and the loudness pass over the result."""
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 from typing import Any
@@ -20,9 +19,11 @@ from remanga.ffmpeg_io import run_ffmpeg
 BGM_FADE_IN_MS = 1500
 BGM_FADE_OUT_MS = 2000
 
-# Loudness range and true-peak ceiling for the normalized master.
-LOUDNORM_LRA = 11
+# The normalized master's true-peak ceiling, and how far under it the peak
+# limiter holds samples (it limits samples; true peak between them reads a
+# little higher).
 LOUDNORM_TRUE_PEAK = -1.0
+LIMITER_MARGIN_DB = 0.5
 
 
 def panel_segments(audio_dir: Path, panel: dict[str, Any], sample_rate: int,
@@ -72,14 +73,23 @@ def load_bgm(path: str | Path, sample_rate: int) -> AudioSegment:
     return load_audio(Path(path), sample_rate, channels=2)
 
 
+def measure_loudness(path: Path) -> tuple[float | None, float | None]:
+    """A file's integrated loudness in LUFS and true peak in dBTP (EBU R128,
+    ffmpeg's ebur128), each None when it can't be measured (silence, an
+    unreadable file). ~1 s for a 7-minute chapter."""
+    result = run_ffmpeg(["ffmpeg", "-hide_banner", "-nostats", "-i", str(path), "-af", "ebur128=peak=true",
+                         "-f", "null", "-"], capture=True)
+    err = result.stderr or ""
+    found = re.findall(r"I:\s+(-?[\d.]+) LUFS", err)
+    peak = re.findall(r"Peak:\s+(-?[\d.]+|-inf) dBFS", err)
+    loudness = float(found[-1]) if found else None
+    true_peak = float(peak[-1]) if peak and peak[-1] != "-inf" else None
+    return (loudness if loudness is not None and loudness > -70 else None), true_peak
+
+
 def integrated_loudness(path: Path) -> float | None:
-    """A file's integrated loudness in LUFS (EBU R128), or None when it can't
-    be measured (silence, an unreadable file)."""
-    result = run_ffmpeg(["ffmpeg", "-hide_banner", "-nostats", "-i", str(path), "-af", "ebur128", "-f", "null", "-"],
-                        capture=True)
-    found = re.findall(r"I:\s+(-?[\d.]+) LUFS", result.stderr or "")
-    value = float(found[-1]) if found else None
-    return value if value is not None and value > -70 else None
+    """A file's integrated loudness in LUFS, or None (see measure_loudness)."""
+    return measure_loudness(path)[0]
 
 
 def music_bed(narration: AudioSegment, bgm: AudioSegment) -> AudioSegment:
@@ -99,9 +109,13 @@ def write_master(raw_path: Path, final_path: Path, sample_rate: int, *, normaliz
     """Puts the raw master in place as the finished one, normalized to
     `target_lufs` when asked for.
 
-    Two passes: the first measures, the second applies one linear gain from
-    those measurements - single-pass loudnorm rides the gain up and down
-    through the track, which pumps the music between sentences. A failed pass
+    Measure, then one linear gain - never a gain that rides up and down
+    through the track (single-pass loudnorm did, and pumped the music between
+    sentences). Measured with ebur128 and applied with `volume` rather than
+    two loudnorm passes: loudnorm upsamples to 192 kHz to do the same job, and
+    took 22 of a 7-minute chapter's 24 s of mixing; this takes ~2 s. Peaks the
+    gain would push over the ceiling are held by a limiter, not the track
+    turned down. A failed pass
     is a warning: the un-normalized master is used instead, because a recap at
     the wrong loudness beats no recap at all."""
     if not normalize:
@@ -109,19 +123,20 @@ def write_master(raw_path: Path, final_path: Path, sample_rate: int, *, normaliz
         return
 
     console.print(f"[cyan]{announcement}[/]")
-    base = f"loudnorm=I={target_lufs:g}:LRA={LOUDNORM_LRA}:TP={LOUDNORM_TRUE_PEAK:g}"
     try:
-        measured = run_ffmpeg(["ffmpeg", "-hide_banner", "-nostats", "-i", str(raw_path), "-af",
-                               f"{base}:print_format=json", "-f", "null", "-"], check=True, capture=True)
-        # loudnorm prints its measurements as the last {...} block on stderr,
-        # with ffmpeg's own summary lines after it.
-        err = measured.stderr or ""
-        stats = json.loads(err[err.rindex("{"):err.rindex("}") + 1])
-        second = (f"{base}:measured_I={stats['input_i']}:measured_LRA={stats['input_lra']}"
-                  f":measured_TP={stats['input_tp']}:measured_thresh={stats['input_thresh']}"
-                  f":offset={stats['target_offset']}:linear=true")
-        run_ffmpeg(["ffmpeg", "-y", "-i", str(raw_path), "-af", second, "-ar", str(sample_rate), str(final_path)],
-                   check=True, capture=True)
+        loudness, peak = measure_loudness(raw_path)
+        if loudness is None:
+            raise ValueError("the track is silent or unreadable")
+        gain = target_lufs - loudness
+        chain = [f"volume={gain:.2f}dB"]
+        if peak is not None and peak + gain > LOUDNORM_TRUE_PEAK:
+            # The gain would push a few peaks over the ceiling: hold just those
+            # (a peak limiter a little under it, since it limits samples and
+            # the ceiling is in true peak) rather than lowering the whole track.
+            ceiling = 10 ** ((LOUDNORM_TRUE_PEAK - LIMITER_MARGIN_DB) / 20)
+            chain.append(f"alimiter=limit={ceiling:.4f}:level=disabled:attack=5:release=50")
+        run_ffmpeg(["ffmpeg", "-y", "-i", str(raw_path), "-af", ",".join(chain), "-ar", str(sample_rate),
+                    str(final_path)], check=True, capture=True)
         raw_path.unlink(missing_ok=True)
     except Exception as e:
         console.print(f"[yellow]Loudness normalization failed ({_esc(str(e))}) - using {on_failure}.[/]")
