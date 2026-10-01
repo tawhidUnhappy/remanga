@@ -9,7 +9,7 @@ from rich.table import Table
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical
+from textual.containers import Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Footer, Label, Static
 from textual.widgets.option_list import Option
@@ -18,10 +18,27 @@ from remanga.ui.dialogs.fit import fit_to_window
 from remanga.ui.widgets import SafeOptionList
 
 
-class Choice(ModalScreen[Any]):
+def note_scroller(note: str) -> VerticalScroll:
+    """The explanation above a list, in a scroller of its own - fit_to_window
+    gives the list its rows first and this the rest."""
+    return VerticalScroll(Static(note), classes="note-scroll", can_focus=False)
+
+
+class NoteScrolling:
+    """Shift+Up/Down (or the mouse wheel) scroll the note while the arrows
+    stay on the list. Mixed into a dialog screen that has a .note-scroll."""
+
+    def action_note(self, rows: int) -> None:
+        for note in self.query(".note-scroll"):
+            note.scroll_relative(y=rows, animate=False)
+
+
+class Choice(NoteScrolling, ModalScreen[Any]):
     """A list of (label, hint, value). Dismissed with the value, or None on Esc."""
 
-    BINDINGS = [Binding("escape", "cancel", "Cancel")]
+    BINDINGS = [Binding("escape", "cancel", "Cancel"),
+                Binding("shift+up", "note(-3)", "Scroll text", key_display="⇧↑↓"),
+                Binding("shift+down", "note(3)", "Scroll text", show=False)]
 
     def __init__(self, title: str, options: Sequence[tuple[str, str, Any]], *, note: str = "",
                  current: Any = None, danger: Sequence[Any] = ()) -> None:
@@ -44,7 +61,7 @@ class Choice(ModalScreen[Any]):
         with Vertical(classes="dialog"):
             yield Label(self.title_text, classes="dialog-title")
             if self.note:
-                yield Static(self.note, classes="note")
+                yield note_scroller(self.note)
             yield SafeOptionList(*self.options)
         yield Footer()
 
@@ -55,7 +72,8 @@ class Choice(ModalScreen[Any]):
         self.call_after_refresh(self._fit)
 
     def _fit(self, again: bool = True) -> None:
-        fit_to_window(self, self.query_one(SafeOptionList))
+        notes = self.query(".note-scroll")
+        fit_to_window(self, self.query_one(SafeOptionList), notes.first() if notes else None)
         if again:  # the first pass measured a clipped box; settle on the second
             self.call_after_refresh(self._fit, False)
 
@@ -78,7 +96,7 @@ class _TickList(SafeOptionList):
     BINDINGS = [Binding("enter", "select", "Tick", show=False)]
 
 
-class Checklist(ModalScreen[list[Any] | None]):
+class Checklist(NoteScrolling, ModalScreen[list[Any] | None]):
     """A list of (label, detail, hint, value) to tick several of. Dismissed with
     the ticked values, or None on Esc.
 
@@ -93,6 +111,8 @@ class Checklist(ModalScreen[list[Any] | None]):
         Binding("a", "tick_all", "Tick all"),
         Binding("d", "done", "Delete ticked"),
         Binding("escape", "cancel", "Cancel"),
+        Binding("shift+up", "note(-3)", "Scroll text", key_display="⇧↑↓"),
+        Binding("shift+down", "note(3)", "Scroll text", show=False),
     ]
 
     def __init__(self, title: str, rows: Sequence[tuple[str, str, str, Any]], *, note: str = "",
@@ -118,7 +138,7 @@ class Checklist(ModalScreen[list[Any] | None]):
         with Vertical(classes="dialog wide"):
             yield Label(self.title_text, classes="dialog-title")
             if self.note:
-                yield Static(self.note, classes="note")
+                yield note_scroller(self.note)
             yield _TickList(*[Option(self._prompt(i)) for i in range(len(self.rows))])
             yield Static("", classes="note", id="checklist-count")
         yield Footer()
@@ -131,7 +151,8 @@ class Checklist(ModalScreen[list[Any] | None]):
         self.call_after_refresh(self._fit)
 
     def _fit(self, again: bool = True) -> None:
-        fit_to_window(self, self.query_one(SafeOptionList))
+        notes = self.query(".note-scroll")
+        fit_to_window(self, self.query_one(SafeOptionList), notes.first() if notes else None)
         if again:
             self.call_after_refresh(self._fit, False)
 

@@ -33,6 +33,9 @@ CSS = """
 Result, Choice, Ask { align: center middle; }
 .dialog-title { text-style: bold; margin-bottom: 1; }
 .note { color: $text-muted; margin-bottom: 1; }
+/* A list dialog's explanation: scrolls on its own so the list keeps its rows (dialogs/fit.py). */
+.note-scroll { height: auto; color: $text-muted; margin-bottom: 1; background: $surface; scrollbar-size-vertical: 1; }
+.note-scroll Static { color: $text-muted; }
 #message { margin: 1 0 0 0; }
 .dialog SafeOptionList { height: auto; border: none; padding: 0; background: $surface;
                          scrollbar-size-vertical: 1; }
