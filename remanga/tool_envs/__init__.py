@@ -16,6 +16,7 @@ from __future__ import annotations
 from remanga.tool_envs.catalog import tool_names, tool_spec, tools
 from remanga.tool_envs.install import (
     backfill_marker,
+    build_env,
     default_torch_backend,
     ensure_tool,
     install_tool,
@@ -37,6 +38,7 @@ __all__ = [
     "InstallStep",
     "ToolSpec",
     "backfill_marker",
+    "build_env",
     "default_torch_backend",
     "ensure_tool",
     "install_tool",

@@ -267,6 +267,12 @@ particular one:
 Each built-in is one folder holding all of its own code; its `__init__.py` only registers a short
 description that names that code. `./run.sh plugins` lists what is loaded and where from.
 
+**Each tool sets itself up:** every plug-in that runs in its own environment (Kokoro, Qwen3-TTS,
+MAGI, faster-whisper) has a `setup.py` in its folder that builds that environment and fetches its
+weights. remanga runs it the first time the tool is used, from `bootstrap.sh`, or on request:
+`./run.sh setup --tool qwen-tts` (no `--tool`: the chosen narrator and MAGI). Each also runs on its
+own: `.venv/bin/python -m remanga.plugins.kokoro.setup [--force] [--no-weights]`.
+
 **Your own:** drop a `.py` file or a package into the top-level `plugins/` folder (see
 `plugins/README.md` and `plugins/_example_job.py`), or ship a package with a `remanga.plugins` entry
 point. One with the same kind and name as a built-in replaces it; one that fails to load is reported

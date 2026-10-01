@@ -55,7 +55,7 @@ DESIGN_SAMPLE_TEXT = (
 )
 
 
-def _model_manager(config: QwenConfig, variant: str) -> ModelManager:
+def model_manager(config: QwenConfig, variant: str) -> ModelManager:
     repo_id, folder = VARIANTS[variant]
     return ModelManager(
         str(Path(config.model_root) / folder), repo_id,
@@ -86,7 +86,7 @@ class QwenSynthesizer(BaseWorkerSynthesizer):
         self.tts_config = tts_config
         self.engine_config: QwenConfig = tts_config.qwen
         self.mode = "clone" if self.engine_config.designed else "custom"
-        super().__init__(audio_config, _model_manager(self.engine_config, self.mode))
+        super().__init__(audio_config, model_manager(self.engine_config, self.mode))
 
     def _spawn_worker(self, model_dir: Path) -> subprocess.Popen:
         config = self.engine_config
@@ -131,7 +131,7 @@ def design_voice(config: QwenConfig, description: str, out_wav: Path, text: str 
     designing happens once, in the settings screen, and holding a second
     multi-gigabyte model open for the rest of the session to do it would cost
     more than the run itself."""
-    model_dir = _model_manager(config, "design").ensure_model()
+    model_dir = model_manager(config, "design").ensure_model()
     python = ensure_tool(SPEC.tool_name)
     script = SCRIPTS / "qwen_tts_worker.py"
     out_wav.parent.mkdir(parents=True, exist_ok=True)

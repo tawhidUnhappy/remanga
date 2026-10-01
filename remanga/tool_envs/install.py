@@ -1,6 +1,8 @@
-"""Creating, updating and checking the environments catalog.py describes:
-all of them at once for bootstrap.sh and `remanga setup-tools` (provision),
-one on demand the first time a tool is used (ensure_tool)."""
+"""Creating, updating and checking the tool environments. Each tool plug-in
+sets itself up (its setup.py's `install`); this module decides WHEN - all of
+them at once for bootstrap.sh (provision), one on demand the first time a tool
+is used (ensure_tool) - and holds build_env, the uv build a setup.py calls for
+the usual case of "these packages into a fresh venv"."""
 
 from __future__ import annotations
 
@@ -96,7 +98,23 @@ def default_torch_backend() -> str:
 
 
 def install_tool(spec: ToolSpec, torch_backend: str | None = None, *, force: bool = False) -> bool:
-    """Creates (or updates) one tool's environment. Returns whether it worked.
+    """Runs the tool plug-in's own setup (`spec.install`), or the plain uv
+    build for a tool that has none. Returns whether it worked; never raises -
+    a broken setup.py is reported like a failed install."""
+    if not spec.install:
+        return build_env(spec, torch_backend, force=force)
+    from remanga import plugins
+
+    try:
+        return bool(plugins.call(spec.install, torch_backend, force))
+    except Exception as error:
+        warn(f"{spec.display_name}'s setup failed: {type(error).__name__}: {error}")
+        return False
+
+
+def build_env(spec: ToolSpec, torch_backend: str | None = None, *, force: bool = False) -> bool:
+    """Creates (or updates) `.tools/venv-<name>` with `spec.steps`. Returns
+    whether it worked.
 
     Never raises: provisioning is a long sequence of independent steps and a
     caller - bootstrap.sh, `setup-tools`, a first use - always wants the

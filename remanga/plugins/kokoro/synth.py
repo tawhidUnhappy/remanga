@@ -16,6 +16,15 @@ SPEC = get("tts", "kokoro")
 SCRIPTS = Path(__file__).parent / "scripts"
 
 
+def model_manager(config) -> ModelManager:
+    """Kokoro's weights - what the synthesizer loads and setup.py fetches."""
+    return ModelManager(
+        config.model_dir, config.hf_repo_id,
+        tool_name="kokoro", download_script=SCRIPTS / "download_kokoro.py",
+        expected_files=("kokoro-v1_0.pth",), display_name=SPEC.display_name,
+    )
+
+
 class KokoroSynthesizer(BaseWorkerSynthesizer):
     """Kokoro-82M - talks to `.tools/venv-kokoro`/kokoro_worker.py."""
 
@@ -25,11 +34,7 @@ class KokoroSynthesizer(BaseWorkerSynthesizer):
     def __init__(self, tts_config: TTSConfig, audio_config: AudioConfig):
         self.tts_config = tts_config
         self.engine_config = tts_config.kokoro
-        super().__init__(audio_config, ModelManager(
-            self.engine_config.model_dir, self.engine_config.hf_repo_id,
-            tool_name="kokoro", download_script=SCRIPTS / "download_kokoro.py",
-            expected_files=("kokoro-v1_0.pth",), display_name=SPEC.display_name,
-        ))
+        super().__init__(audio_config, model_manager(self.engine_config))
 
     def _spawn_worker(self, model_dir: Path) -> subprocess.Popen:
         # lang_code is derived from the voice rather than configured: Kokoro

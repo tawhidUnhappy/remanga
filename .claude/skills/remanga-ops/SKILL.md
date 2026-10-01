@@ -78,8 +78,16 @@ matches anything); source `mangadex`; job `jobs`. Core asks through `remanga/lay
 Marker; detection = `layout.detect`), `remanga/sources.py` (`source_for`, `project_client`;
 project.json now records `"source"`, a missing one = default), `workflow/queue.jobs()`,
 `tool_envs.catalog.tools()/tool_names()/tool_spec()` (were TOOLS/TOOL_NAMES constants).
+**Tools set themselves up (user request 2026-10-01: "they should include scripts for those to setup
+instead of remanga handling it"):** each tool plug-in has `setup.py` = `TOOL` (ToolSpec with its
+install `steps`, `install="...setup:install"`, `weights="...setup:weights"`), `install(torch_backend,
+force)` (built-ins call `tool_envs.build_env`, the uv helper), `weights(config)`, and a `__main__`
+via `tool_envs.cli.run_setup` (`python -m remanga.plugins.<pkg>.setup [--force] [--no-weights]`).
+`__init__` registers `setup.TOOL`. `tool_envs.install_tool` only dispatches to `spec.install`
+(no hook = build_env); ensure_tool/provision decide WHEN. `./run.sh setup [--tool X]` = provision +
+each tool's `weights`. Fingerprint is still the steps, so existing envs stayed "ready".
 **The one rule:** a plug-in's `__init__.py` imports only `remanga.plugins` and
-`remanga.tool_envs.spec`, naming its code as `"module:attr"` strings - config/tts.py loads the
+`remanga.tool_envs.spec` (or its own stdlib-only setup.py), naming its code as `"module:attr"` strings - config/tts.py loads the
 registry while `remanga.config` is still importing, and tool_envs must stay stdlib-only for
 bootstrap. `./run.sh plugins` lists all. Verified: config.json round-trips identically; both
 layouts cut byte-identical panels; MAGI and strip detection through the hook; Strip Marker routes;

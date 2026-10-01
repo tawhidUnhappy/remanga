@@ -29,7 +29,16 @@ the `remanga.plugins` group instead of living here.
 
 `_example_job.py` is a complete example - rename it without the `_` to try it.
 
+**A tool sets itself up.** A `tool` plug-in (anything that runs in its own
+`.tools/venv-<name>`) brings a `setup.py` with `install(torch_backend, force)`
+- build the environment, however it needs to - and `weights(config)` - fetch
+what it runs on. remanga only decides when: on first use, from bootstrap.sh,
+or `./run.sh setup --tool <name>`. `remanga/plugins/kokoro/setup.py` is the
+pattern; `build_env` from `remanga.tool_envs` does the usual "these packages
+into a fresh venv with uv" if that is all a tool needs. Each built-in one
+also runs on its own: `.venv/bin/python -m remanga.plugins.kokoro.setup`.
+
 A new narrator engine is the biggest one: copy `remanga/plugins/kokoro/` and
-change its config block, synthesizer, worker script and settings rows. Its
+change its config block, synthesizer, worker script, settings rows and setup.py. Its
 settings appear in config.json as `tts.<name>` and on the Settings screen by
 themselves.

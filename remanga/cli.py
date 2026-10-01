@@ -11,7 +11,7 @@
     remanga queue    [--run]                    (the job queue the menus fill; --run runs it)
     remanga voices                              (one line in every voice, to listen to)
     remanga plugins                             (what is installed: engines, layouts, sources, ...)
-    remanga setup
+    remanga setup    [--tool kokoro]            (a tool plug-in's own setup: environment + weights)
 
 Exit status: 0 done, 1 failed, 130 stopped with Ctrl+C."""
 
@@ -68,7 +68,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("voices", help="Read one line in each of the narrator engine's voices, into "
                                   "global/voice/samples/")
     sub.add_parser("plugins", help="List the plug-ins: narrator engines, tools, layouts, sources and jobs")
-    sub.add_parser("setup", help="install MAGI v3 and the chosen narrator (their environments and weights)")
+    su = sub.add_parser("setup", help="run tool plug-ins' setup (environment + weights); default: the chosen "
+                                      "narrator and MAGI v3")
+    su.add_argument("--tool", action="append", default=[], help="only this tool (repeatable): see `plugins`")
     return parser
 
 
@@ -82,7 +84,7 @@ def _run(args: argparse.Namespace) -> None:
         run()
         return
     if args.command == "setup":
-        setup()
+        setup(args.tool or None)
         return
     if args.command == "plugins":
         show_plugins()

@@ -42,28 +42,33 @@ def run_queue(machine) -> None:
     console.print(f"[bold green]✓ All {len(jobs)} job(s) done.[/]")
 
 
-def setup() -> None:
-    """What the first video needs: MAGI v3 for finding panels, and the
-    configured narrator's own environment and weights. The other engines are
-    installed when they are first chosen, not here - an engine nobody uses
-    should not cost a download."""
-    from remanga.audio.synth import create_synthesizer
+def setup(names: list[str] | None = None) -> None:
+    """Each tool plug-in sets itself up (its setup.py): the environment, then
+    the weights. Without names, what the first video needs - the configured
+    narrator and MAGI v3; the other tools set themselves up when first used,
+    so a tool nobody uses never costs a download."""
+    from remanga import plugins
     from remanga.config import RemangaConfig
-    from remanga.plugins.magi.assist import ensure_weights_downloaded
-    from remanga.tool_envs import provision
+    from remanga.tool_envs import provision, tool_spec
 
     config = RemangaConfig.load()
-    engine = config.tts.spec
-    failed = provision([engine.tool_name, "magi"], None)
-    if engine.tool_name in failed:
-        raise RuntimeError(f"Installing {engine.display_name}'s environment failed - see the messages above.")
-    create_synthesizer(config.tts, config.audio).model_manager.ensure_model()
-    console.print(f"[bold green]✓ {engine.display_name} is installed and ready.[/]")
+    engine_tool = config.tts.spec.tool_name
+    wanted = names or [engine_tool, "magi"]
+    failed = set(provision(wanted, None))
+    for name in wanted:
+        spec = tool_spec(name)
+        if spec is None or name in failed:
+            continue
+        if spec.weights:
+            plugins.call(spec.weights, config)
+        console.print(f"[bold green]✓ {spec.display_name} is set up.[/]")
+    if engine_tool in failed:
+        raise RuntimeError(f"Setting up {config.tts.spec.display_name} failed - see the messages above.")
     if "magi" in failed:
-        console.print("[yellow]MAGI v3's environment failed to install - the Panel Marker still works, with the "
-                      "panels marked by hand.[/]")
-        return
-    ensure_weights_downloaded(config.marker)
+        console.print("[yellow]MAGI v3 did not set up - the Panel Marker still works, with the panels marked "
+                      "by hand.[/]")
+    if failed - {"magi"}:
+        raise RuntimeError(f"Setup failed for: {', '.join(sorted(failed))} - see the messages above.")
 
 
 def show_plugins() -> None:

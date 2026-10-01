@@ -38,12 +38,20 @@ class InstallStep:
 
 @dataclass(frozen=True)
 class ToolSpec:
-    """One isolated environment: what it is called, and what goes in it."""
+    """One isolated environment: what it is called, what goes in it, and the
+    plug-in's own setup (its setup.py - see plugins/kokoro/setup.py).
+
+    `install` is (torch_backend, force) -> bool, building the environment;
+    `weights` is (RemangaConfig) -> None, fetching what the tool needs to run.
+    Both are references ("module:attr"). A tool without `install` gets the
+    plain build: `steps` installed with uv (install.build_env)."""
 
     name: str
     display_name: str
     summary: str
-    steps: tuple[InstallStep, ...]
+    steps: tuple[InstallStep, ...] = ()
+    install: str | None = None
+    weights: str | None = None
 
     @property
     def venv_dir(self) -> Path:

@@ -6,22 +6,13 @@ a description - slower, much more expressive.
     reference.py       the clip a cloned voice is built from
     reference_text.py  what that clip says, read once with faster-whisper
     rows.py            its rows on the Settings screen
-    scripts/           the worker and the weight download, run in .tools/venv-qwen-tts"""
+    scripts/           the worker and the weight download, run in .tools/venv-qwen-tts
+    setup.py           its environment and weights - runs on its own too"""
 
 from remanga.plugins import TTSEngine, register
-from remanga.tool_envs.spec import InstallStep, ToolSpec
+from remanga.plugins.qwen_tts.setup import TOOL
 
-register("tool", ToolSpec(
-    "qwen-tts", "Qwen3-TTS", "TTS engine - voices designed from a description, and preset narrators",
-    steps=(
-        # qwen-tts pulls transformers and its own tokenizer stack; torch
-        # comes from this machine's wheel index (see hardware.py), which
-        # is why it is named first rather than left to the dependency
-        # resolver. flash-attn is deliberately left out: it builds from
-        # source for many minutes and only saves some VRAM.
-        InstallStep(("torch", "torchaudio", "qwen-tts", "soundfile", "huggingface-hub")),
-    ),
-))
+register("tool", TOOL)   # setup.py: its environment and weights
 
 # config.json has always called this engine "qwen", so that stays its name.
 register("tts", TTSEngine(
