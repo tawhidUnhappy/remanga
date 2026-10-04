@@ -21,7 +21,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from remanga.audio.batching import CLONE_MAX_TAKE_SECONDS
+from remanga.audio.batching import CLONE_MAX_TAKE_SECONDS, TOKEN_CEILING_SECONDS
 from remanga.audio.synth.base import BaseWorkerSynthesizer
 from remanga.config import AudioConfig, TTSConfig
 from remanga.console import console, escape as _esc
@@ -82,6 +82,9 @@ class QwenSynthesizer(BaseWorkerSynthesizer):
     # comes back with a hum in it. Kokoro is deterministic and has no use
     # for one.
     seed = 0
+
+    # max_new_tokens 8192 at 12.5 frames/s - see audio/batching.py.
+    ceiling_seconds = TOKEN_CEILING_SECONDS
 
     def __init__(self, tts_config: TTSConfig, audio_config: AudioConfig):
         self.tts_config = tts_config

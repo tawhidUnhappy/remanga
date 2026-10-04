@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from remanga import activity
-from remanga.audio.batching import TOKEN_CEILING_SECONDS, Batch
+from remanga.audio.batching import Batch
 from remanga.audio.clips import atomic_export
 from remanga.audio.resample import load_audio
 from remanga.config import AudioConfig
@@ -30,7 +30,7 @@ RUNAWAY_FACTOR = 1.4
 MAX_SPLIT_DEPTH = 3
 
 
-def collapsed(clip: Path, batch: Batch) -> str | None:
+def collapsed(clip: Path, batch: Batch, ceiling_seconds: float | None) -> str | None:
     """Why this take is not a reading of its script, or None if it looks
     like one.
 
@@ -38,10 +38,15 @@ def collapsed(clip: Path, batch: Batch) -> str | None:
     nothing but silence, until its token budget runs out. Measured on a real
     chapter: 11,673 characters came back as 655.28s, the budget exactly, with
     three panels read and 2% of the script findable in it. Both symptoms are
-    visible here, before a word of it is transcribed."""
+    visible here, before a word of it is transcribed.
+
+    `ceiling_seconds` is the engine's generation budget (its synthesizer's
+    `ceiling_seconds`), or None for an engine without one - Kokoro reads a
+    whole chapter in one take, far past Qwen's budget, and that is not a
+    collapse."""
     seconds = audio_seconds(clip)
-    if seconds >= TOKEN_CEILING_SECONDS - 5:
-        return (f"it ran to the model's {TOKEN_CEILING_SECONDS:.0f}s generation budget, which means "
+    if ceiling_seconds is not None and seconds >= ceiling_seconds - 5:
+        return (f"it ran to the model's {ceiling_seconds:.0f}s generation budget, which means "
                 f"it stopped when it ran out rather than when it finished")
     if seconds > batch.estimated_seconds * RUNAWAY_FACTOR:
         return (f"it came back {seconds:.0f}s long where about {batch.estimated_seconds:.0f}s of "
@@ -86,7 +91,7 @@ def _make_take(synth, batch: Batch, audio_dir: Path, audio_config: AudioConfig,
     atomic_export(load_audio(raw, audio_config.sample_rate, channels=1), clip)
     raw.unlink(missing_ok=True)
 
-    problem = collapsed(clip, batch)
+    problem = collapsed(clip, batch, synth.ceiling_seconds)
     if problem is None:
         return [batch]
 

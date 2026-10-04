@@ -93,6 +93,11 @@ class BaseWorkerSynthesizer(ToolWorker):
     # cloning engine lowers this to CLONE_MAX_TAKE_SECONDS (audio/batching.py).
     max_take_seconds: float = MAX_TAKE_SECONDS
 
+    # Where the engine's own generation budget runs out, if it has one: a take
+    # that comes back this long stopped rather than finished (audio/takes.py).
+    # None for an engine that reads whatever it is given.
+    ceiling_seconds: float | None = None
+
     def __init__(self, audio_config: AudioConfig, model_manager: ModelManager):
         self.audio_config = audio_config
         self.model_manager = model_manager

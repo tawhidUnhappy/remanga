@@ -18,9 +18,9 @@ class AudioConfig(ConfigModel):
     # Narrate several panels in one generation instead of one each. A panel
     # synthesized alone is a take of its own - Qwen reads it with no idea what
     # came before, so the tone resets every panel, which is audible in a way
-    # no amount of trimming the joins can fix. Off by default while it proves
-    # itself; the per-panel path is unchanged underneath it.
-    batch_narration: bool = False
+    # no amount of trimming the joins can fix. On by default since it proved
+    # itself (2026-10-04); the per-panel path is unchanged underneath it.
+    batch_narration: bool = True
     # About how long one of those generations should be, capped by the
     # synthesizer's max_take_seconds - five minutes, or for a cloned voice
     # audio/batching.py:CLONE_MAX_TAKE_SECONDS, which is why the default is a
@@ -29,7 +29,11 @@ class AudioConfig(ConfigModel):
     # it still measures as the reference. Longer means fewer seams to hear,
     # a voice less like the one asked for, and more audio to make again when
     # one line changes.
-    batch_target_minutes: float = 1.0
+    # The default is the whole chapter (999 = ui/screens/settings_sound.py:
+    # WHOLE_CHAPTER): Kokoro, the default engine, reads it as ONE take with no
+    # joins between takes at all, and every other engine is held to its own
+    # max_take_seconds anyway.
+    batch_target_minutes: float = 999.0
     # Background music: off until a file is chosen.
     bgm_enabled: bool = False
     bgm_path: str = ""

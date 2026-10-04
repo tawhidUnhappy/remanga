@@ -102,7 +102,7 @@ def retake_hums(synth, batches: list[Batch], timings: dict[str, dict[str, Any]],
                     atomic_export(load_audio(raw, audio_config.sample_rate, channels=1), clip)
                     raw.unlink(missing_ok=True)
                     tried[name] = attempt
-                    if collapsed(clip, batch):
+                    if collapsed(clip, batch, synth.ceiling_seconds):
                         clip.unlink(missing_ok=True)
                     else:
                         retakes[name] = clip

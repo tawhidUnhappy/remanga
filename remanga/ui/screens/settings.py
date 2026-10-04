@@ -23,6 +23,7 @@ from remanga.ui.screens.settings_sound import (
     change_music_level,
     change_narration_takes,
     change_panel_gap,
+    take_length_label,
 )
 from remanga.ui.screens.settings_video import (
     change_intro,
@@ -66,7 +67,7 @@ class SettingsScreen(Screen):
         rows = [
             *voice_settings.narrator_rows(config),
             Row("Narration take length",
-                f"about {audio.batch_target_minutes:g} min each" if audio.batch_narration else "one per panel",
+                take_length_label(audio.batch_target_minutes if audio.batch_narration else 0.0),
                 change_narration_takes, "how much is read in one go",
                 "Narration", ("audio.batch_narration", "audio.batch_target_minutes")),
             Row("Pause between panels",

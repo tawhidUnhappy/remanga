@@ -52,6 +52,15 @@ class KokoroSynthesizer(BaseWorkerSynthesizer):
         self.engine_config = tts_config.kokoro
         super().__init__(audio_config, model_manager(self.engine_config))
 
+    # No take limit: Kokoro has no generation budget to run out of and no
+    # reference to drift from - it splits whatever it is given into ~510-
+    # phoneme pieces itself and reads each with the same fixed voice, leaving
+    # a natural ~0.85s pause between them (measured: 0.33s lead + ~0.5s tail).
+    # So a whole chapter can be ONE take, and there is no join between takes
+    # anywhere in it - the joins were what made a line start straight after
+    # the last with no breath (user report, 2026-10-04).
+    max_take_seconds = float("inf")
+
     @property
     def chars_per_second(self) -> float:
         """Kokoro reads slower than Qwen. Measured at speed 1.0 on af_heart as

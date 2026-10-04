@@ -370,7 +370,19 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     0/0.5/1/2/3/5 min. Verified: Golem Master ch1's longest 5-min batch in Qwen preset Ryan
     (37 panels, 3,814 chars) -> 284s vs 283s estimated, not collapsed, longest gap 1.1s, whisper
     matched 99.8%, 37/37 panels anchored, 0 hums; generated in 424s (1.5x real time). Timbre
-    drift over a long preset take is NOT measured - rebuild voiceprint.py if it ever sounds off. **A longer reference is not the lever**: 30s instead of 15 blew the 670s timeout on
+    drift over a long preset take is NOT measured - rebuild voiceprint.py if it ever sounds off.
+  - **Kokoro reads the WHOLE CHAPTER as one take (2026-10-04, user: lines "immediately start"
+    when takes are fitted together).** Cause: `pause_between_panels_ms` was 0, and a take join
+    trims both takes to the word, so the next take began the instant the last word ended - with
+    1-min takes, ~25 times a chapter. Kokoro has no budget and no reference: it splits text into
+    ~510-phoneme pieces itself (each with ~0.33s lead + ~0.5s tail, so ~0.85s at its own joins).
+    So `KokoroSynthesizer.max_take_seconds = inf`, take-length menu has "the whole chapter"
+    (999 = WHOLE_CHAPTER, now the config default), and the 655s budget check in
+    `takes.collapsed` is per engine (`synth.ceiling_seconds`: Qwen's, None for Kokoro) - else a
+    16-min Kokoro take reads as a collapse. Verified Golem Master ch1: 141 panels, 16,424 chars ->
+    one 16.4-min take in 20s, whisper 100% matched, pauses median 420ms / max 930ms, none of the
+    zero-gap kind; final mix -14.1 LUFS, -1.2 dBTP, LRA 2.6. User's setup then: af_heart (only
+    grade A), speed 1.0, pause 500ms, music 20 LU under (was a custom 30). **A longer reference is not the lever**: 30s instead of 15 blew the 670s timeout on
   a take the 15s reference finished in 325s. The tooling for this lives in the scratchpad
   (voiceprint.py: MFCC means over voiced frames + median F0, calibrated before use) - rebuild it the
   same way if this comes back, and calibrate before trusting any number.
