@@ -525,7 +525,17 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   methods that `await app.push_screen_wait(Choice|Ask|Confirm|TaskScreen|Result)`. Work runs in
   `TaskScreen`'s thread worker: `console.file` redirected to `projects/P/logs/chapter_N.log` (or
   `project.log`), progress via `remanga.activity` (never create a Rich Progress directly), Ctrl+C =
-  async KeyboardInterrupt into the thread + SIGTERM to child processes (`pgrep -P`).
+  async KeyboardInterrupt into the thread + SIGTERM to child processes (`pgrep -P`), then
+  **SIGKILL after `STOP_GRACE_SECONDS` (3s)** for any still alive (`ui/task_io.py`).
+  - **Why the kill (fixed 2026-10-04, user: "can't stop while make video is running"):** ffmpeg
+    catches SIGTERM to finish its file cleanly, and on the real chapter encode (concat of PNGs ->
+    h264_nvenc + the sound as a 2nd output) it never does - all threads in futex waits, no
+    signal pending, forever. The work thread is blocked in `for line in proc.stdout`
+    (ffmpeg_io), so the async KeyboardInterrupt never lands either: screen stuck on
+    "stopping…", GPU still encoding. A 320x240 libx264 test encode stops fine, which is why
+    this was missed - reproduce stops on the REAL render (Pilot + TaskScreen + workflow.render on
+    a `cp -al` copy of a project, after unlinking the copy's picture/concat/final_intro so
+    writes can't reach the original through the hard links). Now stops in ~3.4s.
 - **Settings stay a flat list of rows, never a wizard** (user request, asked directly whether the
   Qwen rows should fold into a pick-how-you-want-a-voice walkthrough: "better this way as a simple
   settings instead of a walkthrough"). One row per thing, each opening one dialog. A row that does

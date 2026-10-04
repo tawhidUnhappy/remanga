@@ -11,6 +11,7 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 
 from remanga import activity
@@ -69,15 +70,55 @@ class Reporter(activity.Reporter):
             self.bar = None
 
 
-def stop_child_processes() -> None:
-    """Stops the programs the work is waiting on, so the stop takes effect now
-    rather than when they finish."""
-    if sys.platform == "win32":
-        return
+# How long a program asked to stop gets to stop on its own before it is
+# killed outright.
+STOP_GRACE_SECONDS = 3.0
+
+
+def _children() -> list[int]:
     try:
         found = subprocess.run(["pgrep", "-P", str(os.getpid())], capture_output=True, text=True, check=False)
     except OSError:
+        return []
+    return [int(pid) for pid in found.stdout.split() if pid.isdigit()]
+
+
+def _signal(pids: list[int], sig: signal.Signals) -> None:
+    for pid in pids:
+        with contextlib.suppress(OSError):
+            os.kill(pid, sig)
+
+
+def stop_child_processes() -> None:
+    """Stops the programs the work is waiting on, so the stop takes effect now
+    rather than when they finish: asked politely, then killed if they are
+    still there after STOP_GRACE_SECONDS.
+
+    The kill is not optional. ffmpeg catches SIGTERM to finish its file
+    cleanly, and encoding a chapter (concat of PNG frames into h264_nvenc,
+    with the sound as a second output) it never does: every thread waits on
+    another, nothing is written, and it sits there for good. The work thread
+    is blocked reading ffmpeg's progress, so the stop never lands either and
+    the screen stays on "stopping…" with the GPU still busy. Nothing a kill
+    interrupts looks finished afterwards - the encode writes to `.part` files
+    and takes are written atomically - so it costs nothing to be sure.
+
+    Runs the wait on a thread of its own: this is called from the UI."""
+    if sys.platform == "win32":
         return
-    for pid in found.stdout.split():
-        with contextlib.suppress(OSError, ValueError):
-            os.kill(int(pid), signal.SIGTERM)
+    pids = _children()
+    _signal(pids, signal.SIGTERM)
+
+    def kill_survivors() -> None:
+        deadline = time.monotonic() + STOP_GRACE_SECONDS
+        while time.monotonic() < deadline:
+            # Only the ones asked to stop: a child started after the stop
+            # (a cleanup step's) is not this function's to kill.
+            alive = [pid for pid in pids if pid in _children()]
+            if not alive:
+                return
+            time.sleep(0.2)
+        _signal([pid for pid in pids if pid in _children()], signal.SIGKILL)
+
+    if pids:
+        threading.Thread(target=kill_survivors, name="stop-children", daemon=True).start()
