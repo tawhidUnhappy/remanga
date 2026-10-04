@@ -88,6 +88,18 @@ class QwenSynthesizer(BaseWorkerSynthesizer):
         self.mode = "clone" if self.engine_config.designed else "custom"
         super().__init__(audio_config, model_manager(self.engine_config, self.mode))
 
+    @property
+    def chars_per_second(self) -> float:
+        """A preset narrator reads far slower than a clone. Measured on Ryan
+        with the default monotone `instruct`, as joined panels of a real
+        chapter: 928 characters came back 72.0s, 627 43.4s and 185 11.4s -
+        12.9 to 16.2, every pause between sentences real. Held to the clone's
+        22.5, a take ran 1.75x its estimate and every one would have been
+        refused as a collapse. 13.5 sits under the slowest; a real collapse
+        runs to the token ceiling, far past either. A clone or a designed
+        voice keeps the 22.5 measured on the user's own cloned voice."""
+        return 13.5 if self.mode == "custom" else super().chars_per_second
+
     def _spawn_worker(self, model_dir: Path) -> subprocess.Popen:
         config = self.engine_config
         args = ["--model_dir", str(model_dir.resolve()), "--mode", self.mode, "--language", config.language]

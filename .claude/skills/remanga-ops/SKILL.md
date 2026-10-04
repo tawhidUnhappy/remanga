@@ -259,6 +259,11 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
       speed along the measured wpm curve, held flat past 1.36), carried on every `Batch` and used
       by `plan_batches` too - so Kokoro takes are now really ~60s (22 takes for ch1, was 16 at
       ~85s). A new engine must measure its own pace or it inherits this bug.
+    - **Qwen PRESETS are slower still (2026-10-04):** Ryan with the default monotone `instruct`
+      measured 12.9 / 14.5 / 16.2 chars/s (928 / 627 / 185 chars), real speech with sentence
+      pauses - 1.75x the clone's 22.5, so every take would have failed. `QwenSynthesizer.
+      chars_per_second` = 13.5 in `custom` mode, 22.5 for clone/designed. A different preset or
+      a livelier `instruct` may read faster - that only makes the check more lenient.
     - It then **splits at a page boundary and retries**, up to `MAX_SPLIT_DEPTH` (3). A collapse is
       the model losing the thread on a long text, so the answer is a shorter text.
     - **In-context cloning helps a lot and does NOT fix it (tested 2026-09-21).** The clone used to
