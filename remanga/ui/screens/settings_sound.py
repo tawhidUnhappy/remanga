@@ -46,7 +46,10 @@ MUSIC_LADDER = ((8.0, "loud - fights the words, hard to follow"), (12.0, "energe
 # take there is.
 NARRATION_TAKES = ((0.0, "one take per panel - the voice restarts at every panel"),
                    (0.5, "about 30 seconds - closest to a cloned voice, most restarts"),
-                   (1.0, "about a minute - one voice all through, and still the reference's"))
+                   (1.0, "about a minute - the longest a cloned voice still sounds like its recording"),
+                   (2.0, "about 2 minutes - a scene or two per take"),
+                   (3.0, "about 3 minutes - fewer seams; preset and Kokoro voices only"),
+                   (5.0, "about 5 minutes - fewest seams, most to redo if one line changes"))
 
 
 async def change_music(screen: SettingsScreen, config: RemangaConfig) -> None:
@@ -133,10 +136,11 @@ async def change_narration_takes(screen: SettingsScreen, config: RemangaConfig) 
              "is a performance of its own, so the tone resets at every panel - reading straight "
              "through a scene is what keeps one voice across it. Where each panel falls inside a "
              "take is found by listening to it afterwards, so the pictures are still cut to the "
-             "words. Longer is not better past a point: a cloned voice holds its reference for "
-             "about a minute and then drifts off it, measurably, and asked for nine minutes at "
-             "once the narrator lost the thread entirely. A minute is the most that has held "
-             "both the thread and the voice."))
+             "words. A voice cloned from a recording drifts off it after about a minute, so it is "
+             "held to a minute whatever is picked here. A preset voice or Kokoro has nothing to "
+             "drift from and may go up to five minutes; past that a take can lose the thread "
+             "(nine minutes at once once did). A take is the unit that gets made again, so a "
+             "longer one costs more to redo when one panel's line changes."))
     if minutes is not None:
         config.audio.batch_narration = minutes > 0
         if minutes > 0:

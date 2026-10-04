@@ -21,8 +21,9 @@ class AudioConfig(ConfigModel):
     # no amount of trimming the joins can fix. Off by default while it proves
     # itself; the per-panel path is unchanged underneath it.
     batch_narration: bool = False
-    # About how long one of those generations should be, capped by
-    # audio/batching.py:MAX_BATCH_SECONDS - which is also why the default is a
+    # About how long one of those generations should be, capped by the
+    # synthesizer's max_take_seconds - five minutes, or for a cloned voice
+    # audio/batching.py:CLONE_MAX_TAKE_SECONDS, which is why the default is a
     # minute: a cloned voice measurably drifts away from its reference as a
     # take goes on (see that constant for the numbers), and a minute is where
     # it still measures as the reference. Longer means fewer seams to hear,

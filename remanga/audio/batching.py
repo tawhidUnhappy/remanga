@@ -45,7 +45,16 @@ CHARS_PER_SECOND = 22.5
 # is how audio/batched.py recognises a collapse.
 TOKEN_CEILING_SECONDS = 655.36
 
-# The longest take to ask for, whatever the settings say.
+# The longest take to ask for, whatever the settings say, for a voice that
+# has no recording to drift from - a fixed preset or Kokoro (each
+# synthesizer's `max_take_seconds`). Not the token ceiling: the longest Qwen
+# take known to come back whole was 4,611 characters (~205s), and one of
+# 11,673 collapsed. Five minutes of the slowest narrator measured (Qwen's Ryan,
+# 13.5 chars/s) is ~4,050 characters - inside what has held.
+MAX_TAKE_SECONDS = 300.0
+
+# The longest take for a voice CLONED from a recording (or designed into
+# one), whatever the settings say.
 #
 # Not the token ceiling, and no longer "as long as holds together" either: a
 # take that comes back whole can still stop sounding like the voice it was
@@ -68,7 +77,7 @@ TOKEN_CEILING_SECONDS = 655.36
 # anyway, and the 240s take's own start-to-end step is 0.26 - the same size,
 # just spread out, and it ends up somewhere else entirely. Nor does it cost
 # time: 60s takes generated at 1.4x real time, exactly as the 240s one did.
-MAX_BATCH_SECONDS = 60.0
+CLONE_MAX_TAKE_SECONDS = 60.0
 
 # What goes between two panels' narration in one call. A single space, so the
 # model reads them as consecutive sentences of one paragraph, which is what
@@ -143,7 +152,8 @@ def pages(panels: list[StoryPanel]) -> list[list[StoryPanel]]:
 
 
 def plan_batches(panels: list[StoryPanel], target_minutes: float,
-                 chars_per_second: float = CHARS_PER_SECOND) -> list[Batch]:
+                 chars_per_second: float = CHARS_PER_SECOND,
+                 max_seconds: float = CLONE_MAX_TAKE_SECONDS) -> list[Batch]:
     """The panels packed into batches of about `target_minutes`, breaking
     only between pages.
 
@@ -151,7 +161,7 @@ def plan_batches(panels: list[StoryPanel], target_minutes: float,
     than being split: a page is a handful of panels, so this is theory
     rather than practice, but splitting one would put a seam inside a scene
     to save nothing."""
-    target = min(max(target_minutes, 0.0) * 60.0, MAX_BATCH_SECONDS)
+    target = min(max(target_minutes, 0.0) * 60.0, max_seconds)
     batches: list[Batch] = []
     current: list[StoryPanel] = []
     current_seconds = 0.0

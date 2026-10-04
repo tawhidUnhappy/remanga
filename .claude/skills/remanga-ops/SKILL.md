@@ -245,7 +245,7 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     "Thank you. Thank you... Thanks for watching!" - which is what whisper emits for silence. Match
     2.2%, 96 of 99 panels unanchored. In the SAME run a 4,611-character take came back whole and
     matched 97.5%. So the limit is the model's, not the token budget's, and it is somewhere below
-    11,673 characters. `MAX_BATCH_SECONDS` is now **240s** and the settings offer 2 and 4 minutes,
+    11,673 characters. The cap (then `MAX_BATCH_SECONDS`) was then **240s** and the settings offer 2 and 4 minutes,
     not 9.
     - `audio/takes.py:collapsed` catches it **before transcription**, on two signals: a take at
       the token ceiling, or one more than `RUNAWAY_FACTOR` (1.4) longer than its own estimate. The
@@ -362,8 +362,15 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   (their windows 0.09-0.17, a clone 0.20, another narrator 0.7-0.9): one 240s take ran 0.22 -> 0.45
   with F0 down 12 Hz; three 60s takes stayed 0.16-0.24, drifting 0.01-0.03 each. A seam costs
   almost nothing (step across one 0.24 vs 0.17 between adjacent windows inside a take) and no time
-  (both generate at 1.4x real time). So `MAX_BATCH_SECONDS` is 60 and `batch_target_minutes`
-  defaults to 1. **A longer reference is not the lever**: 30s instead of 15 blew the 670s timeout on
+  (both generate at 1.4x real time). So `CLONE_MAX_TAKE_SECONDS` is 60 and `batch_target_minutes`
+  defaults to 1.
+  - **Only clones are capped at 60s (2026-10-04, user asked for longer takes).** The drift is
+    in-context cloning; a preset or Kokoro has no reference to drift from. Each synthesizer has
+    `max_take_seconds`: `MAX_TAKE_SECONDS` 300 by default, Qwen in clone mode 60. Menu offers
+    0/0.5/1/2/3/5 min. Verified: Golem Master ch1's longest 5-min batch in Qwen preset Ryan
+    (37 panels, 3,814 chars) -> 284s vs 283s estimated, not collapsed, longest gap 1.1s, whisper
+    matched 99.8%, 37/37 panels anchored, 0 hums; generated in 424s (1.5x real time). Timbre
+    drift over a long preset take is NOT measured - rebuild voiceprint.py if it ever sounds off. **A longer reference is not the lever**: 30s instead of 15 blew the 670s timeout on
   a take the 15s reference finished in 325s. The tooling for this lives in the scratchpad
   (voiceprint.py: MFCC means over voiced frames + median F0, calibrated before use) - rebuild it the
   same way if this comes back, and calibrate before trusting any number.

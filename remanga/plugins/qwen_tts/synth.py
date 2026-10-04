@@ -21,6 +21,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from remanga.audio.batching import CLONE_MAX_TAKE_SECONDS
 from remanga.audio.synth.base import BaseWorkerSynthesizer
 from remanga.config import AudioConfig, TTSConfig
 from remanga.console import console, escape as _esc
@@ -99,6 +100,12 @@ class QwenSynthesizer(BaseWorkerSynthesizer):
         runs to the token ceiling, far past either. A clone or a designed
         voice keeps the 22.5 measured on the user's own cloned voice."""
         return 13.5 if self.mode == "custom" else super().chars_per_second
+
+    @property
+    def max_take_seconds(self) -> float:
+        """A clone holds its reference for about a minute (audio/batching.py:
+        CLONE_MAX_TAKE_SECONDS); a preset has no reference to drift from."""
+        return CLONE_MAX_TAKE_SECONDS if self.mode == "clone" else super().max_take_seconds
 
     def _spawn_worker(self, model_dir: Path) -> subprocess.Popen:
         config = self.engine_config

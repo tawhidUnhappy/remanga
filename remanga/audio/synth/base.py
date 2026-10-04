@@ -12,7 +12,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from remanga.audio.batching import CHARS_PER_SECOND
+from remanga.audio.batching import CHARS_PER_SECOND, MAX_TAKE_SECONDS
 from remanga.config import AudioConfig
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.models import ModelManager
@@ -87,6 +87,11 @@ class BaseWorkerSynthesizer(ToolWorker):
     # (audio/takes.py), so an engine that reads slower than this must say so
     # or every take it makes sits on the collapse line.
     chars_per_second: float = CHARS_PER_SECOND
+
+    # The longest one take may be, whatever 'Narration take length' says. A
+    # voice cloned from a recording drifts off it as a take goes on, so a
+    # cloning engine lowers this to CLONE_MAX_TAKE_SECONDS (audio/batching.py).
+    max_take_seconds: float = MAX_TAKE_SECONDS
 
     def __init__(self, audio_config: AudioConfig, model_manager: ModelManager):
         self.audio_config = audio_config
