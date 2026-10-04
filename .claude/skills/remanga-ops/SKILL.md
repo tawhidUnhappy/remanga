@@ -371,6 +371,16 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     (37 panels, 3,814 chars) -> 284s vs 283s estimated, not collapsed, longest gap 1.1s, whisper
     matched 99.8%, 37/37 panels anchored, 0 hums; generated in 424s (1.5x real time). Timbre
     drift over a long preset take is NOT measured - rebuild voiceprint.py if it ever sounds off.
+  - **Music loop crossfades (2026-10-04, user asked to check the loop).** `music_bed` used to
+    repeat the song end to end (`bgm * n`): no clicks (sample step ~0), but every track's own
+    fade-out + download padding left a DROPOUT at each seam - 1.5s of digital silence on
+    ThapinByTheSea, up to 10.5s on others - then a cold restart on the intro. Now:
+    `trim_dead_air` (30 dB under the song's median, 50 ms steps) + 4s equal-power crossfade
+    (`BGM_LOOP_CROSSFADE_MS`). Measured on all 10 global/bgm tracks looped to 17 min: no silence
+    at any seam; 8/10 never dip 25 dB under typical near a seam, Thapin/unravel dip -38/-30 dB
+    for 0.7s (their own soft ending into soft opening; a deeper 20 dB trim did not change it).
+    `BED_VERSION` is in mix.py's fingerprint so old mixes re-mix. Side note: the master WAV is
+    -1.1 dBTP but the 192k AAC in the MP4 measured -0.7 dBTP (encoder overshoot) - not clipping.
   - **Kokoro reads the WHOLE CHAPTER as one take (2026-10-04, user: lines "immediately start"
     when takes are fitted together).** Cause: `pause_between_panels_ms` was 0, and a take join
     trims both takes to the word, so the next take began the instant the last word ended - with

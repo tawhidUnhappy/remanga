@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from pydub import AudioSegment
 
 from remanga.audio.clips import apply_edge_fades
@@ -18,6 +19,19 @@ from remanga.ffmpeg_io import run_ffmpeg
 # enough not to swallow the first line of narration.
 BGM_FADE_IN_MS = 1500
 BGM_FADE_OUT_MS = 2000
+
+# Where one pass of a looped song hands over to the next. Not a plain repeat:
+# a song ends on its own fade-out (and downloads add silence on top), so
+# repeated end to end the music dropped out for 1.5-10s every pass and then
+# restarted on its intro - measured on all ten tracks in global/bgm, every
+# three minutes or so of a chapter. The dead air is trimmed off both ends,
+# and each pass's end overlaps the next one's start for this long.
+BGM_LOOP_CROSSFADE_MS = 4000
+# What counts as dead air at a song's ends: this far under its typical level.
+BGM_SILENCE_UNDER_DB = 30.0
+# Bumped whenever music_bed changes what it makes, so a mix built the old way
+# is not mistaken for up to date (audio/mix.py's fingerprint carries it).
+BED_VERSION = 2
 
 # The normalized master's true-peak ceiling, and how far under it the peak
 # limiter holds samples (it limits samples; true peak between them reads a
@@ -92,11 +106,57 @@ def integrated_loudness(path: Path) -> float | None:
     return measure_loudness(path)[0]
 
 
+def _samples(seg: AudioSegment) -> np.ndarray:
+    """A segment as float frames, shape (frames, channels)."""
+    full = 1 << (8 * seg.sample_width - 1)
+    return np.array(seg.get_array_of_samples(), dtype=np.float64).reshape(-1, seg.channels) / full
+
+
+def _segment(frames: np.ndarray, like: AudioSegment) -> AudioSegment:
+    full = 1 << (8 * like.sample_width - 1)
+    ints = np.clip(np.round(frames * full), -full, full - 1).astype({2: np.int16, 4: np.int32}[like.sample_width])
+    return like._spawn(ints.reshape(-1).tobytes())
+
+
+def trim_dead_air(frames: np.ndarray, sample_rate: int) -> np.ndarray:
+    """The song without the silence (or near silence) at either end - anything
+    BGM_SILENCE_UNDER_DB under its typical level, in 50 ms steps. A quiet
+    intro or outro that is still music stays: it is well above that."""
+    step = max(1, sample_rate // 20)
+    usable = len(frames) // step * step
+    if not usable:
+        return frames
+    rms = np.sqrt(np.mean(frames[:usable].reshape(-1, step, frames.shape[1]) ** 2, axis=(1, 2)))
+    floor = np.median(rms) * 10 ** (-BGM_SILENCE_UNDER_DB / 20)
+    loud = np.flatnonzero(rms > floor)
+    if not len(loud):
+        return frames
+    return frames[loud[0] * step:(loud[-1] + 1) * step]
+
+
 def music_bed(narration: AudioSegment, bgm: AudioSegment) -> AudioSegment:
     """The music looped to the narration's length, faded in and out once - the
-    exact stretch the mix plays, so it is also what gets measured."""
-    loop_count = (len(narration) // max(1, len(bgm))) + 1
-    return (bgm * loop_count)[:len(narration)].fade_in(BGM_FADE_IN_MS).fade_out(BGM_FADE_OUT_MS)
+    exact stretch the mix plays, so it is also what gets measured.
+
+    Each pass is the song with its dead air trimmed (trim_dead_air), and each
+    pass's end crossfades into the next one's start over BGM_LOOP_CROSSFADE_MS
+    with equal-power curves: the two halves sum to steady loudness through
+    the overlap, where a linear crossfade sags in the middle. So the music
+    never stops between passes and never restarts cold."""
+    song = trim_dead_air(_samples(bgm), bgm.frame_rate)
+    need = int(len(narration) * bgm.frame_rate / 1000)
+    overlap = min(int(BGM_LOOP_CROSSFADE_MS * bgm.frame_rate / 1000), len(song) // 4)
+    if overlap > 0:
+        t = np.linspace(0.0, np.pi / 2, overlap)[:, None]
+        fade_out, fade_in = np.cos(t), np.sin(t)
+    bed = song
+    while len(bed) < need:
+        if overlap > 0:
+            joined = bed[-overlap:] * fade_out + song[:overlap] * fade_in
+            bed = np.concatenate([bed[:-overlap], joined, song[overlap:]])
+        else:
+            bed = np.concatenate([bed, song])
+    return _segment(bed[:need], bgm).fade_in(BGM_FADE_IN_MS).fade_out(BGM_FADE_OUT_MS)
 
 
 def under_narration(narration: AudioSegment, bed: AudioSegment, volume_db: float) -> AudioSegment:

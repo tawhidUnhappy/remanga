@@ -14,6 +14,7 @@ from typing import Any
 from remanga.audio.join import join_segments
 from remanga.audio.manifest import verify_audio_manifest
 from remanga.audio.master import (
+    BED_VERSION,
     integrated_loudness,
     load_bgm,
     music_bed,
@@ -59,6 +60,7 @@ def _fingerprint(timing_path: Path, config: AudioConfig, bgm: Path | None) -> di
         "timing_mtime": timing_path.stat().st_mtime,
         "bgm": [str(bgm), bgm_stat.st_size, int(bgm_stat.st_mtime)] if bgm_stat else None,
         "bgm_below_voice_lu": config.bgm_below_voice_lu,
+        "bed_version": BED_VERSION if bgm else None,
         "edge_fade_ms": config.edge_fade_ms,
         "sample_rate": config.sample_rate,
         "enable_loudnorm": config.enable_loudnorm,
