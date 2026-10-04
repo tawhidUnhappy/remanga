@@ -6,7 +6,7 @@ description: How to make a remanga chapter's YouTube thumbnail (1280x720 from it
 # remanga: thumbnails, titles, descriptions
 
 First done 2026-09-30 for chapter 1 of HimeSama, IDied and IReincarnated (user asked for all three;
-black and white is fine - the panels are manga). `specs.example.json` is exactly those three:
+black and white is fine - the panels are manga). `specs.example.json` is exactly those three (plus Golem Master, 2026-10-04):
 `thumb.py render` on it reproduces the shipped thumbnails pixel for pixel.
 
 Outputs go beside the video, named like it:
@@ -31,6 +31,7 @@ one label each - the two roles of the premise:
 | HimeSama | Sofia "please kindly die" -> SADIST PRINCESS | Alfred sweating -> DOOMED TUTOR |
 | IDied | Astrefia with wings -> VAMPIRE MOM | the baby -> LEGENDARY HERO |
 | IReincarnated | Lloyd smirking -> VILLAIN | Cain on his knees -> REAL HERO |
+| Golem Master | tired salaryman (001_003_02) -> COMPANY SLAVE | elf from the title spread (001_002_02, zoom 2.8 top-left: clears the logo and caption boxes) -> GOLEM MASTER |
 
 ## Steps (run with remanga's `.venv/bin/python`)
 

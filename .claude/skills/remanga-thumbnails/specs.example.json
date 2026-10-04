@@ -13,5 +13,10 @@
   "tiles": [{"panel": "001_032_05", "w": 0.55, "zoom": 1.0, "cx": 0.4, "cy": 0.5},
             {"panel": "001_025_03", "w": 0.45, "zoom": 1.0, "cx": 0.6, "cy": 0.5}],
   "labels": [{"text": "VILLAIN", "at": [0.4, 0.08], "to": [0.27, 0.32], "size": 90},
-             {"text": "REAL\nHERO", "at": [0.92, 0.42], "to": [0.77, 0.13], "size": 76}]}
+             {"text": "REAL\nHERO", "at": [0.92, 0.42], "to": [0.77, 0.13], "size": 76}]},
+ "golem": {"project": "CompanySlaveOfAround40BecomesGolemMaster", "chapter": "1",
+  "tiles": [{"panel": "001_003_02", "w": 0.45, "zoom": 1.0, "cx": 0.72, "cy": 0.5},
+            {"panel": "001_002_02", "w": 0.55, "zoom": 2.8, "cx": 0.0, "cy": 0.325}],
+  "labels": [{"text": "COMPANY\nSLAVE", "at": [0.2, 0.8], "to": [0.17, 0.5], "size": 86},
+             {"text": "GOLEM\nMASTER", "at": [0.86, 0.14], "to": [0.77, 0.5], "size": 86}]}
 }
