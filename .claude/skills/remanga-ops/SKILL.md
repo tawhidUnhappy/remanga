@@ -250,6 +250,15 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     - `audio/takes.py:collapsed` catches it **before transcription**, on two signals: a take at
       the token ceiling, or one more than `RUNAWAY_FACTOR` (1.4) longer than its own estimate. The
       estimate is good enough for that - a healthy take asked for ~205s and came back 203s.
+    - **The estimate is the ENGINE's pace (fixed 2026-10-04).** It was Qwen's 22.5 chars/s for
+      every engine; Kokoro af_heart at speed 1.0 reads ~16, so every Kokoro take ran ~1.45x its
+      estimate - right on the line. Golem Master ch1 page 5 (999 chars, a normal 63s) was split
+      three times down to one 164-char panel (11s vs "7s") and failed the chapter with "cannot be
+      split any further - lower Narration take length", which could never have helped. Now each
+      synthesizer has `chars_per_second` (base = Qwen's `CHARS_PER_SECOND`; Kokoro's follows its
+      speed along the measured wpm curve, held flat past 1.36), carried on every `Batch` and used
+      by `plan_batches` too - so Kokoro takes are now really ~60s (22 takes for ch1, was 16 at
+      ~85s). A new engine must measure its own pace or it inherits this bug.
     - It then **splits at a page boundary and retries**, up to `MAX_SPLIT_DEPTH` (3). A collapse is
       the model losing the thread on a long text, so the answer is a shorter text.
     - **In-context cloning helps a lot and does NOT fix it (tested 2026-09-21).** The clone used to

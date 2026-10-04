@@ -25,13 +25,17 @@ from dataclasses import dataclass
 
 from remanga.narration import StoryPanel
 
-# How many characters of narration a second of speech is worth. Measured by
+# How many characters of narration a second of Qwen's speech is worth - the
+# default for an engine that does not measure its own (each synthesizer's
+# `chars_per_second`; Kokoro is slower). Measured by
 # generating real narration as joined batches in the user's own cloned voice:
 # 1,229 characters came back as 55.5s and 3,318 as 142.2s, so 22.1 and 23.3.
 # Deliberately NOT the 18.9 the finished chapter measures - that figure is
 # per-panel audio after its silence is trimmed, and a batch has no per-panel
-# silence to trim. Only used to decide where to break; nothing downstream
-# trusts it, because the real durations are read back off the audio.
+# silence to trim. Used to decide where to break, and as the yardstick a
+# take is held against to spot a collapse (audio/takes.py) - so it has to be
+# the pace of the engine actually reading. Timings are never taken from it:
+# those are read back off the audio.
 CHARS_PER_SECOND = 22.5
 
 # Where Qwen3-TTS's own generation budget runs out: max_new_tokens 8192 at
@@ -78,6 +82,8 @@ class Batch:
     """One generation: the panels in it, in order."""
 
     panels: tuple[StoryPanel, ...]
+    # The pace of the engine reading it - what estimated_seconds is worth.
+    chars_per_second: float = CHARS_PER_SECOND
 
     @property
     def name(self) -> str:
@@ -91,7 +97,7 @@ class Batch:
 
     @property
     def estimated_seconds(self) -> float:
-        return len(self.text) / CHARS_PER_SECOND
+        return len(self.text) / self.chars_per_second
 
     def split(self) -> tuple[Batch, Batch] | None:
         """This batch as two, broken at the page boundary nearest its middle
@@ -104,15 +110,16 @@ class Batch:
             # One page of several panels - break between panels instead,
             # since a page this long is still worth halving.
             middle = len(self.panels) // 2
-            return Batch(self.panels[:middle]), Batch(self.panels[middle:])
+            return (Batch(self.panels[:middle], self.chars_per_second),
+                    Batch(self.panels[middle:], self.chars_per_second))
         half = len(self.panels) / 2
         taken, best, seen = 0, 1, 0
         for index, page in enumerate(grouped[:-1], start=1):
             seen += len(page)
             if abs(seen - half) < abs(taken - half):
                 taken, best = seen, index
-        return Batch(tuple(p for page in grouped[:best] for p in page)), \
-               Batch(tuple(p for page in grouped[best:] for p in page))
+        return Batch(tuple(p for page in grouped[:best] for p in page), self.chars_per_second), \
+               Batch(tuple(p for page in grouped[best:] for p in page), self.chars_per_second)
 
 
 def page_of(panel_id: str) -> str:
@@ -135,7 +142,8 @@ def pages(panels: list[StoryPanel]) -> list[list[StoryPanel]]:
     return grouped
 
 
-def plan_batches(panels: list[StoryPanel], target_minutes: float) -> list[Batch]:
+def plan_batches(panels: list[StoryPanel], target_minutes: float,
+                 chars_per_second: float = CHARS_PER_SECOND) -> list[Batch]:
     """The panels packed into batches of about `target_minutes`, breaking
     only between pages.
 
@@ -152,13 +160,13 @@ def plan_batches(panels: list[StoryPanel], target_minutes: float) -> list[Batch]
         # The separators count: a batch's text is what gets generated, and
         # leaving them out let a plan overshoot its own cap by a second or two.
         page_chars = sum(len(panel.text) + len(JOIN) for panel in page)
-        page_seconds = page_chars / CHARS_PER_SECOND
+        page_seconds = page_chars / chars_per_second
         if current and current_seconds + page_seconds > target:
-            batches.append(Batch(tuple(current)))
+            batches.append(Batch(tuple(current), chars_per_second))
             current, current_seconds = [], 0.0
         current.extend(page)
         current_seconds += page_seconds
 
     if current:
-        batches.append(Batch(tuple(current)))
+        batches.append(Batch(tuple(current), chars_per_second))
     return batches

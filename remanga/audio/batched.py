@@ -104,7 +104,7 @@ def narrate_in_batches(synth, tts_config: TTSConfig, audio_config: AudioConfig,
         verify_audio_manifest(audio_dir, chapter_num)
         verify_subtitle_manifest(subs_dir, chapter_num)
 
-    planned = plan_batches(panels, audio_config.batch_target_minutes)
+    planned = plan_batches(panels, audio_config.batch_target_minutes, synth.chars_per_second)
     voice_identity = tts_config.identity()
     timing_path = get_audio_timing_path(project_name, chapter_num)
     recorded = recorded_keys(timing_path)

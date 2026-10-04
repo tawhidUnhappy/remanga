@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from remanga.audio.batching import CHARS_PER_SECOND
 from remanga.config import AudioConfig
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.models import ModelManager
@@ -79,6 +80,13 @@ class BaseWorkerSynthesizer(ToolWorker):
     # None (the default) means synthesize() always makes exactly one call,
     # unchanged from before this existed.
     chunk_max_chars: int | None = None
+
+    # How many characters of narration a second of this engine's speech is
+    # worth, as a joined batch reads (audio/batching.py). It sizes the takes
+    # and is what a take's length is held against to spot a collapse
+    # (audio/takes.py), so an engine that reads slower than this must say so
+    # or every take it makes sits on the collapse line.
+    chars_per_second: float = CHARS_PER_SECOND
 
     def __init__(self, audio_config: AudioConfig, model_manager: ModelManager):
         self.audio_config = audio_config
