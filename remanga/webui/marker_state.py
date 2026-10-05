@@ -44,6 +44,12 @@ class MarkerState(MarksFileMixin):
         # thing written to crops.json as such. Strictly smaller than
         # `touched`: see set_marks for why the two can't be the same set.
         self.decided: set = set()
+        # Pages whose panel order the user forced by hand ("Custom order" in
+        # the panel list). Auto-order and Reorder leave these alone - the
+        # algorithm gets irregular pages wrong, and a page somebody ordered
+        # themselves must not be re-sorted by the next autosave. Only pages
+        # with marks: an empty page has no order to keep.
+        self.custom_order: set = set()
         self.detect_running = False
         self.detect_done = 0
         self.detect_total = 0
@@ -77,7 +83,8 @@ class MarkerState(MarksFileMixin):
         self._load_existing_crops()
 
     def set_marks(self, filename: str, marks: list[dict[str, Any]],
-                  order_direction: str | None = None) -> list[dict[str, Any]]:
+                  order_direction: str | None = None,
+                  custom_order: bool | None = None) -> list[dict[str, Any]]:
         """Stores a page's marks as the browser sent them, and works out
         whether anything actually happened.
 
@@ -90,10 +97,21 @@ class MarkerState(MarksFileMixin):
 
         So an empty list is only a decision when the page had something on it
         a moment ago. Emptying a page is an act; arriving at one that was
-        already empty is not."""
+        already empty is not.
+
+        `custom_order` is the page's "Custom order" switch as the browser
+        holds it (None: leave it as it is). On, the marks are stored in the
+        order sent, auto-order or not."""
         with self.lock:
             previous = self.marks.get(filename) or []
-            if order_direction and len(marks) > 1:
+            if custom_order is not None:
+                if custom_order and marks:
+                    self.custom_order.add(filename)
+                else:
+                    self.custom_order.discard(filename)
+            if not marks:
+                self.custom_order.discard(filename)
+            if order_direction and len(marks) > 1 and filename not in self.custom_order:
                 # Auto-order: stored in reading order however the marks were
                 # drawn. Returned so the route can hand the browser the order it
                 # actually saved, and the panel numbers on screen stay the real ones.
@@ -169,6 +187,8 @@ class MarkerState(MarksFileMixin):
                 self.marks[filename] = self._ai_marks(filename, boxes, order_direction)
                 self.touched.discard(filename)
                 self.decided.discard(filename)
+                # New boxes, new ids: an order forced on the old ones means nothing now.
+                self.custom_order.discard(filename)
                 replaced += 1
             if replaced:
                 self.revision += 1
@@ -185,10 +205,13 @@ class MarkerState(MarksFileMixin):
 
         A page that changed is flagged touched: its order is now a choice, and
         a detection pass still due for this chapter must not replace it with
-        MAGI's."""
+        MAGI's. A page with a custom order is skipped - forcing the order is
+        exactly saying "not the algorithm's"."""
         with self.lock:
             changed = 0
             for filename in self._selected(filenames):
+                if filename in self.custom_order:
+                    continue
                 marks = self.marks.get(filename) or []
                 ordered = reading_order(marks, direction)
                 if order_changed(marks, ordered):

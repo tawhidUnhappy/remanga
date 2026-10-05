@@ -60,13 +60,23 @@ export async function flushSave(immediate) {
     const res = await api(`/api/marks/${encodeURIComponent(filename)}?rev=${state.chapterRevision}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(state.pageMarksCache[filename] || []),
+      // The page's Custom order switch travels with its marks, so the server
+      // never sorts a page the tab says is ordered by hand.
+      body: JSON.stringify({
+        marks: state.pageMarksCache[filename] || [],
+        custom_order: state.customOrderPages.has(filename),
+      }),
     });
     // Every check below is about the tab having moved on while the request was
     // out. Filenames repeat across chapters, so a reply about page_001 of the
     // chapter just left must not land in this chapter's page_001.
     if (state.chapter.chapter !== chapterAtSend) return;
     if (typeof res.revision === "number") state.chapterRevision = res.revision;
+    // The server drops the flag from a page left with no marks; follow it,
+    // unless the page was edited (or the switch flipped) while this was out.
+    if (res.custom_order === false && (state.editSeq[filename] || 0) === seqAtSend) {
+      state.customOrderPages.delete(filename);
+    }
     adoptStoredOrder(filename, res.marks, seqAtSend);
   } catch (e) {
     if (e.status === 409 && state.chapter.chapter === chapterAtSend) {

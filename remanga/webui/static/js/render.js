@@ -1,8 +1,8 @@
 // Everything that paints the current page's marks: the boxes on the canvas
 // stage and their mirror list in the sidebar.
 
-import { stage, panelList, panelCount, storyBadge, orderHint } from "./dom.js";
-import { state } from "./state.js";
+import { stage, panelList, panelCount, storyBadge, orderHint, orderLock, customOrderToggle } from "./dom.js";
+import { state, currentFilename } from "./state.js";
 import { deleteMark, markDirty } from "./marks.js";
 import { onMarkMouseDown } from "./drag-resize.js";
 
@@ -56,11 +56,29 @@ function updateStoryBadge() {
   storyBadge.classList.toggle("story", n > 0);
 }
 
+// The Custom order switch: on, this page keeps the order the user set -
+// the server stores it as sent and auto-order / Reorder skip it. Turning it
+// off with auto-order on hands the page back to reading order on the save
+// this triggers (the reply is adopted in marks.js).
+customOrderToggle.addEventListener("change", () => {
+  if (state.readOnly) return;
+  if (customOrderToggle.checked) state.customOrderPages.add(currentFilename());
+  else state.customOrderPages.delete(currentFilename());
+  markDirty();
+  render();
+});
+
 function renderList() {
   panelCount.textContent = state.marks.length;
-  orderHint.innerHTML = state.autoOrder
-    ? "Auto-order is on — panels stay in reading order. Turn it off to order them yourself."
-    : "Drag <b>⠿</b> to reorder — this sets narration order.";
+  const locked = state.customOrderPages.has(state.chapter?.pages[state.pageIndex]?.filename);
+  // One panel has no order to force; a viewer can't change it either way.
+  orderLock.hidden = state.readOnly || state.marks.length < 2;
+  customOrderToggle.checked = locked;
+  orderHint.innerHTML = locked
+    ? "Custom order — kept as you set it. Drag <b>⠿</b> to change."
+    : state.autoOrder
+      ? "Auto-order on — dragging <b>⠿</b> locks this page's order."
+      : "Drag <b>⠿</b> to reorder — this sets narration order.";
   if (!state.marks.length) {
     panelList.innerHTML = state.readOnly
       ? `<div class="empty-list">No panels marked on this page.</div>`
@@ -73,13 +91,12 @@ function renderList() {
     row.className = "panel-row" + (m.id === state.selectedId ? " selected" : "") + (m.src === "ai" ? " is-ai" : "");
     // Reordering IS an edit - it's what sets narration order - so a viewer
     // neither drags nor shows a grip to drag by.
-    // With auto-order on, a dragged order would be re-sorted on the very next
-    // save, so the handle isn't offered: the switch decides the order, and
-    // turning it off is how you get the handle back.
-    row.draggable = !state.readOnly && !state.autoOrder;
+    // With auto-order on a drag still works: it forces this page's order
+    // (Custom order), which is what stops the next save re-sorting it.
+    row.draggable = !state.readOnly;
     row.dataset.index = i;
     row.innerHTML = `
-      ${state.readOnly || state.autoOrder ? "" : `<span class="grip">⠿</span>`}
+      ${state.readOnly ? "" : `<span class="grip">⠿</span>`}
       <span class="order-badge">${i + 1}</span>
       <span class="panel-row-main">
         <span class="panel-row-title">Panel ${i + 1}
@@ -107,6 +124,7 @@ function renderList() {
       if (from === to) return;
       const [moved] = state.marks.splice(from, 1);
       state.marks.splice(to, 0, moved);
+      if (state.autoOrder) state.customOrderPages.add(currentFilename());
       markDirty();
       render();
     });

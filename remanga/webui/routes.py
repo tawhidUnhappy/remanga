@@ -50,6 +50,9 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
             # The sidebar draws those differently from a page that is merely
             # still blank, so it needs the narrower set too.
             "decided": sorted(state.decided),
+            # Pages whose panel order the user forced - auto-order and
+            # Reorder skip them (MarkerState.custom_order).
+            "custom_order": sorted(state.custom_order),
             "magi_enabled": config.magi_enabled,
             "click_to_select": config.click_to_select,
             "min_mark_ratio": config.min_mark_ratio,
@@ -102,13 +105,23 @@ def create_app(session: MarkerSession, config: MarkerConfig) -> Flask:
         rev = request.args.get("rev")
         if rev is not None and rev.isdigit() and int(rev) != state.revision:
             return jsonify({"ok": False, "stale": True, "revision": state.revision}), 409
-        marks = request.get_json(force=True) or []
+        # Either the bare list of marks, or {marks, custom_order} - the page's
+        # "Custom order" switch travels with its marks, so the two can never
+        # be saved out of step with each other.
+        body = request.get_json(force=True) or []
+        custom_order = None
+        if isinstance(body, dict):
+            custom_order = body.get("custom_order")
+            custom_order = bool(custom_order) if custom_order is not None else None
+            body = body.get("marks") or []
         stored = state.set_marks(
-            filename, marks,
+            filename, body,
             order_direction=session.reading_direction if session.auto_order else None,
+            custom_order=custom_order,
         )
         session.mark_dirty(session.chapter_num)
-        return jsonify({"ok": True, "marks": stored, "revision": state.revision})
+        return jsonify({"ok": True, "marks": stored, "revision": state.revision,
+                        "custom_order": filename in state.custom_order})
 
     @app.get("/api/outline")
     def get_outline():

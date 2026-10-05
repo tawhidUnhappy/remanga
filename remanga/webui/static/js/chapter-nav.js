@@ -45,6 +45,7 @@ export async function applyChapter(payload, startPage = 0) {
   state.pageMarksCache = {};
   state.touchedPages = new Set(payload.touched || []);
   state.decidedPages = new Set(payload.decided || []);
+  state.customOrderPages = new Set(payload.custom_order || []);
   state.chapterRevision = payload.revision || 0;
   state.editSeq = {};
   state.autoOrder = !!payload.auto_order;
@@ -123,6 +124,7 @@ export async function reloadChapterMarks() {
   state.chapterRevision = payload.revision || 0;
   state.touchedPages = new Set(payload.touched || []);
   state.decidedPages = new Set(payload.decided || []);
+  state.customOrderPages = new Set(payload.custom_order || []);
   state.editSeq = {};
   for (const p of payload.pages) {
     state.pageMarksCache[p.filename] = payload.marks[p.filename] || [];

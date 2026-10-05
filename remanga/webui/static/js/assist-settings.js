@@ -36,11 +36,11 @@ export async function saveSetting(values) {
       state.autoOrder = !!res.auto_order;
       // Turning it on reorders the chapter on screen before the response comes
       // back (and every other chapter behind it): take that order now, and let
-      // the panel list drop or bring back its drag handles.
+      // the panel list update its hint.
       await reloadMarks();
       render();
       notice(state.autoOrder
-        ? "Auto-order on - every chapter is kept in reading order"
+        ? "Auto-order on - every page is kept in reading order, except ones set to Custom order"
         : "Auto-order off - drag panels in the list to order them yourself");
     }
   } catch (e) {

@@ -26,6 +26,11 @@ DECIDED_KEY = "user_decided"
 # nobody excluded anything writes no flags at all, and would otherwise look
 # indistinguishable from a legacy file.
 FORMAT_KEY = "marks_format"
+
+# Per page: the user forced this page's panel order ("Custom order" in the
+# panel list), so auto-order and Reorder must keep it as saved. Written only
+# when true; the cropper ignores it, the panels are already in that order.
+CUSTOM_ORDER_KEY = "custom_order"
 MARKS_FORMAT = 2
 
 # A structured crop (remanga/cropper/structured.py - what the LLM crop
@@ -39,7 +44,8 @@ STRUCTURED_KEY = "structured"
 
 class MarksFileMixin:
     """MarkerState's crops.json side. Reads and fills in the state's
-    `chapter_dir`, `chapter_num`, `pages`, `marks`, `touched` and `decided`."""
+    `chapter_dir`, `chapter_num`, `pages`, `marks`, `touched`, `decided`
+    and `custom_order`."""
 
     def _load_existing_crops(self) -> None:
         """If crops.json already has real content - e.g. a marks_only/"remark"
@@ -136,6 +142,8 @@ class MarksFileMixin:
             if marks:
                 self.marks[filename] = marks
                 self.touched.add(filename)
+                if page_entry.get(CUSTOM_ORDER_KEY):
+                    self.custom_order.add(filename)
 
     def build_crops_json(self) -> dict[str, Any]:
         """This chapter's marks in the shape the cropper reads.
@@ -192,6 +200,7 @@ class MarksFileMixin:
                 "is_story_page": True,
                 "panels": panels_out,
                 DECIDED_KEY: decided,
+                **({CUSTOM_ORDER_KEY: True} if filename in self.custom_order else {}),
             })
 
         return {"chapter": str(self.chapter_num), FORMAT_KEY: MARKS_FORMAT, "pages": pages_out}

@@ -14,6 +14,9 @@ export const state = {
   // than touchedPages on purpose: navigating past a page touches it (the
   // autosave posts the page you leave) but decides nothing.
   decidedPages: new Set(),
+  // Pages whose panel order the user forced ("Custom order"): the server
+  // stores them as sent, and auto-order and Reorder leave them alone.
+  customOrderPages: new Set(),
   // The server's revision of the chapter on screen. It moves when a reorder
   // rewrites marks server-side; the tab sends it with every autosave
   // and reloads when the two disagree (see marks.js flushSave, magi.js poll).
