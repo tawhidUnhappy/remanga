@@ -13,7 +13,8 @@ Run with remanga's .venv/bin/python (it has Pillow). A spec (see specs.example.j
                "labels": [{"text": "SADIST\\nPRINCESS", "at": [0.15, 0.74], "to": [0.29, 0.38], "size": 84}]}}
 
 tiles: `w` is the tile's share of the width (they add up to 1), `zoom` crops in, `cx`/`cy`
-the crop centre as fractions of the PANEL. labels: `at` the label centre, `to` the arrow tip,
+the crop centre as fractions of the PANEL. Instead of `panel`, a tile can take `page` (a file in
+pages/, e.g. a colour cover) plus an optional `box` [left, top, right, bottom] in page pixels. labels: `at` the label centre, `to` the arrow tip,
 both as fractions of the 1280x720 CANVAS - read them off a grid render, never guess."""
 
 from __future__ import annotations
@@ -38,7 +39,12 @@ def panel_path(project: str, chapter: str, panel: str) -> Path:
 
 def tile(project: str, chapter: str, t: dict, box_w: int) -> Image.Image:
     """The panel cropped to the tile's shape around (cx, cy), scaled to fill it."""
-    im = Image.open(panel_path(project, chapter, t["panel"])).convert("RGB")
+    if "page" in t:  # a whole page, e.g. a colour cover the cutter never made panels of
+        im = Image.open(PROJECTS / project / "chapters" / f"chapter_{chapter}" / "pages" / t["page"]).convert("RGB")
+        if "box" in t:
+            im = im.crop(tuple(t["box"]))
+    else:
+        im = Image.open(panel_path(project, chapter, t["panel"])).convert("RGB")
     zoom, aspect = t.get("zoom", 1.0), box_w / H
     ch = im.height / zoom
     cw = ch * aspect

@@ -6,7 +6,7 @@ description: How to make a remanga chapter's YouTube thumbnail (1280x720 from it
 # remanga: thumbnails, titles, descriptions
 
 First done 2026-09-30 for chapter 1 of HimeSama, IDied and IReincarnated (user asked for all three;
-black and white is fine - the panels are manga). `specs.example.json` is exactly those three (plus Golem Master, 2026-10-04):
+black and white is fine - the panels are manga). `specs.example.json` is exactly those three (plus Golem Master, 2026-10-04, and If Her Flag Breaks, 2026-10-05):
 `thumb.py render` on it reproduces the shipped thumbnails pixel for pixel.
 
 Outputs go beside the video, named like it:
@@ -32,6 +32,7 @@ one label each - the two roles of the premise:
 | IDied | Astrefia with wings -> VAMPIRE MOM | the baby -> LEGENDARY HERO |
 | IReincarnated | Lloyd smirking -> VILLAIN | Cain on his knees -> REAL HERO |
 | Golem Master | tired salaryman (001_003_02) -> COMPANY SLAVE | elf from the title spread (001_002_02, zoom 2.8 top-left: clears the logo and caption boxes) -> GOLEM MASTER |
+| If Her Flag Breaks | Souta beside a flag on a classmate's head (001_034_02, zoom 1.2 cx 0.4: crops out a YEAH. bubble) -> FLAG BREAKER | Nanami from the COLOUR cover (page 001_002.jpg, box 530,60,1085,1000 - between the title text and the spine) -> NO FLAG?! |
 
 ## Steps (run with remanga's `.venv/bin/python`)
 
@@ -41,6 +42,9 @@ one label each - the two roles of the premise:
    panel to /tmp/remanga-thumbs/. Look at them, then view the few candidates at full size. Prefer a
    face turned toward the viewer, and panels big enough to scale up (a 250px-wide panel still reads as
    manga line art at 2x, but it's soft). A colour cover panel usually carries scanlation/series text.
+   **Check the colour pages too** (pages/ before the first panel, often never cut into panels): the user
+   wants the cute heroine in colour when there is one (If Her Flag Breaks, 2026-10-05). A tile takes
+   `"page": "001_002.jpg", "box": [l, t, r, b]` instead of `panel` - box out the logo, title text and spine.
 3. **Crop**: write the spec (tiles only, `labels: []`), `thumb.py grid spec.json`, and LOOK at the
    gridded render. Fix `zoom`/`cx`/`cy` until each tile shows a face and upper body, not a torso.
    **Crop out scanlator watermarks** (HimeSama's Alfred panel has "KUMO TRANSLATION" in its top ~10%:

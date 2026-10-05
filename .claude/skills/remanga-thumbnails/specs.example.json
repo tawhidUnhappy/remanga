@@ -18,5 +18,6 @@
   "tiles": [{"panel": "001_003_02", "w": 0.45, "zoom": 1.0, "cx": 0.72, "cy": 0.5},
             {"panel": "001_002_02", "w": 0.55, "zoom": 2.8, "cx": 0.0, "cy": 0.325}],
   "labels": [{"text": "COMPANY\nSLAVE", "at": [0.2, 0.8], "to": [0.17, 0.5], "size": 86},
-             {"text": "GOLEM\nMASTER", "at": [0.86, 0.14], "to": [0.77, 0.5], "size": 86}]}
+             {"text": "GOLEM\nMASTER", "at": [0.86, 0.14], "to": [0.77, 0.5], "size": 86}]},
+ "flag": {"project": "IfHerFlagBreaks", "chapter": "1", "tiles": [{"panel": "001_034_02", "w": 0.5, "zoom": 1.2, "cx": 0.4, "cy": 0.0}, {"page": "001_002.jpg", "box": [530, 60, 1085, 1000], "w": 0.5, "zoom": 1.0, "cx": 0.5, "cy": 0.2}], "labels": [{"text": "FLAG\nBREAKER", "at": [0.21, 0.84], "to": [0.39, 0.57], "size": 84}, {"text": "NO FLAG?!", "at": [0.79, 0.09], "to": [0.8, 0.29], "size": 80}]}
 }
