@@ -136,13 +136,14 @@ never touched. From there the PDF and the video work as for any manga.
 
 ## The narrator
 
-Two engines built in (each a plug-in - see [Plug-ins](#plug-ins)), switchable in **Settings → Narrator engine**; each keeps its own voice, so switching
+Three engines built in (each a plug-in - see [Plug-ins](#plug-ins)), switchable in **Settings → Narrator engine**; each keeps its own voice, so switching
 back and forth changes nothing else. A chapter narrated by the other one is narrated again.
 
 | Engine | Voice | Speed |
 |---|---|---|
 | **Kokoro-82M** (default) | its own studio voices, picked from a list | a 60-panel chapter in seconds |
 | **Qwen3-TTS** | nine preset narrators, steered by a line of plain English ("calm and unhurried") - or **a voice you design**: describe the narrator, and one sample is made and kept | about ten minutes for the same chapter |
+| **IndexTTS-2.5** | **a clone of any recording** in `global/voice/` - no transcript needed, it takes the voice from the first 15 seconds | about real time on a 3060 (a 40s take in ~45s), ~7 GB of VRAM |
 
 **Hearing them first:** `./run.sh voices` (or Settings → Hear the voices) reads one line in every
 voice the engine has, into `global/voice/samples/<engine>/`, with a text file saying which is which.
@@ -158,6 +159,12 @@ to 3.1. `global/voice/samples/qwen/delivery/` has the same line in all four, to 
 `Clone <file>` in Settings → Narrator voice. Every panel is then read in that voice. Ten to fifteen
 seconds of speech is plenty - a longer file is trimmed to its first 15 seconds, because the whole
 reference rides along in the model's context and only slows every line down.
+
+**Cloning a recording** (IndexTTS-2.5): the same `global/voice/` folder, picked in Settings →
+Narrator voice. Every voice it has is a recording there, so Settings → Hear the voices reads one line
+in each. It reads at the recording's own delivery - no emotion is ever asked of it - and `Speaking
+speed` is applied by the model itself, so the pitch stays put. First use installs `.tools/venv-index-tts`
+and downloads about 10 GB of weights into `checkpoints/index_tts_2_5/`.
 
 **Designing a voice** (Qwen3-TTS only): Settings → Design a voice, describe the narrator, and one
 sample is generated into `global/voice/designed.wav`. Listen to it; design again if it is not right.
@@ -279,8 +286,8 @@ particular one:
 
 | Kind | What it is | Built in (`remanga/plugins/`) |
 |---|---|---|
-| `tts` | a narrator engine: its settings block, synthesizer, worker, Settings rows | `kokoro/`, `qwen_tts/` |
-| `tool` | an isolated environment (`.tools/venv-<name>`) | registered by `kokoro/`, `qwen_tts/`, `magi/`, `faster_whisper/` |
+| `tts` | a narrator engine: its settings block, synthesizer, worker, Settings rows | `kokoro/`, `qwen_tts/`, `index_tts/` |
+| `tool` | an isolated environment (`.tools/venv-<name>`) | registered by `kokoro/`, `qwen_tts/`, `index_tts/`, `magi/`, `faster_whisper/` |
 | `layout` | how a chapter is marked into panels | `pages/` (Panel Marker + MAGI), `long_strip/` (Strip Marker) |
 | `source` | where manga come from | `mangadex/` |
 | `job` | something the queue can do to a chapter | `jobs/` |
@@ -289,7 +296,7 @@ Each built-in is one folder holding all of its own code; its `__init__.py` only 
 description that names that code. `./run.sh plugins` lists what is loaded and where from.
 
 **Each tool sets itself up:** every plug-in that runs in its own environment (Kokoro, Qwen3-TTS,
-MAGI, faster-whisper) has a `setup.py` in its folder that builds that environment and fetches its
+IndexTTS-2.5, MAGI, faster-whisper) has a `setup.py` in its folder that builds that environment and fetches its
 weights. remanga runs it the first time the tool is used, from `bootstrap.sh`, or on request:
 `./run.sh setup --tool qwen-tts` (no `--tool`: the chosen narrator and MAGI). Each also runs on its
 own: `.venv/bin/python -m remanga.plugins.kokoro.setup [--force] [--no-weights]`.
@@ -306,10 +313,12 @@ Every setting is in `config.json` and applies to every project:
 
 | Key | Default | Meaning |
 |---|---|---|
-| `tts.engine` | `kokoro` | who narrates - any `tts` plug-in: `kokoro` (fixed voices, seconds a chapter) or `qwen` (preset narrators or a voice you design, minutes a chapter) |
+| `tts.engine` | `kokoro` | who narrates - any `tts` plug-in: `kokoro` (fixed voices, seconds a chapter) or `qwen` (preset narrators or a voice you design, minutes a chapter) or `index_tts` (a clone of a recording, about real time) |
 | `tts.kokoro.voice` / `.speed` | `af_heart` / 1.0 | Kokoro's voice and pace - 1.0 is its own (about 185 words a minute); past about 1.35 it drops the pauses between sentences |
 | `tts.qwen.speaker` / `.instruct` | `Ryan` / monotone... | Qwen3-TTS's preset narrator and how it reads - the default asks for a monotone read, because anything warmer makes the model act |
 | `tts.qwen.design` / `.designed_sample` | - | the voice you described, and the sample every panel is then spoken from |
+| `tts.index_tts.reference` / `.speed` | first file in `global/voice/` / 1.0 | the recording IndexTTS-2.5 clones, and its pace (0.5-2.0) |
+| `tts.index_tts.interval_silence_ms` | 450 | silence between the segments IndexTTS splits a take into (upstream default 200), on top of its own pauses inside one |
 | `tts.volume_boost_db` | 0 | gain on each clip; leave at 0 when loudness normalization is on |
 | `audio.bgm_enabled` / `bgm_path` | off / - | background music |
 | `audio.bgm_below_voice_lu` | 14 | how far the music sits under the voice, in LU - measured per track and chapter, so every music file sits at the same level (12 energetic, 14 balanced, 18 subtle) |

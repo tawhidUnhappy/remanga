@@ -3,8 +3,8 @@ plug-in, registered under its kind and found through the registry - nothing
 in the pipeline names a particular engine, layout or site.
 
     kind     what one is                               built in
-    tts      a narrator engine (TTSEngine)              kokoro, qwen_tts
-    tool     an isolated environment (ToolSpec)         kokoro, qwen-tts, magi, faster-whisper
+    tts      a narrator engine (TTSEngine)              kokoro, qwen_tts, index_tts
+    tool     an isolated environment (ToolSpec)         kokoro, qwen-tts, index-tts, magi, faster-whisper
     layout   how images are marked into panels (Layout) pages, long_strip
     source   where manga come from (Source)             mangadex
     job      a queueable chapter action (Job)           jobs

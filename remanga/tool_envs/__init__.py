@@ -1,5 +1,5 @@
 """The isolated tool environments remanga provisions: each engine or model
-(Kokoro-82M, Qwen3-TTS, MAGI v3, faster-whisper) runs in its own
+(Kokoro-82M, Qwen3-TTS, IndexTTS-2.5, MAGI v3, faster-whisper) runs in its own
 `.tools/venv-<name>`, so torch and its pins never touch the main environment.
 
     spec.py     what an environment entry is (ToolSpec, InstallStep)
