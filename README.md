@@ -42,7 +42,7 @@ click chooses it** - a single click never starts anything.
 | Screen | What it does |
 |---|---|
 | **Projects** | Your projects. `Enter` opens one, `n` starts a new one: paste the manga's MangaDex URL (or ID, or a title to search). The project is named after the manga's English title, and its reading direction comes from the manga's original language. |
-| **Chapters** | The chapter list, fetched fresh from MangaDex each time, as a table: status (✓ downloaded, ◐ partial, + new), pages, what comes next (mark the panels, make the PDF, make the video, video done) and title. `Enter` opens a chapter's actions: download, **mark panels**, make PDF, make video, check pages, re-download, **delete chosen** (a checklist of what the chapter has on disk - pages, marks, panels, PDF, narration, audio, video - with sizes; tick what to delete, `d` deletes, red rows are what remanga can't make again), reset (deletes the cut panels, PDF, narration, audio and video, and the folders that leaves empty - the marks and pages stay) or delete. `space` (or clicking a row's `·`) picks several chapters to act on together, `a` downloads every new chapter. Reset and delete ask first. |
+| **Chapters** | The chapter list, fetched fresh from MangaDex each time, as a table: status (✓ downloaded, ◐ partial, + new), pages, what comes next (mark the panels, make the PDF, make the video, video done) and title. `Enter` opens a chapter's actions: download, **mark panels**, make PDF, make video, check pages, re-download, **delete chosen** (a checklist of what the chapter has on disk - pages, marks, panels, PDF, narration, audio, video - with sizes; tick what to delete, `d` deletes, red rows are what remanga can't make again), reset (deletes the cut panels, PDF, narration, audio and video, and the folders that leaves empty - the marks and pages stay) or delete. `space` (or clicking a row's `·`) picks several chapters to act on together, `r` picks every chapter from the last one picked to the highlighted one (chapter n to m), `a` downloads every new chapter. With several picked, **Long video...** makes one video of them - see [Long videos](#long-videos). Reset and delete ask first. |
 | **Work** | Downloads, panel cutting, PDFs and videos run in a task view: the steps, a progress bar and the last few lines of output. `Ctrl+C` stops. When the work ends you get a result: what was made and what to do next (for a PDF: which files to upload, where to paste the reply), or what went wrong. `l` opens the full log, `c` copies the paths to upload. |
 | **Settings** (`s`) | One flat list, grouped (Narration, Sound, Video, PDF), each row with a one-line "What it does": narrator engine and voice, take length, pauses, background music and its level (custom values kept), intro, video size, panel enlargement limit, PDF file size limit - one set for every project. |
 
@@ -64,6 +64,8 @@ Logs are kept in `projects/<name>/logs/`: `chapter_N.log` for a chapter's PDF an
 # give pdf/chapter_N/panels_*.pdf + prompts/narration.md to the LLM, paste the reply into
 # projects/MyMangaTitle/chapters/chapter_N/narration.json
 ./run.sh video    -p MyMangaTitle -c 1-5
+./run.sh long     -p MyMangaTitle -c 1-5        # one video of chapters 1 to 5 (--from-source, --delete)
+./run.sh long     -p MyMangaTitle             # the long videos made so far
 ./run.sh chapters -p MyMangaTitle
 ```
 
@@ -216,6 +218,7 @@ projects/<name>/
   audio/chapter_N/        one clip per panel + audio_timing.json
   audio_modified/chapter_N/  the mixed track
   video/chapter_N/        the video
+  video/long/ch1-5/       a video of several chapters (Long video)
 global/bgm/               your background music files
 global/intro/             intro videos (Settings - Intro)
 ```
@@ -228,6 +231,24 @@ Narrating is the slow part, so the chapter menu keeps it apart:
 - **Narrate again, no video** replaces the narration and keeps only that.
 - **Remake from source** deletes everything but the pages, the panel marks and narration.json, then
   cuts, narrates and makes the whole video again.
+
+### Long videos
+
+One video of several chapters - chapter n to chapter m. Pick them on the Chapters screen (`space` on
+the first, `r` on the last) and choose **Long video...**:
+
+- **Join chapter videos** - each chapter's video as it is now, one after another, with the intro
+  once at the front. A chapter whose video is missing or out of date for the current settings is
+  rendered first, and one never narrated is narrated first; the rest is a stream copy, seconds
+  for an hour of video.
+- **Make from source** - every chapter remade from its pages, panel marks and narration.json
+  (Remake from source, chapter by chapter), then joined.
+- **Delete long videos...** - a checklist of the long videos holding any picked chapter. Only the
+  long video goes; every chapter keeps its own.
+
+They live in `video/long/ch1-5/` (`ch1-3+7` when chapters were skipped), with
+`logs/long_ch1-5.log`. Each chapter's sound is fitted to its picture's exact length before the
+join, so one chapter can never pull the ones after it out of sync.
 
 Settings are one set for every project: whichever screen you open them from, a change applies
 everywhere.

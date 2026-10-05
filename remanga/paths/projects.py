@@ -142,3 +142,28 @@ def get_log_path(project_name: str, chapter_num: str | None = None) -> Path:
 def get_final_video_path(project_name: str, chapter_num: str, create: bool = True) -> Path:
     video_dir = get_generated_dir(project_name, "video", chapter_num, create=create)
     return video_dir / f"{project_name}_ch{_clean_chapter(chapter_num)}_recap.mp4"
+
+
+def get_long_videos_dir(project_name: str) -> Path:
+    """Where the videos made of several chapters live: video/long/, one folder
+    each - beside the chapters' own video/chapter_N/, never inside one."""
+    return get_generated_dir(project_name, "video", create=False) / "long"
+
+
+def get_long_video_dir(project_name: str, label: str, create: bool = True) -> Path:
+    """One long video's folder, named after its chapters (ch1-5, ch1-3+7)."""
+    d = get_long_videos_dir(project_name) / f"ch{_clean_chapter(label)}"
+    if create:
+        d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def get_long_video_path(project_name: str, label: str, create: bool = True) -> Path:
+    name = f"{project_name}_ch{_clean_chapter(label)}_recap.mp4"
+    return get_long_video_dir(project_name, label, create=create) / name
+
+
+def get_long_video_log_path(project_name: str, label: str) -> Path:
+    path = get_project_dir(project_name) / "logs" / f"long_ch{_clean_chapter(label)}.log"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path

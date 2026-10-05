@@ -28,6 +28,7 @@ from remanga.ui.widgets import SafeTable, TopBar
 class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
     BINDINGS = [
         Binding("space", "pick", "Pick"),
+        Binding("r", "pick_range", "Pick range"),
         Binding("a", "download_new", "Download all new"),
         Binding("j", "queue", "Queue"),
         Binding("s", "settings", "Settings"),
@@ -43,6 +44,7 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
         self.offline = False
         self.rows: list[dict] = []
         self.marks: set[int] = set()
+        self.anchor: int | None = None
 
     @property
     def config(self) -> RemangaConfig:
@@ -75,6 +77,8 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
         table.clear()
         self.rows = _merge_rows(self.project, self.listing)
         self.marks = {m for m in self.marks if m < len(self.rows)}
+        if not self.marks:
+            self.anchor = None
         for index, chapter in enumerate(self.rows):
             label, style = _STATUS[chapter["status"]]
             stage = workflow.chapter_state(self.project, chapter["chapter"])
@@ -104,8 +108,24 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
 
     def toggle_mark(self, index: int) -> None:
         self.marks ^= {index}
+        self.anchor = index if index in self.marks else None
         table = self.query_one(SafeTable)
         table.update_cell_at((index, 0), self._mark(index))
+        self.update_info()
+
+    def action_pick_range(self) -> None:
+        """Picks every chapter from the last one picked to the highlighted one -
+        chapter n to chapter m in two keys, for a long video (user request,
+        2026-10-05). With nothing picked yet, it picks the highlighted row."""
+        table = self.query_one(SafeTable)
+        row = table.picked_row
+        if row is None:
+            return
+        start = self.anchor if self.anchor is not None and self.anchor < len(self.rows) else row
+        for index in range(min(start, row), max(start, row) + 1):
+            self.marks.add(index)
+            table.update_cell_at((index, 0), self._mark(index))
+        self.anchor = row
         self.update_info()
 
     def action_pick(self) -> None:

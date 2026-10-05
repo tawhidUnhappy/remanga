@@ -9,9 +9,12 @@ from typing import Any
 
 from remanga import workflow
 from remanga.config import RemangaConfig
-from remanga.paths import get_audio_dir, get_log_path
+from remanga.humanize import fmt_size
+from remanga.paths import get_audio_dir, get_log_path, get_long_video_log_path
+from remanga.ui.dialogs import Checklist, Choice, Confirm
 from remanga.ui.screens.common import _short
 from remanga.ui.tasks import Step
+from remanga.workflow.long_video import ordered
 
 UNREBUILDABLE = ("pages", "marks", "narration", "review")
 
@@ -83,3 +86,65 @@ class VideoWork:
                 video = _short(outcome.results[-1])
                 await self.show(f"Chapter {chapter}: video ready", [video], ok=True,
                                 warnings=found.get("warnings", []), log=log, copy=[video])
+
+    async def long_video(self, chapters: list[str], config: RemangaConfig) -> None:
+        """One video of the picked chapters: join their videos, make it all
+        from source, or delete long videos already made (workflow/long_video.py)."""
+        project = self.project
+        chapters = ordered(project, chapters)
+        made = [v for v in workflow.long_videos(project) if set(v["chapters"]) & set(chapters)]
+        options = []
+        if len(chapters) > 1:
+            label = workflow.long_label(project, chapters)
+            options += [("Join chapter videos", "each chapter's video as it is now, one after another, the intro "
+                         "once in front - a chapter with no video yet is made first", "join"),
+                        ("Make from source", "every chapter remade from its pages, marks and narration.json (the "
+                         "slow part), then joined", "source")]
+        if made:
+            options.append(("Delete long videos...", "pick which long video(s) with these chapters to delete - "
+                            "the chapters' own videos stay", "delete"))
+        if not options:
+            self.notify("Pick two chapters or more (space) for a long video.")
+            return
+        note = (f"One video of chapters {label}." if len(chapters) > 1 else f"Chapter {chapters[0]}.")
+        if made:
+            note += " Made already: " + ", ".join(f"ch{v['label']}" for v in made) + "."
+        action = await self.app.push_screen_wait(Choice("Long video", options, note=note,
+                                                        danger=["source", "delete"]))
+        if action is None:
+            return
+        if action == "delete":
+            rows = [(f"Chapters {v['label']}", fmt_size(v["size"]),
+                     _short(v["video"]) if v["video"] else "no finished video in it", v["label"]) for v in made]
+            picked = await self.app.push_screen_wait(Checklist(
+                "Delete long videos", rows,
+                note="Tick what to delete: Enter or Space ticks the highlighted row, a ticks all, d deletes. "
+                     "Only the long video goes - every chapter keeps its own."))
+            if not picked or not await self.app.push_screen_wait(Confirm(
+                    "Delete long videos", f"Delete the long video(s) of chapters {', '.join(picked)}?",
+                    yes="Delete", danger=True)):
+                return
+            for picked_label in picked:
+                workflow.delete_long_video(project, picked_label)
+            self.notify(f"Deleted the long video(s) of chapters {', '.join(picked)}.")
+            return
+        from_source = action == "source"
+        if from_source and not await self.app.push_screen_wait(Confirm(
+                "Make from source", f"Delete everything made for chapters {label} - the cut panels, the PDF, the "
+                f"narration audio and the videos - keeping only the pages, the panel marks and narration.json, "
+                f"then cut, narrate (the slow part) and make each video again, and join them?",
+                yes="Make from source", danger=True)):
+            return
+        prepare = workflow.remake_from_source if from_source else workflow.prepare_chapter
+        steps = [Step(f"Chapter {ch}: {'remake from source' if from_source else 'video, made only if needed'}",
+                      lambda ch=ch: prepare(project, ch, config)) for ch in chapters]
+        steps.append(Step(f"Join chapters {label} into one video",
+                          lambda: workflow.join_chapters(project, chapters, config)))
+        log = get_long_video_log_path(project, label)
+        outcome = await self.run_task(f"Chapters {label}: one long video", steps, log)
+        if not outcome.ok:
+            await self.show(f"Chapters {label}: long video {'stopped' if outcome.stopped else 'failed'}",
+                            outcome.error.splitlines(), ok=False, log=log)
+            return
+        video = _short(outcome.results[-1])
+        await self.show(f"Chapters {label}: long video ready", [video], ok=True, log=log, copy=[video])

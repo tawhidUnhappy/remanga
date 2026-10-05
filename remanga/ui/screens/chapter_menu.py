@@ -67,6 +67,11 @@ class ChapterMenu:
             options.append(("Make video", "narrates the whole chapter from narration.json (the slow part), "
                             "then makes the video" + (" - replaces the narration there now" if narrated else ""),
                             "video"))
+            if len(chapters) > 1 or any(set(v["chapters"]) & set(chapters)
+                                        for v in workflow.long_videos(project)):
+                span = workflow.long_label(project, chapters) if len(chapters) > 1 else chapters[0]
+                options.append(("Long video...", f"one video of chapters {span} - join their videos, make it "
+                                "all from source, or delete one made before", "long"))
             if any(workflow.has_marks(project, ch) for ch in chapters):
                 options.append(("Remake from source", "deletes everything but the pages, panel marks and "
                                 "narration.json, then makes it all again", "source"))
@@ -116,6 +121,8 @@ class ChapterMenu:
                     f"narration.json, then cut, narrate (the slow part) and make the video again?",
                     yes="Remake from source", danger=True)):
                 await self.make_videos(chapters, config, from_source=True)
+        elif action == "long":
+            await self.long_video(chapters, config)
         elif action == "remix":
             await self.remix_videos(chapters, config)
         elif action == "reaudio":

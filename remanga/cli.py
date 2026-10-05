@@ -7,6 +7,8 @@
     remanga review   -p NAME -c 1               (flag what the LLM got wrong)
     remanga pdf      -p NAME -c 1-5
     remanga video    -p NAME -c 1-5 [--force | --remix]   (--remix: new music/sound, same narration)
+    remanga long     -p NAME -c 1-5 [--from-source | --delete]   (one video of several chapters)
+    remanga long     -p NAME                    (the long videos made so far)
     remanga chapters -p NAME
     remanga queue    [--run]                    (the job queue the menus fill; --run runs it)
     remanga voices                              (one line in every voice, to listen to)
@@ -62,6 +64,12 @@ def build_parser() -> argparse.ArgumentParser:
                    help="delete everything but the pages, panel marks and narration.json, then make it all again")
     v.add_argument("--audio-only", action="store_true",
                    help="narrate, mix and render as usual, then keep only the raw narration clips")
+    lv = with_project("long", "One video of several chapters: their videos joined, the intro once in front; "
+                              "without -c, list the long videos made", chapters=False)
+    lv.add_argument("--chapters", "-c", default=None, help="a range (1-5), several (1-5,8), or 'all'")
+    lv.add_argument("--from-source", action="store_true",
+                    help="remake every chapter from its pages, panel marks and narration.json first, then join")
+    lv.add_argument("--delete", action="store_true", help="delete the long video of these chapters")
     with_project("chapters", "Show where each chapter is", chapters=False)
     qp = sub.add_parser("queue", help="Show the job queue (filled from the menus: a chapter's Add to queue)")
     qp.add_argument("--run", action="store_true", help="run every job not done yet, one after another")
@@ -112,6 +120,13 @@ def _run(args: argparse.Namespace) -> None:
         for chapter in chapters:
             console.print(f"  chapter {chapter:>6}  {workflow.chapter_state(args.project, chapter)}")
         return
+    if args.command == "long" and not args.chapters:
+        made = workflow.long_videos(args.project)
+        if not made:
+            console.print("[yellow]No long videos yet - make one with -c 1-5.[/]")
+        for video in made:
+            console.print(f"  ch{_esc(video['label']):<12} {_esc(str(video['video'] or '(no finished video)'))}")
+        return
     if args.command == "download":
         listing = workflow.mangadex_chapters(args.project, config, args.url)
         if not args.chapters:
@@ -133,6 +148,15 @@ def _run(args: argparse.Namespace) -> None:
         raise ValueError(f"No downloaded chapter matches '{args.chapters}'.")
     if args.command == "mark":
         workflow.mark(args.project, chapters, config)
+        return
+    if args.command == "long":
+        if args.delete:
+            label = workflow.long_label(args.project, chapters)
+            removed = workflow.delete_long_video(args.project, label)
+            console.print(f"Deleted the long video of chapters {_esc(label)}" if removed
+                          else f"[yellow]There is no long video of chapters {_esc(label)}.[/]")
+        else:
+            workflow.make_long_video(args.project, chapters, config, from_source=args.from_source)
         return
     if args.command in ("write", "review"):
         step = workflow.write_narration if args.command == "write" else workflow.review_narration

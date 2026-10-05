@@ -8,6 +8,7 @@
     pdf        the panels as PDF parts for the LLM, and the hand-off
     video      the pasted narration -> clips -> mix -> render; or a new mix
                and render from the clips already there
+    long_video one video of several chapters, joined or made from source
     voices     one line in every voice the engine has, to listen to
     cleanup    resetting or deleting a chapter
 
@@ -33,6 +34,14 @@ from remanga.workflow.cleanup import (
 )
 from remanga.workflow.deletables import deletable_items, delete_items
 from remanga.workflow.download import download, print_chapter_list
+from remanga.workflow.long_video import (
+    delete_long_video,
+    join_chapters,
+    long_label,
+    long_videos,
+    make_long_video,
+    prepare_chapter,
+)
 from remanga.workflow.narration import review_narration, write_narration
 from remanga.workflow.panels import cut_panels, mark
 from remanga.workflow.pdf import PdfResult, make_pdf, print_handoff
@@ -68,6 +77,7 @@ __all__ = [
     "cut_panels",
     "deletable_items",
     "delete_items",
+    "delete_long_video",
     "download",
     "drop_audio_and_video",
     "drop_derived",
@@ -75,7 +85,11 @@ __all__ = [
     "has_audio",
     "has_marks",
     "has_panels",
+    "join_chapters",
     "local_chapters",
+    "long_label",
+    "long_videos",
+    "make_long_video",
     "make_pdf",
     "make_video",
     "mangadex_chapters",
@@ -84,6 +98,7 @@ __all__ = [
     "narrate",
     "page_files",
     "panel_files",
+    "prepare_chapter",
     "print_chapter_list",
     "print_handoff",
     "project_name_from_title",
