@@ -9,6 +9,7 @@
     remanga video    -p NAME -c 1-5 [--force | --remix]   (--remix: new music/sound, same narration)
     remanga long     -p NAME -c 1-5 [--from-source | --delete]   (one video of several chapters)
     remanga long     -p NAME                    (the long videos made so far)
+    remanga upload   -p NAME                    (restamp every video's title, description, thumbnail)
     remanga chapters -p NAME
     remanga queue    [--run]                    (the job queue the menus fill; --run runs it)
     remanga voices                              (one line in every voice, to listen to)
@@ -71,6 +72,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="remake every chapter from its pages, panel marks and narration.json first, then join")
     lv.add_argument("--delete", action="store_true", help="delete the long video of these chapters")
     with_project("chapters", "Show where each chapter is", chapters=False)
+    with_project("upload", "Write every finished video's title, description and thumbnail again from the "
+                           "project's upload/ folder (after editing it)", chapters=False)
     qp = sub.add_parser("queue", help="Show the job queue (filled from the menus: a chapter's Add to queue)")
     qp.add_argument("--run", action="store_true", help="run every job not done yet, one after another")
     sub.add_parser("voices", help="Read one line in each of the narrator engine's voices, into "
@@ -119,6 +122,10 @@ def _run(args: argparse.Namespace) -> None:
             console.print("[yellow]No chapters downloaded yet.[/]")
         for chapter in chapters:
             console.print(f"  chapter {chapter:>6}  {workflow.chapter_state(args.project, chapter)}")
+        return
+    if args.command == "upload":
+        for path in workflow.stamp_all(args.project):
+            console.print(f"  {_esc(str(path))}")
         return
     if args.command == "long" and not args.chapters:
         made = workflow.long_videos(args.project)

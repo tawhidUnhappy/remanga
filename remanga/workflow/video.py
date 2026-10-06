@@ -9,6 +9,7 @@ from pathlib import Path
 from remanga.config import RemangaConfig
 from remanga.console import console, escape as _esc
 from remanga.narration import load_narration, panel_files
+from remanga.workflow.upload import stamp_quietly
 
 # Four steps, each reusing what is already done and still current. The menus
 # run them one by one to show each; make_video runs them in a row.
@@ -81,7 +82,9 @@ def remix_video(project: str, chapter: str, config: RemangaConfig) -> Path:
         console.print(f"  [yellow]- the clips are in {_esc(other_voice)}, not the voice set now - they are "
                       f"kept as they are; Make video narrates in the new one[/]")
     mix(project, chapter, config, force=True)
-    return render(project, chapter, config)
+    video = render(project, chapter, config)
+    stamp_quietly(project, chapter, video)
+    return video
 
 
 def remake_from_source(project: str, chapter: str, config: RemangaConfig) -> Path:
@@ -124,4 +127,5 @@ def make_video(project: str, chapter: str, config: RemangaConfig, force: bool = 
 
         drop_mix_and_video(project, chapter)
         return get_audio_dir(project, chapter, create=False)
+    stamp_quietly(project, chapter, video)
     return video

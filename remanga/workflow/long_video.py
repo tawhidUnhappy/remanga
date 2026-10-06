@@ -33,6 +33,7 @@ from remanga.paths import (
 )
 from remanga.workflow.chapters import local_chapters
 from remanga.workflow.cleanup import delete_paths, inside
+from remanga.workflow.upload import stamp_quietly
 
 INFO = "long.json"
 
@@ -199,4 +200,5 @@ def join_chapters(project: str, chapters: list[str], config: RemangaConfig) -> P
         work.rmdir()
     write_json(folder / INFO, {"label": label, "chapters": chapters, "intro": intro_identity(config.video)})
     console.print(f"[bold green]✓ Long video of chapters {_esc(label)}:[/] {_esc(str(final))}")
+    stamp_quietly(project, label, final)
     return final

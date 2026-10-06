@@ -11,6 +11,8 @@
     long_video one video of several chapters, joined or made from source
     voices     one line in every voice the engine has, to listen to
     cleanup    resetting or deleting a chapter
+    upload     the project's one title, description and thumbnail, stamped
+               for each video
 
 Everything is re-exported here, so `workflow.make_pdf(...)` reads the same
 from the command line (cli.py) and the menus (remanga/ui/) - which is the
@@ -51,6 +53,7 @@ from remanga.workflow.projects import (
     project_name_from_title,
     settle_reading_direction,
 )
+from remanga.workflow.upload import stamp_all
 from remanga.workflow.video import (
     check_narration,
     make_video,
@@ -112,5 +115,6 @@ __all__ = [
     "samples_dir",
     "select_chapters",
     "settle_reading_direction",
+    "stamp_all",
     "write_narration",
 ]

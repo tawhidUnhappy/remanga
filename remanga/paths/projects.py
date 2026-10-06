@@ -9,6 +9,8 @@
       audio_modified/chapter_N/         the mixed master track
       video/chapter_N/<manga>_chN_recap.mp4, _work/
       logs/chapter_N.log                what the menus' work printed
+      upload/                           the project's one title, description and
+                                        thumbnail spec, stamped per video (source)
 
 A chapter's folder holds only what can't be rebuilt (pages, narration);
 everything generated lives one level up, per kind."""
@@ -167,3 +169,10 @@ def get_long_video_log_path(project_name: str, label: str) -> Path:
     path = get_project_dir(project_name) / "logs" / f"long_ch{_clean_chapter(label)}.log"
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def get_upload_dir(project_name: str) -> Path:
+    """upload/: the project's one YouTube title, description and thumbnail
+    spec - written once, never deleted by a re-render; every video gets its
+    own copy stamped with its chapter (workflow/upload.py)."""
+    return get_project_dir(project_name) / "upload"
