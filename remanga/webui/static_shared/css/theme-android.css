@@ -1,0 +1,156 @@
+/* The "Android 17" look (Material 3 Expressive), the same family as zQR, zOffice and theroj: tonal
+   surfaces instead of hairlines, pill buttons that morph to rounded squares when chosen, large rounded
+   cards, springy motion, light or dark with the system. Active when <html data-style="android">
+   (the default; the Look button in the top bar switches to the terminal look in theme.css).
+   It only sets the palette names every stylesheet reads, plus shapes for shared controls. */
+
+:root[data-style='android'] {
+  --bg: #fef7ff;
+  --surface: #f3edf7;
+  --surface-2: #ece6f0;
+  --surface-3: #e6e0e9;
+  --border: #e6e0e9;
+  --border-strong: #cac4d0;
+  --text: #1d1b20;
+  --text-dim: #49454f;
+  --text-faint: #79747e;
+  --accent: #6750a4;
+  --accent-ink: #ffffff;
+  --primary: #6750a4;
+  --tonal: #e8def8;
+  --on-tonal: #1d192b;
+  --ok: #386a20;
+  --warn: #7d5700;
+  --danger: #b3261e;
+  --ai: #386a20;
+  --ai-ink: #ffffff;
+  --guide: #0b57d0;
+  --grid-dot: rgba(29, 27, 32, 0.06);
+  --shadow: 0 2px 8px rgba(29, 27, 32, 0.12);
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-style='android'] {
+    --bg: #141218;
+    --surface: #211f26;
+    --surface-2: #2b2930;
+    --surface-3: #36343b;
+    --border: #36343b;
+    --border-strong: #49454f;
+    --text: #e6e0e9;
+    --text-dim: #cac4d0;
+    --text-faint: #938f99;
+    --accent: #d0bcff;
+    --accent-ink: #381e72;
+    --primary: #d0bcff;
+    --tonal: #4a4458;
+    --on-tonal: #e8def8;
+    --ok: #9ed383;
+    --warn: #f6bd58;
+    --danger: #f2b8b5;
+    --ai: #9ed383;
+    --ai-ink: #0c1a11;
+    --guide: #a8c7fa;
+    --grid-dot: rgba(255, 255, 255, 0.05);
+    --shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+    color-scheme: dark;
+  }
+}
+
+[data-style='android'] body {
+  font-family: 'Google Sans Flex', 'Google Sans', 'Roboto Flex', Roboto, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* Bars: one tonal surface, no hairline. */
+[data-style='android'] .topbar,
+[data-style='android'] header {
+  border: 0 !important;
+  background: var(--surface) !important;
+  box-shadow: none;
+}
+
+/* Buttons: pills; the chosen one morphs to a rounded square on a tonal fill. */
+[data-style='android'] button,
+[data-style='android'] .tool-btn,
+[data-style='android'] .icon-btn,
+[data-style='android'] .save-btn,
+[data-style='android'] .rm-close-btn,
+[data-style='android'] .status-pill,
+[data-style='android'] .story-badge {
+  border-radius: 999px !important;
+  transition: border-radius 0.3s var(--spring), background-color 0.15s, transform 0.2s var(--spring);
+}
+[data-style='android'] button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+[data-style='android'] .tool-btn.active,
+[data-style='android'] button[aria-pressed='true'] {
+  border-radius: 14px !important;
+  background: var(--tonal) !important;
+  color: var(--on-tonal) !important;
+  box-shadow: none !important;
+}
+[data-style='android'] .save-btn {
+  border: 0 !important;
+  background: var(--accent) !important;
+  color: var(--accent-ink) !important;
+}
+
+/* Cards and panels: large rounded tonal surfaces. */
+[data-style='android'] .rm-card,
+[data-style='android'] .panel-card,
+[data-style='android'] .card {
+  border-color: transparent !important;
+  border-radius: 28px !important;
+  background: var(--surface) !important;
+  box-shadow: var(--shadow) !important;
+}
+[data-style='android'] .panel-card.empty {
+  box-shadow: 0 0 0 2px var(--danger) !important;
+}
+
+/* Fields: filled, rounded, an accent line when focused. */
+[data-style='android'] input:not([type='checkbox']):not([type='radio']):not([type='range']),
+[data-style='android'] textarea,
+[data-style='android'] select {
+  border-radius: 16px !important;
+  background: var(--surface-2) !important;
+  color: var(--text);
+}
+[data-style='android'] :focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+[data-style='android'] kbd {
+  border-radius: 8px !important;
+}
+[data-style='android'] ::selection {
+  background: var(--tonal);
+  color: var(--on-tonal);
+}
+
+/* The Look switch itself (added to every top bar by look.js). */
+.look-btn {
+  margin-left: 6px;
+  padding: 5px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.look-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-style='android'] * {
+    transition: none !important;
+  }
+}
