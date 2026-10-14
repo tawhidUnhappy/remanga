@@ -74,6 +74,35 @@ def long_videos(project: str) -> list[dict]:
     return found
 
 
+def _starts(chapters: list[str], lengths: list[float], total: float) -> dict[str, float]:
+    """Where each chapter begins in the long video, in seconds: whatever is
+    in front of the first one (the intro) is the total less the chapters."""
+    at = max(total - sum(lengths), 0.0)
+    starts = {}
+    for chapter, length in zip(chapters, lengths, strict=True):
+        starts[chapter] = round(at, 3)
+        at += length
+    return starts
+
+
+def chapter_starts(project: str, label: str) -> dict[str, float] | None:
+    """{chapter: seconds into the long video} - as recorded by the join, or,
+    for a long video joined before that was recorded, measured from the
+    chapters' pictures now. None when there is no such long video."""
+    from remanga.video.intro import _duration
+
+    info = read_json_or(get_long_video_dir(project, label, create=False) / INFO, {})
+    final = get_long_video_path(project, label, create=False)
+    if not info.get("chapters") or not final.exists():
+        return None
+    if info.get("starts"):
+        return info["starts"]
+    pictures = [get_video_picture_path(project, ch, create=False) for ch in info["chapters"]]
+    if not all(p.exists() for p in pictures):
+        return None
+    return _starts(info["chapters"], [_duration(p) for p in pictures], _duration(final))
+
+
 def delete_long_video(project: str, label: str) -> list[Path]:
     """Deletes one long video's folder - only ever a folder inside
     video/long/ of this project - and video/long/ itself once it is empty.
@@ -137,12 +166,14 @@ def join_chapters(project: str, chapters: list[str], config: RemangaConfig) -> P
 
     renderer = VideoRenderer(config.system, config.video)
     segments: list[Path] = []
+    lengths: list[float] = []
     try:
         # 1. Each chapter's picture with its own sound, the sound padded or cut
         # to the picture's exact length.
         for chapter in chapters:
             picture = get_video_picture_path(project, chapter)
             seconds = _duration(picture)
+            lengths.append(seconds)
             segment = work / f"chapter_{chapter}.mp4"
             result = run_ffmpeg(["ffmpeg", "-y", "-i", str(picture), "-i", str(get_master_audio_path(project, chapter)),
                                  "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-af", "apad",
@@ -198,7 +229,8 @@ def join_chapters(project: str, chapters: list[str], config: RemangaConfig) -> P
     # folder is left empty, and goes.
     if not any(work.iterdir()):
         work.rmdir()
-    write_json(folder / INFO, {"label": label, "chapters": chapters, "intro": intro_identity(config.video)})
+    write_json(folder / INFO, {"label": label, "chapters": chapters, "intro": intro_identity(config.video),
+                               "starts": _starts(chapters, lengths, _duration(final))})
     console.print(f"[bold green]✓ Long video of chapters {_esc(label)}:[/] {_esc(str(final))}")
     stamp_quietly(project, label, final)
     return final

@@ -15,7 +15,9 @@ The user wants ONE title, description and thumbnail per project, not one per cha
 `projects/<P>/upload/` and are never deleted by a re-render:
 
 - `title.txt` - the title; ` ({num})` is appended unless it holds `{num}` itself
-- `description.txt` - may hold `{num}` and `{chapter}`
+- `description.txt` - may hold `{num}`, `{chapter}` and `{timestamps}` (a long video's YouTube
+  chapter list, `0:00 Chapter 1` a line, from long.json `starts`; empty for a chapter's own video,
+  and the blank lines around it close up)
 - `thumbnail.json` - one spec (format: `remanga/video/thumbnail.py`); tiles may name their own
   `chapter`; a label may hold `{num}` and may leave out `to` (no arrow) - the `CH {num}` badge
 
@@ -44,6 +46,7 @@ one label each - the two roles of the premise:
 | IReincarnated | Lloyd smirking -> VILLAIN | Cain on his knees -> REAL HERO |
 | Golem Master | tired salaryman (001_003_02) -> COMPANY SLAVE | elf from the title spread (001_002_02, zoom 2.8 top-left: clears the logo and caption boxes) -> GOLEM MASTER |
 | If Her Flag Breaks (upload/, series) | Souta + Akane under five friendship flags, "I WANNA BREAK THEM" bubble (002_031_05 from ch2, cy 0.54) -> FLAG BREAKER at Souta | Nanami colour cover (same box) -> NO FLAG?!; `CH {num}` badge top-left |
+| IReincarnated (upload/, series, 2026-10-14) | villain Lloyd laughing, colour page 001_001.jpg box 0,720,720,1530 -> VILLAIN LEADER | reformed Lloyd + Lilina from the colour spread 001_002.jpg box 244,20,674,503 -> STOLE THE HEROINE at Lilina (his Steal skill); `CH {num}` top-right |
 | If Her Flag Breaks (ch1, old) | Souta beside a flag on a classmate's head (001_034_02, zoom 1.2 cx 0.4: crops out a YEAH. bubble) -> FLAG BREAKER | Nanami from the COLOUR cover (page 001_002.jpg, box 530,60,1085,1000 - between the title text and the spine) -> NO FLAG?! |
 
 ## Steps (run with remanga's `.venv/bin/python`)
@@ -78,6 +81,16 @@ cuts at 100 characters - the three shipped ones are 93-98. Examples:
 - He Reincarnated As The Villain Leader, So He Kicked HIMSELF Out Before The Revenge | Manga Recap
 
 ## Description
+
+**The user wants the manga link and the chapter range in every set (2026-10-14):** the range is
+`({num})` on the title, the `CH {num}` badge on the thumbnail and `▶ {chapter}` in the description;
+the link is `📖 Read the manga: <manga_url from project.json>` in the description.
+
+**Viral asks (2026-10-14):** what the research supports - an expressive face, 3-4 words a label,
+thumbnail and title each carrying half the hook (never the same words), the hook's keywords in the
+first ~150 characters of the description, chapter timestamps on long videos, 5 hashtags (the first
+three show above the title). "Fanservice" means the cute heroine in colour and the official Harem
+tag - never a sexual angle on a character the story calls young (Lilina is "a young beastkin girl").
 
 In this order: a two-paragraph hook from the chapter (setup, then twist - no ending spoilers past
 the chapter); `Manga:` official English title, the romaji title in brackets; `Story: ... · Art: ...`;

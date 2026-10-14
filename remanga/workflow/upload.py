@@ -8,7 +8,9 @@ video (user request, 2026-10-06).
                                          its labels may hold {num} too
 
 {num} is the chapter zero-padded - 01, 05.5, 01-02 for a long video - and
-{chapter} spelled out - Chapter 1, Chapters 1-2.
+{chapter} spelled out - Chapter 1, Chapters 1-2. {timestamps} is a long
+video's chapter list for YouTube ("0:00 Chapter 1" a line); in a chapter's
+own video it is empty, and the blank lines around it close up.
 
 Each finished video gets its own copy beside it, named like it:
 <P>_ch<N>_{title.txt,description.txt,thumbnail.jpg}. Make video empties the
@@ -45,6 +47,29 @@ def _fill(template: str, fields: dict[str, str]) -> str:
     return template
 
 
+def _clock(seconds: float) -> str:
+    seconds = int(seconds)
+    hours, rest = divmod(seconds, 3600)
+    return f"{hours}:{rest // 60:02d}:{rest % 60:02d}" if hours else f"{rest // 60}:{rest % 60:02d}"
+
+
+def timestamps(project: str, label: str, video: Path) -> str:
+    """A long video's chapters as YouTube reads them: the first at 0:00 (the
+    intro, when there is one in front), one line each. Empty for a chapter's
+    own video."""
+    from remanga.paths import get_long_videos_dir
+    from remanga.workflow.long_video import chapter_starts
+
+    if video.parent.parent != get_long_videos_dir(project):
+        return ""
+    starts = chapter_starts(project, label)
+    if not starts:
+        return ""
+    lines = [] if min(starts.values()) < 1 else ["0:00 Intro"]
+    lines += [f"{_clock(at)} Chapter {chapter}" for chapter, at in starts.items()]
+    return "\n".join(lines)
+
+
 def has_templates(project: str) -> bool:
     folder = get_upload_dir(project)
     return any((folder / name).exists() for name in (TITLE, DESCRIPTION, THUMBNAIL))
@@ -74,9 +99,10 @@ def stamp(project: str, label: str, video: Path) -> list[Path]:
 
     description_file = folder / DESCRIPTION
     if description_file.exists():
+        text = _fill(description_file.read_text(encoding="utf-8").strip(),
+                     {**fields, "timestamps": timestamps(project, label, video)})
         out = video.with_name(f"{base}_description.txt")
-        out.write_text(_fill(description_file.read_text(encoding="utf-8").strip(), fields) + "\n",
-                       encoding="utf-8")
+        out.write_text(re.sub(r"\n{3,}", "\n\n", text) + "\n", encoding="utf-8")
         written.append(out)
 
     spec_file = folder / THUMBNAIL
