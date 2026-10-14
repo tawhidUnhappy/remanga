@@ -34,6 +34,59 @@ def quality_warnings(project: str, chapter: str, config: RemangaConfig, panels: 
     return [warning] if warning else []
 
 
+def _narrated_timing(project: str, chapter: str) -> dict | None:
+    """The narrated clips' timing.json, or None when the chapter was never narrated."""
+    from remanga.json_io import read_json_or
+    from remanga.paths import get_audio_timing_path
+
+    timing = read_json_or(get_audio_timing_path(project, chapter, create=False), None)
+    return timing if timing and timing.get("panels") else None
+
+
+def narration_changed(timing: dict, panels: list) -> str | None:
+    """The first panel whose narration.json text is not what was narrated, or
+    None when the clips still say exactly what narration.json says."""
+    wanted = [(p.panel_id, p.text) for p in panels]
+    recorded = [(row.get("panel_id"), row.get("text")) for row in timing["panels"]]
+    if wanted == recorded:
+        return None
+    return next((w[0] for w, r in zip(wanted, recorded, strict=False) if w != r), None) or "the panel list"
+
+
+def check_chapter(project: str, chapter: str, config: RemangaConfig) -> dict:
+    """Make video's narration check with nothing made or deleted, so many
+    chapters can be checked at once (user request, 2026-10-14): narration.json
+    against the cut panels, the voice rules, and whether the narration audio
+    still says what narration.json says. Never raises for what it finds -
+    `state` is "ok", "problems" or "not ready", with the lines that say why.
+    A failing chapter gets its fix request written, as Make video does."""
+    from remanga.json_io import has_real_json_content
+    from remanga.narration import FIX_REQUEST_NAME, NarrationError, page_files
+    from remanga.paths import get_narration_path, get_pdf_dir
+
+    if not page_files(project, chapter):
+        return {"state": "not ready", "errors": [], "warnings": [], "notes": ["not downloaded"]}
+    if not has_real_json_content(get_narration_path(project, chapter)):
+        return {"state": "not ready", "errors": [], "warnings": [], "notes": ["no narration.json yet"]}
+    if not panel_files(project, chapter):
+        return {"state": "not ready", "errors": [], "warnings": [], "notes": ["no cut panels yet - Make PDF"]}
+    try:
+        panels, warnings = check_narration(project, chapter)
+    except NarrationError as error:
+        lines = str(error).splitlines()
+        errors = [line.strip()[2:] for line in lines if line.startswith("  - ")] or lines
+        fix = get_pdf_dir(project, chapter) / FIX_REQUEST_NAME
+        return {"state": "problems", "errors": errors, "warnings": [], "notes": [],
+                "fix": fix if fix.exists() else None}
+    warnings = warnings + quality_warnings(project, chapter, config, panels)
+    timing = _narrated_timing(project, chapter)
+    changed = narration_changed(timing, panels) if timing else None
+    errors = [f"narration.json has changed since it was narrated (first difference: {changed}) - the audio "
+              f"does not match it; Make video narrates it again"] if changed else []
+    notes = [f"{len(panels)} panel(s) to narrate" + ("" if timing else ", not narrated yet")]
+    return {"state": "problems" if errors else "ok", "errors": errors, "warnings": warnings, "notes": notes}
+
+
 def narrate(project: str, chapter: str, panels: list, config: RemangaConfig, force: bool = False) -> Path:
     from remanga.audio import TTSEngine
 
@@ -63,17 +116,13 @@ def remix_video(project: str, chapter: str, config: RemangaConfig) -> Path:
     Refuses when narration.json no longer says what the clips say - a video
     whose words and pictures disagree is worse than waiting for Make video."""
     from remanga.audio.narration_voice import voice_changed_from
-    from remanga.json_io import read_json_or
-    from remanga.paths import get_audio_timing_path
 
-    timing = read_json_or(get_audio_timing_path(project, chapter, create=False), None)
-    if not timing or not timing.get("panels"):
+    timing = _narrated_timing(project, chapter)
+    if not timing:
         raise FileNotFoundError(f"Chapter {chapter} has not been narrated yet - use Make video first.")
     panels, _ = check_narration(project, chapter)
-    wanted = [(p.panel_id, p.text) for p in panels]
-    recorded = [(row.get("panel_id"), row.get("text")) for row in timing["panels"]]
-    if wanted != recorded:
-        changed = next((w[0] for w, r in zip(wanted, recorded, strict=False) if w != r), None) or "the panel list"
+    changed = narration_changed(timing, panels)
+    if changed:
         raise ValueError(f"Chapter {chapter}'s narration.json has changed since it was narrated (first "
                          f"difference: {changed}) - use Make video to narrate it again.")
     console.print(f"[bold]Chapter {chapter}:[/] reusing the {len(panels)} narrated panel(s) - no narrating")

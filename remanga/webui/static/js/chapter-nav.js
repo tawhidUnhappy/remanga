@@ -58,12 +58,10 @@ export async function applyChapter(payload, startPage = 0) {
   updateReadOnlyChrome();
   resetAssistCard();
 
-  // Adjust rather than Draw whenever this chapter already has marks (loaded
-  // from its crops.json server-side, or made earlier in this same session and
-  // come back to). Re-evaluated per chapter, because chapter 4 being freshly
-  // downloaded says nothing about chapter 3 having been marked an hour ago.
-  const hasMarks = Object.values(state.pageMarksCache).some(marks => marks.length > 0);
-  setMode(hasMarks ? "adjust" : "draw");
+  // Every chapter opens in Adjust (user request, 2026-10-14), marked or not:
+  // Adjust draws new boxes too (draw.js), and D is one key away. Set per
+  // chapter, so a switch to Draw on one chapter does not carry over to the next.
+  setMode("adjust");
 
   await loadPage(startPage);
   refreshOutline();

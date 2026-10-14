@@ -15,7 +15,7 @@ from textual.widgets import DataTable, Footer, LoadingIndicator
 
 from remanga import workflow
 from remanga.config import RemangaConfig
-from remanga.ui.dialogs import Confirm
+from remanga.ui.dialogs import Choice, Confirm
 from remanga.ui.screens.chapter_menu import ChapterMenu
 from remanga.ui.screens.chapter_work import ChapterWork
 from remanga.ui.screens.common import _STATUS, _fetch_listing, _merge_rows
@@ -29,6 +29,7 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
     BINDINGS = [
         Binding("space", "pick", "Pick"),
         Binding("r", "pick_range", "Pick range"),
+        Binding("p", "pick_all", "Pick all"),
         Binding("a", "download_new", "Download all new"),
         Binding("j", "queue", "Queue"),
         Binding("s", "settings", "Settings"),
@@ -126,6 +127,26 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
             self.marks.add(index)
             table.update_cell_at((index, 0), self._mark(index))
         self.anchor = row
+        self.update_info()
+
+    @work(exclusive=True, group="pick")
+    async def action_pick_all(self) -> None:
+        """Picks every chapter, or every one with its pages on disk (user
+        request, 2026-10-14) - or clears the picks."""
+        have = [i for i, r in enumerate(self.rows) if r["status"] in ("downloaded", "local")]
+        options = [("All chapters", f"all {len(self.rows)}, downloaded or not", "all"),
+                   ("All downloaded", f"the {len(have)} with their pages on disk", "downloaded")]
+        if self.marks:
+            options.append(("Pick none", f"clear the {len(self.marks)} picked", "none"))
+        which = await self.app.push_screen_wait(Choice("Pick", options))
+        if which is None:
+            return
+        self.marks = (set(range(len(self.rows))) if which == "all" else set(have) if which == "downloaded"
+                      else set())
+        self.anchor = None
+        table = self.query_one(SafeTable)
+        for index in range(len(self.rows)):
+            table.update_cell_at((index, 0), self._mark(index))
         self.update_info()
 
     def action_pick(self) -> None:

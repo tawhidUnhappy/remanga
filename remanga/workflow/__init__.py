@@ -55,6 +55,7 @@ from remanga.workflow.projects import (
 )
 from remanga.workflow.upload import stamp_all
 from remanga.workflow.video import (
+    check_chapter,
     check_narration,
     make_video,
     mix,
@@ -75,6 +76,7 @@ __all__ = [
     "SAMPLE_TEXT",
     "PdfResult",
     "chapter_state",
+    "check_chapter",
     "check_narration",
     "create_project",
     "cut_panels",

@@ -48,6 +48,9 @@ class ChapterMenu:
         narrated = False
         if not on_disk:
             options.append(("Download", "fetch the pages", "download"))
+            if some_on_disk:
+                options.append(("Check narration", "the downloaded ones' narration.json against their panels "
+                                "and narrated audio - lists each mismatch, makes nothing", "check"))
         else:
             options.append(("Mark panels", "open the Panel Marker in the browser - MAGI finds them, you "
                             "fix them", "mark"))
@@ -72,6 +75,8 @@ class ChapterMenu:
                 span = workflow.long_label(project, chapters) if len(chapters) > 1 else chapters[0]
                 options.append(("Long video...", f"one video of chapters {span} - join their videos, make it "
                                 "all from source, or delete one made before", "long"))
+            options.append(("Check narration", "every picked chapter's narration.json against its panels and "
+                            "its narrated audio - lists each mismatch, makes nothing", "check"))
             if any(workflow.has_marks(project, ch) for ch in chapters):
                 options.append(("Remake from source", "deletes everything but the pages, panel marks and "
                                 "narration.json, then makes it all again", "source"))
@@ -123,6 +128,8 @@ class ChapterMenu:
                 await self.make_videos(chapters, config, from_source=True)
         elif action == "long":
             await self.long_video(chapters, config)
+        elif action == "check":
+            await self.check_chapters(chapters, config)
         elif action == "remix":
             await self.remix_videos(chapters, config)
         elif action == "reaudio":

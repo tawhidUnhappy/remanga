@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from rich.text import Text
+
 from remanga import workflow
 from remanga.config import RemangaConfig
 from remanga.humanize import fmt_size
@@ -86,6 +88,49 @@ class VideoWork:
                 video = _short(outcome.results[-1])
                 await self.show(f"Chapter {chapter}: video ready", [video], ok=True,
                                 warnings=found.get("warnings", []), log=log, copy=[video])
+
+    async def check_chapters(self, chapters: list[str], config: RemangaConfig) -> None:
+        """Make video's narration check over every picked chapter at once -
+        each chapter's mismatches listed, not just the first failing chapter's,
+        and nothing made or deleted."""
+        project = self.project
+        chapters = ordered(project, chapters)
+        log = get_log_path(project)
+        outcome = await self.run_task(f"Checking {len(chapters)} chapter(s)", [
+            Step(f"Chapter {ch}", lambda ch=ch: workflow.check_chapter(project, ch, config)) for ch in chapters
+        ], log)
+        if not outcome.ok:
+            await self.show(f"Check {'stopped' if outcome.stopped else 'failed'}", outcome.error.splitlines(),
+                            ok=False, log=log)
+            return
+        reports = dict(zip(chapters, outcome.results, strict=True))
+        bad = [ch for ch, r in reports.items() if r["state"] == "problems"]
+        good = [ch for ch, r in reports.items() if r["state"] == "ok"]
+        waiting = [ch for ch, r in reports.items() if r["state"] == "not ready"]
+        lines: list[str | Text] = [Text(
+            f"{len(good)} fine · {len(bad)} with problems · {len(waiting)} not ready", style="bold")]
+        # Problems first - they are what this is for - then the warnings of the
+        # ones that pass, then the ones there is nothing to check in yet.
+        for ch in bad + good:
+            report = reports[ch]
+            if report["state"] == "ok" and not report["warnings"]:
+                continue
+            lines += ["", Text(f"Chapter {ch}" + (" - " + "; ".join(report["notes"]) if report["notes"] else ""),
+                               style="bold red" if report["state"] == "problems" else "bold")]
+            lines += [Text(f"  ✗ {e}", style="red") for e in report["errors"]]
+            if report.get("fix"):
+                lines.append(Text(f"  fix request: {_short(report['fix'])}", style="dim"))
+            lines += [Text(f"  ! {w}", style="yellow") for w in report["warnings"]]
+        if good:
+            lines += ["", Text(f"Fine: {', '.join(good)}", style="green")]
+        if waiting:
+            lines += ["", Text("Not ready: " + ", ".join(f"{ch} ({'; '.join(reports[ch]['notes'])})"
+                                                          for ch in waiting), style="dim")]
+        fixes = [_short(r["fix"]) for r in reports.values() if r.get("fix")]
+        if fixes:
+            lines += ["", Text("Paste each fix request into the same LLM chat and save its new reply over that "
+                               "chapter's narration.json.", style="dim")]
+        await self.show(f"Checked {len(chapters)} chapter(s)", lines, ok=not bad, log=log, copy=fixes)
 
     async def long_video(self, chapters: list[str], config: RemangaConfig) -> None:
         """One video of the picked chapters: join their videos, make it all

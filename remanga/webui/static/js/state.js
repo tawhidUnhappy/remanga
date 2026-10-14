@@ -32,7 +32,7 @@ export const state = {
   pageIndex: 0,
   marks: [],                // current page's marks (same array objects as in cache)
   selectedId: null,
-  mode: "draw",
+  mode: "adjust",
   scale: 1,
   nextLocalId: 1,
   saveDebounce: null,

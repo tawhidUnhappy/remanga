@@ -403,6 +403,15 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   done - Enter never proceeds) -> Confirm -> `delete_items`, every path checked to be that
   chapter's own inside the project, empty folders pruned. Red = can't be rebuilt (pages, marks,
   narration, review). Verified with Pilot on a zz project, screenshot at 116 cols fits one line/row.
+- **Check narration + Pick all (user request, 2026-10-14).** Chapter menu "Check narration" (right
+  after Long video; also offered when only some picks are downloaded) runs `workflow.check_chapter`
+  per picked chapter: Make video's narration check (panels vs narration.json, voice rules, video-size
+  warning) plus `narration_changed` (audio_timing.json vs narration.json - the same test Rebuild
+  video refuses on). Never raises; state ok / problems / not ready, one report for all chapters,
+  fix requests written as Make video does and offered by Copy paths. `p` on the chapters screen:
+  pick all / all downloaded (status downloaded or local) / none. Verified with Pilot on a scratch copy.
+- **Panel Marker opens in Adjust (user request, 2026-10-14)** for every chapter, marked or not
+  (chapter-nav.js applyChapter); Adjust draws new boxes too, D switches to Draw.
 - **Job queue (user request, 2026-09-29).** `workflow/queue.py` holds jobs (project, chapter,
   action) in `projects/queue.json`; only unattended actions (download, pdf, video, remix, reaudio,
   source) - marking and the narration passes need the browser. Menus: a chapter's "Add to queue",
