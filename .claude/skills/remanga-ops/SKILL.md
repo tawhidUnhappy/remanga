@@ -408,7 +408,8 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   per picked chapter: Make video's narration check (panels vs narration.json, voice rules, video-size
   warning) plus `narration_changed` (audio_timing.json vs narration.json - the same test Rebuild
   video refuses on). Never raises; state ok / problems / not ready, one report for all chapters,
-  fix requests written as Make video does and offered by Copy paths. `p` on the chapters screen:
+  fix requests written as Make video does; each failing chapter lists its narration.json and fix
+  request path, both copied by Copy paths (c). `p` on the chapters screen:
   pick all / all downloaded (status downloaded or local) / none. Verified with Pilot on a scratch copy.
 - **Panel Marker opens in Adjust (user request, 2026-10-14)** for every chapter, marked or not
   (chapter-nav.js applyChapter); Adjust draws new boxes too, D switches to Draw.

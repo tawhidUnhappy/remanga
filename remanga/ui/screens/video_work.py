@@ -118,19 +118,22 @@ class VideoWork:
             lines += ["", Text(f"Chapter {ch}" + (" - " + "; ".join(report["notes"]) if report["notes"] else ""),
                                style="bold red" if report["state"] == "problems" else "bold")]
             lines += [Text(f"  ✗ {e}", style="red") for e in report["errors"]]
+            if report.get("narration"):
+                lines.append(Text(f"  narration.json: {_short(report['narration'])}", style="bold"))
             if report.get("fix"):
-                lines.append(Text(f"  fix request: {_short(report['fix'])}", style="dim"))
+                lines.append(Text(f"  fix request:    {_short(report['fix'])}", style="bold"))
             lines += [Text(f"  ! {w}", style="yellow") for w in report["warnings"]]
         if good:
             lines += ["", Text(f"Fine: {', '.join(good)}", style="green")]
         if waiting:
             lines += ["", Text("Not ready: " + ", ".join(f"{ch} ({'; '.join(reports[ch]['notes'])})"
                                                           for ch in waiting), style="dim")]
-        fixes = [_short(r["fix"]) for r in reports.values() if r.get("fix")]
-        if fixes:
+        # Each chapter's narration.json, then its fix request - c copies them in that order.
+        paths = [_short(r[key]) for r in reports.values() for key in ("narration", "fix") if r.get(key)]
+        if any(r.get("fix") for r in reports.values()):
             lines += ["", Text("Paste each fix request into the same LLM chat and save its new reply over that "
                                "chapter's narration.json.", style="dim")]
-        await self.show(f"Checked {len(chapters)} chapter(s)", lines, ok=not bad, log=log, copy=fixes)
+        await self.show(f"Checked {len(chapters)} chapter(s)", lines, ok=not bad, log=log, copy=paths)
 
     async def long_video(self, chapters: list[str], config: RemangaConfig) -> None:
         """One video of the picked chapters: join their videos, make it all

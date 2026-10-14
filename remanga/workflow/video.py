@@ -59,7 +59,8 @@ def check_chapter(project: str, chapter: str, config: RemangaConfig) -> dict:
     against the cut panels, the voice rules, and whether the narration audio
     still says what narration.json says. Never raises for what it finds -
     `state` is "ok", "problems" or "not ready", with the lines that say why.
-    A failing chapter gets its fix request written, as Make video does."""
+    A failing chapter gets its fix request written, as Make video does, and
+    `narration` / `fix` are the narration.json to fix and that request."""
     from remanga.json_io import has_real_json_content
     from remanga.narration import FIX_REQUEST_NAME, NarrationError, page_files
     from remanga.paths import get_narration_path, get_pdf_dir
@@ -77,14 +78,15 @@ def check_chapter(project: str, chapter: str, config: RemangaConfig) -> dict:
         errors = [line.strip()[2:] for line in lines if line.startswith("  - ")] or lines
         fix = get_pdf_dir(project, chapter) / FIX_REQUEST_NAME
         return {"state": "problems", "errors": errors, "warnings": [], "notes": [],
-                "fix": fix if fix.exists() else None}
+                "narration": get_narration_path(project, chapter), "fix": fix if fix.exists() else None}
     warnings = warnings + quality_warnings(project, chapter, config, panels)
     timing = _narrated_timing(project, chapter)
     changed = narration_changed(timing, panels) if timing else None
     errors = [f"narration.json has changed since it was narrated (first difference: {changed}) - the audio "
               f"does not match it; Make video narrates it again"] if changed else []
     notes = [f"{len(panels)} panel(s) to narrate" + ("" if timing else ", not narrated yet")]
-    return {"state": "problems" if errors else "ok", "errors": errors, "warnings": warnings, "notes": notes}
+    return {"state": "problems" if errors else "ok", "errors": errors, "warnings": warnings, "notes": notes,
+            "narration": get_narration_path(project, chapter) if errors else None, "fix": None}
 
 
 def narrate(project: str, chapter: str, panels: list, config: RemangaConfig, force: bool = False) -> Path:
