@@ -30,9 +30,10 @@ YouTube cuts at 100).
 
 ## A/B variants (user request, 2026-10-14)
 
-`title_b.txt`, `thumbnail_b.json`, `_c`, ... beside the plain ones are stamped too
-(`<P>_ch<N>_title_b.txt`, `_thumbnail_b.jpg`) - one per angle of the hook, title and thumbnail
-paired by letter, for YouTube Test & Compare. Each variant a different angle (premise / role swap /
+`title_b.txt`, `thumbnail_b.json`, `_c`, ... beside the plain ones are stamped too - one per angle
+of the hook, title and thumbnail paired by letter, for YouTube Test & Compare. With variants, each
+video gets a folder per letter beside it - `A/` `B/` `C/`, each holding title.txt, thumbnail.jpg,
+description.txt (user: flat `_b`/`_c` files were confusing to pair); a single set stays flat files. Each variant a different angle (premise / role swap /
 power), not the same idea reworded.
 
 **The user's corrections (2026-10-14), over the style below:** never let an arrow touch a face - a

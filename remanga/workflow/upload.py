@@ -14,8 +14,11 @@ own video it is empty, and the blank lines around it close up.
 
 Each finished video gets its own copy beside it, named like it:
 <P>_ch<N>_{title.txt,description.txt,thumbnail.jpg}. For A/B tests, more
-titles and thumbnails sit beside them as title_b.txt, thumbnail_b.json, ...
-and are stamped as <P>_ch<N>_title_b.txt, <P>_ch<N>_thumbnail_b.jpg. Make video empties the
+titles and thumbnails sit beside them as title_b.txt, thumbnail_b.json, ...;
+then each set gets a folder of its own beside the video instead - A/ (title.txt,
+thumbnail.json), B/ (title_b.txt, thumbnail_b.json), ... - each holding its
+title.txt, thumbnail.jpg and description.txt, so a pair is never mixed up
+(user request, 2026-10-14). Make video empties the
 video folder, so the copies are written again after every render (make_video,
 remix_video, join_chapters) - the templates in upload/ are never touched.
 After editing them, `remanga upload -p <P>` restamps every video there is."""
@@ -79,41 +82,52 @@ def has_templates(project: str) -> bool:
 
 def stamp(project: str, label: str, video: Path) -> list[Path]:
     """Writes this video's title, description and thumbnail beside it from
-    the project's templates - whichever of the three exist. Returns what it
-    wrote."""
-    folder = get_upload_dir(project)
+    the project's templates - whichever exist; with A/B variants, one folder
+    per letter. Returns what it wrote."""
+    templates = get_upload_dir(project)
     fields = chapter_fields(label)
     base = video.name.removesuffix("_recap.mp4")
-    written: list[Path] = []
+    titles = {_letter(p): p for p in _variants(templates, TITLE)}
+    thumbnails = {_letter(p): p for p in _variants(templates, THUMBNAIL)}
+    letters = sorted(set(titles) | set(thumbnails)) or ["A"]
 
-    for title_file in _variants(folder, TITLE):
-        title = title_file.read_text(encoding="utf-8").strip()
-        if "{num}" not in title:
-            title += " ({num})"
-        title = _fill(title, fields)
-        if len(title) > YOUTUBE_TITLE_LIMIT:
-            console.print(f"  [yellow]- {title_file.name}: the title is {len(title)} characters; YouTube cuts "
-                          f"it at {YOUTUBE_TITLE_LIMIT}[/]")
-        out = video.with_name(f"{base}_{title_file.stem}.txt")
-        out.write_text(title + "\n", encoding="utf-8")
-        written.append(out)
-
-    description_file = folder / DESCRIPTION
-    if description_file.exists():
-        text = _fill(description_file.read_text(encoding="utf-8").strip(),
+    description = None
+    if (templates / DESCRIPTION).exists():
+        text = _fill((templates / DESCRIPTION).read_text(encoding="utf-8").strip(),
                      {**fields, "timestamps": timestamps(project, label, video)})
-        out = video.with_name(f"{base}_description.txt")
-        out.write_text(re.sub(r"\n{3,}", "\n\n", text) + "\n", encoding="utf-8")
-        written.append(out)
+        description = re.sub(r"\n{3,}", "\n\n", text) + "\n"
 
-    for spec_file in _variants(folder, THUMBNAIL):
-        from remanga.video.thumbnail import compose
+    _clear_stamps(video.parent, base)
+    written: list[Path] = []
+    for letter in letters:
+        if len(letters) > 1:
+            out = video.parent / letter
+            out.mkdir(exist_ok=True)
+            names = {"title": out / "title.txt", "description": out / "description.txt",
+                     "thumbnail": out / "thumbnail.jpg"}
+        else:
+            names = {kind: video.with_name(f"{base}_{kind}.{'jpg' if kind == 'thumbnail' else 'txt'}")
+                     for kind in ("title", "description", "thumbnail")}
+        if letter in titles:
+            title = titles[letter].read_text(encoding="utf-8").strip()
+            if "{num}" not in title:
+                title += " ({num})"
+            title = _fill(title, fields)
+            if len(title) > YOUTUBE_TITLE_LIMIT:
+                console.print(f"  [yellow]- {titles[letter].name}: the title is {len(title)} characters; "
+                              f"YouTube cuts it at {YOUTUBE_TITLE_LIMIT}[/]")
+            names["title"].write_text(title + "\n", encoding="utf-8")
+            written.append(names["title"])
+        if description is not None:
+            names["description"].write_text(description, encoding="utf-8")
+            written.append(names["description"])
+        if letter in thumbnails:
+            from remanga.video.thumbnail import compose
 
-        spec = json.loads(spec_file.read_text(encoding="utf-8"))
-        spec.setdefault("project", project)
-        out = video.with_name(f"{base}_{spec_file.stem}.jpg")
-        compose(spec, fields=fields).save(out, quality=92)
-        written.append(out)
+            spec = json.loads(thumbnails[letter].read_text(encoding="utf-8"))
+            spec.setdefault("project", project)
+            compose(spec, fields=fields).save(names["thumbnail"], quality=92)
+            written.append(names["thumbnail"])
     return written
 
 
@@ -123,6 +137,30 @@ def _variants(folder: Path, name: str) -> list[Path]:
     stem, suffix = name.rsplit(".", 1)
     plain = folder / name
     return ([plain] if plain.exists() else []) + sorted(folder.glob(f"{stem}_*.{suffix}"))
+
+
+def _letter(template: Path) -> str:
+    """title.txt / thumbnail.json -> A, title_b.txt -> B."""
+    return template.stem.partition("_")[2].upper() or "A"
+
+
+STAMPED = ("title.txt", "description.txt", "thumbnail.jpg")
+
+
+def _clear_stamps(folder: Path, base: str) -> None:
+    """What an earlier stamp left beside this video - flat files or letter
+    folders - so a set that went from three variants to one, or back, leaves
+    nothing stale behind. Only those file names are ever removed, and a
+    letter folder only once it is empty."""
+    for old in [*folder.glob(f"{base}_title*.txt"), *folder.glob(f"{base}_thumbnail*.jpg"),
+                *folder.glob(f"{base}_description.txt")]:
+        old.unlink()
+    for letter in folder.iterdir():
+        if letter.is_dir() and len(letter.name) == 1 and letter.name.isupper():
+            for name in STAMPED:
+                (letter / name).unlink(missing_ok=True)
+            if not any(letter.iterdir()):
+                letter.rmdir()
 
 
 def stamp_quietly(project: str, label: str, video: Path) -> None:
