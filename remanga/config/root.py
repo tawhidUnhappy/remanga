@@ -23,6 +23,7 @@ from .audio import AudioConfig
 from .cropper import CropperConfig
 from .downloader import DownloaderConfig
 from .marker import MarkerConfig, ShortcutsConfig
+from .menus import MenusConfig
 from .pdf import PdfConfig
 from .reviewer import ReviewerConfig
 from .subtitles import SubtitlesConfig
@@ -45,6 +46,7 @@ class RemangaConfig(ConfigModel):
     audio: AudioConfig = Field(default_factory=AudioConfig)
     subtitles: SubtitlesConfig = Field(default_factory=SubtitlesConfig)
     video: VideoConfig = Field(default_factory=VideoConfig)
+    menus: MenusConfig = Field(default_factory=MenusConfig)
 
     @classmethod
     def load(cls, config_path: Path | str | None = None) -> RemangaConfig:

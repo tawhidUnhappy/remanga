@@ -7,6 +7,7 @@ from .audio import AudioConfig
 from .cropper import CropperConfig
 from .downloader import DownloaderConfig
 from .marker import MarkerConfig, ShortcutsConfig
+from .menus import MenusConfig
 from .pdf import PdfConfig
 from .reviewer import ReviewerConfig
 from .root import RemangaConfig
@@ -21,6 +22,7 @@ __all__ = [
     "CropperConfig",
     "DownloaderConfig",
     "MarkerConfig",
+    "MenusConfig",
     "PdfConfig",
     "RemangaConfig",
     "ReviewerConfig",

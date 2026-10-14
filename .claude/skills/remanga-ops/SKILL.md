@@ -411,6 +411,12 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   fix requests written as Make video does; each failing chapter lists its narration.json and fix
   request path, both copied by Copy paths (c). `p` on the chapters screen:
   pick all / all downloaded (status downloaded or local) / none. Verified with Pilot on a scratch copy.
+- **Terminal menus: Android 17 look (user request, 2026-10-14)** - `ui/look.py`: Textual themes
+  android-dark (default) / android-light with theme-android.css's M3 palette, plus ANDROID_CSS scoped
+  to the App's `android` class (tonal cards instead of round borders, tonal top bar, one-line pill
+  buttons, secondary-container row highlight). `menus.look` in config.json; Settings > Menus > Look
+  switches live; "terminal" = textual-dark, verified pixel-identical to the old menus. Screenshots:
+  Pilot `save_screenshot` SVG -> cached chrome-headless-shell `--screenshot` PNG.
 - **Panel Marker opens in Adjust (user request, 2026-10-14)** for every chapter, marked or not
   (chapter-nav.js applyChapter); Adjust draws new boxes too, D switches to Draw.
 - **Job queue (user request, 2026-09-29).** `workflow/queue.py` holds jobs (project, chapter,

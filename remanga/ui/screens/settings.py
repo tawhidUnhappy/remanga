@@ -14,8 +14,8 @@ from textual.widgets import DataTable, Footer
 
 from remanga.config import RemangaConfig
 from remanga.paths import GLOBAL_DIR
-from remanga.ui import voice_settings
-from remanga.ui.dialogs import Result
+from remanga.ui import look, voice_settings
+from remanga.ui.dialogs import Choice, Result
 from remanga.ui.screens.common import _global_log
 from remanga.ui.screens.settings_sound import (
     change_edge_fade,
@@ -33,6 +33,15 @@ from remanga.ui.screens.settings_video import (
 )
 from remanga.ui.tasks import Step, TaskScreen
 from remanga.ui.widgets import SafeTable, TopBar
+
+
+async def change_look(screen: SettingsScreen, config: RemangaConfig) -> None:
+    picked = await screen.app.push_screen_wait(Choice(
+        "Look", [(name, hint, key) for key, name, hint in look.LOOKS], current=config.menus.look,
+        note="The menus' colours and shapes. Android is the web pages' look, Material 3 Expressive."))
+    if picked:
+        config.menus.look = picked
+        look.apply(screen.app, picked)
 
 
 class SettingsScreen(Screen):
@@ -96,6 +105,8 @@ class SettingsScreen(Screen):
                 change_max_upscale, "how far small panels are blown up", "Video", ("video.max_upscale",)),
             Row("PDF file size limit", f"{config.pdf.max_mb:g} MB per file", change_pdf_cap,
                 "largest PDF part given to the LLM", "PDF", ("pdf.max_mb",)),
+            Row("Look", look.label(config.menus.look), change_look, "colours and shapes of these menus",
+                "Menus", ("menus.look",)),
         ]
         return rows
 

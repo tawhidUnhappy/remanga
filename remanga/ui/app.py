@@ -14,6 +14,7 @@ from textual.app import App
 
 from remanga.config import RemangaConfig
 from remanga.console import console
+from remanga.ui import look
 from remanga.ui.screens import ProjectsScreen
 from remanga.ui.tasks import TaskScreen
 
@@ -59,7 +60,7 @@ Result, Choice, Ask { align: center middle; }
 
 LoadingIndicator { height: 1fr; }
 LogView RichLog { height: 1fr; overflow-x: hidden; }
-"""
+""" + look.ANDROID_CSS
 
 
 class RemangaApp(App):
@@ -70,6 +71,8 @@ class RemangaApp(App):
     def __init__(self, machine: RemangaConfig) -> None:
         super().__init__()
         self.machine = machine
+        look.register(self)
+        look.apply(self, machine.menus.look)
 
     def on_mount(self) -> None:
         self.push_screen(ProjectsScreen(self.machine))
