@@ -28,6 +28,19 @@ join: `<P>_ch<N>_{title.txt,description.txt,thumbnail.jpg}`. After editing the t
 the same text has to fit chapter 30. Keep the title at 92 characters or under (` (01-02)` is 8 more,
 YouTube cuts at 100).
 
+## A/B variants (user request, 2026-10-14)
+
+`title_b.txt`, `thumbnail_b.json`, `_c`, ... beside the plain ones are stamped too
+(`<P>_ch<N>_title_b.txt`, `_thumbnail_b.jpg`) - one per angle of the hook, title and thumbnail
+paired by letter, for YouTube Test & Compare. Each variant a different angle (premise / role swap /
+power), not the same idea reworded.
+
+**The user's corrections (2026-10-14), over the style below:** never let an arrow touch a face - a
+label sits under or beside the face, arrows are optional and stop short; sharp B&W panels beat
+low-resolution colour pages (chapter 1's colour spread is only 1000x719 - it looked soft). The user
+gave full creative freedom: labels may be any `color`, tiles may be duotoned (`tint` [dark, light])
+and firmed (`contrast`) so B&W art still pops - blue for the old villain, red for the new.
+
 ## Style (the user's references: /mnt/datadisk/thumbnail_examples)
 
 One strong image, then 1-3 SHORT all-caps labels in yellow `#FFE600` Anton with a thick black outline,
@@ -46,7 +59,9 @@ one label each - the two roles of the premise:
 | IReincarnated | Lloyd smirking -> VILLAIN | Cain on his knees -> REAL HERO |
 | Golem Master | tired salaryman (001_003_02) -> COMPANY SLAVE | elf from the title spread (001_002_02, zoom 2.8 top-left: clears the logo and caption boxes) -> GOLEM MASTER |
 | If Her Flag Breaks (upload/, series) | Souta + Akane under five friendship flags, "I WANNA BREAK THEM" bubble (002_031_05 from ch2, cy 0.54) -> FLAG BREAKER at Souta | Nanami colour cover (same box) -> NO FLAG?!; `CH {num}` badge top-left |
-| IReincarnated (upload/, series, 2026-10-14) | villain Lloyd laughing, colour page 001_001.jpg box 0,720,720,1530 -> VILLAIN LEADER | reformed Lloyd + Lilina from the colour spread 001_002.jpg box 244,20,674,503 -> STOLE THE HEROINE at Lilina (his Steal skill); `CH {num}` top-right |
+| IReincarnated A (upload/, 2026-10-14) | Lloyd's menacing smirk 001_013_03 | Cain stunned 001_027_03; one line across the bottom HE KICKED HIMSELF OUT?!, red VILLAIN top-left, no arrows |
+| IReincarnated B (thumbnail_b) | villain Lloyd "So long, Cain!" 001_014_02, blue duotone -> OLD VILLAIN | Cain's grin 4.2_017_03, red duotone -> red NEW VILLAIN?! |
+| IReincarnated C (thumbnail_c) | one tile: Lloyd grinning, hand out, 4.2_006_03 zoom 1.35 (crops out both bubbles), cyan duotone; red STEALS + yellow ANY SKILL | |
 | If Her Flag Breaks (ch1, old) | Souta beside a flag on a classmate's head (001_034_02, zoom 1.2 cx 0.4: crops out a YEAH. bubble) -> FLAG BREAKER | Nanami from the COLOUR cover (page 001_002.jpg, box 530,60,1085,1000 - between the title text and the spine) -> NO FLAG?! |
 
 ## Steps (run with remanga's `.venv/bin/python`)

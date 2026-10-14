@@ -15,8 +15,11 @@ A spec (projects/<P>/upload/thumbnail.json, or a key of specs.example.json):
 it), not the chapter the thumbnail is for. tiles: `w` is the tile's share of the width (they add up to 1), `zoom`
 crops in, `cx`/`cy` the crop centre as fractions of the panel; `page` (a file
 in pages/, e.g. a colour cover) with an optional `box` [l, t, r, b] in page
-pixels instead of `panel`. labels: `at` the label centre, `to` the arrow tip
-(no `to`: no arrow), both as fractions of the canvas - read them off a grid
+pixels instead of `panel`; `tint` [dark, light] (hex) turns the tile into
+that duotone - a black-and-white panel in a colour of its own; `contrast`
+(1 = as it is) firms up a flat grey panel. labels: `at` the label centre, `to` the arrow tip
+(no `to`: no arrow), both as fractions of the canvas; `color` (hex, default
+the house yellow) for the text - read them off a grid
 render, never guess. A label's text may hold {num} (01, 05.5, 01-02) and
 {chapter} (Chapter 1, Chapters 1-2): the one thumbnail of a project, stamped
 for each video."""
@@ -25,7 +28,7 @@ from __future__ import annotations
 
 import math
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
 
 from remanga.paths import REPO_ROOT, get_pages_dir, get_panels_dir
 
@@ -51,7 +54,12 @@ def _tile(project: str, chapter: str, t: dict, box_w: int) -> Image.Image:
     x = min(max(t.get("cx", 0.5) * im.width, cw / 2), im.width - cw / 2)
     y = min(max(t.get("cy", 0.5) * im.height, ch / 2), im.height - ch / 2)
     crop = im.crop((round(x - cw / 2), round(y - ch / 2), round(x + cw / 2), round(y + ch / 2)))
-    return crop.resize((box_w, H), Image.LANCZOS)
+    crop = crop.resize((box_w, H), Image.LANCZOS)
+    if t.get("contrast", 1.0) != 1.0:
+        crop = ImageEnhance.Contrast(crop).enhance(t["contrast"])
+    if "tint" in t:
+        crop = ImageOps.colorize(crop.convert("L"), black=t["tint"][0], white=t["tint"][1])
+    return crop
 
 
 def _arrow(draw: ImageDraw.ImageDraw, start: tuple[float, float], tip: tuple[float, float],
@@ -118,6 +126,6 @@ def compose(spec: dict, grid: bool = False, fields: dict[str, str] | None = None
             bx, by = min(max(tip[0], box[0]), box[2]), min(max(tip[1], box[1]), box[3])
             angle = math.atan2(tip[1] - by, tip[0] - bx)
             _arrow(draw, (bx + 12 * math.cos(angle), by + 12 * math.sin(angle)), tip)
-        draw.multiline_text(centre, text, font=font, fill=YELLOW, anchor="mm", align="center",
+        draw.multiline_text(centre, text, font=font, fill=lab.get("color", YELLOW), anchor="mm", align="center",
                             spacing=0, stroke_width=stroke, stroke_fill=BLACK)
     return canvas

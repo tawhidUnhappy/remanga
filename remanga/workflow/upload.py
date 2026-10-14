@@ -13,7 +13,9 @@ video's chapter list for YouTube ("0:00 Chapter 1" a line); in a chapter's
 own video it is empty, and the blank lines around it close up.
 
 Each finished video gets its own copy beside it, named like it:
-<P>_ch<N>_{title.txt,description.txt,thumbnail.jpg}. Make video empties the
+<P>_ch<N>_{title.txt,description.txt,thumbnail.jpg}. For A/B tests, more
+titles and thumbnails sit beside them as title_b.txt, thumbnail_b.json, ...
+and are stamped as <P>_ch<N>_title_b.txt, <P>_ch<N>_thumbnail_b.jpg. Make video empties the
 video folder, so the copies are written again after every render (make_video,
 remix_video, join_chapters) - the templates in upload/ are never touched.
 After editing them, `remanga upload -p <P>` restamps every video there is."""
@@ -84,16 +86,15 @@ def stamp(project: str, label: str, video: Path) -> list[Path]:
     base = video.name.removesuffix("_recap.mp4")
     written: list[Path] = []
 
-    title_file = folder / TITLE
-    if title_file.exists():
+    for title_file in _variants(folder, TITLE):
         title = title_file.read_text(encoding="utf-8").strip()
         if "{num}" not in title:
             title += " ({num})"
         title = _fill(title, fields)
         if len(title) > YOUTUBE_TITLE_LIMIT:
-            console.print(f"  [yellow]- the title is {len(title)} characters; YouTube cuts it at "
-                          f"{YOUTUBE_TITLE_LIMIT}[/]")
-        out = video.with_name(f"{base}_title.txt")
+            console.print(f"  [yellow]- {title_file.name}: the title is {len(title)} characters; YouTube cuts "
+                          f"it at {YOUTUBE_TITLE_LIMIT}[/]")
+        out = video.with_name(f"{base}_{title_file.stem}.txt")
         out.write_text(title + "\n", encoding="utf-8")
         written.append(out)
 
@@ -105,16 +106,23 @@ def stamp(project: str, label: str, video: Path) -> list[Path]:
         out.write_text(re.sub(r"\n{3,}", "\n\n", text) + "\n", encoding="utf-8")
         written.append(out)
 
-    spec_file = folder / THUMBNAIL
-    if spec_file.exists():
+    for spec_file in _variants(folder, THUMBNAIL):
         from remanga.video.thumbnail import compose
 
         spec = json.loads(spec_file.read_text(encoding="utf-8"))
         spec.setdefault("project", project)
-        out = video.with_name(f"{base}_thumbnail.jpg")
+        out = video.with_name(f"{base}_{spec_file.stem}.jpg")
         compose(spec, fields=fields).save(out, quality=92)
         written.append(out)
     return written
+
+
+def _variants(folder: Path, name: str) -> list[Path]:
+    """title.txt and its A/B variants title_b.txt, title_c.txt, ... - the
+    plain one first."""
+    stem, suffix = name.rsplit(".", 1)
+    plain = folder / name
+    return ([plain] if plain.exists() else []) + sorted(folder.glob(f"{stem}_*.{suffix}"))
 
 
 def stamp_quietly(project: str, label: str, video: Path) -> None:
