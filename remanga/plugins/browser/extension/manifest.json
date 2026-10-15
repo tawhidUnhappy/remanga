@@ -5,7 +5,7 @@
   "description": "Downloads manga chapters for remanga, a program on this computer: opens each chapter in its own window, lets you solve any check, and hands the pages to remanga on 127.0.0.1. Touches no other window.",
   "browser_specific_settings": {
     "gecko": {
-      "id": "remanga-helper@remanga.local",
+      "id": "remanga-helper@placeholder.invalid",
       "strict_min_version": "140.0",
       "data_collection_permissions": {
         "required": [

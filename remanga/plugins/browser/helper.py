@@ -1,14 +1,23 @@
 """The remanga helper extension: packing it into a file Firefox loads, and
 saying how to load it.
 
-Firefox only installs signed extensions for good, so the helper goes in as a
-temporary add-on - in your own profile, in the Firefox you already have open -
-and stays until Firefox restarts. remanga says when it isn't there."""
+Firefox only installs signed extensions for good. Unsigned, the helper goes in
+as a temporary add-on - in your own profile, in the Firefox you already have
+open - until Firefox restarts; `./run.sh helper --install` has Mozilla sign it
+under your own addons.mozilla.org account (amo.py) so it stays.
+
+Each copy of remanga gives its helper an ID of its own, kept in
+global/browser-helper/extension-id (never committed): Mozilla ties an add-on
+ID to the one account that first signs it, so a shared ID would let only one
+person ever sign the helper. extension/manifest.json's ID is a placeholder
+that every build replaces."""
 
 from __future__ import annotations
 
 import configparser
 import json
+import os
+import secrets
 import shutil
 import sqlite3
 import subprocess
@@ -16,14 +25,29 @@ import zipfile
 from pathlib import Path
 
 from remanga.console import console, escape as _esc
+from remanga.paths.roots import GLOBAL_DIR
 
 EXTENSION_DIR = Path(__file__).resolve().parent / "extension"
 XPI_PATH = Path(__file__).resolve().parent / "remanga-helper.xpi"
 DEBUGGING_URL = "about:debugging#/runtime/this-firefox"
+ID_PATH = GLOBAL_DIR / "browser-helper" / "extension-id"
+
+
+def extension_id() -> str:
+    """This copy's helper ID, made the first time it is needed."""
+    if ID_PATH.exists() and ID_PATH.read_text(encoding="utf-8").strip():
+        return ID_PATH.read_text(encoding="utf-8").strip()
+    made = f"remanga-helper-{secrets.token_hex(6)}@remanga.local"
+    ID_PATH.parent.mkdir(parents=True, exist_ok=True)
+    ID_PATH.write_text(made + "\n", encoding="utf-8")
+    return made
 
 
 def manifest() -> dict:
-    return json.loads((EXTENSION_DIR / "manifest.json").read_text(encoding="utf-8"))
+    """extension/manifest.json with this copy's own ID in it."""
+    meta = json.loads((EXTENSION_DIR / "manifest.json").read_text(encoding="utf-8"))
+    meta["browser_specific_settings"]["gecko"]["id"] = extension_id()
+    return meta
 
 
 def ensure_signed() -> Path:
@@ -31,7 +55,7 @@ def ensure_signed() -> Path:
     from remanga.plugins.browser import amo
 
     meta = manifest()
-    version, guid = meta["version"], meta["browser_specific_settings"]["gecko"]["id"]
+    version, guid = meta["version"], extension_id()
     path = amo.signed_path(version)
     if path.exists() and amo.is_signed(path):
         return path
@@ -51,22 +75,32 @@ def install_signed(profile: str = "") -> Path:
 
 
 def build_xpi() -> Path:
-    """extension/ zipped as remanga-helper.xpi, remade whenever a file in it
-    is newer - one file, which Firefox's file picker hands over whole."""
+    """extension/ zipped as remanga-helper.xpi with this copy's ID in its
+    manifest - one file, which Firefox's file picker hands over whole."""
     files = sorted(p for p in EXTENSION_DIR.iterdir() if p.is_file())
-    if XPI_PATH.exists() and all(p.stat().st_mtime <= XPI_PATH.stat().st_mtime for p in files):
-        return XPI_PATH
     partial = XPI_PATH.with_suffix(".xpi.partial")
     with zipfile.ZipFile(partial, "w", zipfile.ZIP_DEFLATED) as archive:
         for path in files:
-            archive.write(path, path.name)
+            if path.name == "manifest.json":
+                archive.writestr(path.name, json.dumps(manifest(), indent=2, ensure_ascii=False) + "\n")
+            else:
+                archive.write(path, path.name)
     partial.replace(XPI_PATH)
     return XPI_PATH
 
 
-# Where Firefox keeps its profiles: a plain install, the snap, the flatpak.
+# Where Firefox keeps its profiles (under your home folder): Linux - a plain
+# install, the snap, the flatpak - then macOS and Windows.
 FIREFOX_ROOTS = (".mozilla/firefox", "snap/firefox/common/.mozilla/firefox",
-                 ".var/app/org.mozilla.firefox/.mozilla/firefox")
+                 ".var/app/org.mozilla.firefox/.mozilla/firefox", "Library/Application Support/Firefox",
+                 "AppData/Roaming/Mozilla/Firefox")
+FIREFOX_PROGRAMS = ("/Applications/Firefox.app/Contents/MacOS/firefox",
+                    os.path.expandvars(r"%ProgramFiles%\Mozilla Firefox\firefox.exe"),
+                    os.path.expandvars(r"%ProgramFiles(x86)%\Mozilla Firefox\firefox.exe"))
+
+
+def firefox_program() -> str | None:
+    return shutil.which("firefox") or next((p for p in FIREFOX_PROGRAMS if Path(p).is_file()), None)
 
 
 def profile_folder(name: str) -> Path | None:
@@ -109,7 +143,7 @@ def _default_folders() -> set[Path]:
 def open_in_firefox(url: str, profile: str = "") -> bool:
     """Opens `url` as a tab in the Firefox already running with `profile`
     (Firefox's default profile when empty) - or starts it."""
-    firefox = shutil.which("firefox")
+    firefox = firefox_program()
     if not firefox:
         return False
     folder = profile_folder(profile) if profile else None

@@ -691,9 +691,13 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   remanga helper extension (temporary add-on, polls 127.0.0.1:47615). Don't "simplify" to
   Playwright/Selenium/BiDi: a remote-controlled Firefox has `navigator.webdriver = true` and sits on
   "Just a moment..." forever (measured). Don't copy the user's profile cookies into another browser
-  either - the auto-mode classifier refuses it (credential exploration), rightly. The user's profile
-  is "Evil" = `fepkdkos.default` (snap Firefox); the name lives in `Profile Groups/*.sqlite`, not
-  profiles.ini, so `-P Evil` doesn't work - helper.py resolves it to `--profile <folder>`.
+  either - the auto-mode classifier refuses it (credential exploration), rightly. A profile's
+  display name (Firefox's profile menu) lives in `Profile Groups/*.sqlite`, not profiles.ini, so
+  `-P <name>` can fail - helper.py resolves it to `--profile <folder>`, and passes no flag at all
+  for the default profile (a running Firefox reached with `--profile` can refuse). Keep the repo
+  free of the user's own details (profile names, paths, keys): it is public; per-user values live
+  in config.json and global/ (both gitignored). The helper's add-on ID is per copy
+  (global/browser-helper/extension-id) because Mozilla ties an ID to the first account to sign it.
   `filterResponseData`'s onstop can fire BEFORE that request's onHeadersReceived: committing on
   onstop lost ~1/3 of pages (re-fetched them). Commit when both have arrived. Test plumbing with the
   mock site + throwaway headless Firefox (BiDi `webExtension.install`); real-site behaviour needs
