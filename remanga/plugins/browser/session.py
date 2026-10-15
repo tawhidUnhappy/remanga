@@ -89,6 +89,12 @@ def _update(bridge: Bridge, config: DownloaderConfig) -> None:
     before 0.6 say nothing) is asked to read its file again (the one made just
     now); an installed one is offered the signed new version, which Firefox
     installs over it with one click."""
+    # A helper's very first request after Firefox starts can go out before it
+    # knows how it is installed (it says ""): waited for, so an installed one
+    # is never taken for a temporary one. Helpers before 0.6 never say.
+    deadline = time.time() + 8
+    while not bridge.helper_install and time.time() < deadline:
+        time.sleep(0.5)
     if bridge.helper_install not in ("development", ""):  # installed: normal, sideload, ...
         console.print(f"[yellow]The remanga helper in Firefox is version {_esc(bridge.helper_version)}; "
                       f"this remanga has {HELPER_VERSION}.[/]")
