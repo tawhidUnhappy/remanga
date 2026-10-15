@@ -1,17 +1,18 @@
 // remanga helper: asks remanga (on 127.0.0.1 only) what to open, opens it in
-// one window of its own, waits while you solve any check, and hands back the
+// one tab of its own - in the background of your Firefox window, reused from
+// chapter to chapter - waits while you solve any check, and hands back the
 // images the site's reader loaded - the bytes the server sent, not a
 // screenshot. One job at a time.
 //
 // Between jobs it does nothing but ask remanga, every few seconds, whether
-// there is one. It never touches another window: its request listeners exist
-// only during a job and only for the remanga window, and its page script runs
-// only in that window's tab.
+// there is one. It never touches another tab: its request listeners exist
+// only during a job and only for the remanga tab, and its page script runs
+// only there.
 
 const BRIDGE = "http://127.0.0.1:47615/remanga";
 const VERSION = browser.runtime.getManifest().version;
 
-let windowId = null;
+let windowId = null; // the window the remanga tab is in (yours)
 let tabId = null;
 let capturing = false; // keeping image bytes (chapter jobs)
 let watching = false; // noting the tab's requests for the discovery file (every job)
@@ -144,9 +145,9 @@ function onSending(details) {
   return {requestHeaders};
 }
 
-// Listening starts with a job, for the remanga window only, and stops with it.
-function listen(win) {
-  const mine = {urls: ["<all_urls>"], windowId: win};
+// Listening starts with a job, for the remanga tab only, and stops with it.
+function listen(tab) {
+  const mine = {urls: ["<all_urls>"], tabId: tab};
   browser.webRequest.onHeadersReceived.addListener(onHeaders, mine, ["responseHeaders"]);
   browser.webRequest.onBeforeRequest.addListener(onRequest, Object.assign({types: ["image", "imageset", "xmlhttprequest"]}, mine),
                                                  ["blocking"]);
@@ -172,15 +173,19 @@ function show(state, title) {
   browser.browserAction.setTitle({title: `remanga helper ${VERSION} - ${title}`}).catch(() => {});
 }
 
-// ---- the remanga window
+// ---- the remanga tab
 
-async function closeWindow() {
-  if (windowId !== null) await browser.windows.remove(windowId).catch(() => {});
+async function closeTab() {
+  if (tabId !== null) await browser.tabs.remove(tabId).catch(() => {});
   windowId = tabId = null;
 }
 
-browser.windows.onRemoved.addListener(id => {
-  if (id === windowId) windowId = tabId = null;
+browser.tabs.onRemoved.addListener(id => {
+  if (id === tabId) windowId = tabId = null;
+});
+
+browser.tabs.onAttached.addListener((id, info) => {
+  if (id === tabId) windowId = info.newWindowId; // dragged to another window
 });
 
 // Resolves when the tab has loaded `url` - a "complete" that arrives after the
@@ -205,20 +210,30 @@ function waitForLoad(id, url, timeoutMs = 90000) {
   });
 }
 
-// The remanga window, made on an empty page so listening can begin before the
-// first request of the job's page.
-async function ensureWindow() {
+// The remanga tab: a background tab in your Firefox window (a window of its
+// own only when none is open), made on an empty page so listening can begin
+// before the first request of the job's page. Reused from job to job.
+async function ensureTab() {
   if (tabId !== null) {
     try {
-      await browser.tabs.get(tabId);
+      const tab = await browser.tabs.get(tabId);
+      windowId = tab.windowId;
       return;
     } catch (e) {
       windowId = tabId = null;
     }
   }
-  const win = await browser.windows.create({url: "about:blank", focused: false, width: 1280, height: 1000});
-  windowId = win.id;
-  tabId = win.tabs[0].id;
+  const windows = await browser.windows.getAll({windowTypes: ["normal"]});
+  const yours = windows.filter(w => !w.incognito).sort((a, b) => (b.focused ? 1 : 0) - (a.focused ? 1 : 0))[0];
+  if (yours) {
+    const tab = await browser.tabs.create({url: "about:blank", active: false, windowId: yours.id});
+    windowId = tab.windowId;
+    tabId = tab.id;
+  } else {
+    const win = await browser.windows.create({url: "about:blank", focused: false});
+    windowId = win.id;
+    tabId = win.tabs[0].id;
+  }
 }
 
 async function open(url) {
@@ -247,7 +262,7 @@ async function inPage(message) {
 }
 
 // A check (Cloudflare's "Just a moment...", a captcha) is yours to solve: the
-// window comes forward and the helper waits for as long as it takes.
+// tab comes to the front and the helper waits for as long as it takes.
 async function passChecks(job, status) {
   let asked = false;
   for (;;) {
@@ -272,7 +287,7 @@ async function passChecks(job, status) {
       asked = true;
       await browser.windows.update(windowId, {focused: true, drawAttention: true}).catch(() => {});
       await browser.tabs.update(tabId, {active: true}).catch(() => {});
-      show("check", "waiting for you to solve the check in the remanga window");
+      show("check", "waiting for you to solve the check in the remanga tab");
     }
     await status("challenge", state.title || "a check");
     await sleep(2000);
@@ -359,13 +374,13 @@ async function runJob(job) {
   };
   try {
     if (job.kind === "finish") {
-      await closeWindow();
+      await closeTab();
       await post("/result", {job: job.id, ok: true, data: {}});
       return;
     }
     if (job.kind === "reload") {
       // remanga has a newer helper: Firefox reads it again from the file it was loaded from.
-      await closeWindow();
+      await closeTab();
       await post("/result", {job: job.id, ok: true, data: {}});
       browser.runtime.reload();
       return;
@@ -377,8 +392,8 @@ async function runJob(job) {
     imageHosts.clear();
     seenRequests.length = 0;
     show("working", "working for remanga");
-    await ensureWindow();
-    listen(windowId);
+    await ensureTab();
+    listen(tabId);
     watching = true;
     capturing = job.kind === "chapter";
     await status("opening", job.url);
@@ -388,10 +403,10 @@ async function runJob(job) {
       if (!message) return;
       if (message.remangaProgress) status("reading", message.remangaProgress).catch(() => {});
       if (message.remangaCheck === true) {
-        // A check inside the page, mid-job: the window comes forward for you.
+        // A check inside the page, mid-job: the tab comes to the front for you.
         browser.windows.update(windowId, {focused: true, drawAttention: true}).catch(() => {});
         browser.tabs.update(tabId, {active: true}).catch(() => {});
-        show("check", "waiting for you to solve the check in the remanga window");
+        show("check", "waiting for you to solve the check in the remanga tab");
         status("challenge", "a check inside the page").catch(() => {});
       } else if (message.remangaCheck === false) {
         show("working", "working for remanga");

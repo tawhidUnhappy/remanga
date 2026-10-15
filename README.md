@@ -94,12 +94,19 @@ own profile**, with a small extension, the remanga helper:
   Add-on...**), gone when Firefox restarts. `downloader.browser_profile` is the profile it opens
   Firefox in (the name Firefox's profile menu shows; empty = Firefox's default).
 - **It stays out of your browsing.** Between downloads the helper only asks remanga whether there is
-  work. It listens to requests only during a job and only in its own remanga window, and runs its
+  work. It listens to requests only during a job and only in its own remanga tab, and runs its
   page script only there - nothing is added to any other site (your bank, YouTube Studio, ...), and
   your Firefox is never put under remote control (no `navigator.webdriver`). Its toolbar button
   shows what it is doing: nothing, `…` working, `!` waiting for you to solve a check.
-- **Checks are yours.** The helper works in a window of its own. When the site shows a check, that
-  window comes forward and remanga prints so; solve it and the download carries on by itself.
+- **One background tab in your own window.** The helper reads the site in a tab of its own at the
+  back of your Firefox window - you keep browsing in the others - and keeps that tab from chapter to
+  chapter; it closes a little after the last one (or when remanga exits).
+- **Checks are yours.** When the site shows a check, the remanga tab comes to the front and remanga
+  says so; solve it and the download carries on by itself.
+- **In the menus** it is just another source: `n` on Projects takes a comix.to link, the chapter list
+  and every download work as for MangaDex, the chapter list's top bar says what Firefox is doing
+  (and when a check waits for you), and Settings → Downloads holds the Firefox profile, the pace and
+  the helper (install or update it from there).
 - **Highest quality.** The pages are the image files the site serves, byte for byte - never a
   screenshot, never re-encoded. When the page's own data names larger originals than the reader
   shows, those originals are what is saved. Each page is checked to be a whole image.
@@ -111,7 +118,7 @@ own profile**, with a small extension, the remanga helper:
   kept in the project's `comix-uploads.json`, so later the list is only turned when it has grown.
   It is fetched at most every 15 minutes (kept for a day).
 - **A check mid-way** (the site's own "verify you are human" inside the page) pauses the helper: its
-  window comes forward, its button shows `!`, remanga says so, and it carries on once you solve it.
+  tab comes to the front, its button shows `!`, remanga says so, and it carries on once you solve it.
 - **Security.** remanga and its helper share a secret key made for your copy
   (`global/browser-helper/pairing-key`, built into your helper, never committed): every request
   and every job carries an HMAC of it over a fresh nonce, so no other program on the computer and

@@ -14,7 +14,6 @@ chapters, and the chapter list fetched at most once every 15 minutes."""
 from __future__ import annotations
 
 import io
-import random
 import re
 import time
 from pathlib import Path
@@ -251,10 +250,12 @@ class ComixClient(ChapterListMixin):
                 if unknown:
                     raise ValueError(f"comix.to lists no chapter {', '.join(unknown)} for this manga.")
                 for i, chapter in enumerate(todo, start=1):
-                    if i > 1:
-                        time.sleep(self.config.browser_chapter_pause_seconds * random.uniform(0.7, 1.3))
+                    session.pace_chapter()
                     console.print(f"[bold cyan]({i}/{len(todo)}) Chapter {_esc(chapter)}[/]")
-                    self._download(session, project_name, hid, chapter, listing[chapter_key(chapter)], force)
+                    try:
+                        self._download(session, project_name, hid, chapter, listing[chapter_key(chapter)], force)
+                    finally:
+                        session.chapter_done()
         save_project_metadata(project_name, {"source": SOURCE, "manga_id": hid,
                                              "manga_url": self._manga_source(project_name, manga_id_or_url),
                                              "last_chapter": str(ordered[-1]) if ordered else ""})

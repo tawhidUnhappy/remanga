@@ -9,6 +9,8 @@ site's reader loaded, unchanged, and hands them to remanga.
     bridge.py      the 127.0.0.1 server the helper takes jobs from
     helper.py      the extension's file and how to load it into Firefox
     hooks.py       `handles`: which links are a browser site's
+    settings_rows.py  its rows on the Settings screen (Firefox profile, pace, the helper)
+    amo.py         having Mozilla sign the helper; commands.py `./run.sh helper`
     extension/     the helper itself (Firefox WebExtension)"""
 
 from remanga.plugins import Source, register
@@ -18,4 +20,5 @@ register("source", Source(
     client="remanga.plugins.browser.comix:ComixClient",
     handles="remanga.plugins.browser.hooks:handles",
     order=20,
+    settings_rows="remanga.plugins.browser.settings_rows:rows",
 ))

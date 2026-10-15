@@ -86,13 +86,16 @@ class Source:
         list_chapters_with_status(project, url, force_refresh=False)
         download_chapters(project, chapters, url, force=False)
     `handles(source) -> bool` says whether a link/ID/title is this source's;
-    the first source in order is the default for anything none claims."""
+    the first source in order is the default for anything none claims.
+    `settings_rows(config) -> list[ui.voice_rows.Row]`: its own rows on the
+    Settings screen (under "Downloads"), if it has settings."""
 
     name: str
     display_name: str
     client: Ref
     handles: Ref
     order: int = 100
+    settings_rows: Ref = None
 
 
 @dataclass(frozen=True)

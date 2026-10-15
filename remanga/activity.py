@@ -10,8 +10,8 @@ mess behind."""
 from __future__ import annotations
 
 import threading
-from collections.abc import Iterator
-from contextlib import contextmanager
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn, TimeElapsedColumn
@@ -102,3 +102,25 @@ def progress(description: str, total: float | None = None, completed: float = 0.
             yield bar
         finally:
             set_reporter(previous)
+
+
+# One line of "what is happening right now" - waiting for something outside
+# remanga, a step that takes minutes - for a screen that wants to show it
+# (the chapter list's top bar). Work that runs on a task screen also prints.
+_status_listeners: list[Callable[[str], None]] = []
+
+
+def status(text: str) -> None:
+    for listener in tuple(_status_listeners):  # a copy: another thread may stop listening meanwhile
+        with suppress(Exception):
+            listener(text)
+
+
+@contextmanager
+def status_to(listener: Callable[[str], None]) -> Iterator[None]:
+    """`listener` hears every status() said inside the block."""
+    _status_listeners.append(listener)
+    try:
+        yield
+    finally:
+        _status_listeners.remove(listener)

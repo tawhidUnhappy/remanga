@@ -12,6 +12,7 @@ from textual.binding import Binding
 from textual.screen import Screen
 from textual.widgets import DataTable, Footer
 
+from remanga import plugins
 from remanga.config import RemangaConfig
 from remanga.paths import GLOBAL_DIR
 from remanga.ui import look, voice_settings
@@ -105,6 +106,9 @@ class SettingsScreen(Screen):
                 change_max_upscale, "how far small panels are blown up", "Video", ("video.max_upscale",)),
             Row("PDF file size limit", f"{config.pdf.max_mb:g} MB per file", change_pdf_cap,
                 "largest PDF part given to the LLM", "PDF", ("pdf.max_mb",)),
+            # Each manga source's own rows (sites read through Firefox: the profile, the pace, the helper).
+            *(row for source in plugins.items("source") if source.settings_rows
+              for row in plugins.call(source.settings_rows, config)),
             Row("Look", look.label(config.menus.look), change_look, "colours and shapes of these menus",
                 "Menus", ("menus.look",)),
         ]

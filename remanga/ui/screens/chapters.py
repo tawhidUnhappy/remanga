@@ -13,7 +13,7 @@ from textual.binding import Binding
 from textual.screen import Screen
 from textual.widgets import DataTable, Footer, LoadingIndicator
 
-from remanga import workflow
+from remanga import activity, workflow
 from remanga.config import RemangaConfig
 from remanga.ui.dialogs import Choice, Confirm
 from remanga.ui.screens.chapter_menu import ChapterMenu
@@ -67,7 +67,13 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
     @work(thread=True, exclusive=True, group="fetch")
     def fetch(self, refresh: bool) -> None:
         if refresh or not self.offline:
-            self.listing, self.offline = _fetch_listing(self.project, self.machine, refresh)
+            # A site read through Firefox can take minutes and wait on you
+            # (a check to solve): said in the top bar as it happens.
+            def say(text: str) -> None:
+                self.app.call_from_thread(self.query_one(TopBar).set_info, text)
+
+            with activity.status_to(say):
+                self.listing, self.offline = _fetch_listing(self.project, self.machine, refresh)
         self.app.call_from_thread(self.load)
 
     def load(self) -> None:

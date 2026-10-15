@@ -42,8 +42,7 @@ class ChapterWork:
             [Step(f"Chapter {ch}", lambda ch=ch: workflow.download(project, [ch], config, force=force))
              for ch in chapters], log)
         if outcome.ok:
-            await self.show("Downloaded", [f"Chapter(s) {', '.join(chapters)} - every page checked against "
-                                           f"MangaDex."], ok=True, log=log)
+            await self.show("Downloaded", [f"Chapter(s) {', '.join(chapters)} - every page checked."], ok=True, log=log)
         else:
             await self.show("Download stopped" if outcome.stopped else "Download failed", [outcome.error],
                             ok=False, log=log)
