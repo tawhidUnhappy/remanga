@@ -716,6 +716,15 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   numbers only from the pager's own box. Mock tests MUST use their own port (47699): the user's
   real helper polls 47615 and would take test jobs. Helper updates: temporary install ->
   `runtime.reload()` re-reads the xpi (verified); signed install -> new signed version offered.
+  Security model (attack-tested 2026-10-15, 19/19 blocked): HMAC pairing key per copy
+  (bridge.py `proof`, extension/pairing.js written by build_xpi - never commit it; lint the xpi
+  with a dummy key), Host must be 127.0.0.1/localhost:<port> (DNS rebinding), nonces never reused,
+  unpaired helpers get only "reload"; helper refuses a tab that left the site (incl. inside
+  passChecks - it used to loop forever there), fallback fetch only http(s) image hosts the reader
+  used (no private/local hosts, cookies only to the site); chapter numbers/ids/links validated in
+  comix.py; pages capped at 50 Mpx before decode. Firefox itself won't draw a 900 Mpx image, so a
+  bomb must be tested against `_check_image` directly. Test harnesses must stub
+  session.explain_loading - otherwise a stuck test opens about:debugging in the USER's Firefox.
   addons-linter (official Node 22 in scratch; nodejs-bin ships too-old v18): description <= 250
   chars, `data_collection_permissions` required (we declare websiteContent - pages go to a program
   outside the browser) + gecko_android min 142.

@@ -15,9 +15,11 @@ from __future__ import annotations
 
 import io
 import random
+import re
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from PIL import Image
 
@@ -50,6 +52,10 @@ LIST_REFRESH_FLOOR_SECONDS = 15 * 60
 # The type comix.to gives a manga -> its original language (for the reading direction).
 LANGUAGE_BY_TYPE = {"manga": "ja", "manhwa": "ko", "manhua": "zh"}
 EXTENSION_BY_FORMAT = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp", "AVIF": ".avif", "GIF": ".gif"}
+# What the site's page may say a chapter is: anything else is dropped, never
+# turned into a folder name or a link.
+CHAPTER_NUMBER = re.compile(r"^\d{1,5}(\.\d{1,3})?$")
+CHAPTER_ID = re.compile(r"^\d{1,12}$")
 
 # A manga's page as last read in this run, by (manga, whole list read).
 _TITLES: dict[tuple[str, bool], tuple[float, dict[str, Any]]] = {}
@@ -67,9 +73,19 @@ def _title_url(source: str) -> tuple[str, str]:
     return hid, f"{site}/title/{hid}" + (f"-{slug}" if slug else "")
 
 
-def _best_per_number(chapters: list[dict[str, Any]], language: str) -> list[dict[str, Any]]:
+def _well_formed(chapter: dict[str, Any], site: str) -> bool:
+    """A chapter as the page described it, checked: a plain number, a numeric
+    id, and a link (if any) on the manga's own site."""
+    number, ident, url = str(chapter.get("number", "")), str(chapter.get("id", "")), str(chapter.get("url") or "")
+    if not (CHAPTER_NUMBER.match(number) and CHAPTER_ID.match(ident)):
+        return False
+    return not url or (urlparse(url).scheme in ("http", "https") and urlparse(url).netloc == urlparse(site).netloc)
+
+
+def _best_per_number(chapters: list[dict[str, Any]], language: str, site: str = "") -> list[dict[str, Any]]:
     """One upload per chapter number - several groups often post the same
     chapter: the official one, else the most voted, else the newest."""
+    chapters = [c for c in chapters if _well_formed(c, site)] if site else chapters
     if any(c.get("language") for c in chapters):
         same = [c for c in chapters if str(c.get("language", "")).lower().startswith(language.lower())]
         chapters = same or chapters
@@ -85,9 +101,17 @@ def _best_per_number(chapters: list[dict[str, Any]], language: str) -> list[dict
     return sorted(listing, key=lambda c: chapter_sort_key(c["chapter"]))
 
 
+# The largest page taken, in pixels - read from the file's header before any
+# decoding. Real pages are ~2-30 million; a "page" far bigger is a
+# decompression bomb (a small file that unpacks into gigabytes).
+MAX_PAGE_PIXELS = 50_000_000
+
+
 def _check_image(content: bytes) -> tuple[str, int, int]:
     """(format, width, height) of a page's bytes, which must be a whole image."""
     with Image.open(io.BytesIO(content)) as image:
+        if image.width * image.height > MAX_PAGE_PIXELS:
+            raise ValueError(f"{image.width}x{image.height} is far larger than any page - refused")
         image.verify()
     with Image.open(io.BytesIO(content)) as image:
         image.load()
@@ -165,7 +189,7 @@ class ComixClient(ChapterListMixin):
                 return cached["chapters"]
             raise
         found, total = data.get("chapters") or [], int(data.get("list_total") or 0)
-        chapters = _best_per_number(found, self.config.language)
+        chapters = _best_per_number(found, self.config.language, self._urls.get(hid, ""))
         if not chapters:
             raise HelperError("comix.to's page showed no chapters - the site may have changed; see "
                               ".cache/browser/last-title.json")
@@ -238,7 +262,12 @@ class ComixClient(ChapterListMixin):
 
     def _download(self, session: Session, project: str, hid: str, chapter: str, entry: dict[str, Any],
                   force: bool) -> None:
+        number, ident = str(entry.get("chapter", "")), str(entry.get("chapter_id", ""))
+        if not (CHAPTER_NUMBER.match(number) and CHAPTER_ID.match(ident)):
+            raise HelperError(f"Chapter {chapter}: the site's listing for it doesn't look right - not downloading it.")
         url = entry.get("url") or f"{self._urls[hid]}/{entry['chapter_id']}-chapter-{entry['chapter']}"
+        if urlparse(url).netloc != urlparse(self._urls[hid]).netloc:
+            raise HelperError(f"Chapter {chapter}: its link leaves the manga's site - not downloading it.")
 
         def record(total: int, verified: bool, extra: dict[str, Any] | None = None) -> None:
             update_manifest_chapter(project, chapter, "pages", {

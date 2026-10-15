@@ -24,6 +24,7 @@ def _set_key() -> None:
     fd = os.open(amo.KEY_PATH, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
         json.dump({"issuer": issuer, "secret": secret}, handle)
+    amo.KEY_PATH.chmod(0o600)  # also when the file was there before, with other permissions
     console.print(f"[green]✓ Saved[/] [dim]({_esc(str(amo.KEY_PATH))}, readable only by you)[/]")
 
 

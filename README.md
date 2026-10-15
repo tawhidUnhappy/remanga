@@ -112,6 +112,17 @@ own profile**, with a small extension, the remanga helper:
   It is fetched at most every 15 minutes (kept for a day).
 - **A check mid-way** (the site's own "verify you are human" inside the page) pauses the helper: its
   window comes forward, its button shows `!`, remanga says so, and it carries on once you solve it.
+- **Security.** remanga and its helper share a secret key made for your copy
+  (`global/browser-helper/pairing-key`, built into your helper, never committed): every request
+  and every job carries an HMAC of it over a fresh nonce, so no other program on the computer and
+  no web page can give the helper work, pose as it, or replay a request. remanga only answers
+  `127.0.0.1`/`localhost` (no DNS rebinding) and never a web page's request. The helper opens only
+  the sites it knows, reads a page only while its tab is still on one of them, and fetches nothing
+  a page merely names - only images from hosts the reader itself loaded, never this computer or the
+  local network, and the site's cookies go only to the site. What a site says a chapter is (its
+  number, id, link) is checked before it becomes a folder or a link, and a page must be a whole
+  image of at most 50 million pixels (a decompression bomb is refused). The key, your Mozilla API
+  key, the built helper and the saved page snapshots are readable only by you.
 - When the site changes its reader, the last page the helper looked at is in `.cache/browser/` -
   what to read to fix `remanga/plugins/browser/extension/reader.js`.
 

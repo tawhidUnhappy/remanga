@@ -43,8 +43,11 @@ class Session:
         job = self.bridge.run(kind, payload, on_status=on_status, timeout=timeout)
         data = (job.result or {}).get("data") or {}
         if data.get("discovery"):
+            # Page text can hold your account name on the site: readable only by you.
             DISCOVERY_DIR.mkdir(parents=True, exist_ok=True)
-            (DISCOVERY_DIR / f"last-{kind}.json").write_text(json.dumps(data["discovery"], indent=1), encoding="utf-8")
+            target = DISCOVERY_DIR / f"last-{kind}.json"
+            target.write_text(json.dumps(data["discovery"], indent=1), encoding="utf-8")
+            target.chmod(0o600)
         return job
 
 
@@ -74,7 +77,8 @@ def helper_session(config: DownloaderConfig, wait: float | None = None) -> Itera
     with Bridge() as bridge:
         if not bridge.wait_for_helper(wait, on_wait=lambda: explain_loading(config.browser_profile)):
             raise HelperError("The remanga helper isn't loaded in Firefox.")
-        if bridge.helper_version != HELPER_VERSION:
+        if not bridge.ready():
+            # Older, or without this copy's key (another copy's helper, or one from before pairing).
             _update(bridge, config)
         try:
             yield Session(bridge, config)

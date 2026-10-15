@@ -480,6 +480,8 @@ if (!window.__remangaReader) {
         if (!blob) return {error: "the page's canvas could not be read"};
         return {type: "image/png", bytes: await blob.arrayBuffer()};
       }
+      // Only the page's own in-memory images (blob:, data:) are read from here.
+      if (!/^(blob|data):/.test(page.url)) return {error: "not a page-held image"};
       const response = await fetch(page.url);
       return {type: response.headers.get("content-type") || "", bytes: await response.arrayBuffer()};
     } catch (e) {

@@ -22,6 +22,7 @@ import time
 import uuid
 import zipfile
 from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 
@@ -153,10 +154,16 @@ def sign(xpi: Path, guid: str, version: str) -> Path:
     target = signed_path(version)
     target.parent.mkdir(parents=True, exist_ok=True)
     partial = target.with_suffix(".partial")
+    # Your key's token goes only to Mozilla.
+    host = urlparse(file["url"]).hostname or ""
+    mozilla = host == "mozilla.org" or host.endswith((".mozilla.org", ".mozilla.net"))
+    if urlparse(file["url"]).scheme != "https" or not mozilla:
+        raise SigningError(f"The signed file's address isn't Mozilla's ({host}) - not downloading it.")
     partial.write_bytes(_check_bytes(call("GET", file["url"])))
     if not is_signed(partial):
         partial.unlink(missing_ok=True)
         raise SigningError("The file Mozilla sent back isn't signed.")
+    partial.chmod(0o600)  # it holds this copy's pairing key
     partial.replace(target)
     console.print(f"[bold green]✓ Signed:[/] {_esc(str(target))}")
     return target

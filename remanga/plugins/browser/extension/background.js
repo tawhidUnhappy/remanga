@@ -31,11 +31,51 @@ const jitter = seconds => seconds * 1000 * (0.7 + Math.random() * 0.6);
 let installType = "";
 browser.management.getSelf().then(self => { installType = self.installType; }, () => {});
 
+// ---- talking to remanga: both sides prove they share this copy's key
+// (pairing.js) - an HMAC over a fresh nonce on every request, and over the
+// answer for every job. Another program on this computer, or a web page,
+// can neither give the helper work nor pose as it.
+
+const encoder = new TextEncoder();
+let hmacKey = null;
+
+const hex = buffer => [...new Uint8Array(buffer)].map(b => b.toString(16).padStart(2, "0")).join("");
+
+async function proof(...parts) {
+  if (!hmacKey) {
+    hmacKey = await crypto.subtle.importKey("raw", encoder.encode(REMANGA_PAIRING_KEY), {name: "HMAC", hash: "SHA-256"},
+                                            false, ["sign"]);
+  }
+  return hex(await crypto.subtle.sign("HMAC", hmacKey, encoder.encode(parts.join("\n"))));
+}
+
+// Headers for one request to remanga: who we are, and the proof for `method path`.
+async function signed(method, path, extra = {}) {
+  const nonce = hex(crypto.getRandomValues(new Uint8Array(16)));
+  const headers = Object.assign({"X-Remanga-Helper": VERSION, "X-Remanga-Install": installType}, extra);
+  if (REMANGA_PAIRING_KEY) {
+    headers["X-Remanga-Nonce"] = nonce;
+    headers["X-Remanga-Proof"] = await proof("helper", nonce, method, path);
+  }
+  return {nonce, headers};
+}
+
 async function bridge(path, init = {}) {
-  const headers = Object.assign({"X-Remanga-Helper": VERSION, "X-Remanga-Install": installType}, init.headers || {});
+  const method = init.method || "GET";
+  const {nonce, headers} = await signed(method, "/remanga" + path, init.headers || {});
   const response = await fetch(BRIDGE + path, Object.assign({}, init, {headers, cache: "no-store"}));
   if (!response.ok) throw new Error(`remanga answered ${response.status} to ${path}`);
-  return response.json();
+  const text = await response.text();
+  if (path === "/job") {
+    // Work is taken only from the remanga that holds this key.
+    const said = response.headers.get("X-Remanga-Proof") || "";
+    if (!REMANGA_PAIRING_KEY || said !== await proof("bridge", nonce, text)) {
+      const answer = JSON.parse(text);
+      // Unproven: nothing but a reload (Firefox reads the helper's own file again).
+      return {job: answer.job && answer.job.kind === "reload" ? {id: answer.job.id, kind: "reload"} : null};
+    }
+  }
+  return JSON.parse(text);
 }
 
 function post(path, body) {
@@ -54,7 +94,10 @@ function commit(requestId) {
   if (!body || type === undefined) return;
   bodies.delete(requestId);
   contentTypes.delete(requestId);
-  if (capturing && type.startsWith("image/")) captured.set(body.url, {type, bytes: body.bytes});
+  if (capturing && type.startsWith("image/")) {
+    captured.set(body.url, {type, bytes: body.bytes});
+    try { imageHosts.add(new URL(body.url).host); } catch (e) { /* not a URL */ }
+  }
 }
 
 function onHeaders(details) {
@@ -140,20 +183,25 @@ browser.windows.onRemoved.addListener(id => {
   if (id === windowId) windowId = tabId = null;
 });
 
-function waitForLoad(id, timeoutMs = 90000) {
+// Resolves when the tab has loaded `url` - a "complete" that arrives after the
+// navigation began, never the previous page's (a tab still showing the last
+// chapter is not done loading the next).
+function waitForLoad(id, url, timeoutMs = 90000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => done(new Error("the page took over 90 s to load")), timeoutMs);
+    let began = false;
     function done(error) {
       clearTimeout(timer);
       browser.tabs.onUpdated.removeListener(listener);
       error ? reject(error) : resolve();
     }
-    function listener(updated, change) {
-      if (updated === id && change.status === "complete") done();
+    function listener(updated, change, tab) {
+      if (updated !== id) return;
+      if (change.status === "loading" || change.url) began = true;
+      if (change.status === "complete" && (began || tab.url === url)) done();
     }
     browser.tabs.onUpdated.addListener(listener);
-    browser.tabs.get(id).then(tab => { if (tab.status === "complete" && tab.url !== "about:blank") done(); },
-                              () => done(new Error("the remanga tab was closed")));
+    browser.tabs.get(id).catch(() => done(new Error("the remanga tab was closed")));
   });
 }
 
@@ -174,11 +222,26 @@ async function ensureWindow() {
 }
 
 async function open(url) {
+  const loaded = waitForLoad(tabId, url);
   await browser.tabs.update(tabId, {url});
-  await waitForLoad(tabId);
+  await loaded;
 }
 
+// The page script runs only while the remanga tab is on a site the helper
+// knows: a page that sent it elsewhere (a redirect, a login) is not read.
 async function inPage(message) {
+  let tab = await browser.tabs.get(tabId);
+  // Mid-navigation a tab can show a passing address (about:blank): judged
+  // only once it has settled.
+  for (let n = 0; n < 30 && !remangaAllowed(tab.url) && (tab.status === "loading" || tab.url === "about:blank"); n++) {
+    await sleep(500);
+    tab = await browser.tabs.get(tabId);
+  }
+  if (!remangaAllowed(tab.url)) {
+    let where = "another page";
+    try { where = new URL(tab.url).hostname || where; } catch (e) { /* about: and the like */ }
+    throw new Error(`the remanga tab left the site (it is on ${where}) - stopped there`);
+  }
   await browser.tabs.executeScript(tabId, {file: "reader.js"});
   return browser.tabs.sendMessage(tabId, message);
 }
@@ -192,6 +255,8 @@ async function passChecks(job, status) {
     try {
       state = await inPage({cmd: "state"});
     } catch (e) {
+      // Off the site (a redirect elsewhere): stop - never wait on a page the helper won't read.
+      if (String(e && e.message || e).includes("left the site")) throw e;
       // The check navigated away mid-question; ask the new page.
       await sleep(1500);
       continue;
@@ -216,6 +281,23 @@ async function passChecks(job, status) {
 
 // ---- jobs
 
+// Hosts that served images to the remanga tab this job.
+const imageHosts = new Set();
+
+const PRIVATE_HOST = /^(localhost|0\.|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|\[|.*\.(local|internal|lan|home|localdomain)$)/i;
+
+// What the helper may fetch on its own (a page the reader didn't load): a
+// plain http(s) image from a host this chapter's reader already got images
+// from, or the site itself - never this computer, the local network, or a
+// site the page merely names (a hostile page could name your bank).
+function fetchable(url) {
+  let parsed;
+  try { parsed = new URL(url); } catch (e) { return false; }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
+  if (remangaAllowed(url)) return true;
+  return imageHosts.has(parsed.host) && !PRIVATE_HOST.test(parsed.hostname);
+}
+
 async function pageBytes(job, page, index) {
   if (page.kind === "canvas" || page.url.startsWith("blob:") || page.url.startsWith("data:")) {
     const got = await inPage({cmd: "bytes", page});
@@ -224,12 +306,15 @@ async function pageBytes(job, page, index) {
   }
   const hit = captured.get(page.url);
   if (hit) return Object.assign({how: "reader"}, hit);
+  if (!fetchable(page.url)) throw new Error(`page ${index + 1}: not fetching ${page.url.slice(0, 120)} - not an image host this chapter used`);
   // Not loaded by the reader (a larger original than it showed, or it was
   // lazy): fetched once, from the browser's cache when it is there.
   refererFor.set(page.url, job.url);
   try {
     await sleep(jitter(job.request_delay));
-    const response = await fetch(page.url, {cache: "force-cache", credentials: "include"});
+    // The site's own cookies go only to the site; an image host gets none.
+    const response = await fetch(page.url, {cache: "force-cache", credentials: remangaAllowed(page.url) ? "include" : "omit",
+                                            redirect: "error"});
     if (!response.ok) throw new Error(`page ${index + 1}: the server answered ${response.status}`);
     const type = (response.headers.get("content-type") || "").split(";")[0].trim();
     return {type, bytes: await response.blob(), how: "fetched"};
@@ -252,10 +337,8 @@ async function chapterJob(job, status) {
     counts[got.how] += 1;
     const query = new URLSearchParams({job: job.id, index: String(i + 1), total: String(found.pages.length),
                                        type: got.type || "", url: found.pages[i].url.slice(0, 2000)});
-    const response = await fetch(`${BRIDGE}/page?${query}`, {
-      method: "POST", body: got.bytes, cache: "no-store",
-      headers: {"X-Remanga-Helper": VERSION, "Content-Type": "application/octet-stream"},
-    });
+    const {headers} = await signed("POST", `/remanga/page?${query}`, {"Content-Type": "application/octet-stream"});
+    const response = await fetch(`${BRIDGE}/page?${query}`, {method: "POST", body: got.bytes, cache: "no-store", headers});
     const answer = await response.json();
     if (answer.cancel) throw new Cancelled();
     if (!response.ok) throw new Error(answer.error || `remanga refused page ${i + 1}`);
@@ -291,6 +374,7 @@ async function runJob(job) {
     captured.clear();
     bodies.clear();
     contentTypes.clear();
+    imageHosts.clear();
     seenRequests.length = 0;
     show("working", "working for remanga");
     await ensureWindow();

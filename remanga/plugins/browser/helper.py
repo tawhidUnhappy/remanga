@@ -26,6 +26,7 @@ from pathlib import Path
 
 from remanga.console import console, escape as _esc
 from remanga.paths.roots import GLOBAL_DIR
+from remanga.plugins.browser.bridge import pairing_key
 
 EXTENSION_DIR = Path(__file__).resolve().parent / "extension"
 XPI_PATH = Path(__file__).resolve().parent / "remanga-helper.xpi"
@@ -75,16 +76,21 @@ def install_signed(profile: str = "") -> Path:
 
 
 def build_xpi() -> Path:
-    """extension/ zipped as remanga-helper.xpi with this copy's ID in its
-    manifest - one file, which Firefox's file picker hands over whole."""
+    """extension/ zipped as remanga-helper.xpi with this copy's ID and key in
+    it - one file, which Firefox's file picker hands over whole. It holds the
+    key: it stays in this copy (gitignored), like the key itself."""
     files = sorted(p for p in EXTENSION_DIR.iterdir() if p.is_file())
     partial = XPI_PATH.with_suffix(".xpi.partial")
     with zipfile.ZipFile(partial, "w", zipfile.ZIP_DEFLATED) as archive:
         for path in files:
             if path.name == "manifest.json":
                 archive.writestr(path.name, json.dumps(manifest(), indent=2, ensure_ascii=False) + "\n")
+            elif path.name == "pairing.js":
+                # This copy's key, so the helper works only with this remanga.
+                archive.writestr(path.name, f'const REMANGA_PAIRING_KEY = "{pairing_key()}";\n')
             else:
                 archive.write(path, path.name)
+    partial.chmod(0o600)  # it holds this copy's pairing key
     partial.replace(XPI_PATH)
     return XPI_PATH
 

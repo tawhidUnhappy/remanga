@@ -3,25 +3,66 @@ HTTP server on 127.0.0.1 that hands the helper one job at a time and takes
 back its pages and results. The helper asks (it polls); remanga never reaches
 into the browser.
 
-Only the helper is answered: every request must carry its X-Remanga-Helper
-header - which a web page can't send to another origin without a CORS
-preflight this server never approves - and a request from a web page (an
-http(s) Origin) is refused outright."""
+Who may talk to whom:
+- Only this copy's helper is answered. remanga and the helper share a secret
+  key (global/browser-helper/pairing-key, built into the helper's file and
+  never committed): every helper request carries a fresh nonce and an HMAC
+  of it, and every job handed out is signed over that nonce - so neither
+  another program on this computer nor a web page can pose as either side,
+  and a nonce is never accepted twice.
+- A web page can't reach it at all: a request from an http(s) Origin, a CORS
+  preflight, or one addressed to any Host but 127.0.0.1/localhost (DNS
+  rebinding: a site pointing its own name at 127.0.0.1) is refused.
+- A helper without the key (one from before pairing, or another copy's) is
+  only noted - its version, so remanga can update it - and may receive only a
+  "reload" job.
+- One job can't send more than MAX_PAGES pages or MAX_JOB_BYTES in all."""
 
 from __future__ import annotations
 
+import collections
+import hashlib
+import hmac
 import itertools
 import json
+import os
+import secrets
 import threading
 import time
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from remanga.paths.roots import GLOBAL_DIR
+
 PORT = 47615  # also in extension/background.js
-HELPER_VERSION = "0.7.0"  # extension/manifest.json's version, which this code expects
+HELPER_VERSION = "0.8.1"  # extension/manifest.json's version, which this code expects
 MAX_PAGE_BYTES = 200 * 1024 * 1024
+MAX_PAGES = 3000
+MAX_JOB_BYTES = 4 * 1024 * 1024 * 1024
+KEY_PATH = GLOBAL_DIR / "browser-helper" / "pairing-key"
+
+
+def pairing_key(path: Path | None = None) -> str:
+    """This copy's secret shared with its helper - made the first time,
+    readable only by you."""
+    path = path or KEY_PATH
+    if path.exists() and len(path.read_text(encoding="utf-8").strip()) == 64:
+        return path.read_text(encoding="utf-8").strip()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    key = secrets.token_hex(32)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(key + "\n")
+    path.chmod(0o600)
+    return key
+
+
+def proof(key: str, *parts: str) -> str:
+    """HMAC-SHA256 of the parts, one per line - extension/background.js makes the same."""
+    return hmac.new(key.encode(), "\n".join(parts).encode(), hashlib.sha256).hexdigest()
 
 
 class HelperError(RuntimeError):
@@ -35,6 +76,7 @@ class Job:
     id: str = ""
     pages: dict[int, tuple[str, bytes, str]] = field(default_factory=dict)  # index -> (type, bytes, url)
     total: int = 0
+    bytes: int = 0
     result: dict[str, Any] | None = None
     cancelled: bool = False
     done: threading.Event = field(default_factory=threading.Event)
@@ -54,6 +96,10 @@ class Bridge:
         self.helper_seen = 0.0
         self.helper_version = ""
         self.helper_install = ""  # "development" (about:debugging) or "normal" (a signed install)
+        self.helper_paired = False  # its requests carry this copy's key
+        self.key = pairing_key()
+        self.nonces: collections.deque[str] = collections.deque(maxlen=5000)
+        self.nonce_set: set[str] = set()
         self.status: tuple[str, str] = ("", "")
         self.ids = itertools.count(1)
         self.server: ThreadingHTTPServer | None = None
@@ -97,10 +143,14 @@ class Bridge:
             time.sleep(0.5)
         return True
 
+    def ready(self) -> bool:
+        """The helper asking is this remanga's version and has this copy's key."""
+        return self.connected() and self.helper_version == HELPER_VERSION and self.helper_paired
+
     def wait_for_version(self, version: str, timeout: float | None) -> bool:
-        """True once the helper asking for work is `version`."""
+        """True once the helper asking for work is `version`, paired with this copy."""
         start = time.time()
-        while not (self.connected() and self.helper_version == version):
+        while not (self.connected() and self.helper_version == version and self.helper_paired):
             if timeout is not None and time.time() - start > timeout:
                 return False
             time.sleep(0.5)
@@ -146,13 +196,24 @@ class Bridge:
 
     # ---- the helper's side (called from the server's threads)
 
-    def take_job(self) -> dict[str, Any] | None:
+    def take_job(self, paired: bool) -> dict[str, Any] | None:
         with self.lock:
+            if not self.pending or (not paired and self.pending.kind != "reload"):
+                return None
             job, self.pending = self.pending, None
-            if job:
-                self.current = job
-                return job.as_message()
-            return None
+            self.current = job
+            return job.as_message()
+
+    def fresh_nonce(self, nonce: str) -> bool:
+        """A nonce seen before is a replayed request."""
+        with self.lock:
+            if not (16 <= len(nonce) <= 128) or nonce in self.nonce_set:
+                return False
+            if len(self.nonces) == self.nonces.maxlen:
+                self.nonce_set.discard(self.nonces[0])
+            self.nonces.append(nonce)
+            self.nonce_set.add(nonce)
+            return True
 
     def job_named(self, job_id: str) -> Job | None:
         with self.lock:
@@ -164,24 +225,42 @@ def _handler(bridge: Bridge):
         def log_message(self, *args) -> None:  # quiet
             pass
 
-        def _answer(self, code: int, body: dict[str, Any]) -> None:
+        def _answer(self, code: int, body: dict[str, Any], nonce: str = "") -> None:
             data = json.dumps(body).encode()
             self.send_response(code)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Cache-Control", "no-store")
+            if nonce:
+                # remanga's own word: the helper acts on nothing without it.
+                self.send_header("X-Remanga-Proof", proof(bridge.key, "bridge", nonce, data.decode()))
             self.end_headers()
             self.wfile.write(data)
 
-        def _allowed(self) -> bool:
+        def _refuse(self) -> None:
+            self._answer(403, {"error": "only this copy's remanga helper"})
+
+        def _check(self) -> str | None:
+            """None for a request to refuse; "" for a helper without the key
+            (noted, nothing more); its nonce for this copy's paired helper."""
             origin = self.headers.get("Origin", "")
-            if not self.headers.get("X-Remanga-Helper") or origin.startswith(("http:", "https:")):
-                self._answer(403, {"error": "only the remanga helper extension"})
-                return False
+            allowed_hosts = {f"127.0.0.1:{bridge.port}", f"localhost:{bridge.port}"}
+            if (self.headers.get("Host", "") not in allowed_hosts or not self.headers.get("X-Remanga-Helper")
+                    or origin.startswith(("http:", "https:"))):
+                self._refuse()
+                return None
+            nonce = self.headers.get("X-Remanga-Nonce", "")
+            given = self.headers.get("X-Remanga-Proof", "")
+            paired = bool(given) and hmac.compare_digest(
+                given, proof(bridge.key, "helper", nonce, self.command, self.path))
+            if paired and not bridge.fresh_nonce(nonce):
+                self._refuse()
+                return None
             bridge.helper_seen = time.time()
-            bridge.helper_version = self.headers.get("X-Remanga-Helper", "")
-            bridge.helper_install = self.headers.get("X-Remanga-Install", "")
-            return True
+            bridge.helper_version = self.headers.get("X-Remanga-Helper", "")[:32]
+            bridge.helper_install = self.headers.get("X-Remanga-Install", "")[:32]
+            bridge.helper_paired = paired
+            return nonce if paired else ""
 
         def _body(self, limit: int) -> bytes:
             length = int(self.headers.get("Content-Length") or 0)
@@ -193,34 +272,44 @@ def _handler(bridge: Bridge):
             self._answer(403, {"error": "only the remanga helper extension"})
 
         def do_GET(self) -> None:
-            if not self._allowed():
+            nonce = self._check()
+            if nonce is None:
                 return
             path = urlparse(self.path).path
             if path == "/remanga/job":
-                self._answer(200, {"job": bridge.take_job()})
+                job = bridge.take_job(paired=bool(nonce))
+                if not nonce:
+                    # Unpaired: only told to reload (from the file remanga just made).
+                    self._answer(200, {"job": job, "unpaired": True})
+                else:
+                    self._answer(200, {"job": job}, nonce)
             elif path == "/remanga/alive":
                 self._answer(200, {"ok": True})
             else:
                 self._answer(404, {"error": "unknown"})
 
         def do_POST(self) -> None:
-            if not self._allowed():
+            nonce = self._check()
+            if nonce is None:
                 return
             parsed = urlparse(self.path)
+            if not nonce and parsed.path != "/remanga/result":
+                self._refuse()
+                return
             try:
                 if parsed.path == "/remanga/page":
                     self._page(parse_qs(parsed.query))
                     return
                 message = json.loads(self._body(4 * 1024 * 1024) or b"{}")
             except (ValueError, json.JSONDecodeError) as error:
-                self._answer(400, {"error": str(error)})
+                self._answer(400, {"error": str(error)[:200]})
                 return
             job = bridge.job_named(str(message.get("job", "")))
-            if job is None:
+            if job is None or (not nonce and job.kind != "reload"):
                 self._answer(200, {"cancel": True})
                 return
             if parsed.path == "/remanga/status":
-                bridge.status = (str(message.get("state", "")), str(message.get("message", "")))
+                bridge.status = (str(message.get("state", ""))[:40], str(message.get("message", ""))[:300])
                 self._answer(200, {"cancel": job.cancelled})
             elif parsed.path == "/remanga/result":
                 job.result = message
@@ -235,9 +324,16 @@ def _handler(bridge: Bridge):
                 self._answer(200, {"cancel": True})
                 return
             index = int(query.get("index", ["0"])[0])
-            job.total = int(query.get("total", ["0"])[0])
+            total = int(query.get("total", ["0"])[0])
+            if not (1 <= index <= total <= MAX_PAGES):
+                raise ValueError(f"page {index} of {total}: out of range")
             content = self._body(MAX_PAGE_BYTES)
-            job.pages[index] = (query.get("type", [""])[0], content, query.get("url", [""])[0])
+            job.bytes += len(content)
+            if job.bytes > MAX_JOB_BYTES:
+                job.cancelled = True
+                raise ValueError("this job sent more than remanga takes")
+            job.total = total
+            job.pages[index] = (query.get("type", [""])[0][:100], content, query.get("url", [""])[0][:2000])
             bridge.status = ("page", f"{index}/{job.total}")
             self._answer(200, {"ok": True})
 
