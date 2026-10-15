@@ -31,6 +31,7 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
         Binding("r", "pick_range", "Pick range"),
         Binding("p", "pick_all", "Pick all"),
         Binding("a", "download_new", "Download all new"),
+        Binding("u", "update_list", "Update list"),
         Binding("j", "queue", "Queue"),
         Binding("s", "settings", "Settings"),
         Binding("escape", "back", "Back"),
@@ -62,6 +63,12 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
         table.display = False
         for label, width in (("", 1), ("Ch", 6), ("Status", 13), ("Pages", 7), ("Next", 24), ("Title", None)):
             table.add_column(label, width=width, key=label or "mark")
+        # A site read through Firefox shows its saved list; MangaDex is asked again.
+        self.fetch(refresh=workflow.list_fresh_on_open(self.project))
+
+    def action_update_list(self) -> None:
+        """Asks the site for its chapter list now (new chapters)."""
+        self.query_one(TopBar).set_info("updating the chapter list…")
         self.fetch(refresh=True)
 
     @work(thread=True, exclusive=True, group="fetch")

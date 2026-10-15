@@ -21,4 +21,5 @@ register("source", Source(
     handles="remanga.plugins.browser.hooks:handles",
     order=20,
     settings_rows="remanga.plugins.browser.settings_rows:rows",
+    fresh_on_open=False,
 ))

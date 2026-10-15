@@ -125,9 +125,10 @@ atexit.register(_close_shared, True)
 
 
 @contextmanager
-def helper_session(config: DownloaderConfig, wait: float | None = None) -> Iterator[Session]:
+def helper_session(config: DownloaderConfig, wait: float | None = None, quiet: bool = False) -> Iterator[Session]:
     """`wait`: how long to wait for the helper (None: until it is loaded or
-    Ctrl+C)."""
+    Ctrl+C). `quiet`: when it isn't there, don't start Firefox or say how to
+    load it - just give up after `wait` (work that can do without it)."""
     with _lock:
         if _shared["timer"]:
             _shared["timer"].cancel()
@@ -137,9 +138,10 @@ def helper_session(config: DownloaderConfig, wait: float | None = None) -> Itera
         bridge = _shared["bridge"]
         _shared["users"] += 1
     try:
-        if not bridge.connected():
+        if not bridge.connected() and not quiet:
             activity.status("waiting for the remanga helper in Firefox…")
-        if not bridge.wait_for_helper(wait, on_wait=lambda: explain_loading(config.browser_profile)):
+        on_wait = None if quiet else (lambda: explain_loading(config.browser_profile))
+        if not bridge.wait_for_helper(wait, on_wait=on_wait):
             raise HelperError("The remanga helper isn't loaded in Firefox.")
         if not bridge.ready():
             # Older, or without this copy's key (another copy's helper, or one from before pairing).

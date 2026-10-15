@@ -45,8 +45,9 @@ from remanga.plugins.mangadex.chapter_pages import sweep_strays
 from remanga.plugins.mangadex.pages import PageFile, remove_paths
 
 SOURCE = "comix"
-# The chapter list is trusted for a day; even an explicit refresh reuses one
-# younger than this, so opening the chapter screen twice opens no page twice.
+# The saved chapter list is shown for a day without asking the site (then read
+# again only if the helper is already running); updating it on purpose reuses
+# one younger than LIST_REFRESH_FLOOR_SECONDS, so no page is read twice in a row.
 LIST_TTL_SECONDS = 24 * 60 * 60
 LIST_REFRESH_FLOOR_SECONDS = 15 * 60
 # The type comix.to gives a manga -> its original language (for the reading direction).
@@ -211,12 +212,17 @@ class ComixClient(ChapterListMixin):
         age = time.time() - cached.get("fetched_at", 0) if cached.get("manga_id") == hid else float("inf")
         if age < (LIST_REFRESH_FLOOR_SECONDS if force_refresh else LIST_TTL_SECONDS):
             return cached["chapters"]
+        # Not asked for (a day-old list, just opened): only if the helper is
+        # already there - Firefox isn't started for it.
+        quiet = not force_refresh and session is None and cached.get("manga_id") == hid
         try:
-            data = self._read_title(hid, session, project) if session else self._read_title_briefly(hid, project)
+            data = (self._read_title(hid, session, project) if session
+                    else self._read_title_briefly(hid, project, quiet=quiet))
         except HelperError:
             if cached.get("manga_id") == hid:
-                console.print("[yellow]Firefox isn't reachable - using the chapter list from "
-                              f"{int(age // 3600)} h ago.[/]")
+                hours = int(age // 3600)
+                console.print(f"[yellow]Firefox isn't reachable - using the chapter list from {hours} h ago.[/]")
+                activity.status(f"chapter list from {hours} h ago - u updates it")
                 return cached["chapters"]
             raise
         found, total = data.get("chapters") or [], int(data.get("list_total") or 0)
@@ -235,11 +241,11 @@ class ComixClient(ChapterListMixin):
             write_remote_chapter_cache(project, hid, chapters, time.time())
         return chapters
 
-    def _read_title_briefly(self, hid: str, project: str) -> dict[str, Any]:
+    def _read_title_briefly(self, hid: str, project: str, quiet: bool = False) -> dict[str, Any]:
         """The manga's page, waiting up to two minutes for the helper (time
-        for Firefox to start) - a list that can't be fetched falls back to
-        the last one."""
-        with helper_session(self.config, wait=120) as session:
+        for Firefox to start) - or, `quiet`, a few seconds for a helper
+        already there - a list that can't be fetched falls back to the last one."""
+        with helper_session(self.config, wait=5 if quiet else 120, quiet=quiet) as session:
             return self._read_title(hid, session, project)
 
     def list_chapters_with_status(self, project_name: str, manga_id_or_url: str | None = None,
@@ -281,6 +287,10 @@ class ComixClient(ChapterListMixin):
             with helper_session(self.config, wait=None) as session:
                 listing = {chapter_key(c["chapter"]): c
                            for c in self._remote_chapters(project_name, hid, False, session)}
+                if any(chapter_key(n) not in listing for n in todo):
+                    # A chapter the saved list doesn't have yet: the list is read again, once.
+                    listing = {chapter_key(c["chapter"]): c
+                               for c in self._remote_chapters(project_name, hid, True, session)}
                 unknown = [n for n in todo if chapter_key(n) not in listing]
                 if unknown:
                     raise ValueError(f"comix.to lists no chapter {', '.join(unknown)} for this manga.")

@@ -88,7 +88,10 @@ class Source:
     `handles(source) -> bool` says whether a link/ID/title is this source's;
     the first source in order is the default for anything none claims.
     `settings_rows(config) -> list[ui.voice_rows.Row]`: its own rows on the
-    Settings screen (under "Downloads"), if it has settings."""
+    Settings screen (under "Downloads"), if it has settings.
+    `fresh_on_open`: whether opening a chapter list asks the source again
+    (a cheap API) or shows the saved list (a site read through the browser -
+    asked only when you update the list, or once the saved one is a day old)."""
 
     name: str
     display_name: str
@@ -96,6 +99,7 @@ class Source:
     handles: Ref
     order: int = 100
     settings_rows: Ref = None
+    fresh_on_open: bool = True
 
 
 @dataclass(frozen=True)

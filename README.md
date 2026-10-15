@@ -103,6 +103,12 @@ own profile**, with a small extension, the remanga helper:
   chapter; it closes a little after the last one (or when remanga exits).
 - **Checks are yours.** When the site shows a check, the remanga tab comes to the front and remanga
   says so; solve it and the download carries on by itself.
+- **Saved, not re-asked.** The chapter list is saved with the project and shown from there - no
+  Firefox, no request - when you open it; `u` (Update list) asks the site for new chapters (page 1
+  only, unless the list grew). A list over a day old is read again only if the helper is already
+  running (Firefox is never started just to show a list), and a download asks again only for a
+  chapter the saved list doesn't have. The manga's details, every upload seen and every chapter
+  downloaded (checked on disk) are kept too.
 - **In the menus** it is just another source: `n` on Projects takes a comix.to link, the chapter list
   and every download work as for MangaDex, the chapter list's top bar says what Firefox is doing
   (and when a check waits for you), and Settings → Downloads holds the Firefox profile, the pace and

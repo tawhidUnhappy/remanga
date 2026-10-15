@@ -149,7 +149,8 @@ def _run(args: argparse.Namespace) -> None:
             console.print(f"  ch{_esc(video['label']):<12} {_esc(str(video['video'] or '(no finished video)'))}")
         return
     if args.command == "download":
-        listing = workflow.mangadex_chapters(args.project, config, args.url)
+        listing = workflow.mangadex_chapters(args.project, config, args.url,
+                                             refresh=workflow.list_fresh_on_open(args.project))
         if not args.chapters:
             workflow.print_chapter_list(listing)
             console.print("[dim]Download with -c: a chapter, a range (1-5), 'new' or 'all'.[/]")

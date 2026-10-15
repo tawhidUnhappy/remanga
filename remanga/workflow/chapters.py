@@ -30,6 +30,14 @@ def mangadex_chapters(project: str, config: RemangaConfig, url: str | None = Non
     return project_client(project, config).list_chapters_with_status(project, url, force_refresh=refresh)
 
 
+def list_fresh_on_open(project: str) -> bool:
+    """Whether showing the project's chapter list asks its source again, or
+    shows the list saved last time (a site read through Firefox)."""
+    from remanga.sources import project_source
+
+    return project_source(project).fresh_on_open
+
+
 def select_chapters(raw: str, available: list[str]) -> list[str]:
     """'1', '1-5', '1-5,8', or 'all', against the chapters available."""
     text = (raw or "").strip()
