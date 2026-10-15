@@ -46,3 +46,6 @@ config.json
 Thumbs.db
 # Sample frames rendered to compare settings - regenerate them, don't track them.
 samples/
+# The remanga helper, zipped for Firefox from remanga/plugins/browser/extension/ on use.
+*.xpi
+*.xpi.partial

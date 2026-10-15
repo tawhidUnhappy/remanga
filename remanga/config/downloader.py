@@ -1,4 +1,4 @@
-"""MangaDex downloader settings - see remanga/plugins/mangadex/."""
+"""Downloader settings - see remanga/plugins/mangadex/ and remanga/plugins/browser/."""
 
 from __future__ import annotations
 
@@ -11,3 +11,10 @@ class DownloaderConfig(ConfigModel):
     max_retries: int = 3
     retry_delay_seconds: int = 2
     request_delay_seconds: float = 0.35
+    # Sites downloaded through your Firefox (remanga/plugins/browser/).
+    # The Firefox profile it happens in, by the name Firefox shows ("" = Firefox's default).
+    browser_profile: str = ""
+    # Pause between two chapters, and between two screens while reading one
+    # (each varied by +-30%) - a reader's pace, never faster.
+    browser_chapter_pause_seconds: float = 10.0
+    browser_scroll_seconds: float = 0.8

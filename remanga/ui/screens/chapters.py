@@ -52,7 +52,7 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
         return self.machine
 
     def compose(self) -> ComposeResult:
-        yield TopBar(self.path, "fetching the chapter list from MangaDex…")
+        yield TopBar(self.path, "fetching the chapter list…")
         yield LoadingIndicator()
         yield SafeTable(id="chapters", mark_column=True)
         yield Footer()
@@ -104,7 +104,7 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
         if self.marks:
             info += f" · {len(self.marks)} picked"
         if not self.rows:
-            info = "MangaDex lists no chapters in this language" + (" (offline)" if self.offline else "")
+            info = "The site lists no chapters in this language" + (" (offline)" if self.offline else "")
         self.query_one(TopBar).set_info(info)
 
     def toggle_mark(self, index: int) -> None:
@@ -179,7 +179,7 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
     async def action_download_new(self) -> None:
         new = self.new_chapters()
         if not new:
-            self.notify("Every chapter MangaDex lists is downloaded.")
+            self.notify("Every chapter the site lists is downloaded.")
             return
         if await self.app.push_screen_wait(Confirm("Download all new", f"Download {len(new)} chapter(s): "
                                                    f"{', '.join(new)}?", yes="Download")):

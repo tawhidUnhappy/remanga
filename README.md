@@ -4,7 +4,8 @@
 
 Manga panels to recap video, in five steps:
 
-1. **Download** chapters from MangaDex.
+1. **Download** chapters from MangaDex - or from comix.to, through your own Firefox
+   ([Sites that need a real browser](#sites-that-need-a-real-browser)).
 2. **Mark the panels** in the Panel Marker, a web UI: MAGI v3 finds them when you press Detect, and
    you fix whatever it got wrong by hand.
 3. **Make a PDF** of the chapter's cut panels, in reading order.
@@ -71,6 +72,43 @@ Logs are kept in `projects/<name>/logs/`: `chapter_N.log` for a chapter's PDF an
 
 `-c` takes a chapter, a range, several (`1-5,8`) or `all` (the default). Decimal chapters are
 chapters of their own: `1-5` includes 4.5 but not 5.1.
+
+### Sites that need a real browser
+
+comix.to only serves a real person - Cloudflare's "Just a moment..." check stands in front of it,
+and its own API is signed and encrypted. So remanga downloads it **through your Firefox, in your
+own profile**, with a small extension, the remanga helper:
+
+```bash
+./run.sh new "https://comix.to/title/mwx7e-ghost-story-club-remake/1513233-chapter-1"
+./run.sh download -p GhostStoryClubRemake -c 1-5
+```
+
+- **Installing the helper for good** (once): Mozilla signs it as a private ("unlisted") add-on -
+  free, never listed anywhere. Sign in (or sign up) at addons.mozilla.org, press "Generate new
+  credentials" on <https://addons.mozilla.org/en-US/developers/addon/api/key/>, then
+  `./run.sh helper --set-key` (paste the two values) and `./run.sh helper --install`: a few minutes
+  later Firefox asks to add it. It stays through restarts like any extension, and when remanga has a
+  newer helper it is signed and offered the same way. `./run.sh helper` shows where it stands.
+  Without that, remanga offers it as a temporary add-on (`about:debugging` → **Load Temporary
+  Add-on...**), gone when Firefox restarts. `downloader.browser_profile` is the profile it opens
+  Firefox in (the name Firefox's profile menu shows; empty = Firefox's default).
+- **It stays out of your browsing.** Between downloads the helper only asks remanga whether there is
+  work. It listens to requests only during a job and only in its own remanga window, and runs its
+  page script only there - nothing is added to any other site (your bank, YouTube Studio, ...), and
+  your Firefox is never put under remote control (no `navigator.webdriver`). Its toolbar button
+  shows what it is doing: nothing, `…` working, `!` waiting for you to solve a check.
+- **Checks are yours.** The helper works in a window of its own. When the site shows a check, that
+  window comes forward and remanga prints so; solve it and the download carries on by itself.
+- **Highest quality.** The pages are the image files the site serves, byte for byte - never a
+  screenshot, never re-encoded. When the page's own data names larger originals than the reader
+  shows, those originals are what is saved. Each page is checked to be a whole image.
+- **Politely.** One chapter at a time, read at a reader's pace (`browser_scroll_seconds` per screen),
+  a pause between chapters (`browser_chapter_pause_seconds`), and nothing fetched twice: the pages
+  are the ones the reader already loaded. A chapter already here and whole is checked on disk, with
+  no browser at all. The chapter list is fetched at most every 15 minutes (kept for a day).
+- When the site changes its reader, the last page the helper looked at is in `.cache/browser/` -
+  what to read to fix `remanga/plugins/browser/extension/reader.js`.
 
 ## Marking the panels
 
@@ -334,3 +372,5 @@ Every setting is in `config.json` and applies to every project:
 | `marker.min_mark_ratio` | 0.03 | the smallest a panel mark may be, as a fraction of the page's shorter side. A drag under it makes no mark (the box says so while you drag), and a resize handle stops there instead of collapsing a panel to a sliver |
 | `cropper.margin_padding_pixels` / `snap_to_gutters` | 8 / true | breathing room around a cut panel, and snapping its edges to the real gutters |
 | `downloader.language` | `en` | MangaDex translation language |
+| `downloader.browser_profile` | `""` | the Firefox profile a [browser site](#sites-that-need-a-real-browser) is downloaded in (Firefox's default when empty) |
+| `downloader.browser_chapter_pause_seconds` / `browser_scroll_seconds` | 10 / 0.8 | the pause between two chapters and between two screens of one, each varied by ±30% |

@@ -1,7 +1,7 @@
 """The `remanga` command line. With no command, the menus.
 
-    remanga new      MANGADEX_URL                (names the project after the manga)
-    remanga download -p NAME [-c 1-5]           (no -c: shows MangaDex's chapter list)
+    remanga new      URL                         (MangaDex or comix.to; names the project after the manga)
+    remanga download -p NAME [-c 1-5]           (no -c: shows the site's chapter list)
     remanga mark     -p NAME -c 1-5             (the Panel Marker web UI)
     remanga write    -p NAME -c 1               (write the narration yourself)
     remanga review   -p NAME -c 1               (flag what the LLM got wrong)
@@ -14,6 +14,7 @@
     remanga queue    [--run]                    (the job queue the menus fill; --run runs it)
     remanga voices                              (one line in every voice, to listen to)
     remanga plugins                             (what is installed: engines, layouts, sources, ...)
+    remanga helper   [--set-key | --install]    (the Firefox helper for comix.to: install it for good)
     remanga setup    [--tool kokoro]            (a tool plug-in's own setup: environment + weights)
 
 Exit status: 0 done, 1 failed, 130 stopped with Ctrl+C."""
@@ -43,14 +44,17 @@ def build_parser() -> argparse.ArgumentParser:
         return p
 
     sub.add_parser("interactive", help="the menus (the default)")
-    n = sub.add_parser("new", help="Create a project from a MangaDex URL, ID or title - named after the manga")
-    n.add_argument("source", help="MangaDex URL, ID, or a title to search")
-    d = with_project("download", "Download chapters from MangaDex (re-verifies ones already here); without -c, "
-                                 "list MangaDex's chapters", chapters=False)
+    n = sub.add_parser("new", help="Create a project from a MangaDex or comix.to link (or a MangaDex title) - named "
+                                       "after the manga")
+    n.add_argument("source", help="MangaDex URL, ID or a title to search; or a comix.to link (downloads "
+                                   "through your Firefox)")
+    d = with_project("download", "Download chapters from the manga's site (re-verifies ones already here); "
+                                 "without -c, list its chapters", chapters=False)
     d.add_argument("--chapters", "-c", default=None,
                    help="a chapter (3), a range (1-5), several (1-5,8), 'new' (every chapter not downloaded) or "
                         "'all'; leave out to see the list")
-    d.add_argument("--url", help="MangaDex URL, ID or title - needed once per project, then remembered")
+    d.add_argument("--url", help="the manga's link (MangaDex URL/ID/title, or comix.to) - needed once per project, "
+                                 "then remembered")
     d.add_argument("--force", action="store_true", help="delete the pages and download them again")
     with_project("mark", "Open the Panel Marker web UI for these chapters - MAGI v3 finds the panels, you fix "
                          "them, saving writes crops.json")
@@ -79,6 +83,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("voices", help="Read one line in each of the narrator engine's voices, into "
                                   "global/voice/samples/")
     sub.add_parser("plugins", help="List the plug-ins: narrator engines, tools, layouts, sources and jobs")
+    hp = sub.add_parser("helper", help="The remanga helper extension for Firefox (comix.to downloads): its state, "
+                                       "and installing it for good")
+    hp.add_argument("--set-key", action="store_true", help="save your addons.mozilla.org API key (asked for)")
+    hp.add_argument("--install", action="store_true",
+                    help="have Mozilla sign the helper (private, unlisted) and open it in Firefox to install")
     su = sub.add_parser("setup", help="run tool plug-ins' setup (environment + weights); default: the chosen "
                                       "narrator and MAGI v3")
     su.add_argument("--tool", action="append", default=[], help="only this tool (repeatable): see `plugins`")
@@ -99,6 +108,11 @@ def _run(args: argparse.Namespace) -> None:
         return
     if args.command == "plugins":
         show_plugins()
+        return
+    if args.command == "helper":
+        from remanga.plugins.browser.commands import helper_command
+
+        helper_command(set_key=args.set_key, install=args.install)
         return
     if args.command == "voices":
         from remanga.config import RemangaConfig as _Config

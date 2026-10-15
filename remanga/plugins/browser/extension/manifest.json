@@ -1,0 +1,45 @@
+{
+  "manifest_version": 2,
+  "name": "remanga helper",
+  "version": "0.6.0",
+  "description": "Downloads manga chapters for remanga, a program on this computer: opens each chapter in its own window, lets you solve any check, and hands the pages to remanga on 127.0.0.1. Touches no other window.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "remanga-helper@remanga.local",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": [
+          "websiteContent"
+        ]
+      }
+    },
+    "gecko_android": {
+      "strict_min_version": "142.0"
+    }
+  },
+  "permissions": [
+    "tabs",
+    "webRequest",
+    "webRequestBlocking",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": [
+      "sites.js",
+      "background.js"
+    ]
+  },
+  "icons": {
+    "16": "icon-16.png",
+    "32": "icon-32.png",
+    "48": "icon-48.png",
+    "96": "icon-96.png"
+  },
+  "browser_action": {
+    "default_icon": {
+      "16": "icon-16.png",
+      "32": "icon-32.png"
+    },
+    "default_title": "remanga helper"
+  }
+}

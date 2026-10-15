@@ -686,6 +686,31 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     prints "All 0 pages verified" and gets nothing. Test webtoon: Skeleton Soldier
     (d993f789-e7e5-4832-92fd-37614220b427) ch 25 is hosted.
 
+- **Browser sites (comix.to, `remanga/plugins/browser/`), 2026-10-15.** comix.to = Cloudflare
+  managed challenge + signed/encrypted API, so the user's own Firefox does the work through the
+  remanga helper extension (temporary add-on, polls 127.0.0.1:47615). Don't "simplify" to
+  Playwright/Selenium/BiDi: a remote-controlled Firefox has `navigator.webdriver = true` and sits on
+  "Just a moment..." forever (measured). Don't copy the user's profile cookies into another browser
+  either - the auto-mode classifier refuses it (credential exploration), rightly. The user's profile
+  is "Evil" = `fepkdkos.default` (snap Firefox); the name lives in `Profile Groups/*.sqlite`, not
+  profiles.ini, so `-P Evil` doesn't work - helper.py resolves it to `--profile <folder>`.
+  `filterResponseData`'s onstop can fire BEFORE that request's onHeadersReceived: committing on
+  onstop lost ~1/3 of pages (re-fetched them). Commit when both have arrived. Test plumbing with the
+  mock site + throwaway headless Firefox (BiDi `webExtension.install`); real-site behaviour needs
+  the user to load the helper. Snap Firefox has a private /tmp: its profile/extension test copies
+  go under ~/snap/firefox/common/.
+  comix.to facts (measured): reader is VIRTUALIZED (~4 `img.rpage-page__img` in the DOM at once,
+  940px webp from rotating `*/hi/...` hosts) - collect pages while scrolling, sort by offset, check
+  against the reader's own "n / N". Chapter list is client-drawn after load, 20/page (`npager`,
+  "Showing a to b of N items"), and REOPENS ON THE LAST PAGE VIEWED; uploads per chapter from many
+  groups ("Official", Tapas, scan groups). Comment "Dislike 0" buttons are digits too - page
+  numbers only from the pager's own box. Mock tests MUST use their own port (47699): the user's
+  real helper polls 47615 and would take test jobs. Helper updates: temporary install ->
+  `runtime.reload()` re-reads the xpi (verified); signed install -> new signed version offered.
+  addons-linter (official Node 22 in scratch; nodejs-bin ships too-old v18): description <= 250
+  chars, `data_collection_permissions` required (we declare websiteContent - pages go to a program
+  outside the browser) + gecko_android min 142.
+
 ## Verified 2026-09-17 (light version)
 
 `download -c 1 --url ...` (40 pages, checksums) -> `pdf` (29.6MB, all lossless, text page ok) ->

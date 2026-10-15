@@ -66,7 +66,7 @@ class ProjectsScreen(Screen):
         else:
             table.show_cursor = False
         self.query_one(TopBar).set_info(f"{len(projects)} project(s)" if projects else
-                                        "no projects yet - press n and paste a MangaDex URL")
+                                        "no projects yet - press n and paste a MangaDex or comix.to link")
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         self.app.push_screen(ChaptersScreen(self.machine, self.names[event.cursor_row]))
@@ -81,12 +81,13 @@ class ProjectsScreen(Screen):
     async def action_new(self) -> None:
         path = ["remanga", "New project"]
         source = await self.app.push_screen_wait(Ask(
-            "New project", "MangaDex URL (or ID, or a title to search)",
-            note="The project is named after the manga's title; the reading direction comes from MangaDex."))
+            "New project", "MangaDex or comix.to link (or a title to search on MangaDex)",
+            note="The project is named after the manga's title; the reading direction comes from its original "
+                 "language. A comix.to link downloads through your Firefox - see the README."))
         if not source:
             return
         outcome: TaskOutcome = await self.app.push_screen_wait(TaskScreen(path, "Creating the project", [
-            Step("Look the manga up on MangaDex", lambda: workflow.create_project(source, self.machine)),
+            Step("Look the manga up", lambda: workflow.create_project(source, self.machine)),
         ], _global_log()))
         if not outcome.ok:
             await self.app.push_screen_wait(Result(path, "Couldn't create the project", [outcome.error], ok=False,

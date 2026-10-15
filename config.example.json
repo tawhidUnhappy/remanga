@@ -12,7 +12,10 @@
     "image_quality": "data",
     "max_retries": 3,
     "retry_delay_seconds": 2,
-    "request_delay_seconds": 0.35
+    "request_delay_seconds": 0.35,
+    "browser_profile": "",
+    "browser_chapter_pause_seconds": 10.0,
+    "browser_scroll_seconds": 0.8
   },
   "pdf": {
     "max_mb": 50.0
