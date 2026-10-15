@@ -94,35 +94,54 @@ def sign(xpi: Path, guid: str, version: str) -> Path:
     def auth() -> dict[str, str]:
         return {"Authorization": f"JWT {_token(*key)}"}
 
-    console.print(f"[cyan]Sending remanga helper {version} to Mozilla to be signed (unlisted - private)...[/]")
-    with xpi.open("rb") as handle:
-        upload = _check(session.post(f"{API}/addons/upload/", headers=auth(), timeout=120,
-                                     files={"upload": (xpi.name, handle, "application/x-xpinstall")},
-                                     data={"channel": "unlisted"}), "the upload")
-    upload_id = upload["uuid"]
-    for _ in range(120):
-        if upload.get("processed"):
-            break
-        time.sleep(5)
-        upload = _check(session.get(f"{API}/addons/upload/{upload_id}/", headers=auth(), timeout=60), "the check")
-    if not upload.get("processed"):
-        raise SigningError("Mozilla's check of the upload didn't finish in 10 minutes - try again later.")
-    if not upload.get("valid"):
-        problems = _validation_errors(upload.get("validation"))
-        raise SigningError("Mozilla's check found problems:\n  " + "\n  ".join(problems))
-    console.print("[green]Mozilla's check passed.[/] Asking for the signature...")
-
-    created = session.post(f"{API}/addons/addon/{guid}/versions/", headers=auth(), json={"upload": upload_id},
-                           timeout=60)
-    if created.status_code in (401, 403, 404):
-        # The first time: the add-on itself doesn't exist on your account yet.
-        created = session.post(f"{API}/addons/addon/", headers=auth(), json={"version": {"upload": upload_id}},
-                               timeout=60)
-    _check(created, "the new version")
+    def call(method: str, url: str, **kwargs) -> requests.Response:
+        """addons.mozilla.org answers 502/503 now and then; such a request is
+        tried again after a pause (a creation is first checked for, since a
+        502 can come back from one that went through)."""
+        for attempt in range(4):
+            response = session.request(method, url, headers=auth(), timeout=120, **kwargs)
+            if response.status_code < 500:
+                return response
+            time.sleep(15 * (attempt + 1))
+            if method == "POST" and version_exists():
+                return response
+        return response
 
     detail_url = f"{API}/addons/addon/{guid}/versions/v{version}/"
+
+    def version_exists() -> bool:
+        return session.get(detail_url, headers=auth(), timeout=60).status_code == 200
+
+    if version_exists():
+        console.print(f"[cyan]remanga helper {version} is already with Mozilla - waiting for its signature...[/]")
+    else:
+        console.print(f"[cyan]Sending remanga helper {version} to Mozilla to be signed (unlisted - private)...[/]")
+        with xpi.open("rb") as handle:
+            upload = _check(call("POST", f"{API}/addons/upload/", data={"channel": "unlisted"},
+                                 files={"upload": (xpi.name, handle, "application/x-xpinstall")}), "the upload")
+        upload_id = upload["uuid"]
+        for _ in range(120):
+            if upload.get("processed"):
+                break
+            time.sleep(5)
+            upload = _check(call("GET", f"{API}/addons/upload/{upload_id}/"), "the check")
+        if not upload.get("processed"):
+            raise SigningError("Mozilla's check of the upload didn't finish in 10 minutes - try again later.")
+        if not upload.get("valid"):
+            problems = _validation_errors(upload.get("validation"))
+            raise SigningError("Mozilla's check found problems:\n  " + "\n  ".join(problems))
+        console.print("[green]Mozilla's check passed.[/] Asking for the signature...")
+        exists = call("GET", f"{API}/addons/addon/{guid}/").status_code == 200
+        if exists:
+            created = call("POST", f"{API}/addons/addon/{guid}/versions/", json={"upload": upload_id})
+        else:
+            # The first time: the add-on itself is made on your account.
+            created = call("POST", f"{API}/addons/addon/", json={"version": {"upload": upload_id}})
+        if not version_exists():
+            _check(created, "the new version")
+
     for _ in range(360):
-        file = (_check(session.get(detail_url, headers=auth(), timeout=60), "the version") or {}).get("file") or {}
+        file = (_check(call("GET", detail_url), "the version") or {}).get("file") or {}
         if file.get("status") == "public" and file.get("url"):
             break
         if file.get("status") == "disabled":
@@ -134,7 +153,7 @@ def sign(xpi: Path, guid: str, version: str) -> Path:
     target = signed_path(version)
     target.parent.mkdir(parents=True, exist_ok=True)
     partial = target.with_suffix(".partial")
-    partial.write_bytes(_check_bytes(session.get(file["url"], headers=auth(), timeout=120)))
+    partial.write_bytes(_check_bytes(call("GET", file["url"])))
     if not is_signed(partial):
         partial.unlink(missing_ok=True)
         raise SigningError("The file Mozilla sent back isn't signed.")
