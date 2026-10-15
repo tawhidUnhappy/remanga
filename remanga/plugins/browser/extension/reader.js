@@ -304,6 +304,16 @@ if (!window.__remangaReader) {
     return Math.round(el.getBoundingClientRect().top - base + scrolling.scrollTop);
   }
 
+  // The reader's page bar: one control per page ("Go to page 192") - its count.
+  function readerBar() {
+    let most = 0;
+    for (const el of document.querySelectorAll("[aria-label], [title]")) {
+      const match = (el.getAttribute("aria-label") || el.getAttribute("title") || "").match(/^(?:go to )?page (\d+)$/i);
+      if (match) most = Math.max(most, Number(match[1]));
+    }
+    return most;
+  }
+
   // The pages the reader numbers itself ("5 / 192" under each): its total.
   function readerTotal() {
     const counts = new Map();
@@ -371,6 +381,7 @@ if (!window.__remangaReader) {
     return {
       pages: useData ? data.map(url => ({kind: "img", url})) : shown,
       expected,
+      bar: readerBar(),
       source: useData ? "page data" : "reader",
       discovery: Object.assign(discovery(), {
         shown: shown.slice(0, 400), data_urls: data, expected,

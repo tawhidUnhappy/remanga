@@ -60,7 +60,7 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
     def on_mount(self) -> None:
         table = self.query_one(SafeTable)
         table.display = False
-        for label, width in (("", 1), ("Ch", 6), ("Status", 13), ("Pages", 5), ("Next", 24), ("Title", None)):
+        for label, width in (("", 1), ("Ch", 6), ("Status", 13), ("Pages", 7), ("Next", 24), ("Title", None)):
             table.add_column(label, width=width, key=label or "mark")
         self.fetch(refresh=True)
 
@@ -90,8 +90,12 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
             label, style = _STATUS[chapter["status"]]
             stage = workflow.chapter_state(self.project, chapter["chapter"])
             stage = "" if stage.startswith("not downloaded") else stage.split(" - ")[-1]
-            table.add_row(self._mark(index), chapter["chapter"], Text(label, style=style),
-                          Text(str(chapter.get("pages") or ""), justify="right"),
+            # Downloaded: its pages and how they checked out (✓ every check passed, ? not one checked download).
+            checked = workflow.page_check(self.project, chapter["chapter"]) if chapter["status"] != "missing" else {}
+            pages = (Text(f"{checked['count']} {checked['mark']}", justify="right",
+                          style="green" if checked["mark"] == "✓" else "yellow") if checked.get("mark")
+                     else Text(str(chapter.get("pages") or ""), justify="right"))
+            table.add_row(self._mark(index), chapter["chapter"], Text(label, style=style), pages,
                           Text(stage, style="green" if stage == "video done" else ""),
                           Text(chapter.get("title") or "", style="dim"))
         if row is not None and self.rows:

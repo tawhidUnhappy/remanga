@@ -68,3 +68,29 @@ def has_marks(project: str, chapter: str) -> bool:
 
 def has_panels(project: str, chapter: str) -> bool:
     return bool(panel_files(project, chapter))
+
+
+def page_check(project: str, chapter: str) -> dict:
+    """How a downloaded chapter's pages were checked, from its download record:
+    {"mark": "✓" (all checked) / "?" (the pages on disk aren't the checked
+    download) / "" (nothing downloaded), "count": pages on disk, "lines": what
+    was checked, in words}."""
+    from remanga.paths import read_manifest
+
+    files = page_files(project, chapter)
+    if not files:
+        return {"mark": "", "count": 0, "lines": []}
+    record = read_manifest(project).get("chapters", {}).get(str(chapter), {}).get("pages") or {}
+    if not record.get("verified") or record.get("total_pages") != len(files):
+        return {"mark": "?", "count": len(files), "lines": [
+            f"{len(files)} pages on disk, but not as one checked download - Check pages fetches whatever is "
+            "missing or broken and checks them all."]}
+    if record.get("checks"):
+        lines = [("✓ " if c["ok"] else "· ") + c["says"] for c in record["checks"]]
+    elif record.get("source") in (None, "", "mangadex"):
+        lines = [f"✓ {len(files)} pages, every one byte for byte the file MangaDex names after its SHA-256 checksum"]
+    else:
+        lines = [f"✓ {len(files)} pages, numbered 1-{len(files)}, every one a whole image, as many as the "
+                 "reader numbered", "· downloaded before the fuller check (the site's own list, the page bar, "
+                 "page sizes) - Re-download gives it one"]
+    return {"mark": "✓", "count": len(files), "lines": lines}

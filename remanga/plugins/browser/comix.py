@@ -118,6 +118,37 @@ def _check_image(content: bytes) -> tuple[str, int, int]:
         return image.format or "", image.width, image.height
 
 
+def page_checks(total: int, data: dict[str, Any], sizes: list[tuple[int, int]]) -> list[dict[str, Any]]:
+    """Every count of the chapter's pages there is, against the pages saved:
+    [{"ok": True/False/None (couldn't check), "says": what was checked}].
+    A False anywhere and the chapter isn't saved."""
+    checks: list[dict[str, Any]] = [
+        {"ok": True, "says": f"{total} pages downloaded, numbered 1-{total}, every one a whole image"}]
+    expected, bar, site = int(data.get("expected") or 0), int(data.get("bar") or 0), data.get("site") or {}
+    if expected:
+        checks.append({"ok": expected == total, "says": f"the reader numbers {expected} pages (\"1 / {expected}\")"})
+    if bar:
+        checks.append({"ok": bar == total, "says": f"the reader's page bar has {bar} pages"})
+    if site.get("count"):
+        same = site.get("same_images")
+        checks.append({"ok": site["count"] == total and same is not False,
+                       "says": f"the site's own page list has {site['count']} images"
+                               + (" - the very images downloaded" if same else "")})
+    elif data.get("source") == "page data":
+        checks.append({"ok": True, "says": f"the pages are the site's own list in the page ({total} images) - "
+                                           "its originals"})
+    elif site.get("encrypted"):
+        checks.append({"ok": None, "says": "the site's own page list came encrypted - not readable, not counted"})
+    else:
+        checks.append({"ok": None, "says": "the site's own page list wasn't seen"})
+    shown = [tuple(size) for size in data.get("sizes") or []]
+    if len(shown) == len(sizes) and all(w and h for w, h in shown):
+        wrong = [i + 1 for i, (a, b) in enumerate(zip(shown, sizes, strict=True)) if a != b]
+        checks.append({"ok": not wrong, "says": "every page is the size the reader showed" if not wrong
+                       else f"page(s) {', '.join(map(str, wrong[:5]))} aren't the size the reader showed"})
+    return checks
+
+
 class ComixClient(ChapterListMixin):
     def __init__(self, config: DownloaderConfig | None = None):
         self.config = config or DownloaderConfig()
@@ -295,17 +326,23 @@ class ComixClient(ChapterListMixin):
 
         dest = get_chapter_dir(project, chapter) / "pages"
         planned: list[tuple[PageFile, bytes]] = []
-        widths = []
+        sizes: list[tuple[int, int]] = []
         for index in range(1, total + 1):
             _type, content, source_url = job.pages[index]
             try:
-                kind, width, _height = _check_image(content)
+                kind, width, height = _check_image(content)
             except Exception as error:
                 raise HelperError(f"Chapter {chapter} page {index} isn't a whole image ({error}) - "
                                   f"from {source_url[:120]}") from error
-            widths.append(width)
+            sizes.append((width, height))
             name = f"{page_stem(chapter, index)}{EXTENSION_BY_FORMAT.get(kind, '.' + kind.lower())}"
             planned.append((PageFile(dest / name, source_url), content))
+
+        checks = page_checks(total, data, sizes)
+        failed = [check for check in checks if check["ok"] is False]
+        if failed:
+            raise HelperError(f"Chapter {chapter}: the pages don't add up - " + "; ".join(c["says"] for c in failed)
+                              + ". Nothing was saved; try again.")
 
         dest.mkdir(parents=True, exist_ok=True)
         if force:
@@ -315,14 +352,10 @@ class ComixClient(ChapterListMixin):
             partial = page.path.with_name(page.path.name + ".partial")
             partial.write_bytes(content)
             partial.replace(page.path)
-        counts = data.get("counts") or {}
-        record(total, True, {"from": data.get("source", ""), "width_min": min(widths), "width_max": max(widths)})
-        fetched = counts.get("fetched", 0)
-        console.print(
-            f"[bold green]✓ {total} page(s), {min(widths)}-{max(widths)} px wide[/] [dim]("
-            + ("from the page's own list of originals; " if data.get("source") == "page data" else "")
-            + f"{counts.get('reader', 0)} as the reader loaded them"
-            + (f", {fetched} fetched once more" if fetched else "")
-            + (f", {counts['page']} read off the page" if counts.get("page") else "")
-            + ")[/]"
-        )
+        widths = [w for w, _ in sizes]
+        record(total, True, {"from": data.get("source", ""), "width_min": min(widths), "width_max": max(widths),
+                             "checks": checks})
+        console.print(f"[bold green]✓ {total} page(s), {min(widths)}-{max(widths)} px wide - every check passed:[/]")
+        for check in checks:
+            mark = "[green]✓[/]" if check["ok"] else "[dim]·[/]"
+            console.print(f"   {mark} {_esc(check['says'])}")

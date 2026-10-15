@@ -88,6 +88,8 @@ function post(path, body) {
 // request is kept once both are in, whichever comes second.
 
 const bodies = new Map(); // requestId -> {url, bytes}
+// The site's own answers about the chapter (JSON the reader fetched), for its page list.
+const chapterAnswers = [];
 
 function commit(requestId) {
   const body = bodies.get(requestId);
@@ -95,6 +97,10 @@ function commit(requestId) {
   if (!body || type === undefined) return;
   bodies.delete(requestId);
   contentTypes.delete(requestId);
+  if (capturing && /json/.test(type) && /chapter/i.test(body.url) && body.bytes.size < 4 * 1024 * 1024
+      && chapterAnswers.length < 20) {
+    chapterAnswers.push(body);
+  }
   if (capturing && type.startsWith("image/")) {
     captured.set(body.url, {type, bytes: body.bytes});
     try { imageHosts.add(new URL(body.url).host); } catch (e) { /* not a URL */ }
@@ -338,6 +344,41 @@ async function pageBytes(job, page, index) {
   }
 }
 
+// The chapter's page list as the site itself sent it to the reader: the
+// longest list of image entries in its JSON answers, as addresses. Null when
+// none could be read - comix.to sometimes sends it encrypted ({"e": ...}).
+async function sitePageList() {
+  let best = null;
+  let encrypted = false;
+  for (const answer of chapterAnswers) {
+    let data;
+    try { data = JSON.parse(await answer.bytes.text()); } catch (e) { continue; }
+    if (data && typeof data.e === "string" && Object.keys(data).length <= 2) encrypted = true;
+    const seen = new Set();
+    const walk = (node, depth) => {
+      if (!node || typeof node !== "object" || depth > 30 || seen.has(node)) return;
+      seen.add(node);
+      const items = Array.isArray(node.items) ? node.items : (Array.isArray(node) ? node : null);
+      if (items && items.length) {
+        const base = typeof node.baseUrl === "string" ? node.baseUrl : (typeof node.base_url === "string" ? node.base_url : "");
+        const urls = items.map(item => typeof item === "string" ? item : item && (item.url || item.src || item.image))
+                          .filter(url => typeof url === "string" && url.length > 3);
+        if (urls.length === items.length && (!best || urls.length > best.urls.length)) {
+          best = {urls: urls.map(url => { try { return new URL(url, base ? base.replace(/\/?$/, "/") : answer.url).href; }
+                                          catch (e) { return url; } }), from: answer.url};
+        }
+      }
+      for (const child of Object.values(node)) walk(child, depth + 1);
+    };
+    walk(data, 0);
+  }
+  return best ? {count: best.urls.length, urls: best.urls} : (encrypted ? {encrypted: true} : null);
+}
+
+// An address's path and query - the part that names the image; some sites
+// spread the same images over many hosts.
+const imagePath = url => { try { const u = new URL(url); return u.pathname + u.search; } catch (e) { return url; } };
+
 async function chapterJob(job, status) {
   const found = await inPage({cmd: "pages", scrollDelay: job.scroll_delay, hid: job.hid});
   if (found.error) throw new Error(found.error);
@@ -359,7 +400,16 @@ async function chapterJob(job, status) {
     if (!response.ok) throw new Error(answer.error || `remanga refused page ${i + 1}`);
   }
   found.discovery.captured = [...captured.keys()];
-  return {pages: found.pages.length, expected: found.expected, counts, source: found.source, discovery: found.discovery};
+  // The evidence remanga checks the pages against: the site's own list, the reader's numbering and
+  // page bar, and the size each page was shown at.
+  const site = await sitePageList();
+  if (site && site.urls) {
+    const theirs = new Set(site.urls.map(imagePath));
+    site.same_images = found.pages.length === site.count && found.pages.every(page => theirs.has(imagePath(page.url)));
+    delete site.urls;
+  }
+  return {pages: found.pages.length, expected: found.expected, bar: found.bar, site, counts, source: found.source,
+          sizes: found.pages.map(page => [page.width || 0, page.height || 0]), discovery: found.discovery};
 }
 
 // The manga's page, then - for the whole list - each other page of its chapter
@@ -434,6 +484,7 @@ async function runJob(job) {
     bodies.clear();
     contentTypes.clear();
     imageHosts.clear();
+    chapterAnswers.length = 0;
     seenRequests.length = 0;
     show("working", "working for remanga");
     await ensureTab();

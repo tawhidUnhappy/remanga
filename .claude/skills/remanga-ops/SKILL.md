@@ -719,6 +719,12 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   numbers only from the pager's own box. Mock tests MUST use their own port (47699): the user's
   real helper polls 47615 and would take test jobs. Helper updates: temporary install ->
   `runtime.reload()` re-reads the xpi (verified); signed install -> new signed version offered.
+  Page checks (comix has no checksums): comix.page_checks compares pages saved vs the reader's
+  "n / N", its page bar (aria-label "Go to page N"), the site's chapter JSON the reader fetched
+  (captured in background.js chapterAnswers; may be {"e":...} encrypted -> "not counted", and
+  image hosts rotate, so URLs compare by path) and per-page natural sizes; any False -> nothing
+  saved. Record in manifest pages.checks; workflow.page_check feeds the "192 ✓" Pages column and
+  the chapter menu's Page check. Pilot tip: Choice starts unhighlighted - press down index+1 times.
   Security model (attack-tested 2026-10-15, 19/19 blocked): HMAC pairing key per copy
   (bridge.py `proof`, extension/pairing.js written by build_xpi - never commit it; lint the xpi
   with a dummy key), Host must be 127.0.0.1/localhost:<port> (DNS rebinding), nonces never reused,

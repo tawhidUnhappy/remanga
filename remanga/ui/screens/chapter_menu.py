@@ -7,7 +7,7 @@ from __future__ import annotations
 from textual import work
 
 from remanga import workflow
-from remanga.ui.dialogs import Choice, Confirm
+from remanga.ui.dialogs import Choice, Confirm, Result
 from remanga.workflow.queue import add_jobs, jobs
 
 BUILT_IN = ("download", "pdf", "video", "remix", "reaudio", "source")
@@ -83,6 +83,10 @@ class ChapterMenu:
             if narrated:
                 options.append(("Narrate again, no video", "replaces the narration with a new one and "
                                 "keeps only that - no mix or video", "reaudio"))
+            if len(chapters) == 1:
+                checked = workflow.page_check(project, chapters[0])
+                options.append(("Page check " + checked["mark"], "how its pages were checked: every page there, "
+                                "whole, and as many as the site says", "pagecheck"))
             options += [("Check pages", "fix any missing or broken page", "download"),
                         ("Re-download", "delete the pages and fetch them all again", "redownload")]
         options.append(("Add to queue", "line it up to run later with other chapters, from any "
@@ -102,6 +106,12 @@ class ChapterMenu:
                              any(workflow.has_marks(project, ch) for ch in chapters), title)
         elif action == "download":
             await self.download(chapters)
+        elif action == "pagecheck":
+            checked = workflow.page_check(project, chapters[0])
+            await self.app.push_screen_wait(Result(
+                self.path, f"{title}: page check", [*checked["lines"], "",
+                "Check pages checks them all again on disk (and fetches anything missing or broken)."],
+                ok=checked["mark"] == "✓"))
         elif action == "mark":
             await self.mark(chapters, config)
         elif action in ("write", "review"):

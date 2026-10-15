@@ -109,7 +109,14 @@ own profile**, with a small extension, the remanga helper:
   the helper (install or update it from there).
 - **Highest quality.** The pages are the image files the site serves, byte for byte - never a
   screenshot, never re-encoded. When the page's own data names larger originals than the reader
-  shows, those originals are what is saved. Each page is checked to be a whole image.
+  shows, those originals are what is saved.
+- **Every page, checked.** comix.to gives no checksums (MangaDex does), so a chapter is saved only
+  when every count of its pages agrees: the pages downloaded (all there, numbered 1 to N, each a
+  whole image), the reader's own numbering ("1 / 192"), its page bar, the site's own page list (the
+  answer its reader got - also checked to name the very images downloaded; when the site sends it
+  encrypted it is said so, not counted) and the size each page was shown at. Anything off and
+  nothing is saved. The chapter list's Pages column shows `192 ✓` for a chapter that checked out
+  (MangaDex ones too - their checksums), and a chapter's **Page check** lists every check.
 - **Politely.** One chapter at a time, read at a reader's pace (`browser_scroll_seconds` per screen),
   a pause between chapters (`browser_chapter_pause_seconds`), and nothing fetched twice: the pages
   are the ones the reader already loaded. A chapter already here and whole is checked on disk, with

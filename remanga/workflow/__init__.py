@@ -26,6 +26,7 @@ from remanga.workflow.chapters import (
     has_panels,
     local_chapters,
     mangadex_chapters,
+    page_check,
     select_chapters,
 )
 from remanga.workflow.cleanup import (
@@ -101,6 +102,7 @@ __all__ = [
     "mark",
     "mix",
     "narrate",
+    "page_check",
     "page_files",
     "panel_files",
     "prepare_chapter",
