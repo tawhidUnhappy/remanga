@@ -18,3 +18,6 @@ class DownloaderConfig(ConfigModel):
     # (each varied by +-30%) - a reader's pace, never faster.
     browser_chapter_pause_seconds: float = 10.0
     browser_scroll_seconds: float = 0.8
+    # Pause between two pages of a site's chapter list (comix.to's firewall
+    # asks for a check when it is turned quickly).
+    browser_list_pause_seconds: float = 8.0

@@ -24,8 +24,10 @@ from PIL import Image
 from remanga.chapters import chapter_key, chapter_sort_key, page_stem
 from remanga.config import DownloaderConfig
 from remanga.console import console, escape as _esc
+from remanga.json_io import read_json_or, write_json
 from remanga.paths import (
     get_chapter_dir,
+    get_project_dir,
     load_project_metadata,
     read_manifest,
     read_remote_chapter_cache,
@@ -49,9 +51,11 @@ LIST_REFRESH_FLOOR_SECONDS = 15 * 60
 LANGUAGE_BY_TYPE = {"manga": "ja", "manhwa": "ko", "manhua": "zh"}
 EXTENSION_BY_FORMAT = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp", "AVIF": ".avif", "GIF": ".gif"}
 
-# A manga's page as last read in this run - creating a project reads it, and
-# the chapter list right after needs the same page.
-_TITLES: dict[str, tuple[float, dict[str, Any]]] = {}
+# A manga's page as last read in this run, by (manga, whole list read).
+_TITLES: dict[tuple[str, bool], tuple[float, dict[str, Any]]] = {}
+# Every upload of the project's manga read so far (projects/<name>/comix-uploads.json):
+# handed back to the helper, which then only turns the list when it has grown.
+UPLOADS_FILE = "comix-uploads.json"
 
 
 def _title_url(source: str) -> tuple[str, str]:
@@ -102,16 +106,25 @@ class ComixClient(ChapterListMixin):
         self._urls[hid] = url
         return hid
 
-    def _read_title(self, hid: str, session: Session | None = None) -> dict[str, Any]:
-        cached = _TITLES.get(hid)
+    def _read_title(self, hid: str, session: Session | None = None, project: str | None = None) -> dict[str, Any]:
+        """The manga's page; with `project`, its whole chapter list too."""
+        whole = project is not None
+        cached = _TITLES.get((hid, whole))
         if cached and time.time() - cached[0] < LIST_REFRESH_FLOOR_SECONDS:
             return cached[1]
         url = self._urls.get(hid) or f"https://comix.to/title/{hid}"
         if session is None:
             with helper_session(self.config) as own:
-                return self._read_title(hid, own)
-        data = session.run("title", {"url": url, "hid": hid}, timeout=600).result["data"]
-        _TITLES[hid] = (time.time(), data)
+                return self._read_title(hid, own, project)
+        uploads_path = get_project_dir(project) / UPLOADS_FILE if whole else None
+        saved = read_json_or(uploads_path, {}) if uploads_path else {}
+        known = saved.get("items", []) if saved.get("manga_id") == hid else []
+        data = session.run("title", {"url": url, "hid": hid, "whole": whole, "known": known,
+                                     "list_pause": self.config.browser_list_pause_seconds},
+                           timeout=1800).result["data"]
+        if uploads_path and data.get("chapters"):
+            write_json(uploads_path, {"manga_id": hid, "items": data["chapters"]})
+        _TITLES[(hid, whole)] = (time.time(), data)
         return data
 
     def get_manga_info(self, manga_id: str) -> dict[str, Any]:
@@ -144,7 +157,7 @@ class ComixClient(ChapterListMixin):
         if age < (LIST_REFRESH_FLOOR_SECONDS if force_refresh else LIST_TTL_SECONDS):
             return cached["chapters"]
         try:
-            data = self._read_title(hid, session) if session else self._read_title_briefly(hid)
+            data = self._read_title(hid, session, project) if session else self._read_title_briefly(hid, project)
         except HelperError:
             if cached.get("manga_id") == hid:
                 console.print("[yellow]Firefox isn't reachable - using the chapter list from "
@@ -164,11 +177,12 @@ class ComixClient(ChapterListMixin):
             write_remote_chapter_cache(project, hid, chapters, time.time())
         return chapters
 
-    def _read_title_briefly(self, hid: str) -> dict[str, Any]:
-        """The manga's page, waiting up to a minute for the helper - a list
-        that can't be fetched falls back to the last one."""
-        with helper_session(self.config, wait=60) as session:
-            return self._read_title(hid, session)
+    def _read_title_briefly(self, hid: str, project: str) -> dict[str, Any]:
+        """The manga's page, waiting up to two minutes for the helper (time
+        for Firefox to start) - a list that can't be fetched falls back to
+        the last one."""
+        with helper_session(self.config, wait=120) as session:
+            return self._read_title(hid, session, project)
 
     def list_chapters_with_status(self, project_name: str, manga_id_or_url: str | None = None,
                                   force_refresh: bool = False, session: Session | None = None) -> list[dict[str, Any]]:

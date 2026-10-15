@@ -20,7 +20,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 PORT = 47615  # also in extension/background.js
-HELPER_VERSION = "0.6.0"  # extension/manifest.json's version, which this code expects
+HELPER_VERSION = "0.7.0"  # extension/manifest.json's version, which this code expects
 MAX_PAGE_BYTES = 200 * 1024 * 1024
 
 

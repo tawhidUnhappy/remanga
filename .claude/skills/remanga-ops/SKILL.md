@@ -707,7 +707,12 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   940px webp from rotating `*/hi/...` hosts) - collect pages while scrolling, sort by offset, check
   against the reader's own "n / N". Chapter list is client-drawn after load, 20/page (`npager`,
   "Showing a to b of N items"), and REOPENS ON THE LAST PAGE VIEWED; uploads per chapter from many
-  groups ("Official", Tapas, scan groups). Comment "Dislike 0" buttons are digits too - page
+  groups ("Official", Tapas, scan groups). Its API FIREWALL: list pages turned ~2 s apart got 403 +
+  an in-page Turnstile (`iframe /@waf/challenge`) every ~3rd page - checks must be watched for
+  mid-job (clearChecks), the list paged slowly (8 s) and read whole once (comix-uploads.json).
+  A Firefox remanga starts must get `--profile <folder>`: with a profile chooser set to show at
+  startup, a bare `firefox URL` sits at the chooser with no profile and no helper (measured).
+  Comment "Dislike 0" buttons are digits too - page
   numbers only from the pager's own box. Mock tests MUST use their own port (47699): the user's
   real helper polls 47615 and would take test jobs. Helper updates: temporary install ->
   `runtime.reload()` re-reads the xpi (verified); signed install -> new signed version offered.

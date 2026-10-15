@@ -147,27 +147,49 @@ def open_in_firefox(url: str, profile: str = "") -> bool:
     if not firefox:
         return False
     folder = profile_folder(profile) if profile else None
-    if folder and folder.resolve() in _default_folders():
-        chosen = []  # the default profile: a plain `firefox URL` reaches it, running or not
+    if folder and folder.resolve() in _default_folders() and firefox_running() is not False:
+        # The default profile, already open: a plain `firefox URL` reaches it
+        # (a running Firefox given --profile can refuse).
+        chosen = []
     else:
+        # Starting Firefox: named outright, so a profile chooser set to show at
+        # startup doesn't stop it with no profile (and no helper) loaded.
         chosen = ["--profile", str(folder)] if folder else (["-P", profile] if profile else [])
     args = [firefox, *chosen, url]
     subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     return True
 
 
+def firefox_running() -> bool | None:
+    """Whether Firefox is running (None: can't tell on this system)."""
+    if not shutil.which("pgrep"):
+        return None
+    return subprocess.run(["pgrep", "-x", "firefox"], stdout=subprocess.DEVNULL).returncode == 0
+
+
 def explain_loading(profile: str = "") -> None:
+    from remanga.plugins.browser import amo
+
+    where = f"Firefox (profile {profile})" if profile else "Firefox"
+    if amo.is_signed(amo.signed_path(manifest()["version"])):
+        # Installed for good: it only needs Firefox open.
+        started = firefox_running() is False and open_in_firefox("about:home", profile)
+        console.print(
+            f"\n[bold yellow]Waiting for the remanga helper in {_esc(where)}[/]"
+            + (" - starting Firefox." if started else " - it connects by itself while Firefox is open.")
+            + "\n  [dim]Removed it? ./run.sh helper --install puts it back. Ctrl+C to stop waiting.[/]\n"
+        )
+        return
     xpi = build_xpi()
     opened = open_in_firefox(DEBUGGING_URL, profile)
-    where = f"Firefox (profile {profile})" if profile else "Firefox"
     console.print(
         f"\n[bold yellow]Waiting for the remanga helper in {_esc(where)}.[/]\n"
         f"  1. In {_esc(where)}, {'the tab remanga just opened: ' if opened else 'open '}"
         f"[bold]{DEBUGGING_URL}[/]\n"
         "  2. [bold]Load Temporary Add-on…[/] and choose this file (Ctrl+L to paste the path):\n"
         f"     [cyan]{_esc(str(xpi))}[/]\n"
-        "  It stays loaded until Firefox restarts. remanga carries on by itself once it is in - "
-        "Ctrl+C to stop waiting.\n"
+        "  It stays loaded until Firefox restarts - `./run.sh helper` installs it for good. remanga carries on "
+        "by itself once it is in - Ctrl+C to stop waiting.\n"
     )
 
 

@@ -301,12 +301,25 @@ async function runJob(job) {
     await open(job.url);
     await passChecks(job, status);
     const progress = message => {
-      if (message && message.remangaProgress) status("reading", message.remangaProgress).catch(() => {});
+      if (!message) return;
+      if (message.remangaProgress) status("reading", message.remangaProgress).catch(() => {});
+      if (message.remangaCheck === true) {
+        // A check inside the page, mid-job: the window comes forward for you.
+        browser.windows.update(windowId, {focused: true, drawAttention: true}).catch(() => {});
+        browser.tabs.update(tabId, {active: true}).catch(() => {});
+        show("check", "waiting for you to solve the check in the remanga window");
+        status("challenge", "a check inside the page").catch(() => {});
+      } else if (message.remangaCheck === false) {
+        show("working", "working for remanga");
+        status("loading", "Check passed.").catch(() => {});
+      }
     };
     browser.runtime.onMessage.addListener(progress);
     let data;
     try {
-      data = job.kind === "chapter" ? await chapterJob(job, status) : await inPage({cmd: "title", hid: job.hid});
+      data = job.kind === "chapter" ? await chapterJob(job, status)
+        : await inPage({cmd: "title", hid: job.hid, known: job.known || [], pause: job.list_pause || 8,
+                        whole: job.whole !== false});
     } finally {
       browser.runtime.onMessage.removeListener(progress);
     }

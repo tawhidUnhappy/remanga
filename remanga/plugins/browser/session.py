@@ -49,10 +49,11 @@ class Session:
 
 
 def _update(bridge: Bridge, config: DownloaderConfig) -> None:
-    """An older helper in Firefox: a temporary one is asked to read its file
-    again (the one made just now); an installed one is offered the signed new
-    version, which Firefox installs over it with one click."""
-    if bridge.helper_install == "normal":
+    """An older helper in Firefox: a temporary one ("development"; helpers
+    before 0.6 say nothing) is asked to read its file again (the one made just
+    now); an installed one is offered the signed new version, which Firefox
+    installs over it with one click."""
+    if bridge.helper_install not in ("development", ""):  # installed: normal, sideload, ...
         console.print(f"[yellow]The remanga helper in Firefox is version {_esc(bridge.helper_version)}; "
                       f"this remanga has {HELPER_VERSION}.[/]")
         install_signed(config.browser_profile)

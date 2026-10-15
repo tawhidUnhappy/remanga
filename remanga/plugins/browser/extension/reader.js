@@ -55,11 +55,29 @@ if (!window.__remangaReader) {
 
   const CHECK_TITLES = /just a moment|attention required|checking your browser|verify you are human|security check|ddos-guard/i;
 
+  const shownOnPage = el => {
+    const box = el.getBoundingClientRect();
+    return box.width > 0 && box.height > 0 && getComputedStyle(el).visibility !== "hidden";
+  };
+
+  // A check to solve: Cloudflare's whole-page one, or one a site shows inside
+  // the page when it wants to be sure mid-way (comix.to's "/@waf/challenge").
   function state() {
     const challenge = CHECK_TITLES.test(document.title)
-      || !!document.querySelector("#challenge-form, #challenge-running, #challenge-stage, .cf-turnstile-wrapper, "
-                                  + "iframe[src*='challenges.cloudflare.com'], .g-recaptcha, .h-captcha");
+      || !!document.querySelector("#challenge-form, #challenge-running, #challenge-stage, .cf-turnstile-wrapper")
+      || [...document.querySelectorAll("iframe[src*='challenges.cloudflare.com'], iframe[src*='/@waf/'], "
+                                       + "iframe[src*='challenge'], .g-recaptcha, .h-captcha")].some(shownOnPage);
     return {challenge, title: document.title, url: location.href, ready: document.readyState};
+  }
+
+  // Waits, as long as it takes, while a check is showing - remanga's window
+  // comes forward for you to solve it - then gives the page a moment.
+  async function clearChecks() {
+    if (!state().challenge) return;
+    browser.runtime.sendMessage({remangaCheck: true}).catch(() => {});
+    while (state().challenge) await sleep(1500);
+    browser.runtime.sendMessage({remangaCheck: false}).catch(() => {});
+    await sleep(2500);
   }
 
   // ---- the page's own data (server-rendered JSON), searched generically
@@ -219,14 +237,20 @@ if (!window.__remangaReader) {
     return match ? Number(match[1].replace(/,/g, "")) : 0;
   }
 
-  async function title(hid) {
+  // `wholeList` false: only the manga's facts and the chapters on show (making
+  // a project needs no more), so no page of the list is turned.
+  async function title(hid, known = [], pause = 8, wholeList = true) {
     const data = mangaData(hid) || {};
     const meta = name => (document.querySelector(`meta[property='${name}'], meta[name='${name}']`) || {}).content || "";
     const alt = Array.isArray(data.altTitles) ? data.altTitles : (Array.isArray(data.alt_titles) ? data.alt_titles : []);
     // The list is drawn after the page loads: wait for it, then for it to finish.
+    await waitFor(() => chapterAnchors(hid).length > 0 || state().challenge, 45000);
+    await clearChecks();
     await waitFor(() => chapterAnchors(hid).length > 0, 45000);
     await settled(() => chapterAnchors(hid).length, 2500);
-    const byId = new Map();
+    // Uploads read on an earlier run count already: when the list's total
+    // hasn't grown, not one page needs turning.
+    const byId = new Map(known.map(c => [String(c.id), c]));
     const take = () => { for (const c of chapterLinks(hid)) byId.set(c.id, c); };
     const turned = [];
     // One click on the list's pager, then wait for the list to change - one
@@ -234,10 +258,18 @@ if (!window.__remangaReader) {
     const turn = async (el, why) => {
       const before = new Set(chapterLinks(hid).map(c => c.id));
       const here = location.pathname;
+      await clearChecks();
       turned.push(`${why}: ${trimmedHtml(el, 200)}`);
       el.click();
       const changed = () => location.pathname !== here || chapterLinks(hid).some(c => !before.has(c.id));
-      const moved = await waitFor(changed, 30000) || (await sleep(3000), changed());
+      let moved = await waitFor(() => changed() || state().challenge, 30000);
+      if (state().challenge) {
+        // The site wants a check before this page: yours to solve, then the page comes.
+        turned.push("a check - waited for you");
+        await clearChecks();
+        moved = await waitFor(changed, 30000);
+      }
+      moved = moved || (await sleep(3000), changed());
       if (location.pathname !== here) {
         // A way out of the page after all: back, and stop turning.
         turned.push(`left the page for ${location.pathname} - went back`);
@@ -249,11 +281,13 @@ if (!window.__remangaReader) {
       await settled(() => chapterAnchors(hid).length, 1500);
       take();
       progress(`chapter list: ${byId.size} so far`);
-      await sleep(1200 + Math.random() * 1000);
+      // A person's pace between pages: the site's firewall asks for a check
+      // when the list is turned quickly.
+      await sleep(pause * 1000 * (0.7 + Math.random() * 0.6));
       return true;
     };
     take();
-    const complete = () => listTotal() > 0 && byId.size >= listTotal();
+    const complete = () => !wholeList || (listTotal() > 0 && byId.size >= listTotal());
     // Forward until "next" is disabled (the list's end) - a page that is slow
     // to come, or a pager not drawn yet, is waited for and tried again.
     const forward = async () => {
@@ -267,6 +301,7 @@ if (!window.__remangaReader) {
         if (!next && pagerControl(hid, "next", false)) break;
         misses++;
         turned.push("next: nothing new yet - waiting");
+        await clearChecks();
         await sleep(3000);
       }
     };
@@ -391,6 +426,7 @@ if (!window.__remangaReader) {
     await sleep(1500);
     const seen = new Map(); // url -> {url, top, width, height, cls}
     const onScreen = async scrolling => {
+      await clearChecks();
       // The pages on screen, once loaded (up to 15 s each - the reader's pace, not ours).
       const view = scrolling.getBoundingClientRect();
       const visible = pageElements().filter(img => {
@@ -474,7 +510,10 @@ if (!window.__remangaReader) {
 
   browser.runtime.onMessage.addListener(message => {
     if (message.cmd === "state") return Promise.resolve(state());
-    if (message.cmd === "title") return title(message.hid).catch(e => ({error: String(e && e.message || e)}));
+    if (message.cmd === "title") {
+      return title(message.hid, message.known || [], message.pause || 8, message.whole !== false)
+        .catch(e => ({error: String(e && e.message || e)}));
+    }
     if (message.cmd === "pages") return pages(message).catch(e => ({error: String(e && e.message || e)}));
     if (message.cmd === "bytes") return bytes(message.page);
     return undefined;

@@ -106,7 +106,12 @@ own profile**, with a small extension, the remanga helper:
 - **Politely.** One chapter at a time, read at a reader's pace (`browser_scroll_seconds` per screen),
   a pause between chapters (`browser_chapter_pause_seconds`), and nothing fetched twice: the pages
   are the ones the reader already loaded. A chapter already here and whole is checked on disk, with
-  no browser at all. The chapter list is fetched at most every 15 minutes (kept for a day).
+  no browser at all. The chapter list is turned slowly (`browser_list_pause_seconds`; comix.to's
+  firewall asks for a check when it is turned fast) and read whole only once: every upload seen is
+  kept in the project's `comix-uploads.json`, so later the list is only turned when it has grown.
+  It is fetched at most every 15 minutes (kept for a day).
+- **A check mid-way** (the site's own "verify you are human" inside the page) pauses the helper: its
+  window comes forward, its button shows `!`, remanga says so, and it carries on once you solve it.
 - When the site changes its reader, the last page the helper looked at is in `.cache/browser/` -
   what to read to fix `remanga/plugins/browser/extension/reader.js`.
 
@@ -373,4 +378,4 @@ Every setting is in `config.json` and applies to every project:
 | `cropper.margin_padding_pixels` / `snap_to_gutters` | 8 / true | breathing room around a cut panel, and snapping its edges to the real gutters |
 | `downloader.language` | `en` | MangaDex translation language |
 | `downloader.browser_profile` | `""` | the Firefox profile a [browser site](#sites-that-need-a-real-browser) is downloaded in (Firefox's default when empty) |
-| `downloader.browser_chapter_pause_seconds` / `browser_scroll_seconds` | 10 / 0.8 | the pause between two chapters and between two screens of one, each varied by ±30% |
+| `downloader.browser_chapter_pause_seconds` / `browser_scroll_seconds` / `browser_list_pause_seconds` | 10 / 0.8 / 8 | the pause between two chapters, between two screens of one, and between two pages of the chapter list, each varied by ±30% |
