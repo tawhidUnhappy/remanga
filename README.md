@@ -113,9 +113,11 @@ own profile**, with a small extension, the remanga helper:
 - **Politely.** One chapter at a time, read at a reader's pace (`browser_scroll_seconds` per screen),
   a pause between chapters (`browser_chapter_pause_seconds`), and nothing fetched twice: the pages
   are the ones the reader already loaded. A chapter already here and whole is checked on disk, with
-  no browser at all. The chapter list is turned slowly (`browser_list_pause_seconds`; comix.to's
-  firewall asks for a check when it is turned fast) and read whole only once: every upload seen is
-  kept in the project's `comix-uploads.json`, so later the list is only turned when it has grown.
+  no browser at all. The chapter list is read one page at a time, each opened by its own address
+  (`?page=N`, oldest first so chapter 1 is known early) - never by clicking its pager, which
+  comix.to's firewall answers with a check - with `browser_list_pause_seconds` between pages, and
+  read whole only once: every upload seen is kept in the project's `comix-uploads.json`, so later
+  only page 1 (the newest) is read unless the list has grown.
   It is fetched at most every 15 minutes (kept for a day).
 - **A check mid-way** (the site's own "verify you are human" inside the page) pauses the helper: its
   tab comes to the front, its button shows `!`, remanga says so, and it carries on once you solve it.

@@ -22,6 +22,7 @@ from urllib.parse import urlparse
 
 from PIL import Image
 
+from remanga import activity
 from remanga.chapters import chapter_key, chapter_sort_key, page_stem
 from remanga.config import DownloaderConfig
 from remanga.console import console, escape as _esc
@@ -189,6 +190,8 @@ class ComixClient(ChapterListMixin):
             raise
         found, total = data.get("chapters") or [], int(data.get("list_total") or 0)
         chapters = _best_per_number(found, self.config.language, self._urls.get(hid, ""))
+        # The list's own rows, against the total it states (data-only mentions don't count).
+        found = [c for c in found if c.get("listed")] or found
         if not chapters:
             raise HelperError("comix.to's page showed no chapters - the site may have changed; see "
                               ".cache/browser/last-title.json")
@@ -196,6 +199,7 @@ class ComixClient(ChapterListMixin):
             # Used for this run, never kept: the next one reads the list again.
             console.print(f"[yellow]comix.to's list holds {total} uploads but {len(found)} were read - some "
                           f"chapters may be missing (see .cache/browser/last-title.json).[/]")
+            activity.status(f"chapter list incomplete: {len(found)} of {total} uploads read - open it again")
         else:
             write_remote_chapter_cache(project, hid, chapters, time.time())
         return chapters

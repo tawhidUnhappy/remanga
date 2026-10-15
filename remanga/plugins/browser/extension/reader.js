@@ -65,18 +65,23 @@ if (!window.__remangaReader) {
   function state() {
     const challenge = CHECK_TITLES.test(document.title)
       || !!document.querySelector("#challenge-form, #challenge-running, #challenge-stage, .cf-turnstile-wrapper")
-      || [...document.querySelectorAll("iframe[src*='challenges.cloudflare.com'], iframe[src*='/@waf/'], "
-                                       + "iframe[src*='challenge'], .g-recaptcha, .h-captcha")].some(shownOnPage);
+      || [...document.querySelectorAll("iframe[src*='challenges.cloudflare.com'], iframe[src*='challenge'], "
+                                       + ".g-recaptcha, .h-captcha")].some(shownOnPage)
+      // A site's own firewall check (comix.to's "/@waf/challenge") counts while it is in the page at
+      // all: in a background tab it may not be drawn - or run - until the tab comes to the front.
+      || !!document.querySelector("iframe[src*='/@waf/']");
     return {challenge, title: document.title, url: location.href, ready: document.readyState};
   }
 
-  // Waits, as long as it takes, while a check is showing - remanga's window
-  // comes forward for you to solve it - then gives the page a moment.
+  // Waits while a check is showing - the remanga tab comes to the front for
+  // you to solve it - then gives the page a moment. Ten minutes at most.
   async function clearChecks() {
     if (!state().challenge) return;
     browser.runtime.sendMessage({remangaCheck: true}).catch(() => {});
-    while (state().challenge) await sleep(1500);
+    const deadline = Date.now() + 10 * 60 * 1000;
+    while (state().challenge && Date.now() < deadline) await sleep(1500);
     browser.runtime.sendMessage({remangaCheck: false}).catch(() => {});
+    if (state().challenge) throw new Error("a check in the page wasn't solved in 10 minutes");
     await sleep(2500);
   }
 
@@ -141,7 +146,7 @@ if (!window.__remangaReader) {
       const row = (link.parentElement && link.parentElement.closest("li, tr, [class*='item']")) || link;
       const text = el => ((el || {}).textContent || "").trim();
       out.set(match[1], {
-        id: match[1], number: match[2], url: link.href.split("#")[0],
+        id: match[1], number: match[2], url: link.href.split("#")[0], listed: true,
         name: text(row.querySelector("[class*='title'], [class*='name']")),
         group: text(row.querySelector("[class*='group'], [class*='scan'], [class*='team']")),
         votes: Number((text(row.querySelector("[class*='like'], [class*='vote']")).match(/\d+/) || [0])[0]),
@@ -186,135 +191,39 @@ if (!window.__remangaReader) {
     return best;
   }
 
-  const PAGER_TEXT = {next: /^(›|»|>|→|next|next page|load more|show more|more chapters)$/i, previous: /^(‹|«|<|←|prev|previous|previous page)$/i};
-  const PAGER_LABEL = {next: /^(next|next page|go to next page|load more|show more)$/i, previous: /^(prev|previous|previous page|go to previous page)$/i};
-
-  // The controls near the chapter list: links and buttons, but not the chapters themselves.
-  function listControls(hid) {
-    const anchors = new Set(chapterAnchors(hid));
-    const found = [];
-    let box = container([...anchors]);
-    for (let up = 0; up < 5 && box; up++, box = box.parentElement) {
-      for (const el of box.querySelectorAll("a, button, [role='button']")) {
-        if (!anchors.has(el) && !found.includes(el)) found.push(el);
-      }
-    }
-    return found;
-  }
-
-  const usable = el => !(el.disabled || el.getAttribute("aria-disabled") === "true" || /disabled/i.test(String(el.className)))
-    && !(el.tagName === "A" && el.href && !el.href.startsWith("javascript:") && new URL(el.href).pathname !== location.pathname);
-
-  // The list's "next page" (or "previous page") control: one that says exactly
-  // that - never a link that leaves the page (a "next chapter"). `usableOnly`:
-  // only when it can be pressed (not disabled at the list's end).
-  function pagerControl(hid, way, usableOnly = true) {
-    return listControls(hid).find(el => {
-      const label = (el.getAttribute("aria-label") || el.getAttribute("title") || "").trim();
-      const text = (el.textContent || "").trim();
-      return (PAGER_TEXT[way].test(text) || PAGER_LABEL[way].test(label) || el.rel === way.slice(0, 4))
-        && (!usableOnly || usable(el));
-    }) || null;
-  }
-
-  // The list's numbered page buttons, [[number, element], ...] - only those in
-  // the pager itself, beside its next/previous controls (a comment's "0" likes
-  // button is a number too).
-  function numberedPages(hid) {
-    const nav = pagerControl(hid, "next", false) || pagerControl(hid, "previous", false);
-    const numbered = box => [...box.querySelectorAll("a, button, [role='button']")]
-      .filter(el => /^\d{1,4}$/.test((el.textContent || "").trim()) && usable(el));
-    for (let box = nav && nav.parentElement, up = 0; box && up < 3; box = box.parentElement, up++) {
-      const found = numbered(box);
-      if (found.length) return found.map(el => [Number(el.textContent.trim()), el]);
-    }
-    return [];
-  }
-
   // "Showing 401 to 413 of 413 items": how many the list holds in all.
   function listTotal() {
     const match = document.body.innerText.match(/\bof\s+([\d,]+)\s+(items|chapters|results|entries)\b/i);
     return match ? Number(match[1].replace(/,/g, "")) : 0;
   }
 
-  // `wholeList` false: only the manga's facts and the chapters on show (making
-  // a project needs no more), so no page of the list is turned.
-  async function title(hid, known = [], pause = 8, wholeList = true) {
-    const data = mangaData(hid) || {};
-    const meta = name => (document.querySelector(`meta[property='${name}'], meta[name='${name}']`) || {}).content || "";
-    const alt = Array.isArray(data.altTitles) ? data.altTitles : (Array.isArray(data.alt_titles) ? data.alt_titles : []);
-    // The list is drawn after the page loads: wait for it, then for it to finish.
+  // Which stretch of the list is on show: {from, to} ("Showing 401 to 413 ...").
+  function listShown() {
+    const match = document.body.innerText.match(/\bshowing\s+([\d,]+)\s+to\s+([\d,]+)\s+of\b/i);
+    return match ? {from: Number(match[1].replace(/,/g, "")), to: Number(match[2].replace(/,/g, ""))} : null;
+  }
+
+  // One page of the chapter list - the page the tab was opened on (its
+  // address names it, ?page=N): the list is drawn after the page loads, so it
+  // is waited for, through any check the site puts up first. The helper never
+  // clicks the list's pager: a page opened by its address is what a person
+  // following a link does, while scripted clicks are what the site's
+  // firewall stops.
+  async function listPage(hid) {
     await waitFor(() => chapterAnchors(hid).length > 0 || state().challenge, 45000);
     await clearChecks();
     await waitFor(() => chapterAnchors(hid).length > 0, 45000);
     await settled(() => chapterAnchors(hid).length, 2500);
-    // Uploads read on an earlier run count already: when the list's total
-    // hasn't grown, not one page needs turning.
-    const byId = new Map(known.map(c => [String(c.id), c]));
-    const take = () => { for (const c of chapterLinks(hid)) byId.set(c.id, c); };
-    const turned = [];
-    // One click on the list's pager, then wait for the list to change - one
-    // request to the site, like a person turning the page.
-    const turn = async (el, why) => {
-      const before = new Set(chapterLinks(hid).map(c => c.id));
-      const here = location.pathname;
-      await clearChecks();
-      turned.push(`${why}: ${trimmedHtml(el, 200)}`);
-      el.click();
-      const changed = () => location.pathname !== here || chapterLinks(hid).some(c => !before.has(c.id));
-      let moved = await waitFor(() => changed() || state().challenge, 30000);
-      if (state().challenge) {
-        // The site wants a check before this page: yours to solve, then the page comes.
-        turned.push("a check - waited for you");
-        await clearChecks();
-        moved = await waitFor(changed, 30000);
-      }
-      moved = moved || (await sleep(3000), changed());
-      if (location.pathname !== here) {
-        // A way out of the page after all: back, and stop turning.
-        turned.push(`left the page for ${location.pathname} - went back`);
-        history.back();
-        await waitFor(() => location.pathname === here && chapterAnchors(hid).length > 0, 15000);
-        return false;
-      }
-      if (!moved) return false;
-      await settled(() => chapterAnchors(hid).length, 1500);
-      take();
-      progress(`chapter list: ${byId.size} so far`);
-      // A person's pace between pages: the site's firewall asks for a check
-      // when the list is turned quickly.
-      await sleep(pause * 1000 * (0.7 + Math.random() * 0.6));
-      return true;
-    };
-    take();
-    const complete = () => !wholeList || (listTotal() > 0 && byId.size >= listTotal());
-    // Forward until "next" is disabled (the list's end) - a page that is slow
-    // to come, or a pager not drawn yet, is waited for and tried again.
-    const forward = async () => {
-      let misses = 0;
-      for (let n = 0; n < 500 && !complete() && misses < 3; n++) {
-        const next = pagerControl(hid, "next");
-        if (next && await turn(next, "next")) {
-          misses = 0;
-          continue;
-        }
-        if (!next && pagerControl(hid, "next", false)) break;
-        misses++;
-        turned.push("next: nothing new yet - waiting");
-        await clearChecks();
-        await sleep(3000);
-      }
-    };
-    // The site reopens the list where it was last left: from there to the end,
-    await forward();
-    // then back to its first page - by the lowest page number shown, a few
-    // pages per click - and forward again until the list's own total is read.
-    for (let n = 0; n < 60 && !complete() && pagerControl(hid, "previous"); n++) {
-      const pages = numberedPages(hid).sort((a, b) => a[0] - b[0]);
-      const target = pages.length ? pages[0][1] : pagerControl(hid, "previous");
-      if (!await turn(target, "to the first page")) break;
-    }
-    await forward();
+    return {chapters: chapterLinks(hid), list_total: listTotal(), shown: listShown()};
+  }
+
+  // The manga's facts, and the chapters on the page as opened.
+  async function title(hid) {
+    const data = mangaData(hid) || {};
+    const meta = name => (document.querySelector(`meta[property='${name}'], meta[name='${name}']`) || {}).content || "";
+    const alt = Array.isArray(data.altTitles) ? data.altTitles : (Array.isArray(data.alt_titles) ? data.alt_titles : []);
+    const first = await listPage(hid);
+    const byId = new Map(first.chapters.map(c => [c.id, c]));
     for (const c of chapterData(hid)) {
       byId.set(c.id, Object.assign({}, byId.get(c.id) || {}, c, {url: c.url || (byId.get(c.id) || {}).url || ""}));
     }
@@ -326,9 +235,9 @@ if (!window.__remangaReader) {
       type: data.type || "",
       formats: (Array.isArray(data.formats) ? data.formats : []).map(f => typeof f === "string" ? f : (f && f.title) || ""),
       chapters: [...byId.values()],
-      list_total: listTotal(),
+      list_total: first.list_total,
+      shown: first.shown,
       discovery: Object.assign(discovery(), {
-        chapters_found: byId.size, pages_turned: turned,
         chapter_list_html: trimmedHtml(list, 8000),
         around_list_html: trimmedHtml(list && list.parentElement && list.parentElement.parentElement, 12000),
       }),
@@ -512,10 +421,8 @@ if (!window.__remangaReader) {
 
   browser.runtime.onMessage.addListener(message => {
     if (message.cmd === "state") return Promise.resolve(state());
-    if (message.cmd === "title") {
-      return title(message.hid, message.known || [], message.pause || 8, message.whole !== false)
-        .catch(e => ({error: String(e && e.message || e)}));
-    }
+    if (message.cmd === "title") return title(message.hid).catch(e => ({error: String(e && e.message || e)}));
+    if (message.cmd === "listPage") return listPage(message.hid).catch(e => ({error: String(e && e.message || e)}));
     if (message.cmd === "pages") return pages(message).catch(e => ({error: String(e && e.message || e)}));
     if (message.cmd === "bytes") return bytes(message.page);
     return undefined;

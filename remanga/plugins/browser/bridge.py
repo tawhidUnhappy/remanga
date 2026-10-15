@@ -38,7 +38,7 @@ from urllib.parse import parse_qs, urlparse
 from remanga.paths.roots import GLOBAL_DIR
 
 PORT = 47615  # also in extension/background.js
-HELPER_VERSION = "0.9.0"  # extension/manifest.json's version, which this code expects
+HELPER_VERSION = "0.10.0"  # extension/manifest.json's version, which this code expects
 MAX_PAGE_BYTES = 200 * 1024 * 1024
 MAX_PAGES = 3000
 MAX_JOB_BYTES = 4 * 1024 * 1024 * 1024

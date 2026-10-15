@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "remanga helper",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Downloads manga chapters for remanga, a program on this computer: opens each chapter in a background tab, lets you solve any check, and hands the pages to remanga on 127.0.0.1. Touches no other tab.",
   "browser_specific_settings": {
     "gecko": {

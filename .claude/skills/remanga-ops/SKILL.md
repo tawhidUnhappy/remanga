@@ -707,9 +707,12 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   940px webp from rotating `*/hi/...` hosts) - collect pages while scrolling, sort by offset, check
   against the reader's own "n / N". Chapter list is client-drawn after load, 20/page (`npager`,
   "Showing a to b of N items"), and REOPENS ON THE LAST PAGE VIEWED; uploads per chapter from many
-  groups ("Official", Tapas, scan groups). Its API FIREWALL: list pages turned ~2 s apart got 403 +
-  an in-page Turnstile (`iframe /@waf/challenge`) every ~3rd page - checks must be watched for
-  mid-job (clearChecks), the list paged slowly (8 s) and read whole once (comix-uploads.json).
+  groups ("Official", Tapas, scan groups). Its API FIREWALL: the list API answered 403 + an
+  in-page check (`iframe /@waf/challenge`, NOT drawn while the tab is in the background) to the
+  very first SCRIPTED pager click, while the request made by a page load passed - so list pages
+  are opened by address (`/title/<hid>-<slug>?page=N`, the user's tip; the SSR has no list, the
+  page fetches it), oldest first, 8 s apart, counting only rows seen in the list (`listed`) toward
+  its "of N items" total; a /@waf/ frame counts as a check even hidden (tab brought forward).
   A Firefox remanga starts must get `--profile <folder>`: with a profile chooser set to show at
   startup, a bare `firefox URL` sits at the chooser with no profile and no helper (measured).
   Comment "Dislike 0" buttons are digits too - page
