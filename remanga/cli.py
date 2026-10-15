@@ -11,6 +11,7 @@
     remanga long     -p NAME                    (the long videos made so far)
     remanga upload   -p NAME                    (restamp every video's title, description, thumbnail)
     remanga chapters -p NAME
+    remanga delete   -p NAME [--yes]            (the whole project, for good - asks you to type its name)
     remanga queue    [--run]                    (the job queue the menus fill; --run runs it)
     remanga voices                              (one line in every voice, to listen to)
     remanga plugins                             (what is installed: engines, layouts, sources, ...)
@@ -76,6 +77,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="remake every chapter from its pages, panel marks and narration.json first, then join")
     lv.add_argument("--delete", action="store_true", help="delete the long video of these chapters")
     with_project("chapters", "Show where each chapter is", chapters=False)
+    dp = with_project("delete", "Delete the whole project for good - pages, marks, narration, audio, videos - "
+                                "and its jobs in the queue", chapters=False)
+    dp.add_argument("--yes", action="store_true", help="don't ask (type the name) first")
     with_project("upload", "Write every finished video's title, description and thumbnail again from the "
                            "project's upload/ folder (after editing it)", chapters=False)
     qp = sub.add_parser("queue", help="Show the job queue (filled from the menus: a chapter's Add to queue)")
@@ -127,6 +131,16 @@ def _run(args: argparse.Namespace) -> None:
             run_queue(RemangaConfig.load())
         else:
             show_queue()
+        return
+
+    if args.command == "delete":
+        size = workflow.project_footprint(args.project)
+        console.print(f"[bold red]Delete {_esc(args.project)} for good?[/] {size['chapters']} chapter(s), "
+                      f"{size['videos']} video(s), {size['files']} files, {size['bytes'] / 1e6:,.1f} MB.")
+        if not args.yes and input(f"Type {args.project} to delete it: ").strip() != args.project:
+            console.print("[yellow]Kept - nothing deleted.[/]")
+            return
+        console.print(f"[green]Deleted[/] {_esc(str(workflow.delete_project(args.project)))}")
         return
 
     config = RemangaConfig.load()

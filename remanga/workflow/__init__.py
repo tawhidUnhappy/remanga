@@ -31,9 +31,11 @@ from remanga.workflow.chapters import (
     select_chapters,
 )
 from remanga.workflow.cleanup import (
+    delete_project,
     drop_audio_and_video,
     drop_derived,
     drop_mix_and_video,
+    project_footprint,
     reset_chapter,
 )
 from remanga.workflow.deletables import deletable_items, delete_items
@@ -85,6 +87,7 @@ __all__ = [
     "deletable_items",
     "delete_items",
     "delete_long_video",
+    "delete_project",
     "download",
     "drop_audio_and_video",
     "drop_derived",
@@ -110,6 +113,7 @@ __all__ = [
     "prepare_chapter",
     "print_chapter_list",
     "print_handoff",
+    "project_footprint",
     "project_name_from_title",
     "quality_warnings",
     "remake_from_source",

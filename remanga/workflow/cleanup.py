@@ -166,3 +166,39 @@ def reset_chapter(project: str, chapter: str, *, delete_pages: bool = False) -> 
     Nothing has to recreate them: every folder here is made on demand the
     next time something is written to it (remanga/paths/projects.py)."""
     return delete_paths(_chapter_paths(project, chapter, with_pages=delete_pages), project)
+
+
+def project_footprint(project: str) -> dict:
+    """What deleting the project would delete: its size, files, chapters and finished videos."""
+    root = get_project_dir(project)
+    files = [p for p in root.rglob("*") if p.is_file() and not p.is_symlink()] if root.is_dir() else []
+    chapters = root / "chapters"
+    return {
+        "bytes": sum(p.stat().st_size for p in files),
+        "files": len(files),
+        "chapters": sum(1 for c in chapters.iterdir() if c.is_dir()) if chapters.is_dir() else 0,
+        "videos": sum(1 for p in files if p.suffix == ".mp4"),
+    }
+
+
+def delete_project(project: str) -> Path:
+    """Deletes the whole project - its folder (pages, marks, narration, audio,
+    videos, everything) and its jobs in the queue. Refuses anything that isn't
+    exactly one project folder directly inside projects/ (no blank or odd
+    name, no link) - so it can never reach further."""
+    import shutil
+
+    from remanga.paths import get_projects_dir
+    from remanga.workflow.queue import load_queue, save_queue
+
+    name = str(project).strip()
+    folder = get_project_dir(name)
+    if (not name or name in (".", "..") or folder.is_symlink() or not folder.is_dir()
+            or folder.resolve().parent != get_projects_dir().resolve()):
+        raise ValueError(f"Refusing to delete {folder} - it isn't one project folder in projects/.")
+    jobs = load_queue()
+    kept = [job for job in jobs if job.project != name]
+    if len(kept) != len(jobs):
+        save_queue(kept)
+    shutil.rmtree(folder)
+    return folder

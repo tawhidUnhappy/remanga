@@ -260,16 +260,37 @@ if (!window.__remangaReader) {
   // Down the chapter a screen at a time at a reading pace, so the reader loads
   // its pages the way it does for a person - one after another, not all at
   // once - noting each page as it goes by (`onScreen` after every step).
+  // To the top of the chapter, and staying there: a reader that reopens a
+  // chapter where you left off can jump back down a moment after it loads.
+  async function toTop(el) {
+    let still = 0;
+    for (let n = 0; n < 60 && still < 4; n++) {
+      if (el.scrollTop > 2) {
+        el.scrollTop = 0;
+        still = 0;
+      } else {
+        still++;
+      }
+      await sleep(500);
+    }
+  }
+
   async function scrollThrough(delay, onScreen) {
     const el = scroller();
-    el.scrollTop = 0;
-    await sleep(1000);
+    await toTop(el);
     await onScreen(el);
     let atBottom = 0;
     let lastHeight = -1;
+    let target = 0;
     for (let step = 0; step < 6000 && atBottom < 3; step++) {
-      el.scrollTop += Math.max(300, el.clientHeight * 0.85);
+      target = el.scrollTop + Math.max(300, el.clientHeight * 0.85);
+      el.scrollTop = target;
       await sleep(delay * 1000 * (0.7 + Math.random() * 0.6));
+      // The reader moved the page itself (to where you left off): back to where reading was.
+      if (Math.abs(el.scrollTop - target) > el.clientHeight && el.scrollTop + el.clientHeight < el.scrollHeight - 4) {
+        el.scrollTop = Math.min(target, el.scrollHeight - el.clientHeight);
+        await sleep(800);
+      }
       await onScreen(el);
       if (el.scrollTop + el.clientHeight >= el.scrollHeight - 4) {
         atBottom = el.scrollHeight === lastHeight ? atBottom + 1 : 0;

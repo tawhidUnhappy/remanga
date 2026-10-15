@@ -83,6 +83,14 @@ class Session:
     def chapter_done(self) -> None:
         _shared["last_chapter"] = time.time()
 
+    def pace_list(self) -> None:
+        """The pause between two list pages (varied by +-30%)."""
+        pause = self.config.browser_list_pause_seconds * random.uniform(0.7, 1.3)
+        left = _shared.get("last_list", 0.0) + pause - time.time()
+        if left > 0:
+            time.sleep(left)
+        _shared["last_list"] = time.time()
+
 
 def _update(bridge: Bridge, config: DownloaderConfig) -> None:
     """An older helper in Firefox: a temporary one ("development"; helpers

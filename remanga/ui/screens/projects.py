@@ -25,6 +25,7 @@ from remanga.ui.widgets import SafeTable, TopBar
 class ProjectsScreen(Screen):
     BINDINGS = [
         Binding("n", "new", "New project"),
+        Binding("d", "delete", "Delete project"),
         Binding("j", "queue", "Queue"),
         Binding("s", "settings", "Settings"),
         Binding("q", "app.quit", "Quit"),
@@ -76,6 +77,31 @@ class ProjectsScreen(Screen):
 
     def action_queue(self) -> None:
         self.app.push_screen(QueueScreen(self.machine, ["remanga"]))
+
+    @work(exclusive=True)
+    async def action_delete(self) -> None:
+        """The highlighted project, gone for good - after typing its name."""
+        table = self.query_one(SafeTable)
+        if not self.names or table.cursor_row is None or not 0 <= table.cursor_row < len(self.names):
+            self.notify("Highlight the project to delete first.")
+            return
+        name = self.names[table.cursor_row]
+        size = workflow.project_footprint(name)
+        typed = await self.app.push_screen_wait(Ask(
+            f"Delete {name}", f"Type {name} to delete it for good",
+            check=lambda text: None if text.strip() == name else f"Type exactly {name} - or Esc to keep it.",
+            note=f"Everything in it goes, and can't be brought back: {size['chapters']} chapter(s), "
+                 f"{size['videos']} video(s), {size['files']} files, {size['bytes'] / 1e6:,.1f} MB - pages, panel "
+                 f"marks, narration, audio and videos - and its jobs in the queue."))
+        if typed is None:
+            return
+        try:
+            workflow.delete_project(name)
+        except Exception as error:
+            await self.app.push_screen_wait(Result(["remanga"], "Couldn't delete it", [str(error)], ok=False))
+            return
+        self.notify(f"Deleted {name}.")
+        self.load()
 
     @work(exclusive=True)
     async def action_new(self) -> None:

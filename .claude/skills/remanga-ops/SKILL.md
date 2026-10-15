@@ -719,7 +719,13 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   numbers only from the pager's own box. Mock tests MUST use their own port (47699): the user's
   real helper polls 47615 and would take test jobs. Helper updates: temporary install ->
   `runtime.reload()` re-reads the xpi (verified); signed install -> new signed version offered.
-  Page checks (comix has no checksums): comix.page_checks compares pages saved vs the reader's
+  List, efficiently (comix_list.ListState): probed - `?limit=100` is ignored (API stays limit=20)
+  and the reader fetches only its own chapter, so: overview = page 1 + last page, placeholders for
+  numbers between; a download locates its chapter by interpolation, reading pages until its
+  uploads' start and end are known (simulated 82-ch/413-upload lists: 0-2 reads per chapter, all
+  chapters in order = exactly 21 reads, no re-reads). A grown list resets page bookkeeping.
+  Readers reopen chapters where you left off: reader.js toTop() holds the top, scrollThrough undoes
+  jumps. Page checks (comix has no checksums): comix.page_checks compares pages saved vs the reader's
   "n / N", its page bar (aria-label "Go to page N"), the site's chapter JSON the reader fetched
   (captured in background.js chapterAnswers; may be {"e":...} encrypted -> "not counted", and
   image hosts rotate, so URLs compare by path) and per-page natural sizes; any False -> nothing

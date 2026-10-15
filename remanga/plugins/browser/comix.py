@@ -26,10 +26,8 @@ from remanga import activity
 from remanga.chapters import chapter_key, chapter_sort_key, page_stem
 from remanga.config import DownloaderConfig
 from remanga.console import console, escape as _esc
-from remanga.json_io import read_json_or, write_json
 from remanga.paths import (
     get_chapter_dir,
-    get_project_dir,
     load_project_metadata,
     read_manifest,
     read_remote_chapter_cache,
@@ -38,6 +36,7 @@ from remanga.paths import (
     write_remote_chapter_cache,
 )
 from remanga.plugins.browser.bridge import HelperError
+from remanga.plugins.browser.comix_list import ABSENT, ListState
 from remanga.plugins.browser.hooks import COMIX_TITLE
 from remanga.plugins.browser.session import Session, helper_session
 from remanga.plugins.mangadex.chapter_list import ChapterListMixin
@@ -58,11 +57,8 @@ EXTENSION_BY_FORMAT = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp", "AVIF": "
 CHAPTER_NUMBER = re.compile(r"^\d{1,5}(\.\d{1,3})?$")
 CHAPTER_ID = re.compile(r"^\d{1,12}$")
 
-# A manga's page as last read in this run, by (manga, whole list read).
-_TITLES: dict[tuple[str, bool], tuple[float, dict[str, Any]]] = {}
-# Every upload of the project's manga read so far (projects/<name>/comix-uploads.json):
-# handed back to the helper, which then only turns the list when it has grown.
-UPLOADS_FILE = "comix-uploads.json"
+# A manga's page as last read in this run.
+_TITLES: dict[str, tuple[float, dict[str, Any]]] = {}
 
 
 def _title_url(source: str) -> tuple[str, str]:
@@ -162,26 +158,33 @@ class ComixClient(ChapterListMixin):
         self._urls[hid] = url
         return hid
 
-    def _read_title(self, hid: str, session: Session | None = None, project: str | None = None) -> dict[str, Any]:
-        """The manga's page; with `project`, its whole chapter list too."""
-        whole = project is not None
-        cached = _TITLES.get((hid, whole))
+    def _read_title(self, hid: str, session: Session | None = None) -> dict[str, Any]:
+        """The manga's page, opened on page 1 of its chapter list: its facts
+        and its newest uploads."""
+        cached = _TITLES.get(hid)
         if cached and time.time() - cached[0] < LIST_REFRESH_FLOOR_SECONDS:
             return cached[1]
-        url = self._urls.get(hid) or f"https://comix.to/title/{hid}"
         if session is None:
             with helper_session(self.config) as own:
-                return self._read_title(hid, own, project)
-        uploads_path = get_project_dir(project) / UPLOADS_FILE if whole else None
-        saved = read_json_or(uploads_path, {}) if uploads_path else {}
-        known = saved.get("items", []) if saved.get("manga_id") == hid else []
-        data = session.run("title", {"url": url, "hid": hid, "whole": whole, "known": known,
-                                     "list_pause": self.config.browser_list_pause_seconds},
-                           timeout=1800).result["data"]
-        if uploads_path and data.get("chapters"):
-            write_json(uploads_path, {"manga_id": hid, "items": data["chapters"]})
-        _TITLES[(hid, whole)] = (time.time(), data)
+                return self._read_title(hid, own)
+        data = session.run("title", {"url": self._page_url(hid, 1), "hid": hid}, timeout=600).result["data"]
+        _TITLES[hid] = (time.time(), data)
         return data
+
+    def _base_url(self, hid: str) -> str:
+        return self._urls.get(hid) or f"https://comix.to/title/{hid}"
+
+    def _page_url(self, hid: str, page: int) -> str:
+        return f"{self._base_url(hid)}?page={page}"
+
+    def _read_list_page(self, session: Session, state: ListState, page: int) -> None:
+        """One page of the chapter list, by its address, at a person's pace."""
+        session.pace_list()
+        activity.status(f"reading chapter list page {page} of {state.last_page or '?'}")
+        data = session.run("listpage", {"url": self._base_url(state.hid), "hid": state.hid, "page": page},
+                           timeout=600).result["data"]
+        state.add_page(page, data)
+        state.save()
 
     def get_manga_info(self, manga_id: str) -> dict[str, Any]:
         data = self._read_title(manga_id)
@@ -206,18 +209,46 @@ class ComixClient(ChapterListMixin):
     def _resolve_manga_id(self, project: str, url: str | None) -> str:
         return self.parse_manga_id(self._manga_source(project, url))
 
+    def _rows(self, project: str, hid: str, state: ListState) -> list[dict[str, Any]]:
+        """The chapter list as known: the best upload of every chapter seen, and
+        a row for every chapter number between not looked up yet."""
+        chapters = _best_per_number(state.listed() or list(state.items.values()), self.config.language,
+                                    self._urls.get(hid, ""))
+        rows = chapters + state.placeholders({chapter_key(c["chapter"]) for c in chapters})
+        rows.sort(key=lambda c: chapter_sort_key(c["chapter"]))
+        write_remote_chapter_cache(project, hid, rows, time.time())
+        return rows
+
+    def _overview(self, project: str, hid: str, session: Session) -> list[dict[str, Any]]:
+        """Page 1 of the list (the newest chapters - also all a re-read needs)
+        and, the first time, its last page (chapter 1): every chapter between
+        is then listed without reading the pages in between."""
+        state = ListState(project, hid)
+        _TITLES.pop(hid, None)
+        state.add_page(1, self._read_title(hid, session))
+        state.save()
+        last = state.last_page
+        if last > 1 and not state.complete() and last not in state.pages:
+            self._read_list_page(session, state, last)
+        if not state.items:
+            raise HelperError("comix.to's page showed no chapters - the site may have changed; see "
+                              ".cache/browser/last-title.json")
+        return self._rows(project, hid, state)
+
     def _remote_chapters(self, project: str, hid: str, force_refresh: bool,
                          session: Session | None = None) -> list[dict[str, Any]]:
         cached = read_remote_chapter_cache(project)
         age = time.time() - cached.get("fetched_at", 0) if cached.get("manga_id") == hid else float("inf")
         if age < (LIST_REFRESH_FLOOR_SECONDS if force_refresh else LIST_TTL_SECONDS):
             return cached["chapters"]
+        if session is not None:
+            return self._overview(project, hid, session)
         # Not asked for (a day-old list, just opened): only if the helper is
         # already there - Firefox isn't started for it.
-        quiet = not force_refresh and session is None and cached.get("manga_id") == hid
+        quiet = not force_refresh and cached.get("manga_id") == hid
         try:
-            data = (self._read_title(hid, session, project) if session
-                    else self._read_title_briefly(hid, project, quiet=quiet))
+            with helper_session(self.config, wait=5 if quiet else 120, quiet=quiet) as own:
+                return self._overview(project, hid, own)
         except HelperError:
             if cached.get("manga_id") == hid:
                 hours = int(age // 3600)
@@ -225,28 +256,20 @@ class ComixClient(ChapterListMixin):
                 activity.status(f"chapter list from {hours} h ago - u updates it")
                 return cached["chapters"]
             raise
-        found, total = data.get("chapters") or [], int(data.get("list_total") or 0)
-        chapters = _best_per_number(found, self.config.language, self._urls.get(hid, ""))
-        # The list's own rows, against the total it states (data-only mentions don't count).
-        found = [c for c in found if c.get("listed")] or found
-        if not chapters:
-            raise HelperError("comix.to's page showed no chapters - the site may have changed; see "
-                              ".cache/browser/last-title.json")
-        if total and len(found) < total:
-            # Used for this run, never kept: the next one reads the list again.
-            console.print(f"[yellow]comix.to's list holds {total} uploads but {len(found)} were read - some "
-                          f"chapters may be missing (see .cache/browser/last-title.json).[/]")
-            activity.status(f"chapter list incomplete: {len(found)} of {total} uploads read - open it again")
-        else:
-            write_remote_chapter_cache(project, hid, chapters, time.time())
-        return chapters
 
-    def _read_title_briefly(self, hid: str, project: str, quiet: bool = False) -> dict[str, Any]:
-        """The manga's page, waiting up to two minutes for the helper (time
-        for Firefox to start) - or, `quiet`, a few seconds for a helper
-        already there - a list that can't be fetched falls back to the last one."""
-        with helper_session(self.config, wait=5 if quiet else 120, quiet=quiet) as session:
-            return self._read_title(hid, session, project)
+    def _locate(self, session: Session, project: str, hid: str, chapter: str) -> dict[str, Any] | None:
+        """The best upload of one chapter, its list pages read as needed (usually
+        one or two) - None when the list has no such chapter."""
+        state = ListState(project, hid)
+        number = float(chapter)
+        for _ in range(12):
+            page = state.next_page_for(number)
+            if page is None or page == ABSENT:
+                break
+            self._read_list_page(session, state, page)
+        rows = self._rows(project, hid, state)
+        return next((r for r in rows if chapter_key(r["chapter"]) == chapter_key(chapter) and r.get("chapter_id")),
+                    None)
 
     def list_chapters_with_status(self, project_name: str, manga_id_or_url: str | None = None,
                                   force_refresh: bool = False, session: Session | None = None) -> list[dict[str, Any]]:
@@ -285,12 +308,13 @@ class ComixClient(ChapterListMixin):
         todo = [n for n in ordered if n not in here]
         if todo:
             with helper_session(self.config, wait=None) as session:
-                listing = {chapter_key(c["chapter"]): c
-                           for c in self._remote_chapters(project_name, hid, False, session)}
-                if any(chapter_key(n) not in listing for n in todo):
-                    # A chapter the saved list doesn't have yet: the list is read again, once.
-                    listing = {chapter_key(c["chapter"]): c
-                               for c in self._remote_chapters(project_name, hid, True, session)}
+                self._remote_chapters(project_name, hid, False, session)
+                # Each chapter's uploads, read from the list as far as needed.
+                listing = {}
+                for chapter in todo:
+                    found = self._locate(session, project_name, hid, chapter)
+                    if found:
+                        listing[chapter_key(chapter)] = found
                 unknown = [n for n in todo if chapter_key(n) not in listing]
                 if unknown:
                     raise ValueError(f"comix.to lists no chapter {', '.join(unknown)} for this manga.")

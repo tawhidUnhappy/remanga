@@ -42,7 +42,7 @@ click chooses it** - a single click never starts anything.
 
 | Screen | What it does |
 |---|---|
-| **Projects** | Your projects. `Enter` opens one, `n` starts a new one: paste the manga's MangaDex URL (or ID, or a title to search). The project is named after the manga's English title, and its reading direction comes from the manga's original language. |
+| **Projects** | Your projects. `Enter` opens one, `d` deletes the highlighted one (after you type its name), `n` starts a new one: paste the manga's MangaDex URL (or ID, or a title to search). The project is named after the manga's English title, and its reading direction comes from the manga's original language. |
 | **Chapters** | The chapter list, fetched fresh from MangaDex each time, as a table: status (✓ downloaded, ◐ partial, + new), pages, what comes next (mark the panels, make the PDF, make the video, video done) and title. `Enter` opens a chapter's actions: download, **mark panels**, make PDF, make video, check pages, re-download, **delete chosen** (a checklist of what the chapter has on disk - pages, marks, panels, PDF, narration, audio, video - with sizes; tick what to delete, `d` deletes, red rows are what remanga can't make again), reset (deletes the cut panels, PDF, narration, audio and video, and the folders that leaves empty - the marks and pages stay) or delete. `space` (or clicking a row's `·`) picks several chapters to act on together, `r` picks every chapter from the last one picked to the highlighted one (chapter n to m), `a` downloads every new chapter. With several picked, **Long video...** makes one video of them - see [Long videos](#long-videos). Reset and delete ask first. |
 | **Work** | Downloads, panel cutting, PDFs and videos run in a task view: the steps, a progress bar and the last few lines of output. `Ctrl+C` stops. When the work ends you get a result: what was made and what to do next (for a PDF: which files to upload, where to paste the reply), or what went wrong. `l` opens the full log, `c` copies the paths to upload. |
 | **Settings** (`s`) | One flat list, grouped (Narration, Sound, Video, PDF), each row with a one-line "What it does": narrator engine and voice, take length, pauses, background music and its level (custom values kept), intro, video size, panel enlargement limit, PDF file size limit - one set for every project. |
@@ -68,6 +68,7 @@ Logs are kept in `projects/<name>/logs/`: `chapter_N.log` for a chapter's PDF an
 ./run.sh long     -p MyMangaTitle -c 1-5        # one video of chapters 1 to 5 (--from-source, --delete)
 ./run.sh long     -p MyMangaTitle             # the long videos made so far
 ./run.sh chapters -p MyMangaTitle
+./run.sh delete   -p MyMangaTitle               # the whole project, for good (asks you to type its name)
 ```
 
 `-c` takes a chapter, a range, several (`1-5,8`) or `all` (the default). Decimal chapters are
@@ -126,11 +127,12 @@ own profile**, with a small extension, the remanga helper:
 - **Politely.** One chapter at a time, read at a reader's pace (`browser_scroll_seconds` per screen),
   a pause between chapters (`browser_chapter_pause_seconds`), and nothing fetched twice: the pages
   are the ones the reader already loaded. A chapter already here and whole is checked on disk, with
-  no browser at all. The chapter list is read one page at a time, each opened by its own address
-  (`?page=N`, oldest first so chapter 1 is known early) - never by clicking its pager, which
-  comix.to's firewall answers with a check - with `browser_list_pause_seconds` between pages, and
-  read whole only once: every upload seen is kept in the project's `comix-uploads.json`, so later
-  only page 1 (the newest) is read unless the list has grown.
+  no browser at all. The chapter list is read only as far as needed, each page opened by its own
+  address (`?page=N` - never by clicking its pager, which comix.to's firewall answers with a check),
+  `browser_list_pause_seconds` apart: its first and last pages list every chapter between (2 page
+  loads instead of 21 for an 82-chapter manga), and a chapter about to be downloaded is looked up
+  on the page it should be on - usually 1-2 page loads, every group's upload of it found. Every
+  page read is kept in the project's `comix-uploads.json`, so none is read twice.
   It is fetched at most every 15 minutes (kept for a day).
 - **A check mid-way** (the site's own "verify you are human" inside the page) pauses the helper: its
   tab comes to the front, its button shows `!`, remanga says so, and it carries on once you solve it.

@@ -412,48 +412,20 @@ async function chapterJob(job, status) {
           sizes: found.pages.map(page => [page.width || 0, page.height || 0]), discovery: found.discovery};
 }
 
-// The manga's page, then - for the whole list - each other page of its chapter
-// list opened by its own address (?page=N), never by clicking the pager, one
-// at a time at a person's pace: oldest first (chapter 1 is known early), and
-// only until every upload the list says it holds is known. Uploads read on an
-// earlier run (job.known) count: when the list hasn't grown, page 1 is enough.
+// The manga's page as opened (its facts and the chapters on show).
 async function titleJob(job, status) {
-  const first = await inPage({cmd: "title", hid: job.hid});
-  if (first.error || job.whole === false || !first.list_total) return first;
-  const byId = new Map((job.known || []).map(c => [String(c.id), c]));
-  for (const c of first.chapters) byId.set(c.id, Object.assign({}, byId.get(c.id) || {}, c));
-  const total = first.list_total;
-  const shown = first.shown || {from: 1, to: first.chapters.length};
-  const perPage = Math.max(1, shown.to - shown.from + 1);
-  const pages = Math.ceil(total / perPage);
-  const opened = Math.floor((shown.from - 1) / perPage) + 1;
-  const pageUrl = number => {
-    const url = new URL(job.url);
-    url.searchParams.set("page", String(number));
-    return url.href;
-  };
-  // Page 1 holds the newest chapters - the only page a re-read needs when
-  // nothing older changed; then from the last page (chapter 1) back.
-  const order = [1, ...Array.from({length: pages}, (_, i) => pages - i).filter(n => n !== 1)].filter(n => n !== opened);
-  const visited = [opened];
-  // Only rows seen in the list itself count toward its total - not chapters
-  // the page's data merely mentions.
-  const listed = () => [...byId.values()].filter(c => c.listed).length;
-  for (const number of order) {
-    if (listed() >= total) break;
-    await sleep(jitter(job.list_pause || 8));
-    await status("reading", `chapter list: ${listed()} of ${total} - page ${number} of ${pages}`);
-    await open(pageUrl(number));
-    await passChecks(job, status);
-    const page = await inPage({cmd: "listPage", hid: job.hid});
-    if (page.error) throw new Error(`chapter list page ${number}: ${page.error}`);
-    for (const c of page.chapters) byId.set(c.id, Object.assign({}, byId.get(c.id) || {}, c));
-    visited.push(number);
-  }
-  return Object.assign(first, {
-    chapters: [...byId.values()], list_total: total,
-    discovery: Object.assign(first.discovery || {}, {list_pages: pages, pages_opened: visited, uploads_known: listed()}),
-  });
+  return inPage({cmd: "title", hid: job.hid});
+}
+
+// One page of the chapter list, opened by its own address (?page=N) - never
+// by clicking the pager, which comix.to's firewall answers with a check.
+// remanga decides which pages it needs; most never are.
+async function listPageJob(job, status) {
+  const url = new URL(job.url);
+  url.searchParams.set("page", String(job.page));
+  await open(url.href);
+  await passChecks(job, status);
+  return inPage({cmd: "listPage", hid: job.hid});
 }
 
 async function runJob(job) {
@@ -511,7 +483,8 @@ async function runJob(job) {
     browser.runtime.onMessage.addListener(progress);
     let data;
     try {
-      data = job.kind === "chapter" ? await chapterJob(job, status) : await titleJob(job, status);
+      data = job.kind === "chapter" ? await chapterJob(job, status)
+        : job.kind === "listpage" ? await listPageJob(job, status) : await titleJob(job, status);
     } finally {
       browser.runtime.onMessage.removeListener(progress);
     }
