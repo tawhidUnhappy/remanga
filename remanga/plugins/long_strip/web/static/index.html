@@ -39,6 +39,7 @@
       <div id="marks"></div>
       <div id="guide" class="line"></div>
       <div id="pendingLine" class="line"></div>
+      <div id="dragBox"></div>
       <div id="readout" class="mono"></div>
     </div>
   </div>
@@ -50,14 +51,14 @@
       <label class="switch"><input type="checkbox" id="gutterToggle" checked> Show gutters <kbd>G</kbd></label>
     </section>
     <section class="grow">
-      <h3>Panels <span class="legend"><i class="flag tall"></i>tall <i class="flag overlap"></i>overlap <i class="flag sides"></i>sides</span></h3>
+      <h3>Panels <span class="legend"><i class="flag tall"></i>tall <i class="flag overlap"></i>overlap</span></h3>
       <div id="panelList"></div>
     </section>
     <section class="keys">
-      <div><b>＋ New panel</b> (<kbd>A</kbd>) then drag, or <b>drag</b> on bare strip or the canvas beside it (<kbd>Alt</kbd>: only as wide as the drag)</div>
+      <div><b>＋ New panel</b> (<kbd>A</kbd>) then drag, or <b>drag</b> on bare strip or the canvas beside it - panels are always full width</div>
       <div><b>Click</b> the canvas beside the strip: deselect</div>
       <div><b>Double-click</b> art no panel covers: a panel fitted to it</div>
-      <div><b>Click</b> a panel to focus it; drag it to move, its edges to resize</div>
+      <div><b>Click</b> a panel to focus it; drag it to move, its top / bottom edge to resize</div>
       <div><kbd>M</kbd> merge with the next panel · <kbd>S</kbd> split at the mouse</div>
       <div><kbd>Shift</kbd> while dragging: don't snap to gutters</div>
       <div><kbd>N</kbd> line after the last panel · hatched = in no panel</div>

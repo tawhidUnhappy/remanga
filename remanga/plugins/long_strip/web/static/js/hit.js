@@ -25,15 +25,11 @@ export function markAt(p) {
   return under.length ? under.reduce((a, b) => (area(b) < area(a) ? b : a)) : null;
 }
 
-// Which edge of `m` the point is on, if any: "top" | "bottom" | "left" | "right".
+// Which edge of `m` the point is on, if any: "top" | "bottom".
 export function edgeAt(m, p) {
-  const rows = pxToRows(GRAB_PX, p.row), frac = GRAB_PX / state.width;
-  const inX = p.frac >= m.left - frac && p.frac <= m.right + frac;
-  const inY = p.row >= m.top - rows && p.row <= m.bottom + rows;
-  if (inX && Math.abs(p.row - m.top) <= rows) return "top";
-  if (inX && Math.abs(p.row - m.bottom) <= rows) return "bottom";
-  if (inY && Math.abs(p.frac - m.left) <= frac) return "left";
-  if (inY && Math.abs(p.frac - m.right) <= frac) return "right";
+  const rows = pxToRows(GRAB_PX, p.row);
+  if (Math.abs(p.row - m.top) <= rows) return "top";
+  if (Math.abs(p.row - m.bottom) <= rows) return "bottom";
   return null;
 }
 

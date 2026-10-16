@@ -9,7 +9,7 @@ them, so:
     borders.py  panel borders with no gutter, from those signals
     quiet.py    splitting a too-tall panel in a calm stretch
     detect.py   proposed panels: the art between gutters and borders
-    marks.py    the Strip Marker's marks (overlap allowed, optional sides)
+    marks.py    the Strip Marker's marks (overlap allowed, always full width)
     pages.py    marks packed into strip/ pages, never splitting touching ones
     crops.py    crops.json from those pages, cut exactly as marked
     tiles.py    the strip as small tiles for the browser tab

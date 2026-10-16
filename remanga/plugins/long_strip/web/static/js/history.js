@@ -1,7 +1,7 @@
 // Every change to the marks goes through commit(): tidied, remembered for
 // undo/redo, drawn, and saved a moment later (so a closed tab loses nothing).
 
-import { state, MIN_ROWS, MIN_WIDTH } from "./state.js";
+import { state, MIN_ROWS } from "./state.js";
 import { postJson } from "./api.js";
 
 const LIMIT = 100;
@@ -19,10 +19,9 @@ export function tidy(marks) {
   for (const m of marks) {
     const top = Math.max(0, Math.round(Math.min(m.top, m.bottom)));
     const bottom = Math.min(state.totalHeight, Math.round(Math.max(m.top, m.bottom)));
-    const left = Math.max(0, Math.min(m.left, m.right)), right = Math.min(1, Math.max(m.left, m.right));
-    if (bottom - top >= MIN_ROWS && right - left >= MIN_WIDTH) out.push({ ...m, top, bottom, left, right });
+    if (bottom - top >= MIN_ROWS) out.push({ ...m, top, bottom, left: 0, right: 1 });
   }
-  return out.sort((a, b) => a.top - b.top || a.left - b.left || a.bottom - b.bottom);
+  return out.sort((a, b) => a.top - b.top || a.bottom - b.bottom);
 }
 
 export function commit(next, before = snapshot()) {

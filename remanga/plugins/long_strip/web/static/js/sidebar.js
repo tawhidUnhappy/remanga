@@ -1,6 +1,6 @@
 // The side panel: the gutter colours that verified, and every panel - its rows,
 // and flags for what deserves a look: a tall panel (no calm place to split
-// it), an overlap, sides dragged in. A click selects the panel and scrolls to it.
+// it), an overlap. A click selects the panel and scrolls to it.
 
 import { state, select } from "./state.js";
 import { colorOf } from "./overlay.js";
@@ -25,7 +25,6 @@ function flags(m, i) {
   if (m.bottom - m.top > 1.8 * runWidth(m.top)) out.push(["tall", "tall - no calm place to split it; check it"]);
   const prev = state.marks[i - 1], next = state.marks[i + 1];
   if ((prev && prev.bottom > m.top) || (next && next.top < m.bottom)) out.push(["overlap", "overlaps a neighbour"]);
-  if (m.left > 0 || m.right < 1) out.push(["sides", "narrower than the strip"]);
   return out;
 }
 

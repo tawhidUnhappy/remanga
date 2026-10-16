@@ -654,7 +654,7 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     **double-click fits** a panel between the nearest gutter/border/panel edges (`fit.js`); **M merges**
     with the next (`edits.js`). All verified in headless Chromium on a copy of the user's chapter.
   - Package is one job per module: runs, gutters, detect, marks, pages, crops, tiles, build (see the
-    package docstring). Marks = [top, bottom, left, right] (sides as width shares), **overlap
+    package docstring). Marks = [top, bottom, left, right] (left/right always 0/1 since 2026-10-16), **overlap
     allowed**; `pages.py` never splits touching/overlapping marks across pages. `crops.py` writes
     `box_pixel` + page `"exact": true` -> `cropper/crop_page.py` turns off snapping, trim and padding
     for that page (snapping pulled overlapping edges apart). **Footgun fixed:** panel_boxes guessed
@@ -664,7 +664,7 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     = api state geometry history viewport hit gestures keys sidebar actions status main): tiles of
     run-width x 2 rows (<= 900 px wide JPEG) mounted only within +/-1 screen, marks as DOM bands only
     in that window; Panel Marker rules (click selects, only the selected moves, drag elsewhere draws,
-    Alt = narrow, Shift = no snap to gutters/other marks), Tab/arrows nudge, J/K, undo/redo,
+    Shift = no snap to gutters/other marks), Tab/arrows nudge, J/K, undo/redo,
     autosave. Measured: load 3.3 s (was 19), 2-3 tiles mounted anywhere in the chapter, 10 MB JS heap;
     every gesture verified in headless Chromium, overlap carried to exact crops (869 + 284 rows cut
     exactly). **CSS footgun:** `.forced` was both the strip's dashed line (position absolute) and the
@@ -683,10 +683,23 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     split across/down, delete, each undone and autosaved; extra undo -> "Nothing to undo".
   - Not done (ask first): a vertical pan over very tall panels, a "join two marks" key, redo.
   - **Strip Marker canvas (user request, 2026-10-16):** the gestures listen on `#reader`, not
-    `#stage`: a drag that starts on the empty canvas beside the strip draws a new mark (full width,
-    Alt = as wide as the drag; `hit.js:at` holds off-strip points to the strip's edges), a click
+    `#stage`: a drag that starts on the empty canvas beside the strip draws a new mark
+    (`hit.js:at` holds off-strip points to the strip's edges), a click
     there deselects (and drops a started line / New panel mode). A press beside the strip never grabs
     the selected mark; presses on the reader's scrollbar are ignored. Verified in headless Chromium.
+  - **Strip marks are full width, y only (user request, 2026-10-16).** No Alt-narrowing, no side
+    handles, no sideways move; `marks.py:normalize` and `history.js:tidy` force left/right to 0/1, so
+    old marks with sides read as full width. While drawing, `#dragBox` (dashed) shows the box dragged
+    out from the start point to the mouse - canvas included - and the band shows the mark it makes.
+    **Footgun fixed:** the selection bar sits above `#reader`; showing it on the first draw step
+    pushed the strip 45 px down under the mouse - `selbar.js` now scrolls by the shift.
+  - **Marking and creating panels are separate steps (user request, same day).** Strip Marker Finish
+    only saves strip_marks.json (no ensure_strip); chapter menu **Create panels** =
+    `workflow.cut_panels(force=True)` (strip/ + crops.json + panels/), **Remark panels** =
+    `workflow.remark` (delete_items marks/strip/panels, then mark - the marker proposes afresh).
+    `has_marks` counts strip_marks.json too, so a marked-but-uncut strip shows "create the panels".
+    Make PDF still cuts when the panels are stale. Verified: headless Chromium, cut 142 panels on a
+    copy, remark left only pages/, Pilot menu lists Mark / Remark / Create panels.
   - MangaDex lists officially licensed chapters with `externalUrl` and 0 pages; downloading one
     prints "All 0 pages verified" and gets nothing. Test webtoon: Skeleton Soldier
     (d993f789-e7e5-4832-92fd-37614220b427) ch 25 is hosted.

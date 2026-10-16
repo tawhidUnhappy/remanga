@@ -59,7 +59,7 @@ def chapter_state(project: str, chapter: str) -> str:
     if panel_files(project, chapter):
         return "panels cut - make the PDF"
     if has_marks(project, chapter):
-        return "panels marked - make the PDF"
+        return "panels marked - create the panels"
     return "downloaded - mark the panels"
 
 
@@ -70,8 +70,10 @@ def has_audio(project: str, chapter: str) -> bool:
 
 
 def has_marks(project: str, chapter: str) -> bool:
-    """Whether this chapter's panels have been marked (crops.json saved)."""
-    return has_real_json_content(get_crops_path(project, chapter))
+    """Whether this chapter's panels have been marked: crops.json saved, or a
+    long strip's strip_marks.json (crops.json follows it at Create panels)."""
+    return (has_real_json_content(get_crops_path(project, chapter))
+            or has_real_json_content(get_crops_path(project, chapter).with_name("strip_marks.json")))
 
 
 def has_panels(project: str, chapter: str) -> bool:

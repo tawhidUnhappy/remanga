@@ -49,7 +49,7 @@ from remanga.workflow.long_video import (
     prepare_chapter,
 )
 from remanga.workflow.narration import review_narration, write_narration
-from remanga.workflow.panels import cut_panels, mark
+from remanga.workflow.panels import cut_panels, mark, remark
 from remanga.workflow.pdf import PdfResult, make_pdf, print_handoff
 from remanga.workflow.projects import (
     READING_DIRECTION_BY_LANGUAGE,
@@ -117,6 +117,7 @@ __all__ = [
     "project_name_from_title",
     "quality_warnings",
     "remake_from_source",
+    "remark",
     "remix_video",
     "render",
     "reset_chapter",

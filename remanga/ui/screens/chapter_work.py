@@ -47,16 +47,19 @@ class ChapterWork:
             await self.show("Download stopped" if outcome.stopped else "Download failed", [outcome.error],
                             ok=False, log=log)
 
-    async def mark(self, chapters: list[str], config: RemangaConfig) -> None:
-        """The browser does the work; the task screen just waits for it."""
+    async def mark(self, chapters: list[str], config: RemangaConfig, again: bool = False) -> None:
+        """The browser does the work; the task screen just waits for it. Only
+        the marks are saved - Create panels cuts them. `again` is Remark: the
+        saved marks go first and every panel is proposed afresh."""
         project, log = self.project, get_log_path(self.project)
+        step = workflow.remark if again else workflow.mark
         outcome = await self.run_task(
-            f"Marking {len(chapters)} chapter(s)",
-            [Step("Panel Marker (waiting for the browser)", lambda: workflow.mark(project, chapters, config))], log)
+            f"{'Remarking' if again else 'Marking'} {len(chapters)} chapter(s)",
+            [Step("Marker (waiting for the browser)", lambda: step(project, chapters, config))], log)
         if outcome.ok:
             marked = [ch for ch in chapters if workflow.has_marks(project, ch)]
             await self.show("Panels marked", [f"Chapter(s) {', '.join(marked) or '-'} have their panels marked.",
-                                              "", Text("Then Make PDF for the chapter.", style="dim")],
+                                              "", Text("Then Create panels for the chapter.", style="dim")],
                             ok=True, log=log)
         else:
             await self.show("Marking stopped" if outcome.stopped else "Marking failed", [outcome.error],
@@ -87,6 +90,22 @@ class ChapterWork:
                                    "new reply into narration.json.", style="dim")]
             await self.show("Narration saved" if writing else "Review saved", lines, ok=True, log=log,
                             copy=[written])
+
+    async def create_panels(self, chapters: list[str], config: RemangaConfig) -> None:
+        """Cuts the marked panels out - its own step, after marking."""
+        project, log = self.project, get_log_path(self.project)
+        outcome = await self.run_task(
+            f"Creating panels for {len(chapters)} chapter(s)",
+            [Step(f"Chapter {ch}", lambda ch=ch: workflow.cut_panels(project, ch, config, force=True))
+             for ch in chapters], log)
+        if outcome.ok:
+            lines: list[str | Text] = [f"Chapter {ch}: {len(cut)} panel(s)"
+                                       for ch, cut in zip(chapters, outcome.results, strict=True)]
+            await self.show("Panels created", [*lines, "", Text("Then Make PDF for the chapter.", style="dim")],
+                            ok=True, log=log)
+        else:
+            await self.show("Creating panels stopped" if outcome.stopped else "Creating panels failed",
+                            [outcome.error], ok=False, log=log)
 
     async def make_pdfs(self, chapters: list[str], config: RemangaConfig) -> None:
         project = self.project

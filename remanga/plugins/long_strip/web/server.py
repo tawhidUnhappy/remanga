@@ -5,9 +5,11 @@ there with its GUI - see git history of /mnt/datadisk/mangaEasy) and grown:
 tiles instead of whole images, overlapping marks, sides, snapping, undo.
 
 Routes only; the state is session.py, the page static/. Marks are
-saved to chapter_N/strip_marks.json on every change; Finish (or the next step
-that needs them - remanga/plugins/long_strip/build.py:ensure_strip) turns them into
-strip/ pages and crops.json."""
+saved to chapter_N/strip_marks.json on every change, and Finish only saves
+them: marking and creating the panels are separate steps (user request,
+2026-10-16). Create panels in the chapter menu (or the next step that needs
+them - remanga/plugins/long_strip/build.py:ensure_strip) turns them into
+strip/ pages, crops.json and the cut panels."""
 
 from __future__ import annotations
 
@@ -17,7 +19,6 @@ from flask import Flask, Response, abort, jsonify, request, send_from_directory
 
 from remanga.config import MarkerConfig
 from remanga.console import console, escape as _esc
-from remanga.plugins.long_strip.build import ensure_strip, strip_panels
 from remanga.plugins.long_strip.web.session import StripSession
 from remanga.webui.launch import start_ui
 from remanga.webui.shared_routes import add_shared_routes
@@ -65,10 +66,9 @@ def create_strip_app(session: StripSession) -> Flask:
     @app.post("/api/finish")
     def finish():
         marks = session.save((request.get_json(force=True) or {}).get("panels"))
-        pages = len(strip_panels(ensure_strip(session.project, session.chapter)))
         console.print(f"[bold green]✓ Chapter {_esc(session.chapter)}: {len(marks)} panel(s) marked on the strip[/]")
         session.finished.set()
-        return jsonify({"ok": True, "panels": len(marks), "pages": pages, "chapter": session.chapter})
+        return jsonify({"ok": True, "panels": len(marks), "chapter": session.chapter})
 
     return app
 
@@ -79,6 +79,4 @@ def launch_and_wait_strip(project: str, chapter: str, config: MarkerConfig) -> i
     session = StripSession(project, chapter)
     ui = start_ui(create_strip_app(session), config, session.finished, title=f"Strip Marker - chapter {chapter}")
     ui.wait(f"mark chapter {chapter}'s panels in the browser and press Finish")
-    # Whatever happened in the tab, the strip matches the marks on disk now.
-    ensure_strip(project, chapter)
     return len(session.marks()[0])

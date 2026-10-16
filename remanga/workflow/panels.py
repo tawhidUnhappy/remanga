@@ -1,5 +1,6 @@
 """The two steps that turn pages into panels: marking them (in whatever the
-chapter's layout plug-in opens - remanga.layouts), and cutting them out."""
+chapter's layout plug-in opens - remanga.layouts), and cutting them out
+(Create panels). Marking only saves marks; nothing is cut until asked."""
 
 from __future__ import annotations
 
@@ -9,10 +10,11 @@ from remanga import plugins
 from remanga.config import RemangaConfig
 from remanga.console import console
 from remanga.cropper import CoordinateCropper
+from remanga.json_io import has_real_json_content
 from remanga.layouts import layout_for
 from remanga.narration import page_files, panel_files
 from remanga.paths import get_crops_path
-from remanga.workflow.chapters import has_marks
+from remanga.workflow.deletables import delete_items
 
 
 def mark(project: str, chapters: list[str], config: RemangaConfig) -> list[str]:
@@ -34,13 +36,23 @@ def mark(project: str, chapters: list[str], config: RemangaConfig) -> list[str]:
     return saved
 
 
+def remark(project: str, chapters: list[str], config: RemangaConfig) -> list[str]:
+    """Mark again from scratch: the saved marks (and the strip pages and cut
+    panels made from them) are deleted, then the marker opens and proposes
+    every panel afresh - MAGI on pages, the gutters on a long strip."""
+    for chapter in chapters:
+        if page_files(project, chapter):
+            delete_items(project, chapter, ["marks", "strip", "panels"])
+    return mark(project, chapters, config)
+
+
 def cut_panels(project: str, chapter: str, config: RemangaConfig, force: bool = False) -> list[Path]:
     """The marked panels, cut out of the pages into chapters/chapter_N/panels/.
     Already-cut panels are reused unless the marks changed since (or `force`)."""
     layout = layout_for(project, chapter)
     if layout.prepare_cut:
         plugins.call(layout.prepare_cut, project, chapter)   # e.g. a strip's crops.json follows its marks
-    if not has_marks(project, chapter):
+    if not has_real_json_content(get_crops_path(project, chapter)):
         raise FileNotFoundError(f"Chapter {chapter} has no marked panels yet - mark them in the Panel Marker "
                                 f"first.")
     newest_panel = max((p.stat().st_mtime for p in panel_files(project, chapter)), default=0.0)

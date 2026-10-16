@@ -71,6 +71,10 @@ function drawLines() {
   };
   line("guide", state.guide);
   line("pendingLine", state.pending);
+  const box = $("dragBox"), b = state.dragBox;
+  box.style.display = b ? "block" : "none";
+  if (b) Object.assign(box.style, { left: Math.min(b.x0, b.x1) + "px", top: Math.min(b.y0, b.y1) + "px",
+                                    width: Math.abs(b.x1 - b.x0) + "px", height: Math.abs(b.y1 - b.y0) + "px" });
   const readout = $("readout");
   readout.style.display = state.readout ? "block" : "none";
   if (state.readout) {

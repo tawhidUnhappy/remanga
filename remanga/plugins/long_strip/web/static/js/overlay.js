@@ -49,15 +49,14 @@ export function drawMarks(lo, hi) {
     const top = rowToY(m.top), bottom = rowToY(m.bottom);
     if (!selected && (bottom < lo || top > hi)) return;
     const el = box(marksLayer, "band" + (selected ? " selected" : "") + (m.id === state.hover ? " hover" : ""),
-                   top, bottom - top,
-                   { left: m.left * state.width + "px", width: (m.right - m.left) * state.width + "px" });
+                   top, bottom - top, { left: 0, width: state.width + "px" });
     el.style.setProperty("--c", colorOf(i));
     const label = document.createElement("span");
     label.className = "label mono";
     label.textContent = String(i + 1);
     el.appendChild(label);
     if (selected) {
-      for (const edge of ["top", "bottom", "left", "right"]) {
+      for (const edge of ["top", "bottom"]) {
         const h = document.createElement("div");
         h.className = `handle ${edge}` + (state.activeEdge === edge ? " active" : "");
         el.appendChild(h);

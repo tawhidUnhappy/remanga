@@ -52,8 +52,13 @@ class ChapterMenu:
                 options.append(("Check narration", "the downloaded ones' narration.json against their panels "
                                 "and narrated audio - lists each mismatch, makes nothing", "check"))
         else:
-            options.append(("Mark panels", "open the Panel Marker in the browser - MAGI finds them, you "
-                            "fix them", "mark"))
+            marked = any(workflow.has_marks(project, ch) for ch in chapters)
+            options.append(("Mark panels", "open the marker in the browser - it finds them, you fix them; "
+                            "only the marks are saved", "mark"))
+            if marked:
+                options += [("Remark panels", "throw the saved marks away and mark again - every panel is "
+                             "proposed afresh", "remark"),
+                            ("Create panels", "cut the marked panels out of the pages", "panels")]
             options += [("Make PDF", "the panels, to give to the LLM with the prompt", "pdf"),
                         ("Write narration", "type it yourself instead, panel by panel, in the browser",
                          "write"),
@@ -98,7 +103,8 @@ class ChapterMenu:
                          "pages stay", "reset"),
                         ("Delete", "delete everything, pages included", "delete")]
         note = ", ".join(chapters) if len(chapters) > 1 else (chosen[0].get("title") or "")
-        action = await self.app.push_screen_wait(Choice(title, options, note=note, danger=["pick", "reset", "delete"]))
+        action = await self.app.push_screen_wait(Choice(title, options, note=note,
+                                                        danger=["remark", "pick", "reset", "delete"]))
         if action is None:
             return
         if action == "queue":
@@ -114,6 +120,14 @@ class ChapterMenu:
                 ok=checked["mark"] == "✓"))
         elif action == "mark":
             await self.mark(chapters, config)
+        elif action == "remark":
+            if await self.app.push_screen_wait(Confirm(
+                    "Remark panels", f"Delete the panel marks of {title.lower()} (and the panels cut from them) "
+                    f"and mark again from scratch? The marker proposes every panel afresh.",
+                    yes="Remark", danger=True)):
+                await self.mark(chapters, config, again=True)
+        elif action == "panels":
+            await self.create_panels(chapters, config)
         elif action in ("write", "review"):
             await self.narration_pass(action, chapters, config)
         elif action == "redownload":

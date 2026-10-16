@@ -6,7 +6,7 @@ import { asRows, commit, snapshot } from "./history.js";
 import { status } from "./status.js";
 import { hideLoading, showDone, showLoading } from "/shared/js/screens.js";
 
-export const fromRows = (rows) => rows.map(([top, bottom, left = 0, right = 1]) => newMark(top, bottom, left, right));
+export const fromRows = (rows) => rows.map(([top, bottom]) => newMark(top, bottom));
 
 export async function autoMarks() {
   status("Finding the panels...");
@@ -23,14 +23,14 @@ export async function finish() {
   if (state.finished) return;
   const button = document.getElementById("finishBtn");
   button.disabled = true;
-  showLoading("Saving and cutting the strip", "the panels become strip pages and crops.json");
+  showLoading("Saving the marks", "strip_marks.json");
   try {
     const data = await postJson("/api/finish", { panels: asRows() });
     state.finished = true;
     showDone({
       title: `Chapter ${data.chapter} is marked`,
-      facts: [["Panels", data.panels], ["Strip pages cut", data.pages], ["Saved to", "strip_marks.json, crops.json"]],
-      next: "Make PDF in the chapter's menu - the panels are cut from these marks.",
+      facts: [["Panels", data.panels], ["Saved to", "strip_marks.json"]],
+      next: "Create panels in the chapter's menu - it cuts them from these marks.",
     });
   } catch (e) {
     hideLoading();

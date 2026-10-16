@@ -1,13 +1,15 @@
 // The mouse on the strip, the way the Panel Marker works: a click selects the
 // mark under it (the smallest, where marks overlap); only the selected mark
-// moves (drag inside) or resizes (drag an edge - top, bottom, or a side);
-// dragging anywhere else draws a new mark, full width (Alt: only as wide as
-// the drag). Edges snap to verified gutters and to other marks (Shift: don't).
-// Right-click deletes. After N, a click finishes the started line. On the
-// empty canvas around the strip a drag draws a new mark the same way, and a
-// click lets go of the selection.
+// moves (drag inside) or resizes (drag its top or bottom edge); dragging
+// anywhere else draws a new mark. Marks are always the strip's full width -
+// only rows are marked, the strip is never cut down its width. Edges snap to
+// verified gutters and to other marks (Shift: don't). Right-click deletes.
+// After N, a click finishes the started line. On the empty canvas around the
+// strip a drag draws a new mark the same way, and a click lets go of the
+// selection. While drawing, the box being dragged out is shown from where the
+// drag started to the mouse, the mark it makes as a band across the strip.
 
-import { state, newMark, markById, select, MIN_ROWS, MIN_WIDTH } from "./state.js";
+import { state, newMark, markById, select, MIN_ROWS } from "./state.js";
 import { at, edgeAt, markAt, snap } from "./hit.js";
 import { commit, snapshot } from "./history.js";
 import { draw } from "./viewport.js";
@@ -17,10 +19,8 @@ import { fitAt } from "./fit.js";
 const stage = document.getElementById("stage");
 const reader = document.getElementById("reader");
 const DRAG_START_PX = 4;
-const CURSORS = { top: "ns-resize", bottom: "ns-resize", left: "ew-resize", right: "ew-resize" };
+const CURSORS = { top: "ns-resize", bottom: "ns-resize" };
 let drag = null;
-
-const clampFrac = (v) => Math.max(0, Math.min(1, v));
 
 function readout(p, m) {
   state.readout = { x: p.x, y: p.y, text: `${m.top} → ${m.bottom} · ${m.bottom - m.top} rows` };
@@ -57,7 +57,6 @@ reader.addEventListener("pointermove", (evt) => {
   if (drag.kind === "press" && Math.hypot(p.x - drag.start.x, p.y - drag.start.y) > DRAG_START_PX) {
     drag.mark = newMark(drag.start.row, drag.start.row);
     drag.kind = "draw";
-    drag.alt = evt.altKey;
     state.marks.push(drag.mark);
     select(drag.mark.id);
   }
@@ -70,9 +69,7 @@ reader.addEventListener("pointermove", (evt) => {
 
 function moveEdge(m, edge, p, evt) {
   if (edge === "top") m.top = Math.min(snap(p.row, evt, m.id), m.bottom - MIN_ROWS);
-  else if (edge === "bottom") m.bottom = Math.max(snap(p.row, evt, m.id), m.top + MIN_ROWS);
-  else if (edge === "left") m.left = Math.min(clampFrac(p.frac), m.right - MIN_WIDTH);
-  else m.right = Math.max(clampFrac(p.frac), m.left + MIN_WIDTH);
+  else m.bottom = Math.max(snap(p.row, evt, m.id), m.top + MIN_ROWS);
 }
 
 function moveMark(p, evt) {
@@ -87,11 +84,6 @@ function moveMark(p, evt) {
   }
   m.top = Math.max(0, Math.min(state.totalHeight - height, top));
   m.bottom = m.top + height;
-  if (orig.left > 0 || orig.right < 1) {   // a narrowed mark moves sideways too
-    const width = orig.right - orig.left;
-    m.left = clampFrac(Math.min(1 - width, orig.left + (p.frac - start.frac)));
-    m.right = m.left + width;
-  }
 }
 
 function drawMark(p, evt) {
@@ -100,7 +92,7 @@ function drawMark(p, evt) {
   const startRow = snap(start.row, evt, m.id);
   m.top = Math.min(startRow, row);
   m.bottom = Math.max(startRow, row);
-  if (drag.alt) { m.left = Math.min(start.frac, p.frac); m.right = Math.max(start.frac, p.frac); }
+  state.dragBox = { x0: start.x, y0: start.y, x1: p.x, y1: p.y };
 }
 
 reader.addEventListener("pointerup", (evt) => {
@@ -109,6 +101,7 @@ reader.addEventListener("pointerup", (evt) => {
   drag = null;
   state.guide = null;
   state.readout = null;
+  state.dragBox = null;
   if (d.kind === "press") {
     if (!d.onStrip) deselectAll();
     else if (state.mode === "new") status("Drag down (or up) the strip to mark the new panel - Esc cancels.");

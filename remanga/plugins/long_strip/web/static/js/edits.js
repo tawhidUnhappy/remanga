@@ -13,7 +13,7 @@ export function splitAtPointer() {
   if (!m) { status("Point at a panel to split it there."); return; }
   const row = p.row;
   if (row - m.top < MIN_ROWS || m.bottom - row < MIN_ROWS) { status("Too close to the edge to split."); return; }
-  const lower = newMark(row, m.bottom, m.left, m.right);
+  const lower = newMark(row, m.bottom);
   commit([...state.marks.filter(x => x !== m), { ...m, bottom: row }, lower]);
   status("Panel split.");
 }
@@ -23,8 +23,7 @@ export function mergeWithNext() {
   if (!m) { status("Select a panel first - M joins it with the next one."); return; }
   const next = state.marks.filter(x => x !== m && x.top >= m.top).sort((a, b) => a.top - b.top)[0];
   if (!next) { status("That is the last panel - nothing after it to join."); return; }
-  const merged = newMark(Math.min(m.top, next.top), Math.max(m.bottom, next.bottom),
-                         Math.min(m.left, next.left), Math.max(m.right, next.right));
+  const merged = newMark(Math.min(m.top, next.top), Math.max(m.bottom, next.bottom));
   commit([...state.marks.filter(x => x !== m && x !== next), merged]);
   select(merged.id);
   status("Joined with the next panel - Ctrl+Z splits them again.");

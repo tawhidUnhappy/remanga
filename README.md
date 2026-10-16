@@ -169,8 +169,11 @@ or **Mark panels** in a chapter's menu. It opens one browser tab for every chapt
   numbers show it.
 - **Save** writes the chapter's `crops.json` and moves to the next chapter in the tab.
 
-The marks are yours: nothing overwrites them, and Reset keeps them. Making the PDF cuts the panels
-again whenever the marks are newer than them.
+The marks are yours: nothing overwrites them, and Reset keeps them. Marking only saves the marks;
+**Create panels** in the chapter's menu cuts them out (Make PDF also cuts them again whenever the
+marks are newer than the panels). **Remark panels** throws the saved marks (and the panels cut from
+them) away and opens the marker to mark again from scratch - MAGI, or the gutters on a long strip,
+propose every panel afresh.
 
 ### Long-strip manga (webtoons)
 
@@ -196,19 +199,21 @@ chapter stays smooth). Every panel is a band in its own colour with a big number
 covers are hatched, so you can see what would be left out.
 
 - **＋ New panel** (or **A**), then drag down the strip over its art - or just drag on bare strip
-  (hold **Alt** for only as wide as the drag). **Double-click** art no panel covers to fit a panel
-  to it. Panels may overlap - a bubble can belong to two.
+  or on the empty canvas beside it; the box you drag out is shown as you go. A panel is always the
+  strip's full width - only its rows are marked. **Click** the canvas beside the strip to deselect.
+  **Double-click** art no panel covers to fit a panel to it. Panels may overlap - a bubble can
+  belong to two.
 - **Click** a panel to focus it: everything else dims and a bar shows its rows, with **Split**
   (**S**, at the mouse), **Merge with next** (**M** - the fix for a panel cut in half) and
-  **Delete**. Drag it to move, drag an edge (top, bottom or a side) to resize; edges snap to gutters
+  **Delete**. Drag it to move, drag its top or bottom edge to resize; edges snap to gutters
   and other panels (hold **Shift** not to).
 - **↑/↓** nudge the selected edge (**Shift** ×10, **Tab** picks top / bottom / whole), **J/K**
   step through the panels, **N** starts a line after the last one, **R** proposes them all again,
   **C** clears, **+/-/0** zoom, **G** shows or hides the gutters, **Esc** leaves focus.
 - **Ctrl+Z / Ctrl+Y** undo and redo, every change is saved as you go (`strip_marks.json`), and
-  **Finish** (Ctrl+S) cuts the strip.
+  **Finish** (Ctrl+S) saves them and closes - it cuts nothing.
 
-The strip is then cut into `strip/` pages between the panels (overlapping ones always on one page)
+**Create panels** in the chapter's menu then cuts the strip into `strip/` pages between the panels (overlapping ones always on one page)
 and `crops.json` is written from them, cut exactly as marked; the downloaded images in `pages/` are
 never touched. From there the PDF and the video work as for any manga.
 
