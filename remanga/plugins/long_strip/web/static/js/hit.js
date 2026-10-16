@@ -6,10 +6,13 @@ import { pxToRows, yToRow } from "./geometry.js";
 const stage = document.getElementById("stage");
 
 // {row, frac, x, y} of a mouse event, in strip rows / width share / stage px.
+// Off the strip (the canvas around it) the row and share are held to the
+// strip's edges, so a drag from beside it still draws on it.
 export function at(evt) {
   const rect = stage.getBoundingClientRect();
   const x = evt.clientX - rect.left, y = evt.clientY - rect.top;
-  return { x, y, row: yToRow(y), frac: Math.max(0, Math.min(1, x / state.width)) };
+  const row = Math.max(0, Math.min(state.totalHeight, yToRow(Math.max(0, Math.min(rect.height, y)))));
+  return { x, y, row, frac: Math.max(0, Math.min(1, x / state.width)) };
 }
 
 const contains = (m, p) => p.row >= m.top && p.row <= m.bottom && p.frac >= m.left && p.frac <= m.right;

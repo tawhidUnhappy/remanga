@@ -682,6 +682,11 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     reorder) and records a server change as a step too. No redo. Verified in headless Chromium:
     split across/down, delete, each undone and autosaved; extra undo -> "Nothing to undo".
   - Not done (ask first): a vertical pan over very tall panels, a "join two marks" key, redo.
+  - **Strip Marker canvas (user request, 2026-10-16):** the gestures listen on `#reader`, not
+    `#stage`: a drag that starts on the empty canvas beside the strip draws a new mark (full width,
+    Alt = as wide as the drag; `hit.js:at` holds off-strip points to the strip's edges), a click
+    there deselects (and drops a started line / New panel mode). A press beside the strip never grabs
+    the selected mark; presses on the reader's scrollbar are ignored. Verified in headless Chromium.
   - MangaDex lists officially licensed chapters with `externalUrl` and 0 pages; downloading one
     prints "All 0 pages verified" and gets nothing. Test webtoon: Skeleton Soldier
     (d993f789-e7e5-4832-92fd-37614220b427) ch 25 is hosted.

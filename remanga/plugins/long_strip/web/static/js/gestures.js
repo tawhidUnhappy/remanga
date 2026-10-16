@@ -3,8 +3,9 @@
 // moves (drag inside) or resizes (drag an edge - top, bottom, or a side);
 // dragging anywhere else draws a new mark, full width (Alt: only as wide as
 // the drag). Edges snap to verified gutters and to other marks (Shift: don't).
-// Right-click deletes. After N, a click finishes the started line. A click on
-// the empty canvas beside the strip deselects.
+// Right-click deletes. After N, a click finishes the started line. On the
+// empty canvas around the strip a drag draws a new mark the same way, and a
+// click lets go of the selection.
 
 import { state, newMark, markById, select, MIN_ROWS, MIN_WIDTH } from "./state.js";
 import { at, edgeAt, markAt, snap } from "./hit.js";
@@ -14,6 +15,7 @@ import { status } from "./status.js";
 import { fitAt } from "./fit.js";
 
 const stage = document.getElementById("stage");
+const reader = document.getElementById("reader");
 const DRAG_START_PX = 4;
 const CURSORS = { top: "ns-resize", bottom: "ns-resize", left: "ew-resize", right: "ew-resize" };
 let drag = null;
@@ -24,11 +26,15 @@ function readout(p, m) {
   state.readout = { x: p.x, y: p.y, text: `${m.top} → ${m.bottom} · ${m.bottom - m.top} rows` };
 }
 
-stage.addEventListener("pointerdown", (evt) => {
+// Pressing on the canvas (not its scrollbars): on the strip it may grab the
+// selected mark; beside it, it only ever draws or deselects.
+reader.addEventListener("pointerdown", (evt) => {
   if (evt.button !== 0 || state.finished) return;
-  const p = at(evt);
-  stage.setPointerCapture(evt.pointerId);
-  const selected = state.mode === "new" ? null : markById(state.selected);
+  const rect = reader.getBoundingClientRect();
+  if (evt.clientX - rect.left >= reader.clientWidth || evt.clientY - rect.top >= reader.clientHeight) return;
+  const p = at(evt), onStrip = stage.contains(evt.target);
+  reader.setPointerCapture(evt.pointerId);
+  const selected = state.mode === "new" || !onStrip ? null : markById(state.selected);
   const edge = selected && edgeAt(selected, p);
   const before = snapshot();
   if (selected && edge) {
@@ -38,12 +44,13 @@ stage.addEventListener("pointerdown", (evt) => {
     drag = { kind: "move", mark: selected, start: p, orig: { ...selected }, before };
     state.activeEdge = "move";
   } else {
-    drag = { kind: "press", start: p, before };
+    drag = { kind: "press", start: p, onStrip, before };
   }
   evt.preventDefault();
 });
 
-stage.addEventListener("pointermove", (evt) => {
+reader.addEventListener("pointermove", (evt) => {
+  if (!drag && !stage.contains(evt.target)) { offStrip(); return; }
   const p = at(evt);
   state.pointer = p;
   if (!drag) { hoverCursor(p); return; }
@@ -96,14 +103,15 @@ function drawMark(p, evt) {
   if (drag.alt) { m.left = Math.min(start.frac, p.frac); m.right = Math.max(start.frac, p.frac); }
 }
 
-stage.addEventListener("pointerup", (evt) => {
+reader.addEventListener("pointerup", (evt) => {
   if (!drag) return;
   const p = at(evt), d = drag;
   drag = null;
   state.guide = null;
   state.readout = null;
   if (d.kind === "press") {
-    if (state.mode === "new") status("Drag down (or up) the strip to mark the new panel - Esc cancels.");
+    if (!d.onStrip) deselectAll();
+    else if (state.mode === "new") status("Drag down (or up) the strip to mark the new panel - Esc cancels.");
     else click(p, evt);
   } else {
     if (d.kind === "draw") setMode("select");
@@ -136,11 +144,12 @@ function hoverCursor(p) {
   if (id !== state.hover) { state.hover = id; draw(); }
 }
 
-stage.addEventListener("pointerleave", () => {
-  if (drag) return;
+function offStrip() {
   state.pointer = null;
   if (state.hover !== null) { state.hover = null; draw(); }
-});
+}
+
+stage.addEventListener("pointerleave", () => { if (!drag) offStrip(); });
 
 stage.addEventListener("contextmenu", (evt) => {
   evt.preventDefault();
@@ -174,12 +183,11 @@ stage.addEventListener("dblclick", (evt) => {
 // A click on the empty canvas around the strip (not the strip itself, not
 // the selection bar) lets go of the selection - and of a started line or New
 // panel mode, the same as Esc.
-document.getElementById("reader").addEventListener("pointerdown", (evt) => {
-  if (evt.button !== 0 || stage.contains(evt.target)) return;
+function deselectAll() {
   if (state.selected === null && state.pending === null && state.mode !== "new") return;
   state.pending = null;
   if (state.mode === "new") setMode("select");
   select(null);
   status("Deselected.");
   draw();
-});
+}
