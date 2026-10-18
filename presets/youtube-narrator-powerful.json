@@ -5,6 +5,8 @@
   "voice": "af_heart",
   "speed": 1.1,
   "take_length": "whole_chapter",
+  "max_gap_ms": 0,
+  "panel_pause_ms": 0,
   "compressor": "strong",
   "bass_boost_db": 5,
   "presence_db": 3,

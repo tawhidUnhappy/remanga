@@ -29,6 +29,7 @@ from pydub import AudioSegment
 
 from remanga.audio.batching import Batch, plan_batches
 from remanga.audio.clips import speech_bounds
+from remanga.audio.gaps import narration_identity
 from remanga.audio.manifest import verify_audio_manifest, write_audio_manifest
 from remanga.audio.retakes import hum_checked, retake_hums, transcribe
 from remanga.audio.takes import recorded_keys, source_key, synthesize_batches
@@ -106,7 +107,7 @@ def narrate_in_batches(synth, tts_config: TTSConfig, audio_config: AudioConfig,
 
     planned = plan_batches(panels, audio_config.batch_target_minutes, synth.chars_per_second,
                            synth.max_take_seconds)
-    voice_identity = tts_config.identity()
+    voice_identity = narration_identity(tts_config, audio_config)
     timing_path = get_audio_timing_path(project_name, chapter_num)
     recorded = recorded_keys(timing_path)
     already_checked = hum_checked(timing_path)

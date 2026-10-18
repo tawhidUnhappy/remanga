@@ -169,6 +169,12 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
 - **Caching chain:** audio_timing.json is rewritten only when content changes; mix fingerprints its
   mtime + BGM file stat + settings; render compares master_audio mtime and a picture fingerprint. A
   gratuitous rewrite anywhere upstream re-mixes and re-renders everything.
+- **Longest pause / no-gaps preset (2026-10-18):** `audio/gaps.py` cuts every inner silence over
+  `audio.max_gap_ms` to it (35 dB under the take's p95 frame = silent, middle cut, 8 ms crossfade) as the
+  take comes back (`load_take`: takes.py, retakes.py, per-panel tts.py) - BEFORE hums/whisper/spans, so the
+  video follows. In the identity only when > 0 (`narration_identity`), so natural chapters keep their keys.
+  Real run, IfHerFlagBreaks ch2: 19.5 -> 16.6 min, gaps >250 ms 372 -> 0, longest 0.94 -> 0.16 s, 96% match.
+  User wanted recap-channel pace: "natural but not normal" pauses were the complaint.
 - **Voice chain v2 (2026-10-18):** v1's bass shelf (`bass ... t=o:w=1` at 150 Hz) dipped -2.4 dB at 200 Hz,
   where the voice's fundamental sits, so +3/+5 dB came out ~1 dB QUIETER on real narration. Measure an EQ
   with tones (`sine=f=...`) before trusting it. v2: compressor first, then Butterworth shelf (q 0.707) at

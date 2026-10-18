@@ -11,8 +11,8 @@ from typing import Any
 from remanga import activity
 from remanga.audio.batching import Batch
 from remanga.audio.clips import atomic_export
+from remanga.audio.gaps import load_take
 from remanga.audio.hums import Hum, find_hums
-from remanga.audio.resample import load_audio
 from remanga.audio.takes import collapsed
 from remanga.config import AudioConfig, SubtitlesConfig
 from remanga.console import console, escape as _esc
@@ -99,7 +99,7 @@ def retake_hums(synth, batches: list[Batch], timings: dict[str, dict[str, Any]],
                     raw = audio_dir / f"{name}_raw.wav"
                     clip = audio_dir / f"{name}_retake.wav"
                     synth.synthesize(text=batch.text, output_wav=raw)
-                    atomic_export(load_audio(raw, audio_config.sample_rate, channels=1), clip)
+                    atomic_export(load_take(raw, audio_config), clip)
                     raw.unlink(missing_ok=True)
                     tried[name] = attempt
                     if collapsed(clip, batch, synth.ceiling_seconds):

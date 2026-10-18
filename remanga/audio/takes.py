@@ -13,7 +13,7 @@ from typing import Any
 from remanga import activity
 from remanga.audio.batching import Batch
 from remanga.audio.clips import atomic_export
-from remanga.audio.resample import load_audio
+from remanga.audio.gaps import load_take
 from remanga.config import AudioConfig
 from remanga.console import console, escape as _esc
 from remanga.json_io import read_json_or
@@ -88,7 +88,7 @@ def _make_take(synth, batch: Batch, audio_dir: Path, audio_config: AudioConfig,
                   f"about {batch.estimated_seconds / 60:.1f} min[/]")
     raw = audio_dir / f"{batch.name}_raw.wav"
     synth.synthesize(text=batch.text, output_wav=raw)
-    atomic_export(load_audio(raw, audio_config.sample_rate, channels=1), clip)
+    atomic_export(load_take(raw, audio_config), clip)
     raw.unlink(missing_ok=True)
 
     problem = collapsed(clip, batch, synth.ceiling_seconds)

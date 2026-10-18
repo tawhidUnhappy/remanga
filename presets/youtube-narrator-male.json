@@ -5,6 +5,8 @@
   "voice": "am_fenrir",
   "speed": 1.08,
   "take_length": "whole_chapter",
+  "max_gap_ms": 0,
+  "panel_pause_ms": 0,
   "compressor": "medium",
   "bass_boost_db": 3,
   "presence_db": 0,

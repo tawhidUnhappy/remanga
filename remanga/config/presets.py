@@ -60,6 +60,10 @@ class NarrationPreset(BaseModel):
     bass_boost_db: float | None = None
     presence_db: float | None = None
     limiter: bool | None = None
+    # The longest pause inside a take, in ms (0 = natural), and the silence
+    # between panels.
+    max_gap_ms: int | None = None
+    panel_pause_ms: int | None = None
     # A target in LUFS, or "off" for no loudness pass.
     loudness_lufs: float | Literal["off"] | None = None
     # True for a preset saved from Settings (global/presets/), not one that ships.
@@ -97,6 +101,10 @@ class NarrationPreset(BaseModel):
             keys.add("audio.voice_presence_db")
         if self.limiter is not None:
             keys.add("audio.voice_limiter")
+        if self.max_gap_ms is not None:
+            keys.add("audio.max_gap_ms")
+        if self.panel_pause_ms is not None:
+            keys.add("audio.pause_between_panels_ms")
         if self.loudness_lufs is not None:
             keys |= {"audio.enable_loudnorm", "audio.loudness_target_lufs"}
         return keys
@@ -128,6 +136,10 @@ class NarrationPreset(BaseModel):
             audio.voice_presence_db = self.presence_db
         if self.limiter is not None:
             audio.voice_limiter = self.limiter
+        if self.max_gap_ms is not None:
+            audio.max_gap_ms = self.max_gap_ms
+        if self.panel_pause_ms is not None:
+            audio.pause_between_panels_ms = self.panel_pause_ms
         if self.loudness_lufs == "off":
             audio.enable_loudnorm = False
         elif self.loudness_lufs is not None:
@@ -205,6 +217,7 @@ def current_settings(config: RemangaConfig, name: str, description: str = "") ->
         compressor=audio.voice_compressor if audio.voice_compressor in ("off", "gentle", "medium", "strong")
         else "off",
         bass_boost_db=audio.voice_bass_boost_db, presence_db=audio.voice_presence_db, limiter=audio.voice_limiter,
+        max_gap_ms=audio.max_gap_ms, panel_pause_ms=audio.pause_between_panels_ms,
         loudness_lufs=audio.loudness_target_lufs if audio.enable_loudnorm else "off")
 
 

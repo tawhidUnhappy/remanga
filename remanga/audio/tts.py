@@ -15,9 +15,9 @@ from pydub import AudioSegment
 from remanga import activity, plugins
 from remanga.audio.batched import narrate_in_batches
 from remanga.audio.clips import atomic_export, speech_bounds
+from remanga.audio.gaps import load_take, narration_identity
 from remanga.audio.manifest import verify_audio_manifest, write_audio_manifest
 from remanga.audio.narration_voice import voice_changed_from
-from remanga.audio.resample import load_audio
 from remanga.audio.resume import clip_is_complete, clips_to_redo
 from remanga.audio.synth import create_synthesizer
 from remanga.audio.timing import panel_timing, write_timing
@@ -77,7 +77,7 @@ class TTSEngine:
 
         timing_path = get_audio_timing_path(project_name, chapter_num)
         previous_timing = read_json_or(timing_path, {})
-        voice_identity = self.tts_config.identity()
+        voice_identity = narration_identity(self.tts_config, self.audio_config)
         was = voice_changed_from(previous_timing, voice_identity)
         if was and not force:
             console.print(f"[yellow]This chapter's clips are in another voice[/] "
@@ -109,7 +109,7 @@ class TTSEngine:
                     self._synth.synthesize(text=panel.text, output_wav=raw)
                     # Through resample.load_audio: pydub's own resampler folds
                     # imaging noise into the clip going from 24 kHz to 44.1 kHz.
-                    segment = load_audio(raw, self.audio_config.sample_rate, channels=1)
+                    segment = load_take(raw, self.audio_config)
                     atomic_export(segment, clip)
                     raw.unlink(missing_ok=True)
                 # Measured here because the clip is already in hand, whether

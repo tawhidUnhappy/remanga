@@ -18,6 +18,8 @@ be reused there.
 | `voice` | a voice of that engine, e.g. `af_heart` | Narrator voice |
 | `speed` | e.g. `1.08` (1.0 = normal) | Speaking speed |
 | `take_length` | minutes, `"whole_chapter"` or `"per_panel"` | Narration take length |
+| `max_gap_ms` | longest pause inside the narration in ms, `0` = natural | Longest pause |
+| `panel_pause_ms` | silence between panels in ms | Pause between panels |
 | `compressor` | `"off"`, `"gentle"`, `"medium"`, `"strong"` | Compressor |
 | `bass_boost_db` | dB at 180 Hz, `0` = off | Bass boost |
 | `presence_db` | dB at 4 kHz, `0` = off | Presence |

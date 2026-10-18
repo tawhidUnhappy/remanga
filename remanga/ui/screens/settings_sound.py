@@ -129,6 +129,29 @@ async def change_panel_gap(screen: SettingsScreen, config: RemangaConfig) -> Non
         config.audio.pause_between_panels_ms = gap
 
 
+MAX_GAPS = ((0, "natural - the engine's own pauses, up to about a second"),
+            (400, "relaxed - long pauses shortened"),
+            (250, "tight - a short breath between sentences"),
+            (150, "recap pace - the voice runs on, barely a breath"),
+            (100, "no gaps - one sentence straight into the next"))
+
+
+def max_gap_label(ms: int) -> str:
+    return f"{ms} ms" if ms > 0 else "natural"
+
+
+async def change_max_gap(screen: SettingsScreen, config: RemangaConfig) -> None:
+    gap = await screen.app.push_screen_wait(Choice(
+        "Longest pause", [(max_gap_label(ms), hint, ms) for ms, hint in MAX_GAPS],
+        current=config.audio.max_gap_ms,
+        note="The longest silence allowed inside the narration: every longer pause the narrator leaves "
+             "between sentences is cut down to this, the way recap channels keep the voice running. "
+             "It is done before the words are timed, so the pictures still follow the voice. Changing "
+             "it narrates chapters again."))
+    if gap is not None:
+        config.audio.max_gap_ms = gap
+
+
 async def change_edge_fade(screen: SettingsScreen, config: RemangaConfig) -> None:
     fade = await screen.app.push_screen_wait(Choice(
         "Fade at line edges", [(f"{ms} ms" if ms else "off", hint, ms) for ms, hint in EDGE_FADES],

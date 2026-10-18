@@ -117,6 +117,7 @@ def remix_video(project: str, chapter: str, config: RemangaConfig) -> Path:
 
     Refuses when narration.json no longer says what the clips say - a video
     whose words and pictures disagree is worse than waiting for Make video."""
+    from remanga.audio.gaps import narration_identity
     from remanga.audio.narration_voice import voice_changed_from
 
     timing = _narrated_timing(project, chapter)
@@ -128,7 +129,7 @@ def remix_video(project: str, chapter: str, config: RemangaConfig) -> Path:
         raise ValueError(f"Chapter {chapter}'s narration.json has changed since it was narrated (first "
                          f"difference: {changed}) - use Make video to narrate it again.")
     console.print(f"[bold]Chapter {chapter}:[/] reusing the {len(panels)} narrated panel(s) - no narrating")
-    other_voice = voice_changed_from(timing, config.tts.identity())
+    other_voice = voice_changed_from(timing, narration_identity(config.tts, config.audio))
     if other_voice:
         console.print(f"  [yellow]- the clips are in {_esc(other_voice)}, not the voice set now - they are "
                       f"kept as they are; Make video narrates in the new one[/]")

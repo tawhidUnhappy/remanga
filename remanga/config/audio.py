@@ -15,6 +15,11 @@ class AudioConfig(ConfigModel):
     # run into each other; a narrator reading aloud takes 300-600ms.
     pause_between_panels_ms: int = Field(350, validation_alias=AliasChoices("pause_between_panels_ms",
                                                                             "pause_between_pages_ms"))
+    # The longest pause allowed inside a take, in ms (0 = keep the engine's
+    # natural pauses): every longer silence is cut down to it as the take
+    # comes back, before it is timed - audio/gaps.py. Changing it remakes
+    # the takes.
+    max_gap_ms: int = 0
     # Narrate several panels in one generation instead of one each. A panel
     # synthesized alone is a take of its own - Qwen reads it with no idea what
     # came before, so the tone resets every panel, which is audible in a way
