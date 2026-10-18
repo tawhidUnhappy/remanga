@@ -299,6 +299,35 @@ async def change_recording(screen: SettingsScreen, config: RemangaConfig) -> Non
         config.audio.voice_recording = picked
 
 
+BLENDED_NOISE_LEVELS = ((0.0, "off - the voice as clean as the engine made it"),
+                        (42.0, "barely there - only missed when it is gone"),
+                        (36.0, "felt, not heard - the voice stops sounding sterile"),
+                        (30.0, "audible on headphones - a breathy, recorded grain"))
+
+
+def blended_noise_label(db: float) -> str:
+    return f"{db:g} dB under the voice" if db > 0 else "off"
+
+
+async def change_blended_noise(screen: SettingsScreen, config: RemangaConfig) -> None:
+    current = config.audio.voice_blended_noise_db
+    options = [(blended_noise_label(db), hint, db) for db, hint in BLENDED_NOISE_LEVELS]
+    if all(current != db for db, _ in BLENDED_NOISE_LEVELS):
+        options.append((blended_noise_label(current), "your custom level", current))
+    options.append(("Custom...", "type your own number of dB", "custom"))
+    note = ("A faint noise made from the voice itself - its own tone, rising and falling with every "
+            "syllable, silent in the pauses - like the breath and air that ride on a real voice. It sits "
+            "in the bands the voice already fills, so it is felt rather than heard. Higher is quieter. "
+            "Changing it re-mixes the chapter; nothing is narrated again.")
+    db = await screen.app.push_screen_wait(Choice("Blended noise", options, current=current, note=note))
+    if db == "custom":
+        db = await screen.app.push_screen_wait(Ask(
+            "Blended noise", "dB under the voice (0 is off, 20 to 60)", value=f"{current:g}",
+            check=number_check(0, 60), note=note))
+    if db is not None:
+        config.audio.voice_blended_noise_db = float(db)
+
+
 def bass_label(db: float) -> str:
     return f"+{db:g} dB at 180 Hz" if db > 0 else "off"
 

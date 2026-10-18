@@ -17,6 +17,7 @@ from pathlib import Path
 
 from pydub import AudioSegment
 
+from remanga.audio.blend import blend_noise
 from remanga.audio.breath import BREATHS, add_breath
 from remanga.audio.master import integrated_loudness
 from remanga.audio.microphone import MICROPHONES, mic_filters, place_in_room, read_wav, speech_level, write_wav
@@ -85,13 +86,17 @@ def voice_filters(config: AudioConfig, input_lufs: float | None) -> list[str]:
 
 def at_the_mic(path: Path, config: AudioConfig) -> None:
     """What reaches the mic with the voice, added to the wav at `path` in
-    place: the narrator's breath (audio/breath.py) and, on a phone, the
-    hiss riding with the voice and the phone's codec (audio/phone.py). Before the
-    chain, so it shapes them as it shapes the voice."""
-    if config.voice_breath not in BREATHS and config.voice_recording not in RECORDINGS:
+    place: noise blended into the voice (audio/blend.py), the narrator's
+    breath (audio/breath.py) and, on a phone, the hiss riding with the voice
+    and the phone's codec (audio/phone.py). Before the chain, so it shapes
+    them as it shapes the voice."""
+    if (config.voice_breath not in BREATHS and config.voice_recording not in RECORDINGS
+            and config.voice_blended_noise_db <= 0):
         return
     seg, x = read_wav(path)
     speech = speech_level(x.mean(axis=1), seg.frame_rate)
+    # First, from the voice alone - not from the breath or hiss added after.
+    x = blend_noise(x, seg.frame_rate, config.voice_blended_noise_db)
     x = add_breath(x, seg.frame_rate, speech, config.voice_breath)
     x = record_on_phone(x, seg.frame_rate, speech, config.voice_recording)
     write_wav(path, seg, x)
@@ -105,7 +110,8 @@ def polish_voice(track: AudioSegment, work_dir: Path, config: AudioConfig) -> Au
     without the polish beats no recap."""
     if (config.voice_bass_boost_db <= 0 and config.voice_presence_db <= 0
             and config.voice_compressor not in COMPRESSORS and config.voice_microphone not in MICROPHONES
-            and config.voice_breath not in BREATHS and config.voice_recording not in RECORDINGS):
+            and config.voice_breath not in BREATHS and config.voice_recording not in RECORDINGS
+            and config.voice_blended_noise_db <= 0):
         return track
     raw, polished = work_dir / "voice_raw.wav", work_dir / "voice_polished.wav"
     try:

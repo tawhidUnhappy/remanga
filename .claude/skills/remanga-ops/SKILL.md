@@ -192,6 +192,12 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   (`showspectrumpic` -> Read the PNG), not just band averages. afftdn: 25 ms delay, ~2 dB. Fingerprint names
   the two keys only when on. Preset youtube-narrator-phone (mic-close + strong breath + phone) was removed
   2026-10-18 after the user compared all presets; the two settings stay as rows.
+- **Blended noise (2026-10-18):** `audio/blend.py`, `audio.voice_blended_noise_db` (0 = off; preset key
+  `blended_noise_db`): random-phase noise with the voice's own spectral envelope per STFT frame (1024/256,
+  smoothed 600 Hz x 3 frames so no pitch passes: periodicity 0.20 vs voice 0.75, white 0.06), mixed N dB under
+  by overall RMS - follows every syllable, silent in pauses (-86 dB). First thing in `at_the_mic`, from the voice
+  alone. User asked for noise "not noticeable but can be felt" after a separate hiss layer was "not blended".
+  Preset youtube-narrator-mic-natural = microphone + 36 dB. 11.5-min chapter 20 s, 2.1 GB.
 - **Longest pause / no-gaps preset (2026-10-18):** `audio/gaps.py` cuts every inner silence over
   `audio.max_gap_ms` to it (35 dB under the take's p95 frame = silent, middle cut, 8 ms crossfade) as the
   take comes back (`load_take`: takes.py, retakes.py, per-panel tts.py) - BEFORE hums/whisper/spans, so the

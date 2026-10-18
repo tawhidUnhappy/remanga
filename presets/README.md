@@ -26,6 +26,7 @@ be reused there.
 | `microphone` | `"off"`, `"close"`, `"studio"` | Microphone |
 | `breath` | `"off"`, `"light"`, `"strong"` | Breath on mic |
 | `recording` | `"off"`, `"phone"` | Recording |
+| `blended_noise_db` | dB under the voice, `0` = off | Blended noise |
 | `limiter` | `true` / `false` | Limiter |
 | `loudness_lufs` | e.g. `-14`, or `"off"` | Loudness |
 

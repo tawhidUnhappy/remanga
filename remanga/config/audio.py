@@ -74,6 +74,9 @@ class AudioConfig(ConfigModel):
     # "off" or "phone": recorded on a phone - hiss that rides with the voice,
     # then a voice codec (audio/phone.py).
     voice_recording: str = "off"
+    # Noise made from the voice itself (its own spectral envelope), this many
+    # dB under it, 0 = off: felt rather than heard (audio/blend.py).
+    voice_blended_noise_db: float = 0.0
     # A peak limiter on the finished mix, so the loudness pass can bring it up
     # without a peak clipping. Off, a mix whose peaks would clip is held
     # quieter than the target instead.

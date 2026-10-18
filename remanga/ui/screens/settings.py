@@ -20,8 +20,10 @@ from remanga.ui.dialogs import Choice, Result
 from remanga.ui.screens.common import _global_log
 from remanga.ui.screens.settings_sound import (
     bass_label,
+    blended_noise_label,
     breath_label,
     change_bass_boost,
+    change_blended_noise,
     change_breath,
     change_compressor,
     change_edge_fade,
@@ -124,6 +126,8 @@ class SettingsScreen(Screen):
                 "voice cuts through, up front", "Voice", ("audio.voice_presence_db",)),
             Row("Microphone", microphone_label(audio.voice_microphone), change_microphone,
                 "sounds recorded, not generated", "Voice", ("audio.voice_microphone",)),
+            Row("Blended noise", blended_noise_label(audio.voice_blended_noise_db), change_blended_noise,
+                "felt, not heard - less sterile", "Voice", ("audio.voice_blended_noise_db",)),
             Row("Breath on mic", breath_label(audio.voice_breath), change_breath,
                 "air pops and inhales, no pop filter", "Voice", ("audio.voice_breath",)),
             Row("Recording", recording_label(audio.voice_recording), change_recording,

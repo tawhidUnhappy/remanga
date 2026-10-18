@@ -62,6 +62,8 @@ class NarrationPreset(BaseModel):
     microphone: Literal["off", "close", "studio"] | None = None
     breath: Literal["off", "light", "strong"] | None = None
     recording: Literal["off", "phone"] | None = None
+    # dB under the voice, 0 = off.
+    blended_noise_db: float | None = None
     limiter: bool | None = None
     # The longest pause inside a take, in ms (0 = natural), and the silence
     # between panels.
@@ -108,6 +110,8 @@ class NarrationPreset(BaseModel):
             keys.add("audio.voice_breath")
         if self.recording is not None:
             keys.add("audio.voice_recording")
+        if self.blended_noise_db is not None:
+            keys.add("audio.voice_blended_noise_db")
         if self.limiter is not None:
             keys.add("audio.voice_limiter")
         if self.max_gap_ms is not None:
@@ -149,6 +153,8 @@ class NarrationPreset(BaseModel):
             audio.voice_breath = self.breath
         if self.recording is not None:
             audio.voice_recording = self.recording
+        if self.blended_noise_db is not None:
+            audio.voice_blended_noise_db = self.blended_noise_db
         if self.limiter is not None:
             audio.voice_limiter = self.limiter
         if self.max_gap_ms is not None:
@@ -235,6 +241,7 @@ def current_settings(config: RemangaConfig, name: str, description: str = "") ->
         microphone=audio.voice_microphone if audio.voice_microphone in ("close", "studio") else "off",
         breath=audio.voice_breath if audio.voice_breath in ("light", "strong") else "off",
         recording=audio.voice_recording if audio.voice_recording == "phone" else "off",
+        blended_noise_db=audio.voice_blended_noise_db,
         max_gap_ms=audio.max_gap_ms, panel_pause_ms=audio.pause_between_panels_ms,
         loudness_lufs=audio.loudness_target_lufs if audio.enable_loudnorm else "off")
 
