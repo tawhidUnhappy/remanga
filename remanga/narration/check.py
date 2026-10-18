@@ -10,7 +10,17 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-SKIP_REASONS = ("credits", "ad", "blank", "duplicate", "title")
+SKIP_REASONS = ("credits", "ad", "blank", "duplicate", "title", "merged")
+
+# A story panel left out of the video because what it holds - usually only
+# speech bubbles - is told in the next narrated panel instead (user request,
+# 2026-10-18: a panel that is only bubbles is dead air on screen). Unlike the
+# other reasons it is still story, so something after it has to tell it.
+MERGED = "merged"
+
+# More merged panels than this share of the chapter is the LLM skipping
+# story, not folding bubble-only panels into their neighbours.
+MAX_MERGED_SHARE = 0.3
 
 
 PANEL_KEYS = ("panel", "skip", "text")
@@ -63,6 +73,9 @@ def check_reply(doc: Any, panel_stems: list[str], chapter: str) -> Check:
         check.errors.append('"memory" must be a JSON object, the story so far')
 
     known, seen, told = set(panel_stems), [], 0
+    # Merged panels waiting for a narrated panel to carry them, and how many there were.
+    pending_merge: list[str] = []
+    merged = 0
     for entry in doc["panels"]:
         if not isinstance(entry, dict) or not isinstance(entry.get("panel"), str):
             check.errors.append(f"an entry in panels has no panel ID: {json.dumps(entry)[:80]}")
@@ -76,6 +89,8 @@ def check_reply(doc: Any, panel_stems: list[str], chapter: str) -> Check:
             continue
         seen.append(stem)
         skip, text = entry.get("skip"), entry.get("text")
+        if skip == MERGED:
+            pending_merge.append(stem)
         if skip:
             if skip not in SKIP_REASONS:
                 check.errors.append(f"{stem}: skip must be one of {', '.join(SKIP_REASONS)} (got {skip!r})")
@@ -86,6 +101,8 @@ def check_reply(doc: Any, panel_stems: list[str], chapter: str) -> Check:
             check.errors.append(f"{stem}: needs its narration in text, or a skip reason")
             continue
         told += 1
+        merged += len(pending_merge)
+        pending_merge.clear()
         if len(text.split()) < MIN_WORDS_PER_PANEL:
             check.warnings.append(f"{stem}: {len(text.split())} words - is everything in the panel told, with all "
                                   f"of its dialogue")
@@ -94,6 +111,12 @@ def check_reply(doc: Any, panel_stems: list[str], chapter: str) -> Check:
         if unknown:
             check.warnings.append(f"{stem}: ignored unknown key(s) {', '.join(unknown)}")
 
+    if pending_merge:
+        check.errors.append(f"{', '.join(pending_merge)}: merged into the next panel, but no panel after it is "
+                            f"narrated - tell it in its own text instead")
+    if told and merged > MAX_MERGED_SHARE * (told + merged):
+        check.warnings.append(f"{merged} of {told + merged} story panels are merged into the next one - only a "
+                              f"panel that is just speech bubbles (or only finishes the one before) should be")
     missing = [stem for stem in panel_stems if stem not in seen]
     if missing:
         check.errors.append(f"panel(s) missing from panels: {', '.join(missing)}")

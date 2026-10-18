@@ -169,6 +169,17 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
 - **Caching chain:** audio_timing.json is rewritten only when content changes; mix fingerprints its
   mtime + BGM file stat + settings; render compares master_audio mtime and a picture fingerprint. A
   gratuitous rewrite anywhere upstream re-mixes and re-renders everything.
+- **Narration accuracy (2026-10-18):** user measured ~20% wrong lines per chapter (Gemini Flash, high
+  thinking). Sampled GhostStoryClub ch1 + VillainParty ch4.2: the misses were lines given to the focused
+  main character (001_039: classmates' complaints given to Lee Jun), captions split over panels told as
+  two unrelated lines (001_112/115), and invented expressions or dramatic adjectives. prompts/narration.md
+  now has look-either-side, bubble order by reading_direction, *Who is speaking* (tail, tail-less,
+  focus is not speaker, bubble shape -> verb), split sentences, *Only what is there*. Kept short on
+  purpose: the 15-pass version (c75638e) made it worse. The user's style rules still win over any outside
+  guide: no quotes, no emoting, third person, no foreshadowing.
+- **`skip: merged`:** a bubble-only story panel can leave the video and its lines open the next
+  narrated panel's text (user request). check.py errors when nothing narrated follows it and warns past
+  30% merged. load_narration drops it like any skip.
 - **Narration presets (2026-10-18):** `presets/*.json` (keys in presets/README.md), picked in Settings ->
   Narration preset, stored as `narration_preset`; default `youtube-narrator` = Kokoro 1.08x, whole-chapter
   take, voice af_heart, medium compressor, +3 dB bass, limiter, -14 LUFS. Settings -> Save as preset writes the

@@ -46,7 +46,8 @@ everything else exactly as it is.
   `issue`.
 - Everything in `prompts/narration.md` still holds for every line you touch: reported speech, no
   quotation marks, no `?` or `!` or `...`, no contractions, one calm narrator, every panel told with
-  all of its dialogue.
+  all of its dialogue (or `merged`, with its lines opening the next narrated panel), every line in the
+  right mouth.
 - **Update `memory` if a fix changes it** - a name that was wrong, an event that did not happen the
   way it was told. Otherwise give the memory section back unchanged.
 

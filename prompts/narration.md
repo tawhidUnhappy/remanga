@@ -19,14 +19,72 @@ A PDF of one chapter's panels, already cut out and in reading order (sometimes s
 
 Work panel by panel, in order. For each panel:
 
-1. **Read everything in it:** every speech bubble, thought bubble, caption and sign, and who says
-   each one (follow the bubble's tail).
-2. **Write its narration: what happens in that panel, and everything said in it.** A quiet panel
+1. **Look at the panels on either side first.** The one before shows what caused this moment; the
+   one after shows who answers and what comes of it. Use them to understand this panel and to see
+   who is speaking. Never use them to tell this panel what has not happened yet.
+2. **Read everything in it, in order:** every speech bubble, thought bubble, caption and sign. The
+   highest bubble comes first. Where two sit at the same height, the right one comes first when
+   `reading_direction` is `right_to_left`, and the left one comes first otherwise (webtoons and
+   left-to-right comics).
+3. **Find who says each line** (see *Who is speaking*, below). This is the most common mistake, so
+   decide it for every bubble rather than assuming.
+4. **Write its narration: what happens in that panel, and everything said in it.** A quiet panel
    gets a sentence; a panel with several bubbles gets as many sentences as its bubbles need. Never
    skip a line of dialogue because the entry is getting long.
-3. **Keep it one continuous account.** Each panel's text carries on from the one before it, because
+5. **Keep it one continuous account.** Each panel's text carries on from the one before it, because
    they are heard one after another with only a short pause between. Never announce panels ("in this
-   panel"), and never summarize several panels in one entry - the next panel has its own.
+   panel"), and never summarize several story panels in one entry. The one exception is a panel
+   that is only speech bubbles (see *Panels told with the next one*).
+
+### Who is speaking
+- **The tail points at the speaker.** A tail running off the edge of the panel means someone not
+  shown is speaking: find them in the panel before or after, or say *a voice*, *one of the
+  students*, *someone behind him*.
+- **A bubble without a tail** belongs to the character it sits on or beside. When it sits near
+  nobody, it is someone off-panel.
+- **The character in focus is not automatically the speaker.** A panel often shows the main
+  character reacting while other people talk around them. If the main character looks startled,
+  has a closed mouth or is turned away, and the lines complain or answer, they are someone else's.
+  Never give a line to the main character just because they are the one drawn largest.
+- **No one answers themselves.** If two lines in a row disagree or answer each other, they are two
+  people.
+- **The shape of the bubble says what kind of line it is.** Report it with the right verb, and keep
+  the narrator's own tone level:
+  - smooth oval: spoken (*says*, *asks*, *tells*);
+  - spiky or jagged: shouted or screamed (*shouts*, *screams*);
+  - cloud-shaped, or a tail made of small circles: a thought, which no one else in the scene hears
+    (*he thinks*, *he wonders to himself*);
+  - square or rectangular box: a caption, not speech. In first person ("I", "me") it is the main
+    character narrating their own story, so it is their reflection (*she reflects*, *looking back,
+    he recalls*), never a mysterious voice or *a grim thought*. In third person it is the story's
+    narrator: tell it as fact;
+  - wavy or trembling outline: said weakly or fearfully (*she whispers*, *he says shakily*);
+  - black bubble with white text: a menacing or inhuman voice;
+  - small text drawn loose in the art, with no bubble: muttering or background chatter (*he
+    mutters*, *someone in the crowd grumbles*).
+- **A sentence split across panels is one sentence.** When a bubble or caption trails off ("Little
+  did I know...") and the next panel finishes it ("...that this was only the beginning."), tell it
+  as the single thought it is. Give each panel its part of that thought, so the two entries read as
+  one sentence. Never give each half a separate meaning of its own.
+
+### Only what is there
+- Tell what the art and the text show. Do not invent an expression on a face we cannot see, an
+  action that is not drawn, a motive, or a name.
+- Sound-effect lettering is never read out. Tell what the sound is doing (*the door slides open*,
+  *the students rise from their seats*, *he drops to the floor*).
+- When a panel is unclear, tell less rather than guessing, and add a line about it to `problems`.
+
+### Panels told with the next one
+A panel that is **only speech bubbles or captions**, with nothing drawn but a plain background or a
+part of a scene already shown, can be left out of the video. Its lines are then told at the start of
+the next narrated panel's text. On screen, a panel of bare bubbles is dead air; told with the panel
+that follows, the same words land on a picture with something in it.
+- Give it `"skip": "merged"` and empty text. The next narrated panel's text must then begin with
+  everything the merged panel held: every line, with who said it, before its own content.
+- Merge only bubble-only panels, and a panel that only finishes the line before it. A panel with a
+  new action, a new character, a new place or a face reacting is told by itself.
+- Never merge the last story panel, because there is nothing after it to tell it.
+- Most chapters merge a few panels or none. Dialogue is never dropped by merging, only moved.
 
 ### The narrator's voice
 - **Report speech, never quote it.** No quotation marks. "I won't let you have him!" becomes *she
@@ -47,6 +105,8 @@ Work panel by panel, in order. For each panel:
   stammers*), no interjections spelled out ("Huh?" becomes *she looks up in confusion*), no sound
   effect lettering (report what happens), no emoji or symbols.
 - **Suggestive or violent moments** are told plainly and briefly, without dwelling.
+- **No dramatic adjectives of the narrator's own** (*horrifyingly*, *sickening*, *terrifying*,
+  *chilling*). Say what happens and how the characters take it; the story carries the weight.
 
 **A whole chapter written in this voice is at the end of this file - read it before you start.** It
 is the sound to aim for: every rule above is in it, and it shows what they add up to.
@@ -58,7 +118,10 @@ landscape. Watermarks, page numbers and publisher blurbs are never narrated.
 
 ## Check before replying
 - Every panel ID from the text page appears exactly once, in order.
-- Every story panel has its own narration, with every line of dialogue in it reported in full.
+- Every story panel has its own narration, with every line of dialogue in it reported in full, or
+  is `merged` and its lines open the next narrated panel's text.
+- Every line is in the right mouth: tail, bubble shape and the panels on either side agree with who
+  you gave it to.
 - No quotation marks, `?`, `!`, `...` or contractions anywhere.
 - Heard straight through, the chapter sounds like one person telling the story.
 
@@ -86,6 +149,11 @@ first, `memory` last.
       {
         "panel": "001_002_03",
         "text": "A girl carrying a basket stops behind him and scolds him, pointing out that the well belongs to the baker and that he cannot simply drink from it."
+      },
+      {"panel": "001_003_01", "skip": "merged", "text": ""},
+      {
+        "panel": "001_003_02",
+        "text": "Before he can answer, a man shouts from the bakery door, asking who is stealing his water. The boy wipes his mouth and backs away from the well."
       }
     ]
   },
@@ -105,7 +173,8 @@ first, `memory` last.
 - `problems`: short sentences about anything you could not do (a missing part, an unreadable panel),
   or `[]`.
 - `panels`: one entry per panel ID, in order. A story panel has `text`; a panel that is not story has
-  `skip` (one of `credits`, `ad`, `blank`, `duplicate`, `title`) and empty text.
+  `skip` (one of `credits`, `ad`, `blank`, `duplicate`, `title`) and empty text; a bubble-only panel
+  told with the next one has `"skip": "merged"` and empty text.
 
 **`memory`** - the story so far after this chapter. It is given back to you on the text page of the
 next chapter's PDF, so write what you will need to narrate that chapter consistently. Start from the
