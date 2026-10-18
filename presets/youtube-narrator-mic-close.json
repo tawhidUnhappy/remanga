@@ -1,0 +1,16 @@
+{
+  "name": "YouTube narrator (close mic)",
+  "description": "YouTube narrator (no gaps) through a close-talking broadcast mic: mic tone and the room's faint air, no room sound, mastered louder at -12 LUFS",
+  "engine": "kokoro",
+  "voice": "af_heart",
+  "speed": 1.08,
+  "take_length": "whole_chapter",
+  "max_gap_ms": 150,
+  "panel_pause_ms": 0,
+  "compressor": "medium",
+  "bass_boost_db": 3,
+  "presence_db": 0,
+  "microphone": "close",
+  "limiter": true,
+  "loudness_lufs": -12
+}

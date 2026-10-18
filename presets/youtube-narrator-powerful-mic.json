@@ -1,0 +1,16 @@
+{
+  "name": "YouTube narrator (powerful, studio mic)",
+  "description": "Heart at 1.1x with no gaps, strong compressor, +5 dB bass and +2 dB presence, through a studio mic, mastered louder at -12 LUFS",
+  "engine": "kokoro",
+  "voice": "af_heart",
+  "speed": 1.1,
+  "take_length": "whole_chapter",
+  "max_gap_ms": 150,
+  "panel_pause_ms": 0,
+  "compressor": "strong",
+  "bass_boost_db": 5,
+  "presence_db": 2,
+  "microphone": "studio",
+  "limiter": true,
+  "loudness_lufs": -12
+}
