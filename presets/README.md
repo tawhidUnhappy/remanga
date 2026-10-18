@@ -5,8 +5,10 @@ Each `.json` file here is one preset, picked in Settings as **Narration preset**
 A preset fixes the settings it names; those rows are locked while it is picked.
 Any key left out stays adjustable in Settings. Pick **No preset** to set every row yourself.
 
-To make a new sound, copy a file, rename it and change the values. Nothing else
-needs to change.
+These are the presets that ship with remanga (tracked by git). Your own go in
+`global/presets/`, which git never tracks: use **Save as preset** in Settings to
+save the settings in use now, or put a file there by hand. A name used here can't
+be reused there.
 
 | Key | Values | Sets |
 |---|---|---|

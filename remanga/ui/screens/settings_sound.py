@@ -7,7 +7,15 @@ from typing import TYPE_CHECKING
 
 from remanga.audio.voice_chain import COMPRESSORS
 from remanga.config import RemangaConfig
-from remanga.config.presets import PRESETS_DIR, load_presets, preset_named
+from remanga.config.presets import (
+    CUSTOM_PRESETS_DIR,
+    PRESETS_DIR,
+    current_settings,
+    load_presets,
+    name_problem,
+    preset_named,
+    save_custom,
+)
 from remanga.paths import GLOBAL_DIR
 from remanga.ui.dialogs import Ask, Choice, number_check
 
@@ -256,19 +264,39 @@ def preset_label(config: RemangaConfig) -> str:
 
 
 async def change_preset(screen: SettingsScreen, config: RemangaConfig) -> None:
-    options = [(preset.name, preset.description, key) for key, preset in load_presets().items()]
+    options = [(f"{preset.name}  (yours)" if preset.custom else preset.name, preset.description, key)
+               for key, preset in load_presets().items()]
     options.append(("No preset", "set every narration row yourself", ""))
     current = config.narration_preset if preset_named(config.narration_preset) else ""
     picked = await screen.app.push_screen_wait(Choice(
         "Narration preset", options, current=current,
         note=f"A preset fixes the narration settings it names - engine, speed, take length, compressor, "
              f"bass, limiter, loudness - and locks those rows while it is picked. Each preset is a JSON "
-             f"file in {PRESETS_DIR}/; copy one to make your own (README.md there lists the keys). "
+             f"file: the ones remanga ships are in {PRESETS_DIR}/, yours (Save as preset, or a file "
+             f"you put there) in {CUSTOM_PRESETS_DIR}/, which git never tracks. "
              f"No preset unlocks every row, starting from the values in use now. A preset that changes "
              f"the engine or speed narrates chapters again; the rest only re-mixes."))
     if picked is not None:
         config.narration_preset = picked
         config.apply_preset()
+
+
+async def save_preset(screen: SettingsScreen, config: RemangaConfig) -> None:
+    """The narration settings in use now, saved as a preset of your own."""
+    current = preset_named(config.narration_preset)
+    name = await screen.app.push_screen_wait(Ask(
+        "Save as preset", "Name for this preset", value=current.name if current and current.custom else "",
+        check=name_problem,
+        note=f"Saves the narration settings in use now - engine, voice, speed, take length, compressor, "
+             f"bass, limiter, loudness - as a preset of your own in {CUSTOM_PRESETS_DIR}/, which git never "
+             f"tracks. A preset of yours with the same name is replaced. It is picked straight away, "
+             f"which locks those rows; pick No preset to change them again."))
+    if not name:
+        return
+    key = save_custom(current_settings(config, name, "saved from Settings"))
+    config.narration_preset = key
+    config.apply_preset()
+    screen.notify(f"Saved as {CUSTOM_PRESETS_DIR / key}.json and picked.", timeout=7)
 
 
 def lock_preset_rows(rows: list, config: RemangaConfig) -> None:

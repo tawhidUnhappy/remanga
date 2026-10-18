@@ -1,7 +1,8 @@
 {
   "name": "YouTube narrator",
-  "description": "Kokoro at 1.08x, the whole chapter in one take, compressed with a bass boost, limited to -14 LUFS",
+  "description": "Kokoro's Heart voice at 1.08x, the whole chapter in one take, compressed with a bass boost, limited to -14 LUFS",
   "engine": "kokoro",
+  "voice": "af_heart",
   "speed": 1.08,
   "take_length": "whole_chapter",
   "compressor": "medium",

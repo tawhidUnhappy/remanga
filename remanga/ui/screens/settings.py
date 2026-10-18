@@ -34,6 +34,7 @@ from remanga.ui.screens.settings_sound import (
     lock_preset_rows,
     loudness_label,
     preset_label,
+    save_preset,
     take_length_label,
 )
 from remanga.ui.screens.settings_video import (
@@ -87,6 +88,8 @@ class SettingsScreen(Screen):
         rows = [
             Row("Narration preset", preset_label(config), change_preset,
                 "a saved narration sound (presets/*.json)", "Narration", ("narration_preset",)),
+            Row("Save as preset", "save current settings", save_preset,
+                "keep these settings as a preset of your own", "Narration"),
             *voice_settings.narrator_rows(config),
             Row("Narration take length",
                 take_length_label(audio.batch_target_minutes if audio.batch_narration else 0.0),

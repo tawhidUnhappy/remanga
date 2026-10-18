@@ -171,7 +171,8 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   gratuitous rewrite anywhere upstream re-mixes and re-renders everything.
 - **Narration presets (2026-10-18):** `presets/*.json` (keys in presets/README.md), picked in Settings ->
   Narration preset, stored as `narration_preset`; default `youtube-narrator` = Kokoro 1.08x, whole-chapter
-  take, medium compressor, +3 dB bass, limiter, -14 LUFS. `config/presets.py` applies it in RemangaConfig's
+  take, voice af_heart, medium compressor, +3 dB bass, limiter, -14 LUFS. Settings -> Save as preset writes the
+  current settings to `global/presets/<id>.json` (gitignored, shown as "(yours)"; can't reuse a shipped id). `config/presets.py` applies it in RemangaConfig's
   after-validator on every load, so it beats config.json; rows it fixes show `(preset)` and are locked.
   "No preset" unlocks every row. A new sound = a new JSON file, never new code - the user rejected a
   hard-coded lock as killing modularity. Voice chain: `audio/voice_chain.py` (bass shelf 150 Hz + acompressor

@@ -1,10 +1,14 @@
 """Narration presets: a whole narration sound in one JSON file, picked in
 Settings as "Narration preset".
 
-Each file in presets/ is one preset (the file name, without .json, is its
-id). A preset fixes the settings it names - engine, voice, speed, take
-length, the voice chain, loudness - and leaves every setting it doesn't name
-to its own row. While one is picked, the rows it fixes are shown but locked
+Each JSON file is one preset (the file name, without .json, is its id).
+The ones that ship with remanga are in presets/ (tracked by git); the ones a
+user saves from Settings ("Save as preset") go to global/presets/, which git
+never tracks, so a pull never touches them and they are never pushed.
+
+A preset fixes the settings it names - engine, voice, speed, take length,
+the voice chain, loudness - and leaves every setting it doesn't name to its
+own row. While one is picked, the rows it fixes are shown but locked
 (ui/screens/settings.py); "No preset" hands every row back. A new sound is a
 new file, not new code. presets/README.md lists the keys.
 
@@ -13,20 +17,23 @@ whatever config.json says, the picked preset wins - for every chapter."""
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, PrivateAttr, ValidationError
 
 from remanga import plugins
 from remanga.console import console, escape as _esc
-from remanga.json_io import read_json
-from remanga.paths import REPO_ROOT
+from remanga.json_io import read_json, write_json
+from remanga.paths import GLOBAL_DIR, REPO_ROOT
 
 if TYPE_CHECKING:
     from remanga.config.root import RemangaConfig
 
+# The presets remanga ships, and the ones saved from Settings (gitignored).
 PRESETS_DIR = REPO_ROOT / "presets"
+CUSTOM_PRESETS_DIR = GLOBAL_DIR / "presets"
 
 # Picked until someone picks otherwise: presets/youtube-narrator.json.
 DEFAULT_PRESET = "youtube-narrator"
@@ -54,6 +61,12 @@ class NarrationPreset(BaseModel):
     limiter: bool | None = None
     # A target in LUFS, or "off" for no loudness pass.
     loudness_lufs: float | Literal["off"] | None = None
+    # True for a preset saved from Settings (global/presets/), not one that ships.
+    _custom: bool = PrivateAttr(default=False)
+
+    @property
+    def custom(self) -> bool:
+        return self._custom
 
     def take_minutes(self) -> float | None:
         if self.take_length is None:
@@ -121,23 +134,79 @@ class NarrationPreset(BaseModel):
 _cache: dict[tuple[Path, float], NarrationPreset | None] = {}
 
 
-def _read(path: Path) -> NarrationPreset | None:
+def _read(path: Path, custom: bool = False) -> NarrationPreset | None:
     key = (path, path.stat().st_mtime)
     if key not in _cache:
         try:
-            _cache[key] = NarrationPreset.model_validate(read_json(path))
+            preset = NarrationPreset.model_validate(read_json(path))
+            preset._custom = custom
+            _cache[key] = preset
         except (ValidationError, ValueError, OSError) as e:
-            console.print(f"[yellow]Skipping narration preset {_esc(path.name)}: {_esc(str(e))}[/]")
+            console.print(f"[yellow]Skipping narration preset {_esc(str(path))}: {_esc(str(e))}[/]")
             _cache[key] = None
     return _cache[key]
 
 
-def load_presets(folder: Path = PRESETS_DIR) -> dict[str, NarrationPreset]:
-    """Every readable preset, by id (file name without .json), in name order."""
-    found = {path.stem: _read(path) for path in sorted(folder.glob("*.json"))} if folder.is_dir() else {}
+def _folder(folder: Path, custom: bool) -> dict[str, NarrationPreset | None]:
+    return {path.stem: _read(path, custom) for path in sorted(folder.glob("*.json"))} if folder.is_dir() else {}
+
+
+def load_presets() -> dict[str, NarrationPreset]:
+    """Every readable preset by id: the ones remanga ships, then the saved
+    ones. A saved preset can't take a shipped one's id (save_custom refuses),
+    and one put there by hand is skipped rather than allowed to replace it."""
+    found = _folder(PRESETS_DIR, custom=False)
+    for key, preset in _folder(CUSTOM_PRESETS_DIR, custom=True).items():
+        if key in found:
+            console.print(f"[yellow]Skipping {_esc(str(CUSTOM_PRESETS_DIR / key))}.json: a preset that "
+                          f"ships with remanga already has that name.[/]")
+        else:
+            found[key] = preset
     return {key: preset for key, preset in found.items() if preset is not None}
 
 
 def preset_named(name: str) -> NarrationPreset | None:
     """The preset with this id, or None for "" (no preset) or a missing file."""
     return load_presets().get(name) if name else None
+
+
+def preset_id(name: str) -> str:
+    """The file name a preset called `name` is saved under."""
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+
+def name_problem(name: str) -> str | None:
+    """Why a preset can't be saved under this name, or None if it can. A
+    saved preset with the same name is fine - saving replaces it."""
+    key = preset_id(name)
+    if not key:
+        return "Use some letters or numbers."
+    if (PRESETS_DIR / f"{key}.json").exists():
+        return "A preset that ships with remanga has that name - pick another."
+    return None
+
+
+def current_settings(config: RemangaConfig, name: str, description: str = "") -> NarrationPreset:
+    """Every setting a preset can hold, as `config` has it now."""
+    block, audio = config.tts.engine_block, config.audio
+    take = audio.batch_target_minutes if audio.batch_narration else "per_panel"
+    return NarrationPreset(
+        name=name, description=description, engine=config.tts.engine,
+        voice=getattr(block, "voice", None) if "voice" in type(block).model_fields else None,
+        speed=getattr(block, "speed", None) if "speed" in type(block).model_fields else None,
+        take_length="whole_chapter" if take != "per_panel" and take >= WHOLE_CHAPTER_MINUTES else take,
+        compressor=audio.voice_compressor if audio.voice_compressor in ("off", "gentle", "medium", "strong")
+        else "off",
+        bass_boost_db=audio.voice_bass_boost_db, limiter=audio.voice_limiter,
+        loudness_lufs=audio.loudness_target_lufs if audio.enable_loudnorm else "off")
+
+
+def save_custom(preset: NarrationPreset) -> str:
+    """Writes `preset` to global/presets/ and returns its id."""
+    problem = name_problem(preset.name)
+    if problem:
+        raise ValueError(problem)
+    key = preset_id(preset.name)
+    CUSTOM_PRESETS_DIR.mkdir(parents=True, exist_ok=True)
+    write_json(CUSTOM_PRESETS_DIR / f"{key}.json", preset.model_dump(exclude_none=True))
+    return key
