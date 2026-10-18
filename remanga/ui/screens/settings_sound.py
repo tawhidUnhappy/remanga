@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from remanga.audio.voice_chain import COMPRESSORS
 from remanga.config import RemangaConfig
+from remanga.config.presets import PRESETS_DIR, load_presets, preset_named
 from remanga.paths import GLOBAL_DIR
 from remanga.ui.dialogs import Ask, Choice, number_check
 
@@ -247,3 +248,41 @@ async def change_loudness(screen: SettingsScreen, config: RemangaConfig) -> None
         audio.enable_loudnorm = False
     elif picked is not None:
         audio.enable_loudnorm, audio.loudness_target_lufs = True, float(picked)
+
+
+def preset_label(config: RemangaConfig) -> str:
+    preset = preset_named(config.narration_preset)
+    return preset.name if preset else "none"
+
+
+async def change_preset(screen: SettingsScreen, config: RemangaConfig) -> None:
+    options = [(preset.name, preset.description, key) for key, preset in load_presets().items()]
+    options.append(("No preset", "set every narration row yourself", ""))
+    current = config.narration_preset if preset_named(config.narration_preset) else ""
+    picked = await screen.app.push_screen_wait(Choice(
+        "Narration preset", options, current=current,
+        note=f"A preset fixes the narration settings it names - engine, speed, take length, compressor, "
+             f"bass, limiter, loudness - and locks those rows while it is picked. Each preset is a JSON "
+             f"file in {PRESETS_DIR}/; copy one to make your own (README.md there lists the keys). "
+             f"No preset unlocks every row, starting from the values in use now. A preset that changes "
+             f"the engine or speed narrates chapters again; the rest only re-mixes."))
+    if picked is not None:
+        config.narration_preset = picked
+        config.apply_preset()
+
+
+def lock_preset_rows(rows: list, config: RemangaConfig) -> None:
+    """Rows whose settings the picked preset fixes: shown with their value,
+    but opening one only says where the value comes from."""
+    preset = preset_named(config.narration_preset)
+    if preset is None:
+        return
+    fixed = preset.fixed_keys(config)
+
+    async def locked(screen: SettingsScreen, _config: RemangaConfig) -> None:
+        screen.notify(f"Set by the narration preset '{preset.name}'. Pick another preset, or No preset, "
+                      f"under Narration preset to change it.", timeout=7)
+
+    for row in rows:
+        if row.keys and any(key in fixed for key in row.keys):
+            row.value, row.change = f"{row.value}  (preset)", locked

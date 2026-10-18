@@ -1,4 +1,5 @@
 {
+  "narration_preset": "youtube-narrator",
   "system": {
     "prefer_gpu": true,
     "gpu_codec": "auto",

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from remanga.config.base import ConfigModel
 from remanga.json_io import read_json, write_json
@@ -25,6 +25,7 @@ from .downloader import DownloaderConfig
 from .marker import MarkerConfig, ShortcutsConfig
 from .menus import MenusConfig
 from .pdf import PdfConfig
+from .presets import DEFAULT_PRESET, preset_named
 from .reviewer import ReviewerConfig
 from .subtitles import SubtitlesConfig
 from .system import SystemConfig
@@ -34,6 +35,9 @@ from .writer import WriterConfig
 
 
 class RemangaConfig(ConfigModel):
+    # The narration preset in use: a file in presets/ by name (config/presets.py),
+    # or "" for none - every narration setting then comes from its own row.
+    narration_preset: str = DEFAULT_PRESET
     system: SystemConfig = Field(default_factory=SystemConfig)
     downloader: DownloaderConfig = Field(default_factory=DownloaderConfig)
     pdf: PdfConfig = Field(default_factory=PdfConfig)
@@ -47,6 +51,17 @@ class RemangaConfig(ConfigModel):
     subtitles: SubtitlesConfig = Field(default_factory=SubtitlesConfig)
     video: VideoConfig = Field(default_factory=VideoConfig)
     menus: MenusConfig = Field(default_factory=MenusConfig)
+
+    @model_validator(mode="after")
+    def _apply_preset(self) -> RemangaConfig:
+        """The picked preset over whatever config.json holds, on every load."""
+        self.apply_preset()
+        return self
+
+    def apply_preset(self) -> None:
+        preset = preset_named(self.narration_preset)
+        if preset is not None:
+            preset.apply(self)
 
     @classmethod
     def load(cls, config_path: Path | str | None = None) -> RemangaConfig:

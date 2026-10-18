@@ -169,12 +169,13 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
 - **Caching chain:** audio_timing.json is rewritten only when content changes; mix fingerprints its
   mtime + BGM file stat + settings; render compares master_audio mtime and a picture fingerprint. A
   gratuitous rewrite anywhere upstream re-mixes and re-renders everything.
-- **Voice chain (2026-10-18):** `audio/voice_chain.py` runs bass shelf (150 Hz, rumble cut <60) +
-  acompressor (gentle/medium/strong, input set to -20 LUFS first) over the narration before the BGM,
-  then restores its measured loudness; `write_master` then normalizes + limits (limiter off = gain held
-  back to the peaks). Mix-time only, so changing Settings > Voice re-mixes, never re-narrates. Kokoro
-  speed (1.05-1.12 presets) is a generation parameter and does re-narrate. Bump VOICE_CHAIN_VERSION
-  if the chain's output changes for the same settings.
+- **Narration presets (2026-10-18):** `presets/*.json` (keys in presets/README.md), picked in Settings ->
+  Narration preset, stored as `narration_preset`; default `youtube-narrator` = Kokoro 1.08x, whole-chapter
+  take, medium compressor, +3 dB bass, limiter, -14 LUFS. `config/presets.py` applies it in RemangaConfig's
+  after-validator on every load, so it beats config.json; rows it fixes show `(preset)` and are locked.
+  "No preset" unlocks every row. A new sound = a new JSON file, never new code - the user rejected a
+  hard-coded lock as killing modularity. Voice chain: `audio/voice_chain.py` (bass shelf 150 Hz + acompressor
+  at mix time, loudness restored); bump VOICE_CHAIN_VERSION if its output changes for the same settings.
 - **The gap between panels is trimmed, not just padded.** Qwen bakes an uneven lead-in into every
   clip - measured over a finished 137-panel chapter: lead median 370 ms, range 0-460, stdev 164;
   tail median 60 ms. Added to a 350 ms pause that was a median 780 ms gap that wobbled by panel,

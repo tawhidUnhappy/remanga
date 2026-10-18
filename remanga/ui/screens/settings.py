@@ -29,8 +29,11 @@ from remanga.ui.screens.settings_sound import (
     change_music_level,
     change_narration_takes,
     change_panel_gap,
+    change_preset,
     compressor_label,
+    lock_preset_rows,
     loudness_label,
+    preset_label,
     take_length_label,
 )
 from remanga.ui.screens.settings_video import (
@@ -82,6 +85,8 @@ class SettingsScreen(Screen):
         audio, video, Row = config.audio, config.video, voice_settings.Row
         music_on = audio.bgm_enabled and bool(audio.bgm_path)
         rows = [
+            Row("Narration preset", preset_label(config), change_preset,
+                "a saved narration sound (presets/*.json)", "Narration", ("narration_preset",)),
             *voice_settings.narrator_rows(config),
             Row("Narration take length",
                 take_length_label(audio.batch_target_minutes if audio.batch_narration else 0.0),
@@ -128,6 +133,7 @@ class SettingsScreen(Screen):
             Row("Look", look.label(config.menus.look), change_look, "colours and shapes of these menus",
                 "Menus", ("menus.look",)),
         ]
+        lock_preset_rows(rows, config)
         return rows
 
     def load(self) -> None:
