@@ -34,7 +34,7 @@ YouTube cuts at 100).
 of the hook, title and thumbnail paired by letter, for YouTube Test & Compare. With variants, each
 video gets a folder per letter beside it - `A/` `B/` `C/`, each holding title.txt, thumbnail.jpg,
 description.txt (user: flat `_b`/`_c` files were confusing to pair); a single set stays flat files. Each variant a different angle (premise / role swap /
-power), not the same idea reworded.
+power), not the same idea reworded. Keep graphic gore out of a thumbnail (Ghost Story Club's bleeding eye 001_114_01): YouTube restricts it, which costs reach - a creepy face sells as well.
 
 **The user's corrections (2026-10-14), over the style below:** never let an arrow touch a face - a
 label sits under or beside the face, arrows are optional and stop short; sharp B&W panels beat
@@ -63,6 +63,9 @@ one label each - the two roles of the premise:
 | IReincarnated A (upload/, 2026-10-14) | Lloyd's menacing smirk 001_013_03 | Cain stunned 001_027_03; one line across the bottom HE KICKED HIMSELF OUT?!, red VILLAIN top-left, no arrows |
 | IReincarnated B (thumbnail_b) | villain Lloyd "So long, Cain!" 001_014_02, blue duotone -> OLD VILLAIN | Cain's grin 4.2_017_03, red duotone -> red NEW VILLAIN?! |
 | IReincarnated C (thumbnail_c) | one tile: Lloyd grinning, hand out, 4.2_006_03 zoom 1.35 (crops out both bubbles), cyan duotone; red STEALS + yellow ANY SKILL | |
+| Ghost Story Club A (upload/, 2026-10-18) | principal's swollen grin 001_056_02 (zoom 1.08 cy 0.47 clears his bubble), w 0.55 -> red WELCOME | teacher frozen in terror 001_067_01 zoom 1.15 -> YOU'RE NEXT under her chin |
+| Ghost Story Club B (thumbnail_b) | Lee Jun's blank stare 001_063_01 zoom 1.25 cy 0.47 -> HE DIED. | the "Restarting from the checkpoint." window 001_117_01 zoom 1.3 cx 0.6 -> red LOOP?! |
+| Ghost Story Club C (thumbnail_c) | teacher's cheeks bulging 001_076_01 zoom 1.9 cx 0.74 cy 0.58 -> red CURSED top-left | Lee Jun panicking 001_084_01 zoom 1.55 cx 0.38 cy 0.43 -> NO WAY OUT; CH badge bottom-left |
 | If Her Flag Breaks (ch1, old) | Souta beside a flag on a classmate's head (001_034_02, zoom 1.2 cx 0.4: crops out a YEAH. bubble) -> FLAG BREAKER | Nanami from the COLOUR cover (page 001_002.jpg, box 530,60,1085,1000 - between the title text and the spine) -> NO FLAG?! |
 
 ## Steps (run with remanga's `.venv/bin/python`)
@@ -117,5 +120,5 @@ text-to-speech.` (honest, and YouTube asks for synthetic-content disclosure - th
 **Titles and credits come from MangaDex, never from memory:**
 `curl -s "https://api.mangadex.org/manga/<manga_id>?includes[]=author&includes[]=artist"` -
 `manga_id` is in `projects/<P>/project.json`; English title = the `en` entry of `altTitles`,
-people = `relationships` of type author/artist. When MangaDex lists several artists without roles
+people = `relationships` of type author/artist. A project from comix.to has no MangaDex id: search `manga?title=...` instead (Ghost Story Club: authors OnlyFun, Parrot Kim; artist HayaroB - no roles given, so none are credited). When MangaDex lists several artists without roles
 (IDied: Hiyashimira's, Hino Tomoyuki), credit all as Art and tell the user - never invent who did what.
