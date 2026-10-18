@@ -25,6 +25,27 @@ RESOLUTIONS = ((1920, 1080, "1080p widescreen"), (2560, 1440, "1440p - keeps big
                (1080, 1920, "1080p vertical"), (1440, 2560, "1440p vertical"))
 
 
+LCD_GRIDS = ((0, "off - a plain blur"),
+             (6, "fine - a sharp modern-ish screen"),
+             (10, "classic - an old phone's LCD, recommended"),
+             (16, "chunky - big visible pixels"))
+
+
+def grid_label(px: int) -> str:
+    return next((hint.split(" - ")[0] for p, hint in LCD_GRIDS if p == px), f"{px} px")
+
+
+async def change_background_grid(screen: SettingsScreen, config: RemangaConfig) -> None:
+    px = await screen.app.push_screen_wait(Choice(
+        "Background grid", [(name.split(" - ")[0], name.split(" - ", 1)[-1], p) for p, name in LCD_GRIDS],
+        current=config.video.background_grid_px,
+        note="Lines like an old phone's LCD over the blurred background, so it reads as a grid of small "
+             "squares. Only the background - the panel stays sharp on top. Changing it re-renders the "
+             "video; nothing is narrated or mixed again."))
+    if px is not None:
+        config.video.background_grid_px = px
+
+
 async def change_intro(screen: SettingsScreen, config: RemangaConfig) -> None:
     folder = GLOBAL_DIR / "intro"
     files = sorted(p for p in folder.iterdir() if p.suffix.lower() in INTRO_EXTS) if folder.exists() else []

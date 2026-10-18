@@ -18,6 +18,13 @@ class VideoConfig(ConfigModel):
     background_style: str = "blur"  # 'blur' (the page, blurred and dimmed) or 'solid' (background_color)
     blur_brightness: float = 0.42   # dimming of the blurred background (0.35 to 0.55 recommended)
     background_color: str = "#000000"
+    # An old phone's LCD over the background: thin dark lines between
+    # "pixels", so the blur reads as a grid of small squares (video/canvas.py).
+    # The size of one square in pixels at 1080p - scaled with the video - and
+    # 0 for no grid. Never over the panel itself.
+    background_grid_px: int = 10
+    # How dark the grid lines are, 0 to 1 (0 invisible, 1 black).
+    background_grid_strength: float = 0.5
     page_padding_percent: int = Field(4, validation_alias=_was("page_padding_percent", "panel_padding_percent"))
     auto_adaptive_padding: bool = True
     # How much a panel may be enlarged to fill the frame. Panels are cut at

@@ -169,6 +169,10 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
 - **Caching chain:** audio_timing.json is rewritten only when content changes; mix fingerprints its
   mtime + BGM file stat + settings; render compares master_audio mtime and a picture fingerprint. A
   gratuitous rewrite anywhere upstream re-mixes and re-renders everything.
+- **LCD background grid (2026-10-18):** `video.background_grid_px` (cell size at 1080p of the short side,
+  0 = off, default 10) + `background_grid_strength` 0.5: a multiply layer built once per compositor
+  (`FrameCompositor._lcd_grid`), over the blur only, before the panel is pasted. +40 ms per 4K frame. Frames
+  re-composite on change via frames_settings.json (model_dump). If viewers see shimmer at 720p, go chunky.
 - **Microphone (2026-10-18):** `audio/microphone.py`, `audio.voice_microphone` off/close/studio, last in the
   voice chain: dynamic-mic EQ + tanh drive (ffmpeg), then studio's small room (generated IR, RT60 0.22 s,
   wet -16 dB, scipy oaconvolve) and pink room tone 56 dB under speech. User: TTS "too smooth, artificial".

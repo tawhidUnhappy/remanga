@@ -44,10 +44,12 @@ from remanga.ui.screens.settings_sound import (
     take_length_label,
 )
 from remanga.ui.screens.settings_video import (
+    change_background_grid,
     change_intro,
     change_max_upscale,
     change_pdf_cap,
     change_video_size,
+    grid_label,
 )
 from remanga.ui.tasks import Step, TaskScreen
 from remanga.ui.widgets import SafeTable, TopBar
@@ -135,6 +137,8 @@ class SettingsScreen(Screen):
             Row("Intro", Path(video.intro_path).name if video.intro_enabled and video.intro_path else "off",
                 change_intro, f"clip before every recap ({GLOBAL_DIR / 'intro'}/)", "Video",
                 ("video.intro_enabled", "video.intro_path")),
+            Row("Background grid", grid_label(video.background_grid_px), change_background_grid,
+                "old-phone LCD lines over the blur", "Video", ("video.background_grid_px",)),
             Row("Video size", f"{video.width}x{video.height}", change_video_size,
                 "resolution of the finished video", "Video", ("video.width", "video.height")),
             Row("Panel enlargement limit",

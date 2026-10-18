@@ -11,7 +11,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PIL import Image, ImageColor, ImageDraw, ImageEnhance, ImageFilter, ImageOps
+import numpy as np
+from PIL import Image, ImageChops, ImageColor, ImageDraw, ImageEnhance, ImageFilter, ImageOps
 
 from remanga.config import VideoConfig
 
@@ -29,6 +30,27 @@ class FrameCompositor:
         self.canvas_size = (self.config.width, self.config.height)
         self.bg_color = ImageColor.getrgb(self.config.background_color)
         self.border_color = ImageColor.getrgb(self.config.page_border_color)
+        self._grid: Image.Image | None = None
+
+    def _lcd_grid(self) -> Image.Image | None:
+        """The old-phone LCD grid as a multiply layer the canvas size: white
+        cells, darker lines between them. Built once - it is the same for
+        every frame. None when the grid is off."""
+        cell_1080 = getattr(self.config, "background_grid_px", 0) or 0
+        if cell_1080 <= 0:
+            return None
+        if self._grid is None:
+            cw, ch = self.canvas_size
+            # Sized against 1080 lines of the shorter side, so 1080p and 4K
+            # (and vertical video) show the same number of squares.
+            scale = min(cw, ch) / 1080
+            cell = max(2, round(cell_1080 * scale))
+            line = max(1, round(scale))
+            strength = max(0.0, min(1.0, getattr(self.config, "background_grid_strength", 0.5)))
+            on_line = (np.arange(cw) % cell < line)[None, :] | (np.arange(ch) % cell < line)[:, None]
+            level = np.where(on_line, round(255 * (1 - strength)), 255).astype(np.uint8)
+            self._grid = Image.fromarray(level, "L").convert("RGB")
+        return self._grid
 
     def _create_fast_canvas_blur(self, src_img: Image.Image) -> Image.Image:
         """
@@ -132,6 +154,10 @@ class FrameCompositor:
                 canvas = self._create_fast_canvas_blur(img)
             else:
                 canvas = Image.new("RGB", self.canvas_size, self.bg_color)
+            # The LCD grid over the background only - the panel goes on top.
+            grid = self._lcd_grid()
+            if grid is not None:
+                canvas = ImageChops.multiply(canvas, grid)
 
             # 2. Adaptive Sizing & Positioning
             if getattr(self.config, "auto_adaptive_padding", True):
