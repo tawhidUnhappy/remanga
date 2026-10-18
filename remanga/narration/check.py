@@ -28,7 +28,7 @@ PANEL_KEYS = ("panel", "skip", "text")
 
 # A panel told in fewer words than this is usually a caption, not the panel
 # and everything said in it.
-MIN_WORDS_PER_PANEL = 5
+MIN_WORDS_PER_PANEL = 3
 
 
 _CONTRACTION = re.compile(r"\b\w+(?:n't|'re|'ve|'ll|'d|'m)\b|\b(?:it|that|there|what|he|she|who|here)'s\b",
@@ -116,7 +116,7 @@ def check_reply(doc: Any, panel_stems: list[str], chapter: str) -> Check:
                             f"narrated - tell it in its own text instead")
     if told and merged > MAX_MERGED_SHARE * (told + merged):
         check.warnings.append(f"{merged} of {told + merged} story panels are merged into the next one - only a "
-                              f"panel that is just speech bubbles (or only finishes the one before) should be")
+                              f"panel with nothing of its own to show (just bubbles, a moment held) should be")
     missing = [stem for stem in panel_stems if stem not in seen]
     if missing:
         check.errors.append(f"panel(s) missing from panels: {', '.join(missing)}")

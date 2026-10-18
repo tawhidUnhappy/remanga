@@ -72,9 +72,39 @@ def info_to_text_lines(info: dict[str, Any]) -> list[str]:
     else:
         lines.append("Story so far: none - this is the first chapter narrated for this manga.")
 
+    if info.get("part_index", 1) == 1:
+        lines.append("")
+        lines.extend(reply_skeleton_lines(info))
+
     wrapped: list[str] = []
     for line in lines:
         indent = " " * (len(line) - len(line.lstrip(" ")))
         wrapped.extend(textwrap.wrap(line, LINE_WIDTH, subsequent_indent=indent + "  ",
                                      break_on_hyphens=False) or [""])
     return wrapped
+
+
+def reply_skeleton_lines(info: dict[str, Any]) -> list[str]:
+    """The reply already laid out with every panel of the chapter, for the
+    LLM to fill in (user request, 2026-10-18): copying ids out of a list is
+    where a panel goes missing or two swap. On the first part only - it
+    covers the whole chapter, so once is enough. One panel per line, so the
+    wrap never splits one."""
+    import json
+
+    ids = info.get("full_manifest", [])
+    memory = {"series_title": info.get("manga_name", ""), "last_chapter": str(info.get("chapter", "")),
+              "characters": {}, "places": {}, "key_events": [], "open_threads": []}
+    lines = ["Reply skeleton: every panel of the chapter, in order. Fill in each text, or give the panel",
+             "a skip and leave its text empty. Write the memory starting from the story so far, and reply",
+             "with the whole thing as one ```json block.",
+             "{",
+             '  "narration": {',
+             f'    "chapter": {json.dumps(str(info.get("chapter", "")))},',
+             '    "problems": [],',
+             '    "panels": [']
+    lines += [f'      {{"panel": {json.dumps(pid)}, "text": ""}}{"," if i < len(ids) - 1 else ""}'
+              for i, pid in enumerate(ids)]
+    memory_lines = json.dumps(memory, indent=2, ensure_ascii=False).splitlines()
+    lines += ["    ]", "  },", '  "memory": ' + memory_lines[0], *("  " + line for line in memory_lines[1:]), "}"]
+    return lines

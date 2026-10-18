@@ -177,6 +177,11 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   focus is not speaker, bubble shape -> verb), split sentences, *Only what is there*. Kept short on
   purpose: the 15-pass version (c75638e) made it worse. The user's style rules still win over any outside
   guide: no quotes, no emoting, third person, no foreshadowing.
+- **Reply skeleton + loose rules (2026-10-18):** part 1's text page ends with the reply JSON, every panel
+  id pre-listed with empty text (`pdf/manifest_info.py:reply_skeleton_lines`). The prompt opens with "the
+  rules serve the story": guidance for a capable model, the panel wins over a rule, unsure = tell less /
+  *someone* / `problems`. Bubble order, tail and shape rules say *usually*; quiet panels may be a few words
+  (MIN_WORDS_PER_PANEL 3). User's reason: rigid rules make a large model invent things to obey them.
 - **`skip: merged`:** a bubble-only story panel can leave the video and its lines open the next
   narrated panel's text (user request). check.py errors when nothing narrated follows it and warns past
   30% merged. load_narration drops it like any skip.

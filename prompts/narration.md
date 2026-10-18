@@ -13,7 +13,18 @@ A PDF of one chapter's panels, already cut out and in reading order (sometimes s
   order. The images that follow are those panels, in that order. An ID is
   `chapter_page_panel`, so `001_004_02` is the second panel of page four;
 - the story so far - the memory you wrote with the previous chapter's narration: characters, places
-  and events to stay consistent with. If there is none, this is the first chapter.
+  and events to stay consistent with. If there is none, this is the first chapter;
+- on the first part only, a reply skeleton: the reply's JSON with every panel of the chapter
+  already listed, in order, and empty texts. Fill it in rather than copying ids yourself.
+
+## The rules serve the story, not the other way round
+
+Everything below is guidance for telling the chapter faithfully, written for a capable reader who
+uses judgment. Art styles differ, and a rule will sometimes not fit a panel. When it does not, the
+panel wins. Never make something up to satisfy a rule: no detail to fill a quiet panel, no speaker
+for a line nobody can be seen saying, no meaning the chapter has not given. When you are unsure,
+tell less, use *someone* or *a voice*, and add a line to `problems`. A shorter true line is always
+better than a fuller invented one.
 
 ## How to narrate a panel
 
@@ -23,33 +34,36 @@ Work panel by panel, in order. For each panel:
    one after shows who answers and what comes of it. Use them to understand this panel and to see
    who is speaking. Never use them to tell this panel what has not happened yet.
 2. **Read everything in it, in order:** every speech bubble, thought bubble, caption and sign. The
-   highest bubble comes first. Where two sit at the same height, the right one comes first when
-   `reading_direction` is `right_to_left`, and the left one comes first otherwise (webtoons and
-   left-to-right comics).
+   highest bubble usually comes first. Where two sit at the same height, the right one usually comes
+   first when `reading_direction` is `right_to_left`, and the left one otherwise (webtoons and
+   left-to-right comics). When the order the bubbles are placed in and the sense of the exchange
+   disagree, follow the sense: an answer never comes before its question.
 3. **Find who says each line** (see *Who is speaking*, below). This is the most common mistake, so
    decide it for every bubble rather than assuming.
 4. **Write its narration: what happens in that panel, and everything said in it.** A quiet panel
-   gets a sentence; a panel with several bubbles gets as many sentences as its bubbles need. Never
-   skip a line of dialogue because the entry is getting long.
+   can be a short sentence, even a few words; never pad it with details that are not drawn. A panel
+   with several bubbles gets as many sentences as its bubbles need. Never skip a line of dialogue
+   because the entry is getting long.
 5. **Keep it one continuous account.** Each panel's text carries on from the one before it, because
    they are heard one after another with only a short pause between. Never announce panels ("in this
-   panel"), and never summarize several story panels in one entry. The one exception is a panel
-   that is only speech bubbles (see *Panels told with the next one*).
+   panel"), and never summarize several story panels in one entry. The exception is a panel with
+   nothing of its own to show (see *Panels told with the next one*).
 
 ### Who is speaking
 - **The tail points at the speaker.** A tail running off the edge of the panel means someone not
   shown is speaking: find them in the panel before or after, or say *a voice*, *one of the
   students*, *someone behind him*.
-- **A bubble without a tail** belongs to the character it sits on or beside. When it sits near
-  nobody, it is someone off-panel.
+- **A bubble without a tail** usually belongs to the character it sits on or beside. When it sits
+  near nobody, it is most likely someone off-panel.
 - **The character in focus is not automatically the speaker.** A panel often shows the main
   character reacting while other people talk around them. If the main character looks startled,
-  has a closed mouth or is turned away, and the lines complain or answer, they are someone else's.
-  Never give a line to the main character just because they are the one drawn largest.
+  has a closed mouth or is turned away, and the lines complain or answer, they are probably someone
+  else's. Never give a line to the main character just because they are the one drawn largest.
 - **No one answers themselves.** If two lines in a row disagree or answer each other, they are two
   people.
-- **The shape of the bubble says what kind of line it is.** Report it with the right verb, and keep
-  the narrator's own tone level:
+- **The shape of the bubble usually says what kind of line it is.** Artists vary, so take this as
+  a guide, not a code. Report each line with a verb that fits, and keep the narrator's own tone
+  level. When the shape is unclear, plain *says* is never wrong:
   - smooth oval: spoken (*says*, *asks*, *tells*);
   - spiky or jagged: shouted or screamed (*shouts*, *screams*);
   - cloud-shaped, or a tail made of small circles: a thought, which no one else in the scene hears
@@ -75,14 +89,15 @@ Work panel by panel, in order. For each panel:
 - When a panel is unclear, tell less rather than guessing, and add a line about it to `problems`.
 
 ### Panels told with the next one
-A panel that is **only speech bubbles or captions**, with nothing drawn but a plain background or a
-part of a scene already shown, can be left out of the video. Its lines are then told at the start of
+A panel with **nothing of its own to show** can be left out of the video. That means only speech
+bubbles or captions on a plain background, a part of a scene already shown, or the same moment held a
+beat longer. Use your judgment: merge when it makes the telling flow better. Its lines are then told at the start of
 the next narrated panel's text. On screen, a panel of bare bubbles is dead air; told with the panel
 that follows, the same words land on a picture with something in it.
 - Give it `"skip": "merged"` and empty text. The next narrated panel's text must then begin with
   everything the merged panel held: every line, with who said it, before its own content.
-- Merge only bubble-only panels, and a panel that only finishes the line before it. A panel with a
-  new action, a new character, a new place or a face reacting is told by itself.
+- A panel with a new action, a new character, a new place or a reaction that matters is told by
+  itself.
 - Never merge the last story panel, because there is nothing after it to tell it.
 - Most chapters merge a few panels or none. Dialogue is never dropped by merging, only moved.
 
@@ -97,7 +112,8 @@ that follows, the same words land on a picture with something in it.
 - **One calm narrator, third person, present tense.** No opinions, no jokes, no addressing the
   viewer, no hints about what comes later. Emotion belongs to the characters: *he is furious*.
 - **Explain, don't just describe.** The viewer sees the panel; tell them what it means - who these
-  people are to each other, why a moment matters, what a look implies.
+  people are to each other, why a moment matters, what a look implies - as far as the chapter and
+  the story so far make it clear. Never invent a motive or a backstory to have something to explain.
 - **Connect moments** by cause, contrast or timing (*however*, *so*, *just then*, *meanwhile*), and
   mark a change of scene. Vary how sentences begin.
 - **Names only once the story gives them;** until then, *the dark-haired boy*.
