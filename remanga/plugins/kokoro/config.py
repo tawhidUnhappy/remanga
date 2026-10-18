@@ -5,7 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 from remanga.config.base import ConfigModel
-from remanga.plugins.kokoro.voices import DEFAULT_VOICE, KOKORO_VOICES, KokoroVoice, lang_code_for, marked_label, voice_spec
+from remanga.plugins.kokoro.voices import (
+    DEFAULT_VOICE,
+    KOKORO_VOICES,
+    KokoroVoice,
+    lang_code_for,
+    marked_label,
+    voice_spec,
+)
 
 
 class KokoroConfig(ConfigModel):
