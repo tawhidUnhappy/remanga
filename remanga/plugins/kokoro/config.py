@@ -1,4 +1,4 @@
-"""Kokoro-82M's settings block: a named voice and a speed."""
+"""Kokoro-82M's settings block: a named voice (the speed is fixed - SPEED)."""
 
 from __future__ import annotations
 
@@ -14,6 +14,12 @@ from remanga.plugins.kokoro.voices import (
     voice_spec,
 )
 
+# The speaking rate, applied by the model itself (1.0 = normal). Fixed, not
+# a setting (user's call, 2026-10-18): 1.08 is YouTube/TikTok pacing, part
+# of the same locked preset as audio/voice_chain.py. An old "speed" key in
+# config.json is ignored.
+SPEED = 1.08
+
 
 class KokoroConfig(ConfigModel):
     """hexgrad/Kokoro-82M in `.tools/venv-kokoro`: fixed, named voices
@@ -21,8 +27,6 @@ class KokoroConfig(ConfigModel):
 
     # Which of Kokoro's built-in voices narrates.
     voice: str = DEFAULT_VOICE
-    # Speaking rate, applied by the model itself (1.0 = normal).
-    speed: float = 1.0
     hf_repo_id: str = "hexgrad/Kokoro-82M"
     model_dir: str = "checkpoints/kokoro_82m"
     # Kokoro's native output rate; the pipeline resamples from here.
@@ -33,6 +37,10 @@ class KokoroConfig(ConfigModel):
         what a person should see). The settings list and the voice sampler
         both read this, so neither can list a voice the other does not."""
         return [(v.name, f"{marked_label(v)} - grade {v.grade}, {v.accent}") for v in KOKORO_VOICES]
+
+    @property
+    def speed(self) -> float:
+        return SPEED
 
     @property
     def spec(self) -> KokoroVoice:

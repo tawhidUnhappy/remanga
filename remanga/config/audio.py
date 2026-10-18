@@ -1,4 +1,4 @@
-"""Audio settings: pauses, background music, loudness - see remanga/audio/mix.py."""
+"""Audio settings: pauses, background music - see remanga/audio/mix.py."""
 
 from __future__ import annotations
 
@@ -48,20 +48,6 @@ class AudioConfig(ConfigModel):
     # it is offered again next time beside the presets, whichever level is in
     # use. None until one has been typed.
     bgm_custom_lu: float | None = None
-    # The voice chain (audio/voice_chain.py), over the narration before the
-    # music goes under it. Re-mixes only - nothing is narrated again.
-    # Compressor: "off", "gentle", "medium" or "strong" - evens the loud and
-    # quiet parts so the voice sounds thick and close to the mic.
-    voice_compressor: str = "medium"
-    # A low shelf at 150 Hz, in dB (0 = off): the deep radio-narrator chest.
-    voice_bass_boost_db: float = 3.0
-    # A peak limiter on the finished mix, so the loudness pass can bring it up
-    # without a peak clipping. Off, a mix whose peaks would clip is held
-    # quieter than the target instead.
-    voice_limiter: bool = True
-    # Normalize the finished mix to `loudness_target_lufs` (two-pass, linear -
-    # the level changes, the dynamics don't).
-    enable_loudnorm: bool = True
-    # -14 LUFS is what YouTube normalizes to: a quieter video is not turned up
-    # and sounds weaker next to others.
-    loudness_target_lufs: float = -14.0
+    # The voice chain, the limiter and the -14 LUFS loudness are a fixed
+    # preset, not settings - see audio/voice_chain.py. Old config.json keys
+    # for them (voice_compressor, enable_loudnorm, ...) are ignored.
