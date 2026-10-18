@@ -18,6 +18,7 @@ from pathlib import Path
 from pydub import AudioSegment
 
 from remanga.audio.master import integrated_loudness
+from remanga.audio.microphone import MICROPHONES, mic_filters, place_in_room
 from remanga.config import AudioConfig
 from remanga.console import console, escape as _esc
 from remanga.ffmpeg_io import run_ffmpeg
@@ -73,6 +74,8 @@ def voice_filters(config: AudioConfig, input_lufs: float | None) -> list[str]:
         filters.append(f"bass=g={config.voice_bass_boost_db:g}:f={BASS_SHELF_HZ}:t=q:w={BASS_SHELF_Q}")
     if config.voice_presence_db > 0:
         filters.append(f"equalizer=f={PRESENCE_HZ}:t=o:w=1.5:g={config.voice_presence_db:g}")
+    # Last: the voice as a mic would hear it (audio/microphone.py).
+    filters += mic_filters(config.voice_microphone)
     return filters
 
 
@@ -81,7 +84,7 @@ def polish_voice(track: AudioSegment, work_dir: Path, config: AudioConfig) -> Au
     in at. A failed pass is a warning and the track as it was: a recap
     without the polish beats no recap."""
     if (config.voice_bass_boost_db <= 0 and config.voice_presence_db <= 0
-            and config.voice_compressor not in COMPRESSORS):
+            and config.voice_compressor not in COMPRESSORS and config.voice_microphone not in MICROPHONES):
         return track
     raw, polished = work_dir / "voice_raw.wav", work_dir / "voice_polished.wav"
     try:
@@ -91,6 +94,7 @@ def polish_voice(track: AudioSegment, work_dir: Path, config: AudioConfig) -> Au
         console.print(f"[cyan]Voice chain:[/] [dim]{_esc(', '.join(filters))}[/]")
         run_ffmpeg(["ffmpeg", "-y", "-i", str(raw), "-af", ",".join(filters), "-ar", str(config.sample_rate),
                     "-ac", str(track.channels), str(polished)], check=True, capture=True)
+        place_in_room(polished, config.voice_microphone)
         out = AudioSegment.from_file(polished)
         after = integrated_loudness(polished)
         if before is not None and after is not None:

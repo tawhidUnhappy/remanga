@@ -169,6 +169,11 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
 - **Caching chain:** audio_timing.json is rewritten only when content changes; mix fingerprints its
   mtime + BGM file stat + settings; render compares master_audio mtime and a picture fingerprint. A
   gratuitous rewrite anywhere upstream re-mixes and re-renders everything.
+- **Microphone (2026-10-18):** `audio/microphone.py`, `audio.voice_microphone` off/close/studio, last in the
+  voice chain: dynamic-mic EQ + tanh drive (ffmpeg), then studio's small room (generated IR, RT60 0.22 s,
+  wet -16 dB, scipy oaconvolve) and pink room tone 56 dB under speech. User: TTS "too smooth, artificial".
+  17-min take: 14 s, 3.7 GB peak. Preset youtube-narrator-mic = no-gaps + studio + -12 LUFS ("louder like a
+  microphone"); LIMITER_MARGIN_DB 0.5 -> 1.0 so a -12 master stays under -1 dBTP (measured -1.3).
 - **Longest pause / no-gaps preset (2026-10-18):** `audio/gaps.py` cuts every inner silence over
   `audio.max_gap_ms` to it (35 dB under the take's p95 frame = silent, middle cut, 8 ms crossfade) as the
   take comes back (`load_take`: takes.py, retakes.py, per-panel tts.py) - BEFORE hums/whisper/spans, so the

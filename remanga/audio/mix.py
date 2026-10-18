@@ -67,6 +67,7 @@ def _fingerprint(timing_path: Path, config: AudioConfig, bgm: Path | None) -> di
         "voice_compressor": config.voice_compressor,
         "voice_bass_boost_db": config.voice_bass_boost_db,
         "voice_presence_db": config.voice_presence_db,
+        "voice_microphone": config.voice_microphone,
         "voice_limiter": config.voice_limiter,
         "voice_chain_version": VOICE_CHAIN_VERSION,
         "enable_loudnorm": config.enable_loudnorm,

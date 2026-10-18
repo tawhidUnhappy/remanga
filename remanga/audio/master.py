@@ -37,7 +37,7 @@ BED_VERSION = 2
 # limiter holds samples (it limits samples; true peak between them reads a
 # little higher).
 LOUDNORM_TRUE_PEAK = -1.0
-LIMITER_MARGIN_DB = 0.5
+LIMITER_MARGIN_DB = 1.0
 
 
 def panel_segments(audio_dir: Path, panel: dict[str, Any], sample_rate: int,

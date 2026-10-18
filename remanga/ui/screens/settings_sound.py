@@ -236,6 +236,27 @@ async def change_presence(screen: SettingsScreen, config: RemangaConfig) -> None
         config.audio.voice_presence_db = float(db)
 
 
+MICROPHONE_STYLES = (("off", "the voice as the engine made it - clean, a little too smooth"),
+                     ("close", "a close-talking broadcast mic: its tone, a little drive, the room's faint air"),
+                     ("studio", "the close mic in a small treated room - sounds recorded, not generated"))
+
+
+def microphone_label(style: str) -> str:
+    return style if style in ("close", "studio") else "off"
+
+
+async def change_microphone(screen: SettingsScreen, config: RemangaConfig) -> None:
+    picked = await screen.app.push_screen_wait(Choice(
+        "Microphone", [(name, hint, name) for name, hint in MICROPHONE_STYLES],
+        current=microphone_label(config.audio.voice_microphone),
+        note="A text-to-speech voice is recorded nowhere: no room around it, dead silence between words, "
+             "a perfectly flat tone - so it sounds generated however natural it is. This puts back what a "
+             "real recording always has: a broadcast mic's tone, the faint air of the room, and for studio "
+             "a small room around the voice. Changing it re-mixes the chapter; nothing is narrated again."))
+    if picked:
+        config.audio.voice_microphone = picked
+
+
 def bass_label(db: float) -> str:
     return f"+{db:g} dB at 180 Hz" if db > 0 else "off"
 

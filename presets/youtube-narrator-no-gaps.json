@@ -10,6 +10,7 @@
   "compressor": "medium",
   "bass_boost_db": 3,
   "presence_db": 0,
+  "microphone": "off",
   "limiter": true,
   "loudness_lufs": -14
 }
