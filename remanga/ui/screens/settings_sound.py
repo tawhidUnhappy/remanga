@@ -187,8 +187,34 @@ def compressor_label(name: str) -> str:
     return name if name in COMPRESSORS else "off"
 
 
+PRESENCE_BOOSTS = ((0.0, "off - recommended for most voices"), (2.0, "a little clearer"),
+                   (3.0, "up front and punchy"), (5.0, "aggressive - can turn harsh on bright voices"))
+
+
+def presence_label(db: float) -> str:
+    return f"+{db:g} dB at 4 kHz" if db > 0 else "off"
+
+
+async def change_presence(screen: SettingsScreen, config: RemangaConfig) -> None:
+    current = config.audio.voice_presence_db
+    options = [(presence_label(db), hint, db) for db, hint in PRESENCE_BOOSTS]
+    if all(current != db for db, _ in PRESENCE_BOOSTS):
+        options.append((presence_label(current), "your custom boost", current))
+    options.append(("Custom...", "type your own number of dB", "custom"))
+    note = ("A boost around 4 kHz, where a voice's consonants and edge live: it makes the narrator cut "
+            "through the music and sound powerful and up front. Too much turns harsh. Changing it re-mixes "
+            "the chapter; nothing is narrated again.")
+    db = await screen.app.push_screen_wait(Choice("Presence", options, current=current, note=note))
+    if db == "custom":
+        db = await screen.app.push_screen_wait(Ask(
+            "Presence", "Boost in dB (0 is off, up to 10)", value=f"{current:g}",
+            check=number_check(0, 10), note=note))
+    if db is not None:
+        config.audio.voice_presence_db = float(db)
+
+
 def bass_label(db: float) -> str:
-    return f"+{db:g} dB at 150 Hz" if db > 0 else "off"
+    return f"+{db:g} dB at 180 Hz" if db > 0 else "off"
 
 
 def loudness_label(audio) -> str:
@@ -212,7 +238,7 @@ async def change_bass_boost(screen: SettingsScreen, config: RemangaConfig) -> No
     if all(current != db for db, _ in BASS_BOOSTS):
         options.append((bass_label(current), "your custom boost", current))
     options.append(("Custom...", "type your own number of dB", "custom"))
-    note = ("A low shelf at 150 Hz (the 100-200 Hz chest of a voice) for that deep radio-narrator "
+    note = ("A low shelf at 180 Hz (the 100-200 Hz chest of a voice) for that deep radio-narrator "
             "resonance; rumble under 60 Hz is cut rather than boosted with it. Changing it re-mixes the "
             "chapter; nothing is narrated again.")
     db = await screen.app.push_screen_wait(Choice("Bass boost", options, current=current, note=note))

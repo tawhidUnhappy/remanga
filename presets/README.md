@@ -19,7 +19,8 @@ be reused there.
 | `speed` | e.g. `1.08` (1.0 = normal) | Speaking speed |
 | `take_length` | minutes, `"whole_chapter"` or `"per_panel"` | Narration take length |
 | `compressor` | `"off"`, `"gentle"`, `"medium"`, `"strong"` | Compressor |
-| `bass_boost_db` | dB at 150 Hz, `0` = off | Bass boost |
+| `bass_boost_db` | dB at 180 Hz, `0` = off | Bass boost |
+| `presence_db` | dB at 4 kHz, `0` = off | Presence |
 | `limiter` | `true` / `false` | Limiter |
 | `loudness_lufs` | e.g. `-14`, or `"off"` | Loudness |
 

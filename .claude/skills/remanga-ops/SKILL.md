@@ -169,6 +169,11 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
 - **Caching chain:** audio_timing.json is rewritten only when content changes; mix fingerprints its
   mtime + BGM file stat + settings; render compares master_audio mtime and a picture fingerprint. A
   gratuitous rewrite anywhere upstream re-mixes and re-renders everything.
+- **Voice chain v2 (2026-10-18):** v1's bass shelf (`bass ... t=o:w=1` at 150 Hz) dipped -2.4 dB at 200 Hz,
+  where the voice's fundamental sits, so +3/+5 dB came out ~1 dB QUIETER on real narration. Measure an EQ
+  with tones (`sine=f=...`) before trusting it. v2: compressor first, then Butterworth shelf (q 0.707) at
+  180 Hz, then presence (`equalizer` 4 kHz, new `voice_presence_db` / preset `presence_db`). Measured on
+  Heart: default bass -10.2 -> -8.9 dB vs whole; powerful preset (strong, +5, +3, 1.1x) crest 23.8 -> 18.4.
 - **Narration accuracy (2026-10-18):** user measured ~20% wrong lines per chapter (Gemini Flash, high
   thinking). Sampled GhostStoryClub ch1 + VillainParty ch4.2: the misses were lines given to the focused
   main character (001_039: classmates' complaints given to Lee Jun), captions split over panels told as

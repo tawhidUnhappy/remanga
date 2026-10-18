@@ -24,12 +24,23 @@ from remanga.ffmpeg_io import run_ffmpeg
 
 # Bumped whenever the chain makes something different from the same
 # settings, so a mix built the old way is not taken as up to date.
-VOICE_CHAIN_VERSION = 1
+VOICE_CHAIN_VERSION = 2
 
 # Where the bass shelf sits: the 100-200 Hz chest of a voice. Under 60 Hz is
 # rumble rather than voice, so it is cut instead of boosted along with it.
-BASS_SHELF_HZ = 150
+#
+# A Butterworth shelf (Q 0.707), never one set by octave width: measured with
+# tones, version 1's `t=o:w=1` shelf at 150 Hz boosted 100 Hz by 7 dB but CUT
+# 200 Hz by 2.4 dB - exactly where a voice's fundamental sits - so on real
+# narration the "bass boost" came out about 1 dB quieter instead of deeper.
+BASS_SHELF_HZ = 180
+BASS_SHELF_Q = 0.707
 RUMBLE_CUT_HZ = 60
+
+# Where the presence boost sits: the 3-5 kHz band that carries a voice's
+# consonants and edge - lifting it makes the voice cut through and sound up
+# front, the "powerful" half of a broadcast sound that bass alone muddies.
+PRESENCE_HZ = 4000
 
 # The compressor's input is set to this loudness first, so a preset's
 # threshold means the same thing whatever level the engine reads at (Kokoro
@@ -47,15 +58,21 @@ COMPRESSORS = {
 
 def voice_filters(config: AudioConfig, input_lufs: float | None) -> list[str]:
     """The ffmpeg filters the chain runs, in order - empty when it is all off."""
+    # The compressor first, then the EQ: put before it, the compressor pulls
+    # the boosted band back down (the loud, voiced parts are the bass-heavy
+    # ones), and most of the boost never reaches the mix.
     filters = []
     if config.voice_bass_boost_db > 0:
-        filters += [f"highpass=f={RUMBLE_CUT_HZ}",
-                    f"bass=g={config.voice_bass_boost_db:g}:f={BASS_SHELF_HZ}:t=o:w=1"]
+        filters.append(f"highpass=f={RUMBLE_CUT_HZ}")
     preset = COMPRESSORS.get(config.voice_compressor)
     if preset:
         if input_lufs is not None:
             filters.insert(0, f"volume={COMPRESSOR_INPUT_LUFS - input_lufs:.2f}dB")
         filters.append(f"acompressor={preset}")
+    if config.voice_bass_boost_db > 0:
+        filters.append(f"bass=g={config.voice_bass_boost_db:g}:f={BASS_SHELF_HZ}:t=q:w={BASS_SHELF_Q}")
+    if config.voice_presence_db > 0:
+        filters.append(f"equalizer=f={PRESENCE_HZ}:t=o:w=1.5:g={config.voice_presence_db:g}")
     return filters
 
 
@@ -63,7 +80,8 @@ def polish_voice(track: AudioSegment, work_dir: Path, config: AudioConfig) -> Au
     """The narration track through the voice chain, at the loudness it came
     in at. A failed pass is a warning and the track as it was: a recap
     without the polish beats no recap."""
-    if config.voice_bass_boost_db <= 0 and config.voice_compressor not in COMPRESSORS:
+    if (config.voice_bass_boost_db <= 0 and config.voice_presence_db <= 0
+            and config.voice_compressor not in COMPRESSORS):
         return track
     raw, polished = work_dir / "voice_raw.wav", work_dir / "voice_polished.wav"
     try:

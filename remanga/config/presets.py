@@ -58,6 +58,7 @@ class NarrationPreset(BaseModel):
     take_length: float | Literal["whole_chapter", "per_panel"] | None = None
     compressor: Literal["off", "gentle", "medium", "strong"] | None = None
     bass_boost_db: float | None = None
+    presence_db: float | None = None
     limiter: bool | None = None
     # A target in LUFS, or "off" for no loudness pass.
     loudness_lufs: float | Literal["off"] | None = None
@@ -92,6 +93,8 @@ class NarrationPreset(BaseModel):
             keys.add("audio.voice_compressor")
         if self.bass_boost_db is not None:
             keys.add("audio.voice_bass_boost_db")
+        if self.presence_db is not None:
+            keys.add("audio.voice_presence_db")
         if self.limiter is not None:
             keys.add("audio.voice_limiter")
         if self.loudness_lufs is not None:
@@ -121,6 +124,8 @@ class NarrationPreset(BaseModel):
             audio.voice_compressor = self.compressor
         if self.bass_boost_db is not None:
             audio.voice_bass_boost_db = self.bass_boost_db
+        if self.presence_db is not None:
+            audio.voice_presence_db = self.presence_db
         if self.limiter is not None:
             audio.voice_limiter = self.limiter
         if self.loudness_lufs == "off":
@@ -199,7 +204,7 @@ def current_settings(config: RemangaConfig, name: str, description: str = "") ->
         take_length="whole_chapter" if take != "per_panel" and take >= WHOLE_CHAPTER_MINUTES else take,
         compressor=audio.voice_compressor if audio.voice_compressor in ("off", "gentle", "medium", "strong")
         else "off",
-        bass_boost_db=audio.voice_bass_boost_db, limiter=audio.voice_limiter,
+        bass_boost_db=audio.voice_bass_boost_db, presence_db=audio.voice_presence_db, limiter=audio.voice_limiter,
         loudness_lufs=audio.loudness_target_lufs if audio.enable_loudnorm else "off")
 
 

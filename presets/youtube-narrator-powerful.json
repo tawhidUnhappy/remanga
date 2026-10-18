@@ -1,0 +1,13 @@
+{
+  "name": "YouTube narrator (powerful)",
+  "description": "Kokoro's best voice, Heart, at 1.1x: strong compressor, +5 dB bass, +3 dB presence, limited to -14 LUFS - the whole chapter in one take",
+  "engine": "kokoro",
+  "voice": "af_heart",
+  "speed": 1.1,
+  "take_length": "whole_chapter",
+  "compressor": "strong",
+  "bass_boost_db": 5,
+  "presence_db": 3,
+  "limiter": true,
+  "loudness_lufs": -14
+}

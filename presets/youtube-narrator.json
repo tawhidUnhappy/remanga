@@ -7,6 +7,7 @@
   "take_length": "whole_chapter",
   "compressor": "medium",
   "bass_boost_db": 3,
+  "presence_db": 0,
   "limiter": true,
   "loudness_lufs": -14
 }

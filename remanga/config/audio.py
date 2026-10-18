@@ -55,6 +55,9 @@ class AudioConfig(ConfigModel):
     voice_compressor: str = "medium"
     # A low shelf at 150 Hz, in dB (0 = off): the deep radio-narrator chest.
     voice_bass_boost_db: float = 3.0
+    # A peaking boost at 4 kHz, in dB (0 = off): the edge that makes a voice
+    # cut through - the "powerful" half of a broadcast sound.
+    voice_presence_db: float = 0.0
     # A peak limiter on the finished mix, so the loudness pass can bring it up
     # without a peak clipping. Off, a mix whose peaks would clip is held
     # quieter than the target instead.
