@@ -57,7 +57,11 @@ def music_gain_db(narration_wav: Path, bed_wav: Path, below_voice_lu: float) -> 
 
 def _fingerprint(timing_path: Path, config: AudioConfig, bgm: Path | None) -> dict[str, Any]:
     bgm_stat = bgm.stat() if bgm else None
+    # Named only when on, so the chapters mixed before they existed stay up to date.
+    extras = {key: value for key, value in (("voice_breath", config.voice_breath),
+                                            ("voice_recording", config.voice_recording)) if value != "off"}
     return {
+        **extras,
         "timing_mtime": timing_path.stat().st_mtime,
         "bgm": [str(bgm), bgm_stat.st_size, int(bgm_stat.st_mtime)] if bgm_stat else None,
         "bgm_below_voice_lu": config.bgm_below_voice_lu,

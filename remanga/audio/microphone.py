@@ -87,25 +87,40 @@ def room_tone(frames: int, sample_rate: int, level_rms: float) -> np.ndarray:
     return tone / (np.sqrt(np.mean(tone ** 2)) or 1.0) * level_rms
 
 
+def read_wav(path: Path) -> tuple[AudioSegment, np.ndarray]:
+    """The wav at `path` and its samples (frames x channels, float, full scale 1)."""
+    seg = AudioSegment.from_file(path)
+    full = float(1 << (8 * seg.sample_width - 1))
+    return seg, np.array(seg.get_array_of_samples(), dtype=np.float32).reshape(-1, seg.channels) / full
+
+
+def write_wav(path: Path, seg: AudioSegment, x: np.ndarray) -> None:
+    """`x` written over the wav at `path`, in `seg`'s format."""
+    full = float(1 << (8 * seg.sample_width - 1))
+    ints = np.clip(np.round(x * full), -full, full - 1).astype({2: np.int16, 4: np.int32}[seg.sample_width])
+    seg._spawn(ints.reshape(-1).tobytes()).export(path, format="wav")
+
+
+def speech_level(mono: np.ndarray, sample_rate: int) -> float:
+    """The voice's RMS over its loud half (speech, not the pauses)."""
+    frame = max(1, sample_rate // 50)
+    usable = len(mono) // frame * frame
+    rms = np.sqrt(np.mean(mono[:usable].reshape(-1, frame) ** 2, axis=1)) if usable else np.array([0.0])
+    return float(np.sqrt(np.mean(np.square(rms[rms >= np.median(rms)])))) if rms.size else 0.0
+
+
 def place_in_room(path: Path, style: str) -> None:
     """The room (studio) and the room tone (both) added to the wav at `path`,
     in place. The tone is set from the voice's own level, so it sits the
     same distance under every chapter."""
     if style not in MICROPHONES:
         return
-    seg = AudioSegment.from_file(path)
-    full = float(1 << (8 * seg.sample_width - 1))
-    x = np.array(seg.get_array_of_samples(), dtype=np.float32).reshape(-1, seg.channels) / full
+    seg, x = read_wav(path)
     mono = x.mean(axis=1)
     if style == "studio":
         wet = signal.oaconvolve(mono, room_impulse(seg.frame_rate).astype(np.float32))[: len(mono)]
         x = x + wet[:, None]
-    # The voice's level over its loud half (speech, not the pauses).
-    frame = max(1, seg.frame_rate // 50)
-    usable = len(mono) // frame * frame
-    rms = np.sqrt(np.mean(mono[:usable].reshape(-1, frame) ** 2, axis=1)) if usable else np.array([0.0])
-    speech = float(np.sqrt(np.mean(np.square(rms[rms >= np.median(rms)])))) if rms.size else 0.0
+    speech = speech_level(mono, seg.frame_rate)
     if speech > 0:
         x = x + room_tone(len(x), seg.frame_rate, speech * 10 ** (-ROOM_TONE_UNDER_DB / 20))[:, None]
-    ints = np.clip(np.round(x * full), -full, full - 1).astype({2: np.int16, 4: np.int32}[seg.sample_width])
-    seg._spawn(ints.reshape(-1).tobytes()).export(path, format="wav")
+    write_wav(path, seg, x)

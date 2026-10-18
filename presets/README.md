@@ -24,6 +24,8 @@ be reused there.
 | `bass_boost_db` | dB at 180 Hz, `0` = off | Bass boost |
 | `presence_db` | dB at 4 kHz, `0` = off | Presence |
 | `microphone` | `"off"`, `"close"`, `"studio"` | Microphone |
+| `breath` | `"off"`, `"light"`, `"strong"` | Breath on mic |
+| `recording` | `"off"`, `"phone"` | Recording |
 | `limiter` | `true` / `false` | Limiter |
 | `loudness_lufs` | e.g. `-14`, or `"off"` | Loudness |
 

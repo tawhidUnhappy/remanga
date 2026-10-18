@@ -178,6 +178,14 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   wet -16 dB, scipy oaconvolve) and pink room tone 56 dB under speech. User: TTS "too smooth, artificial".
   17-min take: 14 s, 3.7 GB peak. Preset youtube-narrator-mic = no-gaps + studio + -12 LUFS ("louder like a
   microphone"); LIMITER_MARGIN_DB 0.5 -> 1.0 so a -12 master stays under -1 dBTP (measured -1.3).
+- **Breath on mic + phone recording (2026-10-18):** `audio.voice_breath` off/light/strong (`audio/breath.py`:
+  low air-thump pops 8 ms after onsets loud within 10 ms of a pause, >= 2.5 s apart; mouth inhales in pauses
+  >= 120 ms) and `audio.voice_recording` off/phone (`audio/phone.py`: pink+fan room noise 30 dB under speech,
+  then a decision-directed Wiener suppressor, floor -20 dB, DD 0.9, STFT 1024/256 in 30 s blocks; phone EQ
+  last in the chain). Both run on the raw track BEFORE the chain (`voice_chain.at_the_mic`). **Not afftdn**: it
+  delays audio 25 ms (video drifts off the words) and cut this noise only ~2 dB. Fingerprint names the two keys
+  only when on, so old mixes stay cached. Preset youtube-narrator-phone = mic-close + strong + phone.
+  Full 11.5-min chapter: 24 s, 2.1 GB peak, -12.2 LUFS / -1.3 dBTP, length unchanged; pauses -30 -> -45 dB.
 - **Longest pause / no-gaps preset (2026-10-18):** `audio/gaps.py` cuts every inner silence over
   `audio.max_gap_ms` to it (35 dB under the take's p95 frame = silent, middle cut, 8 ms crossfade) as the
   take comes back (`load_take`: takes.py, retakes.py, per-panel tts.py) - BEFORE hums/whisper/spans, so the

@@ -67,6 +67,13 @@ class AudioConfig(ConfigModel):
     # EQ and drive, room tone, and for studio a small room around it
     # (audio/microphone.py). TTS with none of that sounds generated.
     voice_microphone: str = "off"
+    # "off", "light" or "strong": the narrator's breath on an unprotected
+    # mic - pops of air on hard word onsets, quick inhales in the pauses
+    # (audio/breath.py).
+    voice_breath: str = "off"
+    # "off" or "phone": recorded on a phone - the room's noise under the
+    # voice, then the phone's noise removal over both (audio/phone.py).
+    voice_recording: str = "off"
     # A peak limiter on the finished mix, so the loudness pass can bring it up
     # without a peak clipping. Off, a mix whose peaks would clip is held
     # quieter than the target instead.

@@ -20,7 +20,9 @@ from remanga.ui.dialogs import Choice, Result
 from remanga.ui.screens.common import _global_log
 from remanga.ui.screens.settings_sound import (
     bass_label,
+    breath_label,
     change_bass_boost,
+    change_breath,
     change_compressor,
     change_edge_fade,
     change_limiter,
@@ -33,6 +35,7 @@ from remanga.ui.screens.settings_sound import (
     change_panel_gap,
     change_presence,
     change_preset,
+    change_recording,
     compressor_label,
     lock_preset_rows,
     loudness_label,
@@ -40,6 +43,7 @@ from remanga.ui.screens.settings_sound import (
     microphone_label,
     presence_label,
     preset_label,
+    recording_label,
     save_preset,
     take_length_label,
 )
@@ -120,6 +124,10 @@ class SettingsScreen(Screen):
                 "voice cuts through, up front", "Voice", ("audio.voice_presence_db",)),
             Row("Microphone", microphone_label(audio.voice_microphone), change_microphone,
                 "sounds recorded, not generated", "Voice", ("audio.voice_microphone",)),
+            Row("Breath on mic", breath_label(audio.voice_breath), change_breath,
+                "air pops and inhales, no pop filter", "Voice", ("audio.voice_breath",)),
+            Row("Recording", recording_label(audio.voice_recording), change_recording,
+                "phone: room noise, then noise removal", "Voice", ("audio.voice_recording",)),
             Row("Limiter", "on" if audio.voice_limiter else "off", change_limiter,
                 "loud without distorting", "Voice", ("audio.voice_limiter",)),
             Row("Loudness", loudness_label(audio), change_loudness,

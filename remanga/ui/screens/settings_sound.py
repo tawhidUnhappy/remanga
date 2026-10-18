@@ -257,6 +257,47 @@ async def change_microphone(screen: SettingsScreen, config: RemangaConfig) -> No
         config.audio.voice_microphone = picked
 
 
+BREATH_AMOUNTS = (("off", "no breath - the voice alone"),
+                  ("light", "now and then a puff of air on a hard consonant, an inhale between sentences"),
+                  ("strong", "a mic with no pop filter, right at the mouth: pops and inhales you clearly hear"))
+
+
+def breath_label(amount: str) -> str:
+    return amount if amount in ("light", "strong") else "off"
+
+
+async def change_breath(screen: SettingsScreen, config: RemangaConfig) -> None:
+    picked = await screen.app.push_screen_wait(Choice(
+        "Breath on mic", [(name, hint, name) for name, hint in BREATH_AMOUNTS],
+        current=breath_label(config.audio.voice_breath),
+        note="A real narrator breathes, and close to a mic with nothing in front of it, the air of hard "
+             "consonants hits it as a low puff. A text-to-speech voice does neither. This adds both: pops "
+             "on words that start hard, quick inhales in the pauses between sentences - nothing moves, so "
+             "the video stays on the words. Changing it re-mixes the chapter; nothing is narrated again."))
+    if picked:
+        config.audio.voice_breath = picked
+
+
+RECORDING_STYLES = (("off", "a proper mic - the voice and nothing else"),
+                    ("phone", "recorded on a phone: room noise, then the phone's noise removal over it"))
+
+
+def recording_label(style: str) -> str:
+    return style if style == "phone" else "off"
+
+
+async def change_recording(screen: SettingsScreen, config: RemangaConfig) -> None:
+    picked = await screen.app.push_screen_wait(Choice(
+        "Recording", [(name, hint, name) for name, hint in RECORDING_STYLES],
+        current=recording_label(config.audio.voice_recording),
+        note="Recorded on a phone, a voice picks up the room's noise, and the phone's noise removal takes "
+             "most of it out again - leaving the faint, slightly watery residue under the words and the "
+             "small mic's bright, thin tone that make it sound like a real person recorded it. Changing it "
+             "re-mixes the chapter; nothing is narrated again."))
+    if picked:
+        config.audio.voice_recording = picked
+
+
 def bass_label(db: float) -> str:
     return f"+{db:g} dB at 180 Hz" if db > 0 else "off"
 

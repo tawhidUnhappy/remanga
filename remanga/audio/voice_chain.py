@@ -17,8 +17,10 @@ from pathlib import Path
 
 from pydub import AudioSegment
 
+from remanga.audio.breath import BREATHS, add_breath
 from remanga.audio.master import integrated_loudness
-from remanga.audio.microphone import MICROPHONES, mic_filters, place_in_room
+from remanga.audio.microphone import MICROPHONES, mic_filters, place_in_room, read_wav, speech_level, write_wav
+from remanga.audio.phone import RECORDINGS, phone_filters, record_on_phone
 from remanga.config import AudioConfig
 from remanga.console import console, escape as _esc
 from remanga.ffmpeg_io import run_ffmpeg
@@ -76,7 +78,23 @@ def voice_filters(config: AudioConfig, input_lufs: float | None) -> list[str]:
         filters.append(f"equalizer=f={PRESENCE_HZ}:t=o:w=1.5:g={config.voice_presence_db:g}")
     # Last: the voice as a mic would hear it (audio/microphone.py).
     filters += mic_filters(config.voice_microphone)
+    # Then what a phone does to what its mic heard (audio/phone.py).
+    filters += phone_filters(config.voice_recording)
     return filters
+
+
+def at_the_mic(path: Path, config: AudioConfig) -> None:
+    """What reaches the mic with the voice, added to the wav at `path` in
+    place: the narrator's breath (audio/breath.py) and, on a phone, the
+    room's noise and the phone's suppressor (audio/phone.py). Before the
+    chain, so it shapes them as it shapes the voice."""
+    if config.voice_breath not in BREATHS and config.voice_recording not in RECORDINGS:
+        return
+    seg, x = read_wav(path)
+    speech = speech_level(x.mean(axis=1), seg.frame_rate)
+    x = add_breath(x, seg.frame_rate, speech, config.voice_breath)
+    x = record_on_phone(x, seg.frame_rate, speech, config.voice_recording)
+    write_wav(path, seg, x)
 
 
 def polish_voice(track: AudioSegment, work_dir: Path, config: AudioConfig) -> AudioSegment:
@@ -84,12 +102,14 @@ def polish_voice(track: AudioSegment, work_dir: Path, config: AudioConfig) -> Au
     in at. A failed pass is a warning and the track as it was: a recap
     without the polish beats no recap."""
     if (config.voice_bass_boost_db <= 0 and config.voice_presence_db <= 0
-            and config.voice_compressor not in COMPRESSORS and config.voice_microphone not in MICROPHONES):
+            and config.voice_compressor not in COMPRESSORS and config.voice_microphone not in MICROPHONES
+            and config.voice_breath not in BREATHS and config.voice_recording not in RECORDINGS):
         return track
     raw, polished = work_dir / "voice_raw.wav", work_dir / "voice_polished.wav"
     try:
         track.export(raw, format="wav")
         before = integrated_loudness(raw)
+        at_the_mic(raw, config)
         filters = voice_filters(config, before)
         console.print(f"[cyan]Voice chain:[/] [dim]{_esc(', '.join(filters))}[/]")
         run_ffmpeg(["ffmpeg", "-y", "-i", str(raw), "-af", ",".join(filters), "-ar", str(config.sample_rate),

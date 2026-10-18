@@ -60,6 +60,8 @@ class NarrationPreset(BaseModel):
     bass_boost_db: float | None = None
     presence_db: float | None = None
     microphone: Literal["off", "close", "studio"] | None = None
+    breath: Literal["off", "light", "strong"] | None = None
+    recording: Literal["off", "phone"] | None = None
     limiter: bool | None = None
     # The longest pause inside a take, in ms (0 = natural), and the silence
     # between panels.
@@ -102,6 +104,10 @@ class NarrationPreset(BaseModel):
             keys.add("audio.voice_presence_db")
         if self.microphone is not None:
             keys.add("audio.voice_microphone")
+        if self.breath is not None:
+            keys.add("audio.voice_breath")
+        if self.recording is not None:
+            keys.add("audio.voice_recording")
         if self.limiter is not None:
             keys.add("audio.voice_limiter")
         if self.max_gap_ms is not None:
@@ -139,6 +145,10 @@ class NarrationPreset(BaseModel):
             audio.voice_presence_db = self.presence_db
         if self.microphone is not None:
             audio.voice_microphone = self.microphone
+        if self.breath is not None:
+            audio.voice_breath = self.breath
+        if self.recording is not None:
+            audio.voice_recording = self.recording
         if self.limiter is not None:
             audio.voice_limiter = self.limiter
         if self.max_gap_ms is not None:
@@ -223,6 +233,8 @@ def current_settings(config: RemangaConfig, name: str, description: str = "") ->
         else "off",
         bass_boost_db=audio.voice_bass_boost_db, presence_db=audio.voice_presence_db, limiter=audio.voice_limiter,
         microphone=audio.voice_microphone if audio.voice_microphone in ("close", "studio") else "off",
+        breath=audio.voice_breath if audio.voice_breath in ("light", "strong") else "off",
+        recording=audio.voice_recording if audio.voice_recording == "phone" else "off",
         max_gap_ms=audio.max_gap_ms, panel_pause_ms=audio.pause_between_panels_ms,
         loudness_lufs=audio.loudness_target_lufs if audio.enable_loudnorm else "off")
 
