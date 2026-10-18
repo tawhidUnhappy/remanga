@@ -148,7 +148,9 @@ def _read(path: Path, custom: bool = False) -> NarrationPreset | None:
 
 
 def _folder(folder: Path, custom: bool) -> dict[str, NarrationPreset | None]:
-    return {path.stem: _read(path, custom) for path in sorted(folder.glob("*.json"))} if folder.is_dir() else {}
+    # The default first, then by name - so the list opens on the preset most people want.
+    paths = sorted(folder.glob("*.json"), key=lambda path: (path.stem != DEFAULT_PRESET, path.stem))
+    return {path.stem: _read(path, custom) for path in paths} if folder.is_dir() else {}
 
 
 def load_presets() -> dict[str, NarrationPreset]:
