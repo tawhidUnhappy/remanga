@@ -112,8 +112,8 @@ def speech_level(mono: np.ndarray, sample_rate: int) -> float:
 def place_in_room(path: Path, style: str, tone: bool = True) -> None:
     """The room (studio) and the room tone (both) added to the wav at `path`,
     in place. The tone is set from the voice's own level, so it sits the
-    same distance under every chapter. No tone when a phone's gate has
-    already made the pauses black (audio/phone.py) - it would fill them."""
+    same distance under every chapter. No tone on a phone (audio/phone.py):
+    its hiss is the air there, and the reference's pauses are near-black."""
     if style not in MICROPHONES:
         return
     seg, x = read_wav(path)

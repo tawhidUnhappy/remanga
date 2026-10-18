@@ -6,8 +6,8 @@ mouth - has both, and a TTS voice has neither (user request, 2026-10-18:
 "the effect of breath touching microphone ... without any protection"):
 
     pops     at word onsets that start abruptly (the release of p/b/t/k
-             and hard vowel attacks), a low thump of air arriving at the
-             capsule a few ms after the sound does - air is slower than sound
+             and hard vowel attacks), a short toneless puff of low air
+             arriving a few ms after the sound does - air is slower than sound
     inhales  a short mouth inhale filling a pause between sentences
 
 `audio.voice_breath` picks how much: light or strong. Both are added to the
@@ -28,8 +28,8 @@ BREATHS = ("light", "strong")
 # about 25 dB under the voice; pops are low-frequency and sound quieter
 # than their level.
 _AMOUNTS = {
-    "light": {"pop_share": 0.15, "pop_db": -6.0, "inhale_share": 0.4, "inhale_db": -30.0},
-    "strong": {"pop_share": 0.35, "pop_db": -1.0, "inhale_share": 0.7, "inhale_db": -24.0},
+    "light": {"pop_share": 0.15, "pop_db": -10.0, "inhale_share": 0.4, "inhale_db": -30.0},
+    "strong": {"pop_share": 0.35, "pop_db": -5.0, "inhale_share": 0.7, "inhale_db": -24.0},
 }
 
 # Analysis frames, and what counts as a pause / an abrupt onset, in dB
@@ -46,7 +46,7 @@ MIN_POP_SPACING_S = 2.5
 MIN_INHALE_SPACING_S = 2.5
 # The air reaches a mic a few cm away this long after the sound.
 POP_DELAY_MS = 8
-POP_LENGTH_MS = 90
+POP_LENGTH_MS = 60
 # Inhales go in pauses at least this long, end this long before the next
 # word, and last at most this long.
 INHALE_MIN_GAP_MS = 120
@@ -84,18 +84,18 @@ def _onsets(env: np.ndarray) -> list[tuple[int, int]]:
 
 
 def _pop(sample_rate: int, rng: np.random.Generator) -> np.ndarray:
-    """A puff of air on a capsule: low rumbling noise and a falling sub
-    thump, a 2 ms attack and a fast decay. Unit RMS over its first 40 ms."""
+    """A puff of air on a capsule: a short burst of low, toneless rumble -
+    1 ms attack, gone in about 40 ms. Unit RMS over its first 20 ms.
+
+    Never a pitched thump: version 1 had a sine falling from ~100 to 40 Hz
+    under the noise, which is how a kick drum is synthesized, and it was
+    heard as a drum after the words (user, 2026-10-18)."""
     n = int(sample_rate * POP_LENGTH_MS / 1000)
     t = np.arange(n) / sample_rate
-    env = (1 - np.exp(-t / 0.002)) * np.exp(-t / rng.uniform(0.018, 0.032))
-    b, a = signal.butter(2, rng.uniform(220, 380) / (sample_rate / 2), "low")
-    noise = signal.lfilter(b, a, rng.standard_normal(n))
-    noise /= np.sqrt(np.mean(noise ** 2)) or 1.0
-    f0 = rng.uniform(70, 110) * np.exp(-t / 0.05) + 40  # the thump falls as the air spreads
-    thump = np.sin(2 * np.pi * np.cumsum(f0) / sample_rate) * 1.4
-    pop = (noise + thump) * env
-    head = pop[: int(sample_rate * 0.04)]
+    env = (1 - np.exp(-t / 0.001)) * np.exp(-t / rng.uniform(0.008, 0.014))
+    b, a = signal.butter(2, [40 / (sample_rate / 2), rng.uniform(300, 500) / (sample_rate / 2)], "band")
+    pop = signal.lfilter(b, a, rng.standard_normal(n)) * env
+    head = pop[: int(sample_rate * 0.02)]
     return pop / (np.sqrt(np.mean(head ** 2)) or 1.0)
 
 

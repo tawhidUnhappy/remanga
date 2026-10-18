@@ -279,7 +279,7 @@ async def change_breath(screen: SettingsScreen, config: RemangaConfig) -> None:
 
 
 RECORDING_STYLES = (("off", "a proper mic - the voice and nothing else"),
-                    ("phone", "recorded on a phone: hiss under the voice, gated off in the pauses, voice codec"))
+                    ("phone", "recorded on a phone: hiss blended into the voice, voice codec"))
 
 
 def recording_label(style: str) -> str:
@@ -290,9 +290,9 @@ async def change_recording(screen: SettingsScreen, config: RemangaConfig) -> Non
     picked = await screen.app.push_screen_wait(Choice(
         "Recording", [(name, hint, name) for name, hint in RECORDING_STYLES],
         current=recording_label(config.audio.voice_recording),
-        note="Recorded on a phone, a voice picks up hiss with it; the phone's noise removal lets voice and "
-             "hiss through together while someone talks and shuts both off the moment they stop, and its "
-             "voice codec fills the top with a haze that swells with every syllable and stops at 12 kHz. "
+        note="Recorded on a phone, a voice picks up hiss with it; after the phone's noise removal what is "
+             "left swells and fades with the voice, part of it rather than a layer, and the phone's voice "
+             "codec fills the top with a haze that rises with every syllable and stops at 12 kHz. "
              "That is what makes it sound like a real person recorded it. Changing it re-mixes the "
              "chapter; nothing is narrated again."))
     if picked:

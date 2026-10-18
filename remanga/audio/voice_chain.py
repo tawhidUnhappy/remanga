@@ -86,7 +86,7 @@ def voice_filters(config: AudioConfig, input_lufs: float | None) -> list[str]:
 def at_the_mic(path: Path, config: AudioConfig) -> None:
     """What reaches the mic with the voice, added to the wav at `path` in
     place: the narrator's breath (audio/breath.py) and, on a phone, the
-    room's hiss, the phone's gate and its codec (audio/phone.py). Before the
+    hiss riding with the voice and the phone's codec (audio/phone.py). Before the
     chain, so it shapes them as it shapes the voice."""
     if config.voice_breath not in BREATHS and config.voice_recording not in RECORDINGS:
         return

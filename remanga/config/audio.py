@@ -71,8 +71,8 @@ class AudioConfig(ConfigModel):
     # mic - pops of air on hard word onsets, quick inhales in the pauses
     # (audio/breath.py).
     voice_breath: str = "off"
-    # "off" or "phone": recorded on a phone - hiss under the voice, a gate
-    # that shuts both off in the pauses, then a voice codec (audio/phone.py).
+    # "off" or "phone": recorded on a phone - hiss that rides with the voice,
+    # then a voice codec (audio/phone.py).
     voice_recording: str = "off"
     # A peak limiter on the finished mix, so the loudness pass can bring it up
     # without a peak clipping. Off, a mix whose peaks would clip is held

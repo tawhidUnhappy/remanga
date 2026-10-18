@@ -1,21 +1,28 @@
 """The narration as a phone (or a noise-removal app) records it: a bright
-hiss picked up with the voice, then a gate that lets voice and hiss through
-together while someone talks and shuts both off the moment they stop.
+hiss that rides with the voice, then the voice codec it is saved or sent in.
 
-That is the sound (user request, 2026-10-18: "noise removing after a blend
-of voice and some kinda noise"), measured on the user's reference - a
-4.6-hour recap narration whose spectrogram shows it plainly: while the
-voice is on, an even hiss from about 3 to 12 kHz rides with it and buries
-its sibilants; the instant it stops, everything above the low hum goes
-black. The voice is darker than a TTS voice (about 10 dB less at 5-10 kHz)
-and stops at 12 kHz. A cleaner that works frequency by frequency (version
-1, a Wiener suppressor) was not it: it left a faint hiss spread through the
-pauses and nothing that came and went with the words.
+Matched to the user's reference (user request, 2026-10-18: "noise removing
+after a blend of voice and some kinda noise") - a 4.6-hour recap narration
+whose zoomed spectrogram shows it plainly: while the voice is on, an even
+hiss from about 3 to 12 kHz rides with it and buries its sibilants; when it
+stops, the hiss is gone; the top is a haze that swells with every syllable
+and stops flat at 12 kHz, with the codec's band seams across it. The voice
+is darker than a TTS voice and has nothing over 12 kHz.
 
-    hiss    white-ish noise above ~2.5 kHz under the voice (room_noise)
-    gate    driven by the voice: open within 5 ms, held 30 ms after it
-            stops, closed to GATE_FLOOR_DB (record_on_phone)
-    hum     a faint mains hum the gate leaves in the pauses
+What did not work, and why it is not here:
+- a Wiener suppressor (version 1): a faint hiss carpet through the pauses,
+  nothing that came and went with the words - "this one is not it";
+- a hard gate (version 2): voice and hiss cut off at every word end, and a
+  mains hum it left exposed in each short pause - together a low "dum"
+  after the words, and the hiss heard as a layer switching on and off -
+  "like drum, not natural ... the noise isn't blended".
+
+So the hiss now follows the voice's own loudness smoothly (follow_voice):
+it swells and fades with the words like part of the voice rather than a
+layer, and the voice itself is never cut.
+
+    hiss    white-ish noise above ~2.5 kHz (room_noise), its level following
+            the voice (follow_voice)
     tone    the voice darker (before the hiss); no lows, last in the voice
             chain (phone_filters)
     codec   Opus at 24 kbps, as voice apps send it (through_codec)
@@ -40,18 +47,14 @@ RECORDINGS = ("phone",)
 HISS_UNDER_DB = 37.0
 HISS_WOBBLE_DB = 1.5
 
-# The gate: open while the voice (5 ms frames) is less than GATE_OPEN_DB
-# under the speech level, held GATE_HOLD_MS after, then faded shut to
-# GATE_FLOOR_DB over GATE_RELEASE_MS - the reference's edges are sharp.
+# How the hiss follows the voice (5 ms frames): its level tracks the voice's,
+# rising within HISS_ATTACK_MS and falling over HISS_RELEASE_MS - slow enough
+# to fade with a word's tail, never a cut - and never under HISS_FLOOR_DB of
+# its level while talking, so the pauses keep the faintest air.
 FRAME_MS = 5
-GATE_OPEN_DB = -32.0
-GATE_HOLD_MS = 30
-GATE_RELEASE_MS = 25
-GATE_FLOOR_DB = -50.0
-
-# The hum left in the pauses: 50 Hz mains harmonics, this far under the speech.
-HUM_HZ = (150, 200, 250, 300)
-HUM_UNDER_DB = 56.0
+HISS_ATTACK_MS = 10
+HISS_RELEASE_MS = 90
+HISS_FLOOR_DB = -24.0
 
 # A phone mic: the voice darker above 5.5 kHz - before the hiss goes in,
 # since the hiss is the phone's own and never passed through its mic - and
@@ -99,38 +102,25 @@ def room_noise(frames: int, sample_rate: int, level_rms: float) -> np.ndarray:
     return noise / (np.sqrt(np.mean(noise ** 2)) or 1.0) * level_rms
 
 
-def hum(frames: int, sample_rate: int, level_rms: float) -> np.ndarray:
-    """A faint mains hum at `level_rms`, its harmonics falling off."""
-    rng = np.random.default_rng(_SEED + 1)
-    t = np.arange(frames) / sample_rate
-    tone = sum(np.sin(2 * np.pi * hz * t + rng.uniform(0, 2 * np.pi)) / (i + 1) for i, hz in enumerate(HUM_HZ))
-    tone = tone * _wander(frames, sample_rate, 1.0, rng)
-    return tone / (np.sqrt(np.mean(tone ** 2)) or 1.0) * level_rms
-
-
-def gate_gain(voice: np.ndarray, sample_rate: int, speech_rms: float) -> np.ndarray:
-    """Per-sample gain of a gate driven by `voice` (mono): 1 while it talks
-    and GATE_HOLD_MS after, GATE_FLOOR_DB once it has faded shut."""
+def follow_voice(voice: np.ndarray, sample_rate: int, speech_rms: float) -> np.ndarray:
+    """Per-sample gain for the hiss: the voice's own level (5 ms frames)
+    against the speech level, capped at 1, rising fast and falling slowly,
+    never under HISS_FLOOR_DB."""
     frame = max(1, sample_rate * FRAME_MS // 1000)
     n = -(-len(voice) // frame)
     padded = np.zeros(n * frame, dtype=np.float32)
     padded[: len(voice)] = voice
-    rms = np.sqrt(np.mean(padded.reshape(n, frame) ** 2, axis=1)) + 1e-12
-    is_open = 20 * np.log10(rms / speech_rms) > GATE_OPEN_DB
-    # The hold: open for GATE_HOLD_MS after every open frame.
-    hold = max(1, GATE_HOLD_MS // FRAME_MS)
-    is_open = np.convolve(is_open.astype(np.float32), np.ones(hold + 1), mode="full")[:n] > 0
-    floor = 10 ** (GATE_FLOOR_DB / 20)
-    # Opens at once, closes in a straight line in dB.
-    fall = -GATE_FLOOR_DB * FRAME_MS / GATE_RELEASE_MS
-    gains_db = np.empty(n, dtype=np.float32)
-    level = GATE_FLOOR_DB
-    for i, on in enumerate(is_open):
-        level = 0.0 if on else max(GATE_FLOOR_DB, level - fall)
-        gains_db[i] = level
-    gain = 10 ** (gains_db / 20)
+    level = np.minimum(np.sqrt(np.mean(padded.reshape(n, frame) ** 2, axis=1)) / speech_rms, 1.0)
+    rise, fall = np.exp(-FRAME_MS / HISS_ATTACK_MS), np.exp(-FRAME_MS / HISS_RELEASE_MS)
+    gains = np.empty(n, dtype=np.float32)
+    now = 0.0
+    for i, target in enumerate(level):
+        coef = rise if target > now else fall
+        now = coef * now + (1 - coef) * target
+        gains[i] = now
+    gains = np.maximum(gains, 10 ** (HISS_FLOOR_DB / 20))
     centers = (np.arange(n) + 0.5) * frame
-    return np.interp(np.arange(len(voice)), centers, np.maximum(gain, floor)).astype(np.float32)
+    return np.interp(np.arange(len(voice)), centers, gains).astype(np.float32)
 
 
 def high_shelf(sample_rate: int, hz: float, gain_db: float) -> tuple[np.ndarray, np.ndarray]:
@@ -146,16 +136,14 @@ def high_shelf(sample_rate: int, hz: float, gain_db: float) -> tuple[np.ndarray,
 
 
 def record_on_phone(x: np.ndarray, sample_rate: int, speech_rms: float, style: str) -> np.ndarray:
-    """`x` (frames x channels, float) as a phone records it: the hiss under
-    it, the gate over both, the hum it leaves. Same length, no delay."""
+    """`x` (frames x channels, float) as a phone's mic hears it: the voice a
+    little darker, the hiss riding with it. Same length, no delay."""
     if style not in RECORDINGS or speech_rms <= 0:
         return x
-    frames = len(x)
-    gain = gate_gain(x.mean(axis=1), sample_rate, speech_rms)
+    gain = follow_voice(x.mean(axis=1), sample_rate, speech_rms)
     x = signal.lfilter(*high_shelf(sample_rate, DARKER_HZ, DARKER_DB), x, axis=0).astype(np.float32)
-    hiss = room_noise(frames, sample_rate, speech_rms * 10 ** (-HISS_UNDER_DB / 20)).astype(np.float32)
-    left = hum(frames, sample_rate, speech_rms * 10 ** (-HUM_UNDER_DB / 20)).astype(np.float32)
-    return (x + hiss[:, None]) * gain[:, None] + left[:, None]
+    hiss = room_noise(len(x), sample_rate, speech_rms * 10 ** (-HISS_UNDER_DB / 20)).astype(np.float32)
+    return x + (hiss * gain)[:, None]
 
 
 def through_codec(path: Path) -> None:

@@ -182,13 +182,15 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   low air-thump pops 8 ms after onsets loud within 10 ms of a pause, >= 2.5 s apart; mouth inhales in pauses
   >= 120 ms). `audio.voice_recording` off/phone (`audio/phone.py`), matched to the user's reference (a recap
   narration, `/mnt/datadisk/Isekaid Boy ... Relatives.mp3`): voice -3 dB shelf at 5.5 kHz, white hiss >2.5 kHz
-  37 dB under speech, a gate driven by the voice (open -32 dB, hold 30 ms, 25 ms to -50 dB), faint 50 Hz-harmonic
-  hum, then **Opus 24 kbps voip round trip** (no delay, same length - verified), highpass 110 + lowpass 12 kHz
-  last in the chain; no room tone for phone (it filled the black pauses). Speech spectrum 5-12.5 kHz within
-  ~2 dB of the reference. **v1 was rejected ("this one is not it")**: a Wiener suppressor left a hiss carpet in
-  the pauses; the reference is gate + codec haze that swells per syllable, seen only on a zoomed
-  spectrogram (`showspectrumpic` -> Read the PNG) - compare pictures, not just band averages. afftdn: 25 ms
-  delay, ~2 dB. Fingerprint names the two keys only when on. Preset youtube-narrator-phone = mic-close + both.
+  37 dB under speech whose level FOLLOWS the voice (10 ms up, 90 ms down, floor -24 dB), then **Opus 24 kbps
+  voip round trip** (no delay, same length - verified), highpass 110 + lowpass 12 kHz last in the chain; no
+  room tone for phone. Speech spectrum 5-12.5 kHz within ~2 dB of the reference. Rejected on the way:
+  v1 Wiener suppressor (hiss carpet in pauses, "this one is not it"); v2 hard gate + mains hum ("sound at the
+  end of words like drum, not natural ... the noise isn't blended") - the gate chopped word tails and each
+  short pause exposed a hum burst. **Never synthesize a pitched thump** (sine falling ~100->40 Hz = a kick drum):
+  breath pops are toneless 40-500 Hz noise puffs, 1 ms attack, ~12 ms decay. Compare zoomed spectrograms
+  (`showspectrumpic` -> Read the PNG), not just band averages. afftdn: 25 ms delay, ~2 dB. Fingerprint names
+  the two keys only when on. Preset youtube-narrator-phone = mic-close + strong breath + phone.
 - **Longest pause / no-gaps preset (2026-10-18):** `audio/gaps.py` cuts every inner silence over
   `audio.max_gap_ms` to it (35 dB under the take's p95 frame = silent, middle cut, 8 ms crossfade) as the
   take comes back (`load_take`: takes.py, retakes.py, per-panel tts.py) - BEFORE hums/whisper/spans, so the

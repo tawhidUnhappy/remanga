@@ -1,6 +1,6 @@
 {
   "name": "YouTube narrator (phone, breath on mic)",
-  "description": "The close-mic narrator recorded on a phone with nothing in front of the mic: puffs of air on hard consonants, quick inhales between sentences, hiss that rides with the voice and is gated off in the pauses, through a phone's voice codec - mastered at -12 LUFS",
+  "description": "The close-mic narrator recorded on a phone with nothing in front of the mic: puffs of air on hard consonants, quick inhales between sentences, hiss blended into the voice, through a phone's voice codec - mastered at -12 LUFS",
   "engine": "kokoro",
   "voice": "af_heart",
   "speed": 1.08,
