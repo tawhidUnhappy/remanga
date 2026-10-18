@@ -9,13 +9,7 @@ timeline is untouched.
 The loudness stays where it was: the compressor takes level off the peaks,
 and the chain puts back exactly what it took (measured), so turning it on or
 off changes the voice's character and never its level - the final loudness
-pass (audio/master.py:write_master) is what sets that.
-
-The chain is a fixed preset, not a setting (user's call, 2026-10-18): the
-sound was chosen once - medium compression, +3 dB of bass, the limiter on,
--14 LUFS - and nothing in config.json, a project or the menus can change it.
-The settings screen shows it, locked. To change it, change the constants
-here and bump VOICE_CHAIN_VERSION."""
+pass (audio/master.py:write_master) is what sets that."""
 
 from __future__ import annotations
 
@@ -31,12 +25,6 @@ from remanga.ffmpeg_io import run_ffmpeg
 # Bumped whenever the chain makes something different from the same
 # settings, so a mix built the old way is not taken as up to date.
 VOICE_CHAIN_VERSION = 1
-
-# The preset itself.
-COMPRESSOR = "medium"
-BASS_BOOST_DB = 3.0
-LIMITER = True
-LOUDNESS_LUFS = -14.0
 
 # Where the bass shelf sits: the 100-200 Hz chest of a voice. Under 60 Hz is
 # rumble rather than voice, so it is cut instead of boosted along with it.
@@ -57,12 +45,17 @@ COMPRESSORS = {
 }
 
 
-def voice_filters(input_lufs: float | None) -> list[str]:
-    """The ffmpeg filters the chain runs, in order."""
-    filters = [f"highpass=f={RUMBLE_CUT_HZ}", f"bass=g={BASS_BOOST_DB:g}:f={BASS_SHELF_HZ}:t=o:w=1",
-               f"acompressor={COMPRESSORS[COMPRESSOR]}"]
-    if input_lufs is not None:
-        filters.insert(0, f"volume={COMPRESSOR_INPUT_LUFS - input_lufs:.2f}dB")
+def voice_filters(config: AudioConfig, input_lufs: float | None) -> list[str]:
+    """The ffmpeg filters the chain runs, in order - empty when it is all off."""
+    filters = []
+    if config.voice_bass_boost_db > 0:
+        filters += [f"highpass=f={RUMBLE_CUT_HZ}",
+                    f"bass=g={config.voice_bass_boost_db:g}:f={BASS_SHELF_HZ}:t=o:w=1"]
+    preset = COMPRESSORS.get(config.voice_compressor)
+    if preset:
+        if input_lufs is not None:
+            filters.insert(0, f"volume={COMPRESSOR_INPUT_LUFS - input_lufs:.2f}dB")
+        filters.append(f"acompressor={preset}")
     return filters
 
 
@@ -70,11 +63,13 @@ def polish_voice(track: AudioSegment, work_dir: Path, config: AudioConfig) -> Au
     """The narration track through the voice chain, at the loudness it came
     in at. A failed pass is a warning and the track as it was: a recap
     without the polish beats no recap."""
+    if config.voice_bass_boost_db <= 0 and config.voice_compressor not in COMPRESSORS:
+        return track
     raw, polished = work_dir / "voice_raw.wav", work_dir / "voice_polished.wav"
     try:
         track.export(raw, format="wav")
         before = integrated_loudness(raw)
-        filters = voice_filters(before)
+        filters = voice_filters(config, before)
         console.print(f"[cyan]Voice chain:[/] [dim]{_esc(', '.join(filters))}[/]")
         run_ffmpeg(["ffmpeg", "-y", "-i", str(raw), "-af", ",".join(filters), "-ar", str(config.sample_rate),
                     "-ac", str(track.channels), str(polished)], check=True, capture=True)

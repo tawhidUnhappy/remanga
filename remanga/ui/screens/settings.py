@@ -13,20 +13,25 @@ from textual.screen import Screen
 from textual.widgets import DataTable, Footer
 
 from remanga import plugins
-from remanga.audio import voice_chain
 from remanga.config import RemangaConfig
 from remanga.paths import GLOBAL_DIR
 from remanga.ui import look, voice_settings
 from remanga.ui.dialogs import Choice, Result
 from remanga.ui.screens.common import _global_log
 from remanga.ui.screens.settings_sound import (
+    bass_label,
+    change_bass_boost,
+    change_compressor,
     change_edge_fade,
+    change_limiter,
+    change_loudness,
     change_music,
     change_music_level,
     change_narration_takes,
     change_panel_gap,
+    compressor_label,
+    loudness_label,
     take_length_label,
-    voice_locked,
 )
 from remanga.ui.screens.settings_video import (
     change_intro,
@@ -89,13 +94,15 @@ class SettingsScreen(Screen):
             Row("Fade at line edges", f"{audio.edge_fade_ms} ms" if audio.edge_fade_ms else "off",
                 change_edge_fade, "softens line edges (no clicks)", "Narration",
                 ("audio.edge_fade_ms",)),
-            Row("Compressor", f"{voice_chain.COMPRESSOR}  (locked)", voice_locked,
-                "fixed preset: thick, close-to-the-mic voice", "Voice"),
-            Row("Bass boost", f"+{voice_chain.BASS_BOOST_DB:g} dB at 150 Hz  (locked)", voice_locked,
-                "fixed preset: deep radio-narrator resonance", "Voice"),
-            Row("Limiter", "on  (locked)", voice_locked, "fixed preset: loud without distorting", "Voice"),
-            Row("Loudness", f"{voice_chain.LOUDNESS_LUFS:g} LUFS  (locked)", voice_locked,
-                "fixed preset: standard YouTube level", "Voice"),
+            Row("Compressor", compressor_label(audio.voice_compressor), change_compressor,
+                "thick, close-to-the-mic voice", "Voice", ("audio.voice_compressor",)),
+            Row("Bass boost", bass_label(audio.voice_bass_boost_db), change_bass_boost,
+                "deep radio-narrator resonance", "Voice", ("audio.voice_bass_boost_db",)),
+            Row("Limiter", "on" if audio.voice_limiter else "off", change_limiter,
+                "loud without distorting", "Voice", ("audio.voice_limiter",)),
+            Row("Loudness", loudness_label(audio), change_loudness,
+                "standard level (YouTube is -14)", "Voice",
+                ("audio.enable_loudnorm", "audio.loudness_target_lufs")),
             Row("Background music", Path(audio.bgm_path).name if music_on else "off", change_music,
                 f"music under the voice ({GLOBAL_DIR / 'bgm'}/)", "Sound",
                 ("audio.bgm_enabled", "audio.bgm_path")),
