@@ -22,6 +22,7 @@ from remanga.audio.master import (
     under_narration,
     write_master,
 )
+from remanga.audio.voice_chain import VOICE_CHAIN_VERSION, polish_voice
 from remanga.config import AudioConfig
 from remanga.console import console, escape as _esc
 from remanga.json_io import read_json, read_json_or, write_json
@@ -63,6 +64,10 @@ def _fingerprint(timing_path: Path, config: AudioConfig, bgm: Path | None) -> di
         "bed_version": BED_VERSION if bgm else None,
         "edge_fade_ms": config.edge_fade_ms,
         "sample_rate": config.sample_rate,
+        "voice_compressor": config.voice_compressor,
+        "voice_bass_boost_db": config.voice_bass_boost_db,
+        "voice_limiter": config.voice_limiter,
+        "voice_chain_version": VOICE_CHAIN_VERSION,
         "enable_loudnorm": config.enable_loudnorm,
         "loudness_target_lufs": config.loudness_target_lufs,
     }
@@ -92,6 +97,9 @@ def mix_master_audio(project_name: str, chapter_num: str, config: AudioConfig, f
     for panel in read_json(timing_path).get("panels", []):
         segments.extend(panel_segments(audio_dir, panel, config.sample_rate, config.edge_fade_ms))
     track = join_segments(segments).set_channels(2).set_frame_rate(config.sample_rate)
+    # The voice chain over the narration alone, before the music goes under
+    # it - so the music is measured against the voice as it will be heard.
+    track = polish_voice(track, master.parent, config)
 
     raw = master.with_name("master_audio_raw.wav")
     if bgm:
@@ -107,7 +115,7 @@ def mix_master_audio(project_name: str, chapter_num: str, config: AudioConfig, f
 
     track.export(raw, format="wav")
     write_master(raw, master, config.sample_rate, normalize=config.enable_loudnorm,
-                 target_lufs=config.loudness_target_lufs,
+                 target_lufs=config.loudness_target_lufs, limiter=config.voice_limiter,
                  announcement=f"Normalizing loudness to {config.loudness_target_lufs:g} LUFS...",
                  on_failure="the un-normalized mix")
     write_json(fingerprint_path, _fingerprint(timing_path, config, bgm))

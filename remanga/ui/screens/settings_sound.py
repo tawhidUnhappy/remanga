@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from remanga.audio.voice_chain import COMPRESSORS
 from remanga.config import RemangaConfig
 from remanga.paths import GLOBAL_DIR
 from remanga.ui.dialogs import Ask, Choice, number_check
@@ -157,3 +158,92 @@ async def change_narration_takes(screen: SettingsScreen, config: RemangaConfig) 
         config.audio.batch_narration = minutes > 0
         if minutes > 0:
             config.audio.batch_target_minutes = minutes
+
+
+COMPRESSOR_HINTS = (("off", "the voice as the engine made it"),
+                    ("gentle", "takes the edge off the loudest words"),
+                    ("medium", "thick and close to the mic - recommended"),
+                    ("strong", "flat and in your face, radio-promo style"))
+
+
+BASS_BOOSTS = ((0.0, "off"), (2.0, "a little warmth"), (3.0, "radio-narrator chest - recommended"),
+               (5.0, "deep"), (7.0, "booming - can muddy on big speakers"))
+
+
+LOUDNESS_TARGETS = ((-14.0, "YouTube's level - recommended"), (-16.0, "a little quieter - podcasts, Apple"),
+                    (-13.0, "a little louder - TikTok and Shorts"), (None, "off - the mix as it comes"))
+
+
+def compressor_label(name: str) -> str:
+    return name if name in COMPRESSORS else "off"
+
+
+def bass_label(db: float) -> str:
+    return f"+{db:g} dB at 150 Hz" if db > 0 else "off"
+
+
+def loudness_label(audio) -> str:
+    return f"{audio.loudness_target_lufs:g} LUFS" if audio.enable_loudnorm else "off"
+
+
+async def change_compressor(screen: SettingsScreen, config: RemangaConfig) -> None:
+    picked = await screen.app.push_screen_wait(Choice(
+        "Compressor", [(name, hint, name) for name, hint in COMPRESSOR_HINTS],
+        current=compressor_label(config.audio.voice_compressor),
+        note="Squashes the peaks and lifts the quiet parts, so the whole voice sounds thick, powerful "
+             "and close to the microphone. The voice's overall level is kept - this changes its "
+             "character, not its loudness. Changing it re-mixes the chapter; nothing is narrated again."))
+    if picked:
+        config.audio.voice_compressor = picked
+
+
+async def change_bass_boost(screen: SettingsScreen, config: RemangaConfig) -> None:
+    current = config.audio.voice_bass_boost_db
+    options = [(bass_label(db), hint, db) for db, hint in BASS_BOOSTS]
+    if all(current != db for db, _ in BASS_BOOSTS):
+        options.append((bass_label(current), "your custom boost", current))
+    options.append(("Custom...", "type your own number of dB", "custom"))
+    note = ("A low shelf at 150 Hz (the 100-200 Hz chest of a voice) for that deep radio-narrator "
+            "resonance; rumble under 60 Hz is cut rather than boosted with it. Changing it re-mixes the "
+            "chapter; nothing is narrated again.")
+    db = await screen.app.push_screen_wait(Choice("Bass boost", options, current=current, note=note))
+    if db == "custom":
+        db = await screen.app.push_screen_wait(Ask(
+            "Bass boost", "Boost in dB (0 is off, up to 12)", value=f"{current:g}",
+            check=number_check(0, 12), note=note))
+    if db is not None:
+        config.audio.voice_bass_boost_db = float(db)
+
+
+async def change_limiter(screen: SettingsScreen, config: RemangaConfig) -> None:
+    picked = await screen.app.push_screen_wait(Choice(
+        "Limiter", [("on", "peaks are held under -1 dB, so the mix reaches its loudness - recommended", True),
+                    ("off", "nothing holds the peaks; a mix that would clip is left quieter instead", False)],
+        current=config.audio.voice_limiter,
+        note="A ceiling on the finished mix's peaks, so the loudness pass can bring it up to standard "
+             "without distorting. Changing it re-mixes the chapter."))
+    if picked is not None:
+        config.audio.voice_limiter = picked
+
+
+async def change_loudness(screen: SettingsScreen, config: RemangaConfig) -> None:
+    audio = config.audio
+    current = audio.loudness_target_lufs if audio.enable_loudnorm else None
+    options = [(f"{lufs:g} LUFS" if lufs is not None else "off", hint, lufs if lufs is not None else "off")
+               for lufs, hint in LOUDNESS_TARGETS]
+    if current is not None and all(current != lufs for lufs, _ in LOUDNESS_TARGETS):
+        options.insert(-1, (f"{current:g} LUFS", "your custom level", current))
+    options.insert(-1, ("Custom...", "type your own LUFS", "custom"))
+    note = ("Normalizes the finished mix to a standard loudness, the way YouTube measures it: a "
+            "quieter video is not turned up and sounds weak next to others. One gain for the whole "
+            "track - the limiter holds the few peaks it would push over. Changing it re-mixes the chapter.")
+    picked = await screen.app.push_screen_wait(Choice(
+        "Loudness", options, current=current if current is not None else "off", note=note))
+    if picked == "custom":
+        picked = await screen.app.push_screen_wait(Ask(
+            "Loudness", "Target in LUFS (-30 to -8)", value=f"{audio.loudness_target_lufs:g}",
+            check=number_check(-30, -8), note=note))
+    if picked == "off":
+        audio.enable_loudnorm = False
+    elif picked is not None:
+        audio.enable_loudnorm, audio.loudness_target_lufs = True, float(picked)

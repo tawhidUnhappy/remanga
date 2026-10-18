@@ -122,7 +122,7 @@ static/), `cropper/` (crops.json -> panels/: crop_page, panel_boxes, gutter/, se
 `pdf/` (`encode` one panel -> a PDF page, `pack` panels -> parts under the cap, `builder` wires
 them, `writer` the PDF itself, `manifest_info` the text page), `plugins/` (see Plug-ins above:
 engines, MAGI, faster-whisper, layouts, MangaDex, jobs - each a folder), `layouts.py`, `sources.py`,
-`audio/` (tts, mix, master, clips, manifest, synth/base = the worker lifecycle),
+`audio/` (tts, mix, master, clips, manifest, voice_chain, synth/base = the worker lifecycle),
 `video/` (`canvas` one panel on one frame, `quality` is this size enough, `frames` the frame cache,
 `compose` re-exports those three, `frame_timeline`, `render`, `encoding`), `config/`, `paths/`, `tool_envs/` +
 `workers/` + `models/` (isolated venvs + weights; each tool's spec is in its plug-in).
@@ -169,6 +169,12 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
 - **Caching chain:** audio_timing.json is rewritten only when content changes; mix fingerprints its
   mtime + BGM file stat + settings; render compares master_audio mtime and a picture fingerprint. A
   gratuitous rewrite anywhere upstream re-mixes and re-renders everything.
+- **Voice chain (2026-10-18):** `audio/voice_chain.py` runs bass shelf (150 Hz, rumble cut <60) +
+  acompressor (gentle/medium/strong, input set to -20 LUFS first) over the narration before the BGM,
+  then restores its measured loudness; `write_master` then normalizes + limits (limiter off = gain held
+  back to the peaks). Mix-time only, so changing Settings > Voice re-mixes, never re-narrates. Kokoro
+  speed (1.05-1.12 presets) is a generation parameter and does re-narrate. Bump VOICE_CHAIN_VERSION
+  if the chain's output changes for the same settings.
 - **The gap between panels is trimmed, not just padded.** Qwen bakes an uneven lead-in into every
   clip - measured over a finished 137-panel chapter: lead median 370 ms, range 0-460, stdev 164;
   tail median 60 ms. Added to a 350 ms pause that was a median 780 ms gap that wobbled by panel,

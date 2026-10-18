@@ -48,6 +48,17 @@ class AudioConfig(ConfigModel):
     # it is offered again next time beside the presets, whichever level is in
     # use. None until one has been typed.
     bgm_custom_lu: float | None = None
+    # The voice chain (audio/voice_chain.py), over the narration before the
+    # music goes under it. Re-mixes only - nothing is narrated again.
+    # Compressor: "off", "gentle", "medium" or "strong" - evens the loud and
+    # quiet parts so the voice sounds thick and close to the mic.
+    voice_compressor: str = "medium"
+    # A low shelf at 150 Hz, in dB (0 = off): the deep radio-narrator chest.
+    voice_bass_boost_db: float = 3.0
+    # A peak limiter on the finished mix, so the loudness pass can bring it up
+    # without a peak clipping. Off, a mix whose peaks would clip is held
+    # quieter than the target instead.
+    voice_limiter: bool = True
     # Normalize the finished mix to `loudness_target_lufs` (two-pass, linear -
     # the level changes, the dynamics don't).
     enable_loudnorm: bool = True
