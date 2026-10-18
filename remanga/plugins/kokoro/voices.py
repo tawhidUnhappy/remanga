@@ -68,6 +68,15 @@ VOICE_BY_NAME = {v.name: v for v in KOKORO_VOICES}
 # coin flip, which is why it isn't silently the default.
 DEFAULT_VOICE = "af_heart"
 
+# How the best voice is marked wherever voices are listed - the picker, the
+# settings row, the voice samples - so it can be found without reading grades.
+BEST_MARK = "★ best"
+
+
+def marked_label(voice: KokoroVoice) -> str:
+    """The voice's label, with BEST_MARK on the best one."""
+    return f"{voice.label}  {BEST_MARK}" if voice.name == DEFAULT_VOICE else voice.label
+
 # Kokoro takes the accent as a one-character "lang_code" rather than reading
 # it off the voice name, and mismatching them produces a voice speaking with
 # the wrong accent's phonemes instead of an error. Derived from the voice so

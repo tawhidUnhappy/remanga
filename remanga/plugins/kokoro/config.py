@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from remanga.config.base import ConfigModel
-from remanga.plugins.kokoro.voices import DEFAULT_VOICE, KOKORO_VOICES, KokoroVoice, lang_code_for, voice_spec
+from remanga.plugins.kokoro.voices import DEFAULT_VOICE, KOKORO_VOICES, KokoroVoice, lang_code_for, marked_label, voice_spec
 
 
 class KokoroConfig(ConfigModel):
@@ -25,7 +25,7 @@ class KokoroConfig(ConfigModel):
         """Every voice this engine can read in: (what it is called in config,
         what a person should see). The settings list and the voice sampler
         both read this, so neither can list a voice the other does not."""
-        return [(v.name, f"{v.label} - grade {v.grade}, {v.accent}") for v in KOKORO_VOICES]
+        return [(v.name, f"{marked_label(v)} - grade {v.grade}, {v.accent}") for v in KOKORO_VOICES]
 
     @property
     def spec(self) -> KokoroVoice:
@@ -33,7 +33,7 @@ class KokoroConfig(ConfigModel):
 
     @property
     def voice_label(self) -> str:
-        return self.spec.label
+        return marked_label(self.spec)
 
     @property
     def voice_detail(self) -> str:

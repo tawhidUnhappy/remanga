@@ -4,16 +4,16 @@ ui/voice_settings.py for the rows every engine shares and how a row works."""
 from __future__ import annotations
 
 from remanga.config import RemangaConfig
-from remanga.plugins.kokoro.voices import KOKORO_VOICES
+from remanga.plugins.kokoro.voices import KOKORO_VOICES, marked_label
 from remanga.ui.dialogs import Ask, Choice, number_check
 from remanga.ui.voice_rows import Row, wait_for
 
 
 async def _pick_kokoro_voice(screen, config: RemangaConfig) -> None:
     voice = await wait_for(screen)(Choice(
-        "Narrator voice", [(v.label, f"grade {v.grade} · {v.accent}", v.name) for v in KOKORO_VOICES],
+        "Narrator voice", [(marked_label(v), f"grade {v.grade} · {v.accent}", v.name) for v in KOKORO_VOICES],
         current=config.tts.kokoro.voice,
-        note="Kokoro-82M's own voices, best graded first. A new voice narrates chapters again."))
+        note="Kokoro-82M's own voices, best graded first - ★ marks the best one. A new voice narrates chapters again."))
     if voice:
         config.tts.kokoro.voice = voice
 
