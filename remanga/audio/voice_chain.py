@@ -20,7 +20,7 @@ from pydub import AudioSegment
 from remanga.audio.breath import BREATHS, add_breath
 from remanga.audio.master import integrated_loudness
 from remanga.audio.microphone import MICROPHONES, mic_filters, place_in_room, read_wav, speech_level, write_wav
-from remanga.audio.phone import RECORDINGS, phone_filters, record_on_phone
+from remanga.audio.phone import RECORDINGS, phone_filters, record_on_phone, through_codec
 from remanga.config import AudioConfig
 from remanga.console import console, escape as _esc
 from remanga.ffmpeg_io import run_ffmpeg
@@ -86,7 +86,7 @@ def voice_filters(config: AudioConfig, input_lufs: float | None) -> list[str]:
 def at_the_mic(path: Path, config: AudioConfig) -> None:
     """What reaches the mic with the voice, added to the wav at `path` in
     place: the narrator's breath (audio/breath.py) and, on a phone, the
-    room's noise and the phone's suppressor (audio/phone.py). Before the
+    room's hiss, the phone's gate and its codec (audio/phone.py). Before the
     chain, so it shapes them as it shapes the voice."""
     if config.voice_breath not in BREATHS and config.voice_recording not in RECORDINGS:
         return
@@ -95,6 +95,8 @@ def at_the_mic(path: Path, config: AudioConfig) -> None:
     x = add_breath(x, seg.frame_rate, speech, config.voice_breath)
     x = record_on_phone(x, seg.frame_rate, speech, config.voice_recording)
     write_wav(path, seg, x)
+    if config.voice_recording in RECORDINGS:
+        through_codec(path)
 
 
 def polish_voice(track: AudioSegment, work_dir: Path, config: AudioConfig) -> AudioSegment:
@@ -114,7 +116,7 @@ def polish_voice(track: AudioSegment, work_dir: Path, config: AudioConfig) -> Au
         console.print(f"[cyan]Voice chain:[/] [dim]{_esc(', '.join(filters))}[/]")
         run_ffmpeg(["ffmpeg", "-y", "-i", str(raw), "-af", ",".join(filters), "-ar", str(config.sample_rate),
                     "-ac", str(track.channels), str(polished)], check=True, capture=True)
-        place_in_room(polished, config.voice_microphone)
+        place_in_room(polished, config.voice_microphone, tone=config.voice_recording not in RECORDINGS)
         out = AudioSegment.from_file(polished)
         after = integrated_loudness(polished)
         if before is not None and after is not None:

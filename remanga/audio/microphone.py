@@ -109,10 +109,11 @@ def speech_level(mono: np.ndarray, sample_rate: int) -> float:
     return float(np.sqrt(np.mean(np.square(rms[rms >= np.median(rms)])))) if rms.size else 0.0
 
 
-def place_in_room(path: Path, style: str) -> None:
+def place_in_room(path: Path, style: str, tone: bool = True) -> None:
     """The room (studio) and the room tone (both) added to the wav at `path`,
     in place. The tone is set from the voice's own level, so it sits the
-    same distance under every chapter."""
+    same distance under every chapter. No tone when a phone's gate has
+    already made the pauses black (audio/phone.py) - it would fill them."""
     if style not in MICROPHONES:
         return
     seg, x = read_wav(path)
@@ -121,6 +122,6 @@ def place_in_room(path: Path, style: str) -> None:
         wet = signal.oaconvolve(mono, room_impulse(seg.frame_rate).astype(np.float32))[: len(mono)]
         x = x + wet[:, None]
     speech = speech_level(mono, seg.frame_rate)
-    if speech > 0:
+    if tone and speech > 0:
         x = x + room_tone(len(x), seg.frame_rate, speech * 10 ** (-ROOM_TONE_UNDER_DB / 20))[:, None]
     write_wav(path, seg, x)

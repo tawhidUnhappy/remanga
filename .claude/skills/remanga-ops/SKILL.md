@@ -180,12 +180,15 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   microphone"); LIMITER_MARGIN_DB 0.5 -> 1.0 so a -12 master stays under -1 dBTP (measured -1.3).
 - **Breath on mic + phone recording (2026-10-18):** `audio.voice_breath` off/light/strong (`audio/breath.py`:
   low air-thump pops 8 ms after onsets loud within 10 ms of a pause, >= 2.5 s apart; mouth inhales in pauses
-  >= 120 ms) and `audio.voice_recording` off/phone (`audio/phone.py`: pink+fan room noise 30 dB under speech,
-  then a decision-directed Wiener suppressor, floor -20 dB, DD 0.9, STFT 1024/256 in 30 s blocks; phone EQ
-  last in the chain). Both run on the raw track BEFORE the chain (`voice_chain.at_the_mic`). **Not afftdn**: it
-  delays audio 25 ms (video drifts off the words) and cut this noise only ~2 dB. Fingerprint names the two keys
-  only when on, so old mixes stay cached. Preset youtube-narrator-phone = mic-close + strong + phone.
-  Full 11.5-min chapter: 24 s, 2.1 GB peak, -12.2 LUFS / -1.3 dBTP, length unchanged; pauses -30 -> -45 dB.
+  >= 120 ms). `audio.voice_recording` off/phone (`audio/phone.py`), matched to the user's reference (a recap
+  narration, `/mnt/datadisk/Isekaid Boy ... Relatives.mp3`): voice -3 dB shelf at 5.5 kHz, white hiss >2.5 kHz
+  37 dB under speech, a gate driven by the voice (open -32 dB, hold 30 ms, 25 ms to -50 dB), faint 50 Hz-harmonic
+  hum, then **Opus 24 kbps voip round trip** (no delay, same length - verified), highpass 110 + lowpass 12 kHz
+  last in the chain; no room tone for phone (it filled the black pauses). Speech spectrum 5-12.5 kHz within
+  ~2 dB of the reference. **v1 was rejected ("this one is not it")**: a Wiener suppressor left a hiss carpet in
+  the pauses; the reference is gate + codec haze that swells per syllable, seen only on a zoomed
+  spectrogram (`showspectrumpic` -> Read the PNG) - compare pictures, not just band averages. afftdn: 25 ms
+  delay, ~2 dB. Fingerprint names the two keys only when on. Preset youtube-narrator-phone = mic-close + both.
 - **Longest pause / no-gaps preset (2026-10-18):** `audio/gaps.py` cuts every inner silence over
   `audio.max_gap_ms` to it (35 dB under the take's p95 frame = silent, middle cut, 8 ms crossfade) as the
   take comes back (`load_take`: takes.py, retakes.py, per-panel tts.py) - BEFORE hums/whisper/spans, so the

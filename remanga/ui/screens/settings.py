@@ -127,7 +127,7 @@ class SettingsScreen(Screen):
             Row("Breath on mic", breath_label(audio.voice_breath), change_breath,
                 "air pops and inhales, no pop filter", "Voice", ("audio.voice_breath",)),
             Row("Recording", recording_label(audio.voice_recording), change_recording,
-                "phone: room noise, then noise removal", "Voice", ("audio.voice_recording",)),
+                "phone: gated hiss, voice codec", "Voice", ("audio.voice_recording",)),
             Row("Limiter", "on" if audio.voice_limiter else "off", change_limiter,
                 "loud without distorting", "Voice", ("audio.voice_limiter",)),
             Row("Loudness", loudness_label(audio), change_loudness,
