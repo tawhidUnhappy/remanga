@@ -190,7 +190,8 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   short pause exposed a hum burst. **Never synthesize a pitched thump** (sine falling ~100->40 Hz = a kick drum):
   breath pops are toneless 40-500 Hz noise puffs, 1 ms attack, ~12 ms decay. Compare zoomed spectrograms
   (`showspectrumpic` -> Read the PNG), not just band averages. afftdn: 25 ms delay, ~2 dB. Fingerprint names
-  the two keys only when on. Preset youtube-narrator-phone = mic-close + strong breath + phone.
+  the two keys only when on. Preset youtube-narrator-phone (mic-close + strong breath + phone) was removed
+  2026-10-18 after the user compared all presets; the two settings stay as rows.
 - **Longest pause / no-gaps preset (2026-10-18):** `audio/gaps.py` cuts every inner silence over
   `audio.max_gap_ms` to it (35 dB under the take's p95 frame = silent, middle cut, 8 ms crossfade) as the
   take comes back (`load_take`: takes.py, retakes.py, per-panel tts.py) - BEFORE hums/whisper/spans, so the
