@@ -710,6 +710,20 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     around - which is what quiet.py imitates. Visually checked on Skeleton Soldier too (sword + SFX
     kept together, bubbles attached, fade dropped). Evaluation scripts were in the scratchpad
     (proto/evalnew/compare/signals.py) - rebuild them the same way: score IoU >= 0.8 both ways.
+  - **Detector v4, 2026-10-19 (user, Ghost Story Club ch 2 screenshots: one picture cut at its fence
+    line and again mid-ground; "more accurately detect panels").** Scored on all three hand-marked
+    chapters (Ghost ch1, Urban ch1, Invincible ch1; 250 cuts, a cut matches within 60 rows): ~140
+    rows passed the border vote and only 3 were cuts the user kept - a horizon, fence, desk or caption
+    box edge scores like a cut, and those were the false cuts. Their gutterless cuts are almost all
+    editorial splits at calm rows (score ~0). So: **borders never cut on their own**; in `quiet.py`
+    a too-tall picture is split at its strongest border (score >= 0.6) in the middle part first, else
+    at the calmest stretch. Also `gutters.py` trims each gutter to its CLEAN rows (full width, <= 1 ink
+    pixel > 48 off the colour) and drops one with none - a bubble hanging across a white gutter was
+    being cut in half (Urban ch1 x2). `FEATURELESS` 4 -> 15 (every user panel has a row with spread
+    >= 36; a white fade between two gutters had 6) and touching gutters leave no zero-height piece.
+    Result: same 18 misses, false cuts 37 -> 24 (rest: credits pages, debatable calm splits).
+    `SLICER_VERSION` 5. A chapter whose proposal was already auto-saved keeps it until Auto (R).
+    Rejected: smaller glue share (0.35/0.25: more false cuts), border-only thresholds (0.8/0.9 = none).
   - **Strip Marker visibility (same day, user):** "hard to see what I'm marking, no focus, no option
     to make a new mark". Now: per-panel colours (overlay.js PALETTE) with a dark double edge (reads on
     white and black art) and no tint, big number badge, hatched rows no panel covers; the selected

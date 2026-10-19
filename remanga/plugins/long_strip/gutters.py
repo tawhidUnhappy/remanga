@@ -17,7 +17,13 @@ prove itself on the strip first:
    ("strong" - white or black gutters) or at least LOCAL_REPEATS times within
    LOCAL_WINDOW rows around it ("local" - a flashback in black, a scene in pink,
    with gutters of its own colour). A one-off flat patch is neither and never
-   cuts.
+   cuts;
+4. a gutter is only its CLEAN rows - rows with no ink at all across the full
+   width. A bubble or caption hanging between two panels on a white gutter
+   leaves its rows solid when sampled (the outline is a few pixels), but its
+   outline crosses every one of them: cutting there split the bubble in two
+   (two of them on one real chapter). So a gutter is trimmed to its clean
+   rows, and one with none is no gutter.
 
 Webtoons use more than one gutter colour, so there is no single "the gutter
 colour": every colour that verifies is used, each where it verifies. All numpy,
@@ -39,6 +45,8 @@ SAME_COLOR = 16            # max per-channel difference to count as one colour
 STRONG_REPEATS = 3
 LOCAL_REPEATS = 2
 LOCAL_WINDOW = 6000        # rows either side
+INK = 48                   # per-channel difference from the gutter colour that is ink, not noise
+MAX_INK_PIXELS = 1         # a clean row has at most this many ink pixels
 
 
 @dataclass(frozen=True)
@@ -76,6 +84,16 @@ def candidate_runs(median: np.ndarray, share: np.ndarray) -> list[tuple[int, int
     return runs
 
 
+def clean_rows(arr: np.ndarray, top: int, bottom: int, color) -> tuple[int, int] | None:
+    """The run trimmed to its first and last clean rows, at full width - None
+    when no row of it is clean (something drawn crosses all of it)."""
+    ink = (np.abs(arr[top:bottom].astype(np.int16) - np.array(color, np.int16)).max(axis=2) > INK).sum(axis=1)
+    clean = np.flatnonzero(ink <= MAX_INK_PIXELS)
+    if not clean.size:
+        return None
+    return top + int(clean[0]), top + int(clean[-1]) + 1
+
+
 def group_of(color, groups: list[tuple[int, int, int]]) -> int:
     for i, known in enumerate(groups):
         if max(abs(a - b) for a, b in zip(color, known, strict=True)) <= SAME_COLOR:
@@ -90,7 +108,11 @@ def verified_gutters(arr: np.ndarray) -> list[Gutter]:
     between panels, and are left out."""
     height = arr.shape[0]
     median, share = row_colors(arr)
-    runs = [r for r in candidate_runs(median, share) if r[0] > 0 and r[1] < height]
+    runs = []
+    for top, bottom, color in candidate_runs(median, share):
+        trimmed = clean_rows(arr, top, bottom, color) if top > 0 and bottom < height else None
+        if trimmed:
+            runs.append((*trimmed, color))
     colors: list[tuple[int, int, int]] = []
     group = [group_of(color, colors) for _, _, color in runs]
     # A repeat only counts with art between the two: the steps of one fade

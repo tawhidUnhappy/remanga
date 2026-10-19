@@ -1,17 +1,26 @@
-"""A long strip's panels, proposed by several methods voting together, as
+"""A long strip's panels, proposed by several methods together, as
 [top, bottom) rows of one run:
 
 1. gutters.py  - rows of one colour, trusted as gutters only once the strip
                  proves that colour separates panels (a flat sky never does);
-2. borders.py  - borders with no gutter: a straight cut across the width, a
-                 new picture starting, or two scenes' colours meeting
-                 (signals.py fuses the three);
-3. glued       - a small piece (a bubble, a sound effect floating between two
+                 the art between them is the first cut;
+2. glued       - a small piece (a bubble, a sound effect floating between two
                  panels) joins the neighbour across the narrower gap;
-4. blank       - a piece with no busy row (a plain fade, blank paper) is dropped;
-5. quiet.py    - a picture taller than 1.8x the width is split at its calmest
-                 stretch, never forced; one with none stays whole and is
-                 reported as tall, for a look.
+3. blank       - a piece with no busy row (a plain fade, blank paper) is dropped;
+4. quiet.py    - a picture taller than 1.8x the width is split - at a strong
+                 border (borders.py: a straight cut across the width, a new
+                 picture starting, two scenes' colours meeting) if there is
+                 one in its middle part, else at its calmest stretch, never
+                 forced; one with neither stays whole and is reported as tall,
+                 for a look.
+
+Borders never cut a picture on their own. Measured against the user's marks
+on three chapters (253 panels), about 140 rows passed the border vote, and
+only 3 were cuts the user kept: a straight line inside a picture - a horizon,
+a fence, a desk, a caption box's edge - looks just like a cut to it, and
+those false cuts were the complaint (2026-10-19). Kept only as split points
+of a too-tall picture, they still find the user's cuts they found before,
+with a third fewer false ones.
 
 No fixed-point splitting: the method this replaced cut every tall block at
 even intervals whatever was there, through faces and bubbles."""
@@ -27,13 +36,16 @@ from PIL import Image
 from remanga.plugins.long_strip.borders import borders
 from remanga.plugins.long_strip.gutters import Gutter, verified_gutters
 from remanga.plugins.long_strip.quiet import TALL, split_tall
-from remanga.plugins.long_strip.signals import measure
+from remanga.plugins.long_strip.signals import border_score, measure
 
 Range = tuple[int, int]
 
 SMALL_SHARE = 0.45      # a piece shorter than this x the width is glued, not a panel
-EDGE_MARGIN = 0.08      # a border this close (x width) to a gutter is that gutter's own edge
-FEATURELESS = 4.0
+STRONG_BORDER = 0.6     # fused border score a border needs to split a tall picture
+# A piece whose busiest row has less grey spread than this is blank (a fade,
+# paper, JPEG noise on white): every panel the user marked on three chapters
+# has a row over 36, a soft white fade between two gutters 6.
+FEATURELESS = 15.0
 PADDING = 2
 
 
@@ -41,28 +53,16 @@ PADDING = 2
 class Detection:
     panels: list[Range] = field(default_factory=list)
     gutters: list[Gutter] = field(default_factory=list)
-    borders: list[int] = field(default_factory=list)    # cuts found with no gutter
+    borders: list[int] = field(default_factory=list)    # borders found with no gutter
     tall: list[Range] = field(default_factory=list)     # panels left taller than TALL x width
 
 
 def between_gutters(height: int, gutters: list[Gutter]) -> list[Range]:
-    """The art between the gutters, padded a little into each."""
+    """The art between the gutters, padded a little into each - none between
+    two gutters that touch (the steps of a fade)."""
     edges = [0] + [y for g in gutters for y in (g.top, g.bottom)] + [height]
-    out = []
-    for top, bottom in zip(edges[::2], edges[1::2], strict=True):
-        top, bottom = max(0, top - PADDING), min(height, bottom + PADDING)
-        if bottom > top:
-            out.append((top, bottom))
-    return out
-
-
-def cut_at(blocks: list[Range], cuts: list[int], margin: int) -> list[Range]:
-    """Each block split at the borders inside it (not at its own edges)."""
-    out = []
-    for top, bottom in blocks:
-        inner = [y for y in cuts if top + margin <= y <= bottom - margin]
-        out += list(pairwise([top, *inner, bottom]))
-    return out
+    return [(max(0, top - PADDING), min(height, bottom + PADDING))
+            for top, bottom in zip(edges[::2], edges[1::2], strict=True) if bottom > top]
 
 
 def glue_small(pieces: list[Range], width: int) -> list[Range]:
@@ -97,9 +97,10 @@ def detect(image: Image.Image) -> Detection:
     signals = measure(arr)
     gutters = verified_gutters(arr)
     found = borders(signals)
-    pieces = cut_at(between_gutters(height, gutters), found, int(EDGE_MARGIN * width))
-    pieces = glue_small(pieces, width)
+    score = border_score(signals)
+    strong = [(y, float(score[y])) for y in found if score[y] >= STRONG_BORDER]
+    pieces = glue_small(between_gutters(height, gutters), width)
     pieces = [p for p in pieces if float(signals.busy[p[0]:p[1]].max(initial=0)) > FEATURELESS]
-    panels = [part for top, bottom in pieces for part in split_tall(top, bottom, signals.energy, width)]
+    panels = [part for top, bottom in pieces for part in split_tall(top, bottom, signals.energy, width, strong)]
     tall = [p for p in panels if p[1] - p[0] > TALL * width]
     return Detection(panels, gutters, found, tall)

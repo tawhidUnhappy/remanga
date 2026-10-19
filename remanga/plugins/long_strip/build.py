@@ -35,7 +35,7 @@ from remanga.plugins.long_strip.tiles import StripView
 STRIP_DIR_NAME = "strip"
 STRIP_RECORD_NAME = "strip.json"
 # Bumped when the cutting changes: an unmarked strip is then proposed again.
-SLICER_VERSION = 4
+SLICER_VERSION = 5
 
 
 def strip_dir(project: str, chapter: str) -> Path:
