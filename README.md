@@ -230,13 +230,14 @@ never touched. From there the PDF and the video work as for any manga.
 
 ## The narrator
 
-Four engines built in (each a plug-in - see [Plug-ins](#plug-ins)), switchable in **Settings → Narrator engine**; each keeps its own voice, so switching
+Five engines built in (each a plug-in - see [Plug-ins](#plug-ins)), switchable in **Settings → Narrator engine**; each keeps its own voice, so switching
 back and forth changes nothing else. A chapter narrated by the other one is narrated again.
 
 | Engine | Voice | Speed |
 |---|---|---|
 | **Ming-3.0-tts** (default, via the Plain narrator preset) | five built-in English voices (Stella, James, Emma, Charlotte, George) | about 1.3x real time on a 3060 (a 13-minute chapter in ~17 minutes), ~4 GB of VRAM |
 | **Kokoro-82M** | its own studio voices, picked from a list | a 60-panel chapter in seconds |
+| **Edge voices** | Microsoft Edge's online US neural voices (Guy, Andrew, Brian, Christopher, Aria, Jenny...) - **needs the internet**, and it is Edge's Read Aloud service, not a licensed API: check Microsoft's terms before monetizing | a 14-minute chapter in ~90 seconds, no GPU |
 | **Qwen3-TTS** | nine preset narrators, steered by a line of plain English ("calm and unhurried") - or **a voice you design**: describe the narrator, and one sample is made and kept | about ten minutes for the same chapter |
 | **IndexTTS-2.5** | **a clone of any recording** in `global/voice/` - no transcript needed, it takes the voice from the first 15 seconds | about real time on a 3060 (a 40s take in ~45s), ~7 GB of VRAM |
 

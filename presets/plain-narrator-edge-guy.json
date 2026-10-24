@@ -1,0 +1,19 @@
+{
+  "name": "Edge Guy narrator",
+  "description": "Microsoft Edge's Guy voice (online), the whole chapter in one take, no effects, only brought up to -14 LUFS with a limiter",
+  "engine": "edge",
+  "voice": "en-US-GuyNeural",
+  "speed": 1.0,
+  "take_length": "whole_chapter",
+  "max_gap_ms": 0,
+  "panel_pause_ms": 0,
+  "compressor": "off",
+  "bass_boost_db": 0,
+  "presence_db": 0,
+  "microphone": "off",
+  "breath": "off",
+  "recording": "off",
+  "blended_noise_db": 0,
+  "limiter": true,
+  "loudness_lufs": -14
+}

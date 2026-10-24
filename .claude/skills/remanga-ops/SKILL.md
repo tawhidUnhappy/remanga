@@ -483,6 +483,13 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     already 0. Kokoro am_fenrir (deterministic) 11.9. Shorter takes cannot help - fragments are already
     independent. Plain narrator presets have loudness OFF: the long video measured -21.1 LUFS. Preset
     `plain-narrator-kokoro-male` = Fenrir 1.0x, whole chapter, no effects, limiter, -14 LUFS.
+  - **Edge voices engine (`edge`, 2026-10-24, user asked for Edge's Guy).** Plug-in `plugins/edge_tts/`,
+    venv `edge-tts` (edge-tts 7.3, no torch, no weights - `NoWeights` hands the worker base a dummy dir).
+    Worker: Communicate(text, voice, rate).save(mp3) with 4 tries, then system ffmpeg -> 24 kHz PCM_16 WAV.
+    edge-tts splits a whole chapter itself; the voice doesn't sample, so whole-chapter takes are safe.
+    Guy measured on HimeSama ch1: 14,156 chars -> 842.9s in 90s (16.8 chars/s; `speed` -> rate "+N%"),
+    timbre distance 4.1-8.6 over 14 min (George 5.5-18.3, Fenrir 2.0-4.7), F0 150-154 Hz. Preset
+    `plain-narrator-edge-guy`. Online + not a licensed API - said in the README; don't hide it.
   - **Kokoro reads the WHOLE CHAPTER as one take (2026-10-04, user: lines "immediately start"
     when takes are fitted together).** Cause: `pause_between_panels_ms` was 0, and a take join
     trims both takes to the word, so the next take began the instant the last word ended - with
