@@ -466,6 +466,13 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     pauses after sentences median 340ms (17/119 under 150ms - Kokoro's were ~420), raw -23.1 LUFS.
     Preset `plain-narrator` (the default) = Ming US_Stella, whole chapter, every effect off,
     no limiter, loudness off (user: "don't add any effect or anything").
+    **Male voice = UK_George, never US_James (2026-10-24, user asked for "its best male vocal").**
+    Same 2,064 chars of HimeSama ch1: James matched the script 96.8% and SPOKE TWO SENTENCES THAT
+    ARE NOT IN IT ("he is so happy that he doesn't want to leave the palace", "the girl stands up and
+    says") at a rushed 213 wpm, pitch spread 5.82 st; George 98.4% (only name spellings), nothing
+    invented, 169 wpm, 4.52 st. Preset `plain-narrator-male`. George reads ~15.3 chars/s, slower than
+    the engine's 18.7 (Stella's) - takes run ~1.2x their estimate, inside RUNAWAY_FACTOR 1.4. Check a
+    voice's script match with whisper before shipping it: an invented sentence passes every other check.
   - **Kokoro reads the WHOLE CHAPTER as one take (2026-10-04, user: lines "immediately start"
     when takes are fitted together).** Cause: `pause_between_panels_ms` was 0, and a take join
     trims both takes to the word, so the next take began the instant the last word ended - with
@@ -502,6 +509,15 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   buttons, secondary-container row highlight). `menus.look` in config.json; Settings > Menus > Look
   switches live; "terminal" = textual-dark, verified pixel-identical to the old menus. Screenshots:
   Pilot `save_screenshot` SVG -> cached chrome-headless-shell `--screenshot` PNG.
+- **Marking by hand without the marker UI (2026-10-24, user: "MAGI marks wrong 20% of the time,
+  mark them all manually").** Write crops.json directly: `box_1000` is **[ymin, xmin, ymax, xmax]**
+  (geometry.calculate_pixel_bounds), NOT l,t,r,b - the first cut came out transposed. Panels are cut
+  in list order (no re-sort), `src: "manual"`, `custom_order: true`. Page `"exact": true` skips
+  snapping/trim for a page where the snapper ate a caption letter at the page edge. **`page_index`
+  names the panels, `page_filename` finds the file** - so a scanlation that put a page out of order
+  (HimeSama ch2: printed page 32 shipped as file 002_041) is fixed by listing pages in story order
+  with sequential indexes. Check every cut panel on contact sheets - a box edge through a bubble
+  only shows there.
 - **Panel Marker opens in Adjust (user request, 2026-10-14)** for every chapter, marked or not
   (chapter-nav.js applyChapter); Adjust draws new boxes too, D switches to Draw.
 - **Job queue (user request, 2026-09-29).** `workflow/queue.py` holds jobs (project, chapter,
