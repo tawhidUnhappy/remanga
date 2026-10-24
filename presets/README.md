@@ -14,7 +14,7 @@ be reused there.
 |---|---|---|
 | `name` | text (required) | what Settings shows |
 | `description` | text | the hint beside it |
-| `engine` | `kokoro`, `qwen`, `index_tts`, ... | Narrator engine |
+| `engine` | `ming`, `kokoro`, `qwen`, `index_tts`, ... | Narrator engine |
 | `voice` | a voice of that engine, e.g. `af_heart` | Narrator voice |
 | `speed` | e.g. `1.08` (1.0 = normal) | Speaking speed |
 | `take_length` | minutes, `"whole_chapter"` or `"per_panel"` | Narration take length |

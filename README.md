@@ -12,7 +12,7 @@ Manga panels to recap video, in five steps:
 4. **Give the PDF and `prompts/narration.md` to an LLM** (Gemini, ChatGPT, Claude, ...) and paste its
    one JSON reply into the chapter's `narration.json` - or write it yourself in the Narration Writer,
    and check what the LLM wrote in the Narration Reviewer.
-5. **Make the video**: each panel on screen while Kokoro-82M reads that panel's narration, with
+5. **Make the video**: each panel on screen while the narrator (Ming-3.0-tts by default) reads that panel's narration, with
    background music underneath.
 
 ## Install
@@ -219,12 +219,13 @@ never touched. From there the PDF and the video work as for any manga.
 
 ## The narrator
 
-Three engines built in (each a plug-in - see [Plug-ins](#plug-ins)), switchable in **Settings → Narrator engine**; each keeps its own voice, so switching
+Four engines built in (each a plug-in - see [Plug-ins](#plug-ins)), switchable in **Settings → Narrator engine**; each keeps its own voice, so switching
 back and forth changes nothing else. A chapter narrated by the other one is narrated again.
 
 | Engine | Voice | Speed |
 |---|---|---|
-| **Kokoro-82M** (default) | its own studio voices, picked from a list | a 60-panel chapter in seconds |
+| **Ming-3.0-tts** (default, via the Plain narrator preset) | five built-in English voices (Stella, James, Emma, Charlotte, George) | about 1.3x real time on a 3060 (a 13-minute chapter in ~17 minutes), ~4 GB of VRAM |
+| **Kokoro-82M** | its own studio voices, picked from a list | a 60-panel chapter in seconds |
 | **Qwen3-TTS** | nine preset narrators, steered by a line of plain English ("calm and unhurried") - or **a voice you design**: describe the narrator, and one sample is made and kept | about ten minutes for the same chapter |
 | **IndexTTS-2.5** | **a clone of any recording** in `global/voice/` - no transcript needed, it takes the voice from the first 15 seconds | about real time on a 3060 (a 40s take in ~45s), ~7 GB of VRAM |
 
@@ -369,8 +370,8 @@ particular one:
 
 | Kind | What it is | Built in (`remanga/plugins/`) |
 |---|---|---|
-| `tts` | a narrator engine: its settings block, synthesizer, worker, Settings rows | `kokoro/`, `qwen_tts/`, `index_tts/` |
-| `tool` | an isolated environment (`.tools/venv-<name>`) | registered by `kokoro/`, `qwen_tts/`, `index_tts/`, `magi/`, `faster_whisper/` |
+| `tts` | a narrator engine: its settings block, synthesizer, worker, Settings rows | `kokoro/`, `ming_tts/`, `qwen_tts/`, `index_tts/` |
+| `tool` | an isolated environment (`.tools/venv-<name>`) | registered by `kokoro/`, `ming_tts/`, `qwen_tts/`, `index_tts/`, `magi/`, `faster_whisper/` |
 | `layout` | how a chapter is marked into panels | `pages/` (Panel Marker + MAGI), `long_strip/` (Strip Marker) |
 | `source` | where manga come from | `mangadex/` |
 | `job` | something the queue can do to a chapter | `jobs/` |
@@ -396,7 +397,8 @@ Every setting is in `config.json` and applies to every project:
 
 | Key | Default | Meaning |
 |---|---|---|
-| `tts.engine` | `kokoro` | who narrates - any `tts` plug-in: `kokoro` (fixed voices, seconds a chapter) or `qwen` (preset narrators or a voice you design, minutes a chapter) or `index_tts` (a clone of a recording, about real time) |
+| `tts.engine` | `kokoro` | who narrates - any `tts` plug-in: `kokoro` (fixed voices, seconds a chapter) or `ming` (five built-in English voices, about 1.3x real time) or `qwen` (preset narrators or a voice you design, minutes a chapter) or `index_tts` (a clone of a recording, about real time) |
+| `tts.ming.voice` | `US_Stella` | Ming-3.0-tts's built-in voice: `US_Stella`, `US_James`, `US_Emma`, `UK_Charlotte`, `UK_George` |
 | `tts.kokoro.voice` / `.speed` | `af_heart` / 1.0 | Kokoro's voice and pace - 1.0 is its own (about 185 words a minute); past about 1.35 it drops the pauses between sentences |
 | `tts.qwen.speaker` / `.instruct` | `Ryan` / monotone... | Qwen3-TTS's preset narrator and how it reads - the default asks for a monotone read, because anything warmer makes the model act |
 | `tts.qwen.design` / `.designed_sample` | - | the voice you described, and the sample every panel is then spoken from |

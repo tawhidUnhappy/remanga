@@ -226,7 +226,8 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   narrated panel's text (user request). check.py errors when nothing narrated follows it and warns past
   30% merged. load_narration drops it like any skip.
 - **Narration presets (2026-10-18):** `presets/*.json` (keys in presets/README.md), picked in Settings ->
-  Narration preset, stored as `narration_preset`; default `youtube-narrator` = Kokoro 1.08x, whole-chapter
+  Narration preset, stored as `narration_preset`; default since 2026-10-24 `plain-narrator` (Ming, see below);
+  before that `youtube-narrator` = Kokoro 1.08x, whole-chapter
   take, voice af_heart, medium compressor, +3 dB bass, limiter, -14 LUFS. Settings -> Save as preset writes the
   current settings to `global/presets/<id>.json` (gitignored, shown as "(yours)"; can't reuse a shipped id). `config/presets.py` applies it in RemangaConfig's
   after-validator on every load, so it beats config.json; rows it fixes show `(preset)` and are locked.
@@ -445,6 +446,19 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     for 0.7s (their own soft ending into soft opening; a deeper 20 dB trim did not change it).
     `BED_VERSION` is in mix.py's fingerprint so old mixes re-mix. Side note: the master WAV is
     -1.1 dBTP but the 192k AAC in the MP4 measured -0.7 dBTP (encoder overshoot) - not clipping.
+  - **Ming-3.0-tts-0.5B engine (`ming`, 2026-10-24, user asked for a better TTS; MIT).** Plug-in
+    `plugins/ming_tts/`, venv `ming-tts` (torch 2.8 - upstream pins 2.6, no cu129 wheels;
+    transformers 4.46.3 pinned; pynini for text normalization). Upstream is NOT pip-installable: its
+    source is a tarball at `setup.MING_COMMIT` in `.tools/ming-tts-src-<sha12>`, put on the worker's
+    sys.path. Task "IP" (built-in voice, zero speaker embedding), 5 English voices. Footguns: its own
+    save writes 32-bit float WAV, which `audio_seconds` (stdlib wave) can't open - the worker writes
+    PCM_16 itself. run.sh exports HF_HUB_ENABLE_HF_TRANSFER=1 but no venv has hf_transfer, so a
+    first weight download through run.sh fails - download_ming_tts.py forces it to 0 when missing
+    (the other engines' downloaders still have this latent bug). Verified GhostStoryClubRemake ch2:
+    14,890 chars -> one 798.6s take in 1045s (RTF 1.31, 18.65 chars/s), whisper 98.8% matched,
+    pauses after sentences median 340ms (17/119 under 150ms - Kokoro's were ~420), raw -23.1 LUFS.
+    Preset `plain-narrator` (the default) = Ming US_Stella, whole chapter, every effect off,
+    no limiter, loudness off (user: "don't add any effect or anything").
   - **Kokoro reads the WHOLE CHAPTER as one take (2026-10-04, user: lines "immediately start"
     when takes are fitted together).** Cause: `pause_between_panels_ms` was 0, and a take join
     trims both takes to the word, so the next take began the instant the last word ended - with

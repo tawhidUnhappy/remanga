@@ -35,8 +35,8 @@ if TYPE_CHECKING:
 PRESETS_DIR = REPO_ROOT / "presets"
 CUSTOM_PRESETS_DIR = GLOBAL_DIR / "presets"
 
-# Picked until someone picks otherwise: presets/youtube-narrator.json.
-DEFAULT_PRESET = "youtube-narrator"
+# Picked until someone picks otherwise: presets/plain-narrator.json.
+DEFAULT_PRESET = "plain-narrator"
 
 # Bigger than any chapter - the same as ui/screens/settings_sound.py:WHOLE_CHAPTER.
 WHOLE_CHAPTER_MINUTES = 999.0
