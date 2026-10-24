@@ -473,6 +473,16 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     invented, 169 wpm, 4.52 st. Preset `plain-narrator-male`. George reads ~15.3 chars/s, slower than
     the engine's 18.7 (Stella's) - takes run ~1.2x their estimate, inside RUNAWAY_FACTOR 1.4. Check a
     voice's script match with whisper before shipping it: an invented sentence passes every other check.
+    **Ming's built-in voices wander over a long chapter (2026-10-24, user: "the vocal changes, at the start
+    it is ok but as it becomes lengthy it becomes different", plus "low volume").** Not drift: upstream
+    splits text into ~24-char fragments and generates each INDEPENDENTLY with a zero speaker embedding, so
+    every fragment re-samples the voice. Measured on 6 fragments of HimeSama ch1 (MFCC-mean pairwise
+    distance; content alone puts a floor ~12): George plain 32.0; anchored to a fixed George reference via
+    prompt_wav + prompt_text + use_spk_emb 25.7 (the reference text never leaked, 0/18); reference audio
+    without the embedding 36.1 (worse); sigma 0.25 -> 0.1/0.0 changes nothing (24.8-26.4); temperature is
+    already 0. Kokoro am_fenrir (deterministic) 11.9. Shorter takes cannot help - fragments are already
+    independent. Plain narrator presets have loudness OFF: the long video measured -21.1 LUFS. Preset
+    `plain-narrator-kokoro-male` = Fenrir 1.0x, whole chapter, no effects, limiter, -14 LUFS.
   - **Kokoro reads the WHOLE CHAPTER as one take (2026-10-04, user: lines "immediately start"
     when takes are fitted together).** Cause: `pause_between_panels_ms` was 0, and a take join
     trims both takes to the word, so the next take began the instant the last word ended - with
