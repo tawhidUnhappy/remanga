@@ -518,6 +518,15 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   (HimeSama ch2: printed page 32 shipped as file 002_041) is fixed by listing pages in story order
   with sequential indexes. Check every cut panel on contact sheets - a box edge through a bubble
   only shows there.
+  When reading boxes off a gridded overlay, read the GRID LABELS (units), never the image's pixel
+  rows: at a 1250-px-tall overlay the two differ by 1.25x, and 5 of 26 pages of HimeSama 3.x were cut
+  through panels that way before the contact sheets caught it.
+- **comix.to: "Error: Could not establish connection. Receiving end does not exist." (2026-10-24)** - the
+  extension's message when a job reaches the helper's tab while it is closing/reloading (a --force re-run
+  straight after the last one). Nothing is lost (pages are only swapped in after a whole, checked
+  download); running it again works. Downloads that sit silent for 10-20 min with no check showing are
+  the helper waiting on Firefox's background tab - they finished on their own (ch 3.1 took ~20 min).
+  Three --force passes of HimeSama 3.1-3.3 were byte-identical (34 pages, SHA-256).
 - **Panel Marker opens in Adjust (user request, 2026-10-14)** for every chapter, marked or not
   (chapter-nav.js applyChapter); Adjust draws new boxes too, D switches to Draw.
 - **Job queue (user request, 2026-09-29).** `workflow/queue.py` holds jobs (project, chapter,
