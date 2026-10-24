@@ -286,8 +286,11 @@ The LLM replies with one JSON block in two sections. Paste all of it into
 **Make video** checks the reply first. If a panel is missing, has no narration, or is skipped for no
 reason, nothing is narrated: the problems are listed and written to `pdf/chapter_N/fix_request.md` -
 paste that into the same chat and save the new reply over `narration.json`. It also warns (without
-stopping) when a panel's narration looks too short, or uses quotation marks, `?`, `!`, `...` or
-contractions, which the voice reads badly.
+stopping) when a panel's narration looks too short, or uses quotation marks or contractions, which
+the voice reads badly. `?`, `!` and `...` are welcome where a sentence really is a question, an
+exclamation or a trailing-off. Whatever no voice can say - emoji, symbols like ★ or ♪, Japanese,
+Chinese or Korean text - is taken out before the narrator reads it (`narration.json` keeps it), and
+accents, money and fractions are written plainly (Chloé -> Chloe, $5 -> 5 dollars, 3/4 -> 3 out of 4).
 
 Make each chapter's PDF after pasting the previous chapter's narration, so its story so far is up to
 date (the PDF step says so when an earlier chapter has none yet).

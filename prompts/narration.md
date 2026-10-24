@@ -105,9 +105,12 @@ that follows, the same words land on a picture with something in it.
 - **Report speech, never quote it.** No quotation marks. "I won't let you have him!" becomes *she
   refuses to let him have the boy*. Keep all of it: every claim, question, threat and insult in a
   bubble is reported - only the grammar changes, never the content.
-- **Every sentence ends in a period.** No question marks, no exclamation marks, no "...". A question
-  becomes *he asks where they are*; a shout becomes *she screams at him to run*; hesitation becomes
-  *after a brief pause*.
+- **End each sentence the way it is meant to sound.** Most end in a period. A sentence that is
+  itself a question ends in `?`, one that lands with force ends in `!`, and a thought that trails
+  off ends in `...` - the narrator's voice rises, punches or fades with them, so use them where the
+  moment really is one, not for decoration: *Something moves in the dark!*, *Where could he have
+  gone?*, *He hesitates... then admits the truth.* A character's own question or shout is still
+  reported: *he asks where they are*, *she screams at him to run*.
 - **No contractions.** Write *does not*, *cannot*, *it is*.
 - **One calm narrator, third person, present tense.** No opinions, no jokes, no addressing the
   viewer, no hints about what comes later. Emotion belongs to the characters: *he is furious*.
@@ -138,7 +141,8 @@ landscape. Watermarks, page numbers and publisher blurbs are never narrated.
   is `merged` and its lines open the next narrated panel's text.
 - Every line is in the right mouth: tail, bubble shape and the panels on either side agree with who
   you gave it to.
-- No quotation marks, `?`, `!`, `...` or contractions anywhere.
+- No quotation marks or contractions anywhere; `?`, `!` and `...` only where the sentence really is a
+  question, an exclamation or a trailing-off.
 - Heard straight through, the chapter sounds like one person telling the story.
 
 ## Reply
@@ -205,8 +209,9 @@ Below is one complete chapter of a DIFFERENT manga, narrated as wanted. Read it 
 how yours should read.
 
 **Take from it:**
-- the voice: third person, present tense, one calm narrator, no quotation marks, no `?`, `!` or
-  contractions - all of it is here, in practice rather than as a rule;
+- the voice: third person, present tense, one calm narrator, no quotation marks, no contractions -
+  all of it is here, in practice rather than as a rule (it happens to use no `?` or `!`; yours may,
+  where a sentence is one);
 - how speech is reported: every claim, question, threat and refusal turned into reported speech
   (*she asks the other woman's opinion*, *he urges her to stay hidden*), with nothing dropped;
 - how much is explained: what a look means, who these people are to each other, why a moment

@@ -1,7 +1,9 @@
 """Checking an LLM's narration reply against the chapter's panels
 (prompts/narration.md is the contract), and the fix request written when it
 does not check out: errors stop the video, warnings are the user's style
-(reported speech - no quote marks, no ?/!, no contractions)."""
+(reported speech - no quote marks, no contractions). `?`, `!` and `...` are
+allowed (user, 2026-10-24): the narrator ends a sentence with one where it
+is a question, an exclamation or a trailing-off."""
 
 from __future__ import annotations
 
@@ -51,10 +53,6 @@ def _style_warnings(stem: str, text: str) -> list[str]:
     found = []
     if re.search(r"[\"“”]", text):
         found.append("quotation marks")
-    if "?" in text or "!" in text:
-        found.append("a question or exclamation mark")
-    if "..." in text or "…" in text:
-        found.append("an ellipsis")
     contractions = sorted({m.group(0) for m in _CONTRACTION.finditer(text)})
     if contractions:
         found.append(f"contractions ({', '.join(contractions[:4])})")

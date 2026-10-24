@@ -23,6 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
+from remanga.narration.speakable import speakable
 from remanga.subtitles.normalize import words as normalize
 
 # A batch whose script matches this much of what whisper heard is aligned;
@@ -68,11 +69,12 @@ class Alignment:
 
 
 def _script_tokens(panels: list[tuple[str, str]]) -> tuple[list[str], list[int]]:
-    """Every word of the batch's script, and which panel each came from."""
+    """Every word of the batch's script as the engine was given it
+    (narration/speakable.py), and which panel each came from."""
     tokens: list[str] = []
     owners: list[int] = []
     for index, (_, text) in enumerate(panels):
-        for token in normalize(text):
+        for token in normalize(speakable(text)):
             tokens.append(token)
             owners.append(index)
     return tokens, owners

@@ -16,6 +16,7 @@ from remanga.audio.batching import CHARS_PER_SECOND, MAX_TAKE_SECONDS
 from remanga.config import AudioConfig
 from remanga.ffmpeg_io import run_ffmpeg
 from remanga.models import ModelManager
+from remanga.narration.speakable import speakable
 from remanga.workers import ToolWorker
 
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
@@ -167,7 +168,13 @@ class BaseWorkerSynthesizer(ToolWorker):
         sentence boundaries into several bounded calls first and the
         resulting clips re-joined into `output_wav` - see chunk_max_chars'
         docstring above for why. The rest of the pipeline never sees the
-        difference: still exactly one WAV at `output_wav` either way."""
+        difference: still exactly one WAV at `output_wav` either way.
+
+        Every engine reads `speakable(text)` (narration/speakable.py): what
+        no engine can voice - emoji, symbols, kana - is taken out here."""
+        text = speakable(text)
+        if not text:
+            raise ValueError("this narration has nothing a voice can read once its symbols are taken out")
         if self.chunk_max_chars and len(text) > self.chunk_max_chars:
             chunks = _split_text_into_chunks(text, self.chunk_max_chars)
             if len(chunks) > 1:

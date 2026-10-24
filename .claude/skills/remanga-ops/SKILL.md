@@ -151,8 +151,15 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   `narration._style_warnings` as it stands. **If the user changes that file, re-sync the section** -
   the prompt holds a copy, not a link, because the prompt is what gets uploaded.
 - `narration.load_narration` errors -> nothing synthesized, `pdf/chapter_N/fix_request.md` written.
-  Warnings only: <12 words per listed panel; quotes/?/!/.../contractions (the user's narration style:
-  reported speech, complete content, no quote marks, no ?/!, no contractions, one steady narrator).
+  Warnings only: <12 words per listed panel; quotes/contractions (the user's narration style:
+  reported speech, complete content, no quote marks, no contractions, one steady narrator).
+  `?`/`!`/`...` ALLOWED since 2026-10-24 (user): narrator sentences may end in them; still no quoted
+  dialogue. `narration/speakable.py` cleans text for every engine in `BaseWorkerSynthesizer.synthesize`
+  (and `align._script_tokens` aligns against the same cleaned text): NFKC, emoji/symbols/CJK dropped,
+  runs of marks collapsed, accents folded, $5 -> 5 dollars, 3/4 -> 3 out of 4. Measured why: Ming read
+  "Chloé ... café" as "Khlo ... CAF" and "$5 and 30 percent" as "$5.30"; Kokoro read 3/4 "three-four".
+  Delivery (pyin over . ? ! on 3 sentences): Ming's end pitch rises ~+9.5 st on ?, ~+7 on !, flat on
+  period; Kokoro ignores ? (no rise) and ! only lifts median F0 ~6%. 0 of 1,663 existing panels change.
 - The story so far lives only in narration.json: `make_pdf` reads the memory section of the nearest EARLIER chapter's
   narration.json (`narration.story_so_far`) and prints it on the text page, warning when earlier
   chapters have no narration yet. The user uploads only the prompt + PDF.
