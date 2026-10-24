@@ -71,6 +71,10 @@ class AudioConfig(ConfigModel):
     # mic - pops of air on hard word onsets, quick inhales in the pauses
     # (audio/breath.py).
     voice_breath: str = "off"
+    # "keep", "soften" or "strong": the creak (vocal fry) a narrator ends its
+    # phrases with - the "rhh" on the last syllable before a pause - its low
+    # rumble turned down, the word kept (audio/creak.py). First in the chain.
+    voice_creak: str = "keep"
     # "off" or "phone": recorded on a phone - hiss that rides with the voice,
     # then a voice codec (audio/phone.py).
     voice_recording: str = "off"

@@ -25,6 +25,7 @@ be reused there.
 | `presence_db` | dB at 4 kHz, `0` = off | Presence |
 | `microphone` | `"off"`, `"close"`, `"studio"` | Microphone |
 | `breath` | `"off"`, `"light"`, `"strong"` | Breath on mic |
+| `creak` | `"keep"`, `"soften"`, `"strong"` | Creaky endings (the "rhh" at phrase ends) |
 | `recording` | `"off"`, `"phone"` | Recording |
 | `blended_noise_db` | dB under the voice, `0` = off | Blended noise |
 | `limiter` | `true` / `false` | Limiter |

@@ -278,6 +278,27 @@ async def change_breath(screen: SettingsScreen, config: RemangaConfig) -> None:
         config.audio.voice_breath = picked
 
 
+CREAK_AMOUNTS = (("keep", "the narrator as it reads - phrase endings may creak"),
+                 ("soften", "the low rumble of a creaky ending turned down; the word stays"),
+                 ("strong", "that rumble turned well down, the ending set back a little"))
+
+
+def creak_label(amount: str) -> str:
+    return amount if amount in ("soften", "strong") else "keep"
+
+
+async def change_creak(screen: SettingsScreen, config: RemangaConfig) -> None:
+    picked = await screen.app.push_screen_wait(Choice(
+        "Creaky endings", [(name, hint, name) for name, hint in CREAK_AMOUNTS],
+        current=creak_label(config.audio.voice_creak),
+        note="Some voices let the last syllable before a pause fall into a low creak - a rough \"rhh\" at "
+             "the end of each sentence (Kokoro's Heart does it at most of them). This finds those endings "
+             "and turns down only their rumble, under 500 Hz; the rest of the speech is not touched and "
+             "no word is cut. Changing it re-mixes the chapter; nothing is narrated again."))
+    if picked:
+        config.audio.voice_creak = picked
+
+
 RECORDING_STYLES = (("off", "a proper mic - the voice and nothing else"),
                     ("phone", "recorded on a phone: hiss blended into the voice, voice codec"))
 

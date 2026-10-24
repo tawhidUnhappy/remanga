@@ -19,6 +19,7 @@ from pydub import AudioSegment
 
 from remanga.audio.blend import blend_noise
 from remanga.audio.breath import BREATHS, add_breath
+from remanga.audio.creak import CREAKS, soften_creak
 from remanga.audio.master import integrated_loudness
 from remanga.audio.microphone import MICROPHONES, mic_filters, place_in_room, read_wav, speech_level, write_wav
 from remanga.audio.phone import RECORDINGS, phone_filters, record_on_phone, through_codec
@@ -89,11 +90,14 @@ def at_the_mic(path: Path, config: AudioConfig) -> None:
     place: noise blended into the voice (audio/blend.py), the narrator's
     breath (audio/breath.py) and, on a phone, the hiss riding with the voice
     and the phone's codec (audio/phone.py). Before the chain, so it shapes
-    them as it shapes the voice."""
+    them as it shapes the voice - and before all of them, the phrase-end
+    creak softened (audio/creak.py), so nothing after it lifts the creak or
+    builds noise from it."""
     if (config.voice_breath not in BREATHS and config.voice_recording not in RECORDINGS
-            and config.voice_blended_noise_db <= 0):
+            and config.voice_blended_noise_db <= 0 and config.voice_creak not in CREAKS):
         return
     seg, x = read_wav(path)
+    x = soften_creak(x.astype("float64"), seg.frame_rate, config.voice_creak)
     speech = speech_level(x.mean(axis=1), seg.frame_rate)
     # First, from the voice alone - not from the breath or hiss added after.
     x = blend_noise(x, seg.frame_rate, config.voice_blended_noise_db)
@@ -111,7 +115,7 @@ def polish_voice(track: AudioSegment, work_dir: Path, config: AudioConfig) -> Au
     if (config.voice_bass_boost_db <= 0 and config.voice_presence_db <= 0
             and config.voice_compressor not in COMPRESSORS and config.voice_microphone not in MICROPHONES
             and config.voice_breath not in BREATHS and config.voice_recording not in RECORDINGS
-            and config.voice_blended_noise_db <= 0):
+            and config.voice_blended_noise_db <= 0 and config.voice_creak not in CREAKS):
         return track
     raw, polished = work_dir / "voice_raw.wav", work_dir / "voice_polished.wav"
     try:

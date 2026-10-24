@@ -60,8 +60,9 @@ def _fingerprint(timing_path: Path, config: AudioConfig, bgm: Path | None) -> di
     # Named only when on, so the chapters mixed before they existed stay up to date.
     extras = {key: value for key, value in (("voice_breath", config.voice_breath),
                                             ("voice_recording", config.voice_recording),
-                                            ("voice_blended_noise_db", config.voice_blended_noise_db))
-              if value not in ("off", 0, 0.0)}
+                                            ("voice_blended_noise_db", config.voice_blended_noise_db),
+                                            ("voice_creak", config.voice_creak))
+              if value not in ("off", "keep", 0, 0.0)}
     return {
         **extras,
         "timing_mtime": timing_path.stat().st_mtime,

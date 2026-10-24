@@ -61,6 +61,7 @@ class NarrationPreset(BaseModel):
     presence_db: float | None = None
     microphone: Literal["off", "close", "studio"] | None = None
     breath: Literal["off", "light", "strong"] | None = None
+    creak: Literal["keep", "soften", "strong"] | None = None
     recording: Literal["off", "phone"] | None = None
     # dB under the voice, 0 = off.
     blended_noise_db: float | None = None
@@ -108,6 +109,8 @@ class NarrationPreset(BaseModel):
             keys.add("audio.voice_microphone")
         if self.breath is not None:
             keys.add("audio.voice_breath")
+        if self.creak is not None:
+            keys.add("audio.voice_creak")
         if self.recording is not None:
             keys.add("audio.voice_recording")
         if self.blended_noise_db is not None:
@@ -151,6 +154,8 @@ class NarrationPreset(BaseModel):
             audio.voice_microphone = self.microphone
         if self.breath is not None:
             audio.voice_breath = self.breath
+        if self.creak is not None:
+            audio.voice_creak = self.creak
         if self.recording is not None:
             audio.voice_recording = self.recording
         if self.blended_noise_db is not None:
@@ -240,6 +245,7 @@ def current_settings(config: RemangaConfig, name: str, description: str = "") ->
         bass_boost_db=audio.voice_bass_boost_db, presence_db=audio.voice_presence_db, limiter=audio.voice_limiter,
         microphone=audio.voice_microphone if audio.voice_microphone in ("close", "studio") else "off",
         breath=audio.voice_breath if audio.voice_breath in ("light", "strong") else "off",
+        creak=audio.voice_creak if audio.voice_creak in ("soften", "strong") else "keep",
         recording=audio.voice_recording if audio.voice_recording == "phone" else "off",
         blended_noise_db=audio.voice_blended_noise_db,
         max_gap_ms=audio.max_gap_ms, panel_pause_ms=audio.pause_between_panels_ms,

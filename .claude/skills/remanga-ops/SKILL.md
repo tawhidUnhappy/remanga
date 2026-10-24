@@ -490,6 +490,19 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     Guy measured on HimeSama ch1: 14,156 chars -> 842.9s in 90s (16.8 chars/s; `speed` -> rate "+N%"),
     timbre distance 4.1-8.6 over 14 min (George 5.5-18.3, Fenrir 2.0-4.7), F0 150-154 Hz. Preset
     `plain-narrator-edge-guy`. Online + not a licensed API - said in the README; don't hide it.
+- **Creaky endings (`audio.voice_creak` keep/soften/strong, preset key `creak`, 2026-10-24, user: "that
+  annoying rhh sound after each sentence" on youtube-narrator-no-gaps / af_heart).** It is VOCAL FRY on
+  the last syllable before a pause (F0 ~200 -> irregular 50-90 Hz, 10-20 dB under, ~all <1 kHz), NOT
+  breath after the word - a first attempt that quieted unpitched audio before pauses missed it (the fry
+  reads as pitched to a loose detector and IS the word). `audio/creak.py`: YIN (FFT form, 16 kHz,
+  60 ms windows, 50-400 Hz) min CMND > 0.3 + <1k share > 0.6 + audible, within 400 ms before a >=80 ms
+  pause; gain on <500 Hz (sosfiltfilt split) and the whole frame, 20 ms ramps; first in `at_the_mic`
+  (before compressor/bass, which lift it). Calibrated on 5 min of af_heart: 78% of pauses follow >=50 ms
+  of creak vs 12% of mid-sentence frames. Verified: creak <500 Hz -11.9/-15.9 dB (soften/strong) raw,
+  -11.7 dB in the real chain; all other samples bit-identical; whisper vs script 97.8 -> 97.9/97.7%.
+  Footguns hit: plain autocorrelation calls any low smooth sound pitched; deepest-dip YIN halves F0
+  (use min CMND as aperiodicity); a 1764-sample window with an 882 lag range silently returned "no pitch".
+  Preset `youtube-narrator-no-gaps-no-creak` = no-gaps + creak strong.
   - **Kokoro reads the WHOLE CHAPTER as one take (2026-10-04, user: lines "immediately start"
     when takes are fitted together).** Cause: `pause_between_panels_ms` was 0, and a take join
     trims both takes to the word, so the next take began the instant the last word ended - with
