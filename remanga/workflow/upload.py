@@ -18,7 +18,9 @@ titles and thumbnails sit beside them as title_b.txt, thumbnail_b.json, ...;
 then each set gets a folder of its own beside the video instead - A/ (title.txt,
 thumbnail.json), B/ (title_b.txt, thumbnail_b.json), ... - each holding its
 title.txt, thumbnail.jpg and description.txt, so a pair is never mixed up
-(user request, 2026-10-14). Make video empties the
+(user request, 2026-10-14). description_b.txt, ... give a set its own
+description (user request, 2026-10-24); a set without one gets description.txt.
+Make video empties the
 video folder, so the copies are written again after every render (make_video,
 remix_video, join_chapters) - the templates in upload/ are never touched.
 After editing them, `remanga upload -p <P>` restamps every video there is."""
@@ -89,13 +91,10 @@ def stamp(project: str, label: str, video: Path) -> list[Path]:
     base = video.name.removesuffix("_recap.mp4")
     titles = {_letter(p): p for p in _variants(templates, TITLE)}
     thumbnails = {_letter(p): p for p in _variants(templates, THUMBNAIL)}
-    letters = sorted(set(titles) | set(thumbnails)) or ["A"]
+    descriptions = {_letter(p): p for p in _variants(templates, DESCRIPTION)}
+    letters = sorted(set(titles) | set(thumbnails) | set(descriptions)) or ["A"]
 
-    description = None
-    if (templates / DESCRIPTION).exists():
-        text = _fill((templates / DESCRIPTION).read_text(encoding="utf-8").strip(),
-                     {**fields, "timestamps": timestamps(project, label, video)})
-        description = re.sub(r"\n{3,}", "\n\n", text) + "\n"
+    stamp_fields = {**fields, "timestamps": timestamps(project, label, video)} if descriptions else fields
 
     _clear_stamps(video.parent, base)
     written: list[Path] = []
@@ -118,8 +117,10 @@ def stamp(project: str, label: str, video: Path) -> list[Path]:
                               f"YouTube cuts it at {YOUTUBE_TITLE_LIMIT}[/]")
             names["title"].write_text(title + "\n", encoding="utf-8")
             written.append(names["title"])
-        if description is not None:
-            names["description"].write_text(description, encoding="utf-8")
+        template = descriptions.get(letter) or descriptions.get("A")
+        if template is not None:
+            text = _fill(template.read_text(encoding="utf-8").strip(), stamp_fields)
+            names["description"].write_text(re.sub(r"\n{3,}", "\n\n", text) + "\n", encoding="utf-8")
             written.append(names["description"])
         if letter in thumbnails:
             from remanga.video.thumbnail import compose
