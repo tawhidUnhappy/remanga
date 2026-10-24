@@ -62,7 +62,7 @@ class ChapterListMixin:
         chapter list or not."""
         manga_id = self._resolve_manga_id(project_name, manga_id_or_url)
 
-        cached = read_remote_chapter_cache(project_name)
+        cached = read_remote_chapter_cache(project_name, manga_id)
         cache_is_fresh = (
             not force_refresh
             and cached.get("manga_id") == manga_id

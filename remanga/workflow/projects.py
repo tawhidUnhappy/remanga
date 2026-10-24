@@ -51,7 +51,7 @@ def create_project(source: str, config: RemangaConfig) -> str:
     resolver = sources.client(origin, config)
     manga_id = resolver.parse_manga_id(source)
     for project in list_projects():
-        if project["manga_id"] == manga_id:
+        if manga_id in project["manga_ids"]:
             console.print(f"[green]You already have this manga:[/] {_esc(project['name'])}")
             return project["name"]
 

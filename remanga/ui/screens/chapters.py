@@ -15,7 +15,7 @@ from textual.widgets import DataTable, Footer, LoadingIndicator
 
 from remanga import activity, workflow
 from remanga.config import RemangaConfig
-from remanga.ui.dialogs import Choice, Confirm
+from remanga.ui.dialogs import Ask, Choice, Confirm, Result
 from remanga.ui.screens.chapter_menu import ChapterMenu
 from remanga.ui.screens.chapter_work import ChapterWork
 from remanga.ui.screens.common import _STATUS, _fetch_listing, _merge_rows
@@ -32,6 +32,7 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
         Binding("p", "pick_all", "Pick all"),
         Binding("a", "download_new", "Download all new"),
         Binding("u", "update_list", "Update list"),
+        Binding("o", "sources", "Sources"),
         Binding("j", "queue", "Queue"),
         Binding("s", "settings", "Settings"),
         Binding("escape", "back", "Back"),
@@ -63,8 +64,36 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
         table.display = False
         for label, width in (("", 1), ("Ch", 6), ("Status", 13), ("Pages", 7), ("Next", 24), ("Title", None)):
             table.add_column(label, width=width, key=label or "mark")
-        # A site read through Firefox shows its saved list; MangaDex is asked again.
-        self.fetch(refresh=workflow.list_fresh_on_open(self.project))
+        # Each source as it does on opening: MangaDex is asked again, a site
+        # read through Firefox shows its saved list.
+        self.fetch(refresh=None)
+
+    @work(exclusive=True, group="sources")
+    async def action_sources(self) -> None:
+        """The sites this manga comes from; a link adds the same manga on
+        another one (remanga.sources) - its chapters join the list."""
+        from remanga import plugins, sources
+
+        have = [f"{i}. {source.display_name}: {entry['manga_url'] or entry['manga_id']}"
+                for i, (source, entry) in enumerate(sources.project_sources(self.project), start=1)]
+
+        def check(text: str) -> str | None:
+            known = any(plugins.call(source.handles, text.strip()) for source in plugins.items("source"))
+            return None if known else "A MangaDex or comix.to link to this same manga - or Esc."
+
+        link = await self.app.push_screen_wait(Ask(
+            "Sources", "Add the same manga on another site (a link)", check=check,
+            note="Now: " + "; ".join(have) + ". Each chapter comes from the site that downloaded it, else the "
+                 "first one with its pages - so chapters MangaDex only links to come from the next site."))
+        if not link:
+            return
+        try:
+            sources.add_source(self.project, link, self.machine)
+        except Exception as error:
+            await self.app.push_screen_wait(Result(self.path, "Couldn't add the source", [str(error)], ok=False))
+            return
+        self.query_one(TopBar).set_info("reading the new source's chapter list…")
+        self.fetch(refresh=None)
 
     def action_update_list(self) -> None:
         """Asks the site for its chapter list now (new chapters)."""
@@ -72,7 +101,7 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
         self.fetch(refresh=True)
 
     @work(thread=True, exclusive=True, group="fetch")
-    def fetch(self, refresh: bool) -> None:
+    def fetch(self, refresh: bool | None) -> None:
         if refresh or not self.offline:
             # A site read through Firefox can take minutes and wait on you
             # (a check to solve): said in the top bar as it happens.
@@ -90,6 +119,7 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
         row = table.picked_row
         table.clear()
         self.rows = _merge_rows(self.project, self.listing)
+        several = len({row.get("source") for row in self.listing}) > 1
         self.marks = {m for m in self.marks if m < len(self.rows)}
         if not self.marks:
             self.anchor = None
@@ -102,9 +132,11 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
             pages = (Text(f"{checked['count']} {checked['mark']}", justify="right",
                           style="green" if checked["mark"] == "✓" else "yellow") if checked.get("mark")
                      else Text(str(chapter.get("pages") or ""), justify="right"))
+            title = Text(chapter.get("title") or "", style="dim")
+            if several:  # which site each chapter comes from
+                title = Text.assemble((f"{chapter.get('source') or 'local'}  ", "cyan"), title)
             table.add_row(self._mark(index), chapter["chapter"], Text(label, style=style), pages,
-                          Text(stage, style="green" if stage == "video done" else ""),
-                          Text(chapter.get("title") or "", style="dim"))
+                          Text(stage, style="green" if stage == "video done" else ""), title)
         if row is not None and self.rows:
             table.move_cursor(row=min(row, len(self.rows) - 1))
         table.focus()

@@ -42,6 +42,7 @@ from remanga.plugins.browser.session import Session, helper_session
 from remanga.plugins.mangadex.chapter_list import ChapterListMixin
 from remanga.plugins.mangadex.chapter_pages import sweep_strays
 from remanga.plugins.mangadex.pages import PageFile, remove_paths
+from remanga.sources import remember_source
 
 SOURCE = "comix"
 # The saved chapter list is shown for a day without asking the site (then read
@@ -237,7 +238,7 @@ class ComixClient(ChapterListMixin):
 
     def _remote_chapters(self, project: str, hid: str, force_refresh: bool,
                          session: Session | None = None) -> list[dict[str, Any]]:
-        cached = read_remote_chapter_cache(project)
+        cached = read_remote_chapter_cache(project, hid)
         age = time.time() - cached.get("fetched_at", 0) if cached.get("manga_id") == hid else float("inf")
         if age < (LIST_REFRESH_FLOOR_SECONDS if force_refresh else LIST_TTL_SECONDS):
             return cached["chapters"]
@@ -325,9 +326,9 @@ class ComixClient(ChapterListMixin):
                         self._download(session, project_name, hid, chapter, listing[chapter_key(chapter)], force)
                     finally:
                         session.chapter_done()
-        save_project_metadata(project_name, {"source": SOURCE, "manga_id": hid,
-                                             "manga_url": self._manga_source(project_name, manga_id_or_url),
-                                             "last_chapter": str(ordered[-1]) if ordered else ""})
+        # Only comix.to's own entry: a project may have other sources (remanga.sources).
+        remember_source(project_name, SOURCE, hid, self._manga_source(project_name, manga_id_or_url))
+        save_project_metadata(project_name, {"last_chapter": str(ordered[-1]) if ordered else ""})
         return [get_chapter_dir(project_name, n) / "pages" for n in ordered]
 
     def _download(self, session: Session, project: str, hid: str, chapter: str, entry: dict[str, Any],

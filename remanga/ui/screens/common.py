@@ -41,7 +41,7 @@ def _merge_rows(project: str, listing: list[dict]) -> list[dict]:
     return sorted(rows, key=lambda row: chapter_sort_key(row["chapter"]))
 
 
-def _fetch_listing(project: str, machine: RemangaConfig, refresh: bool) -> tuple[list[dict], bool]:
+def _fetch_listing(project: str, machine: RemangaConfig, refresh: bool | None) -> tuple[list[dict], bool]:
     """MangaDex's chapter list, with what it printed kept in the project log."""
     old = console.file
     activity.set_reporter(activity.Reporter())  # no progress bar drawn anywhere

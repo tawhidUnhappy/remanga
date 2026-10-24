@@ -21,21 +21,22 @@ def local_chapters(project: str) -> list[str]:
 
 
 def mangadex_chapters(project: str, config: RemangaConfig, url: str | None = None,
-                      refresh: bool = True) -> list[dict]:
-    """Every chapter MangaDex lists for the project's manga right now, each
-    with its local status (downloaded / partial / missing). Fetched fresh by
-    default, so a chapter published since the last run is in it."""
-    from remanga.sources import project_client
+                      refresh: bool | None = None) -> list[dict]:
+    """Every chapter the project's sources list (MangaDex, comix.to, ...),
+    each with its local status (downloaded / partial / missing) and the
+    source it comes from. `refresh` None = as each source does on opening a
+    list (MangaDex asked again, a site read through Firefox shown as saved),
+    True = ask every source now - see remanga.sources.chapter_listing."""
+    from remanga.sources import chapter_listing
 
-    return project_client(project, config).list_chapters_with_status(project, url, force_refresh=refresh)
+    return chapter_listing(project, config, refresh=refresh, url=url)
 
 
-def list_fresh_on_open(project: str) -> bool:
-    """Whether showing the project's chapter list asks its source again, or
-    shows the list saved last time (a site read through Firefox)."""
-    from remanga.sources import project_source
+def source_names(project: str) -> list[str]:
+    """The display names of the project's sources, in order of preference."""
+    from remanga.sources import project_sources
 
-    return project_source(project).fresh_on_open
+    return [source.display_name for source, _ in project_sources(project)]
 
 
 def select_chapters(raw: str, available: list[str]) -> list[str]:

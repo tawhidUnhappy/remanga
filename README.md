@@ -68,11 +68,22 @@ Logs are kept in `projects/<name>/logs/`: `chapter_N.log` for a chapter's PDF an
 ./run.sh long     -p MyMangaTitle -c 1-5        # one video of chapters 1 to 5 (--from-source, --delete)
 ./run.sh long     -p MyMangaTitle             # the long videos made so far
 ./run.sh chapters -p MyMangaTitle
+./run.sh sources  -p MyMangaTitle --add "https://comix.to/title/..."  # the same manga on another site
 ./run.sh delete   -p MyMangaTitle               # the whole project, for good (asks you to type its name)
 ```
 
 `-c` takes a chapter, a range, several (`1-5,8`) or `all` (the default). Decimal chapters are
 chapters of their own: `1-5` includes 4.5 but not 5.1.
+
+### One manga, several sites
+
+A project can download from more than one site: MangaDex often only links to a licensed chapter (no
+pages), while comix.to has it. `./run.sh sources -p MyMangaTitle --add <link>` (or `o` on the
+Chapters screen) adds the same manga on another site; `--remove comix` takes one away, and
+`./run.sh sources -p MyMangaTitle` lists them, first = preferred. The chapter list then shows every
+site's chapters together, each row naming its site, and a download takes each chapter from the site
+that downloaded it before, else from the first site that has its pages. project.json keeps them as
+`"sources"`; a project with one site has no list and works as it always did.
 
 ### Sites that need a real browser
 

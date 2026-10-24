@@ -24,11 +24,11 @@ from remanga.workflow.chapters import (
     has_audio,
     has_marks,
     has_panels,
-    list_fresh_on_open,
     local_chapters,
     mangadex_chapters,
     page_check,
     select_chapters,
+    source_names,
 )
 from remanga.workflow.cleanup import (
     delete_project,
@@ -96,7 +96,6 @@ __all__ = [
     "has_marks",
     "has_panels",
     "join_chapters",
-    "list_fresh_on_open",
     "local_chapters",
     "long_label",
     "long_videos",
@@ -126,6 +125,7 @@ __all__ = [
     "samples_dir",
     "select_chapters",
     "settle_reading_direction",
+    "source_names",
     "stamp_all",
     "write_narration",
 ]

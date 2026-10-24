@@ -64,23 +64,31 @@ def read_manifest(project_name: str) -> dict[str, Any]:
     return read_json_or(get_manifest_path(project_name), {"chapters": {}})
 
 
-def read_remote_chapter_cache(project_name: str) -> dict[str, Any]:
-    """manifest.json['remote_chapters'] - the last MangaDex chapter-feed
-    fetch for this project, cached whole (not merged into the per-chapter
-    "chapters" sections above, which only ever describe chapters this
-    project has actually started downloading): {"manga_id", "fetched_at"
-    (epoch seconds), "chapters": [{"chapter", "chapter_id", "pages"}, ...]}.
-    Empty dict when nothing's been fetched yet. See
-    plugins/mangadex/chapter_list.py:list_chapters_with_status for the 24h TTL this
-    backs and the interactive "refetch" escape hatch."""
-    return read_manifest(project_name).get("remote_chapters", {})
+def read_remote_chapter_cache(project_name: str, manga_id: str | None = None) -> dict[str, Any]:
+    """The last chapter-list fetch for one of this project's manga, cached
+    whole (not merged into the per-chapter "chapters" sections above, which
+    only ever describe chapters this project has actually started
+    downloading): {"manga_id", "fetched_at" (epoch seconds), "chapters":
+    [{"chapter", "chapter_id", "pages"}, ...]}. Empty dict when nothing's
+    been fetched yet. One per manga id in manifest.json['remote_chapter_lists'],
+    since a project can have several sources (remanga.sources); the single
+    'remote_chapters' slot written before that is still read. See
+    plugins/mangadex/chapter_list.py:list_chapters_with_status for the 24h
+    TTL this backs and the interactive "refetch" escape hatch."""
+    manifest = read_manifest(project_name)
+    legacy = manifest.get("remote_chapters", {})
+    if manga_id is None:
+        return legacy
+    return manifest.get("remote_chapter_lists", {}).get(manga_id) or (
+        legacy if legacy.get("manga_id") == manga_id else {})
 
 
 def write_remote_chapter_cache(
     project_name: str, manga_id: str, chapters: list[dict[str, Any]], fetched_at: float
 ) -> None:
     manifest = read_manifest(project_name)
-    manifest["remote_chapters"] = {"manga_id": manga_id, "fetched_at": fetched_at, "chapters": chapters}
+    manifest.setdefault("remote_chapter_lists", {})[manga_id] = {
+        "manga_id": manga_id, "fetched_at": fetched_at, "chapters": chapters}
     write_json(get_manifest_path(project_name), manifest)
 
 
@@ -118,6 +126,8 @@ def list_projects() -> list[dict[str, Any]]:
                 "path": p,
                 "manga_url": meta.get("manga_url", ""),
                 "manga_id": meta.get("manga_id", ""),
+                # Every source's manga id - a link to any of them is this project.
+                "manga_ids": [e.get("manga_id", "") for e in meta.get("sources") or []] or [meta.get("manga_id", "")],
                 "last_chapter": meta.get("last_chapter", ""),
                 "chapters": chapters,
             })

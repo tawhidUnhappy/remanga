@@ -16,17 +16,24 @@ def remember_manga(resolver, project: str, source: str, manga_id: str, chapter: 
     """The manga's identity in project.json. Resolving an ID/URL directly
     never learns the manga's title along the way, but the PDF's text page
     names the manga for the LLM, so it is fetched here - only when missing or
-    the manga changed, not on every re-run of a downloaded chapter."""
+    the manga changed, not on every re-run of a downloaded chapter. On a
+    project with several sources only MangaDex's own entry is written
+    (remanga.sources.remember_source)."""
+    from remanga.sources import project_entries, remember_source
+
     meta = load_project_metadata(project)
     title, language = meta.get("manga_title", ""), meta.get("original_language", "")
-    if not title or not language or meta.get("manga_id") != manga_id:
+    primary = project_entries(project)[0]
+    changed = primary["source"] == "mangadex" and primary.get("manga_id") != manga_id
+    if not title or not language or changed:
         info = resolver.get_manga_info(manga_id)
         title, language = info["title"] or title, info["original_language"] or language
     save_project_metadata(project, {
-        "project_name": project, "manga_url": source, "manga_id": manga_id, "manga_title": title,
+        "project_name": project, "manga_title": title,
         # What the reading direction is derived from instead of asking.
         "original_language": language, "last_chapter": str(chapter),
     })
+    remember_source(project, "mangadex", manga_id, source)
 
 
 def planned_pages(dest_dir: Path, chapter: str, files: list[str]) -> list[PageFile]:
@@ -76,6 +83,7 @@ def record_pages(project: str, chapter: str, chapter_id: str, manga_id: str, tot
     every page is on disk and checked, so a run killed mid-download leaves a
     record saying so - the chapter listing reads it."""
     update_manifest_chapter(project, chapter, "pages", {
-        "chapter_id": chapter_id, "manga_id": manga_id, "total_pages": total, "quality": quality,
+        "source": "mangadex", "chapter_id": chapter_id, "manga_id": manga_id, "total_pages": total,
+        "quality": quality,
         "timestamp": time.time(), "verified": verified,
     })

@@ -77,6 +77,11 @@ def build_parser() -> argparse.ArgumentParser:
                     help="remake every chapter from its pages, panel marks and narration.json first, then join")
     lv.add_argument("--delete", action="store_true", help="delete the long video of these chapters")
     with_project("chapters", "Show where each chapter is", chapters=False)
+    so = with_project("sources", "The sites this manga is downloaded from, first = preferred: each chapter comes "
+                                 "from the one that downloaded it, else the first that has its pages",
+                      chapters=False)
+    so.add_argument("--add", metavar="LINK", help="add the same manga on another site (a MangaDex or comix.to link)")
+    so.add_argument("--remove", metavar="SOURCE", help="remove a source by name (mangadex, comix)")
     dp = with_project("delete", "Delete the whole project for good - pages, marks, narration, audio, videos - "
                                 "and its jobs in the queue", chapters=False)
     dp.add_argument("--yes", action="store_true", help="don't ask (type the name) first")
@@ -144,6 +149,17 @@ def _run(args: argparse.Namespace) -> None:
         return
 
     config = RemangaConfig.load()
+    if args.command == "sources":
+        from remanga import sources
+
+        if args.add:
+            sources.add_source(args.project, args.add, config)
+        if args.remove:
+            sources.remove_source(args.project, args.remove)
+        for i, (source, entry) in enumerate(sources.project_sources(args.project), start=1):
+            link = entry["manga_url"] or entry["manga_id"]
+            console.print(f"  {i}. {_esc(source.display_name):<26} [dim]{_esc(link)}[/]")
+        return
     if args.command == "chapters":
         chapters = workflow.local_chapters(args.project)
         if not chapters:
@@ -163,8 +179,7 @@ def _run(args: argparse.Namespace) -> None:
             console.print(f"  ch{_esc(video['label']):<12} {_esc(str(video['video'] or '(no finished video)'))}")
         return
     if args.command == "download":
-        listing = workflow.mangadex_chapters(args.project, config, args.url,
-                                             refresh=workflow.list_fresh_on_open(args.project))
+        listing = workflow.mangadex_chapters(args.project, config, args.url)
         if not args.chapters:
             workflow.print_chapter_list(listing)
             console.print("[dim]Download with -c: a chapter, a range (1-5), 'new' or 'all'.[/]")

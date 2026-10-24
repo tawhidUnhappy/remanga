@@ -819,6 +819,19 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     prints "All 0 pages verified" and gets nothing. Test webtoon: Skeleton Soldier
     (d993f789-e7e5-4832-92fd-37614220b427) ch 25 is hosted.
 
+- **Several sources per project (user request, 2026-10-24: HimeSama ch1-2 on MangaDex, ch3+ only on
+  comix.to).** `remanga/sources.py` owns it: project.json `"sources"` list (first = preferred; top-level
+  source/manga_id/manga_url = the first, so one-source projects have no list and read as before).
+  **Clients never write the top-level identity** - `remember_source(project, name, id, url)` updates only
+  their entry (comix used to overwrite manga_id/source, which would hand MangaDex comix's id). Core always
+  passes each client its own link (`chapter_listing`, `plan_downloads`): chapter -> the source that
+  downloaded it (manifest pages.source; MangaDex records now carry "source" too, old ones default to it),
+  else first with pages (MangaDex lists licensed chapters with pages 0). Planning never opens Firefox: cheap
+  sources (fresh_on_open) are asked, the browser source takes the rest and looks them up itself. Chapter
+  lists are cached per manga id (`manifest.remote_chapter_lists`; the old single `remote_chapters` slot is
+  still read). `refresh=None` = each source as on opening; `list_fresh_on_open` is gone. `list_projects`
+  has `manga_ids`, so `new` with any source's link opens the project. UI: `o` Sources on Chapters; rows
+  name their source when there are several. Verified on a scratch copy + Pilot with the comix list stubbed.
 - **Browser sites (comix.to, `remanga/plugins/browser/`), 2026-10-15.** comix.to = Cloudflare
   managed challenge + signed/encrypted API, so the user's own Firefox does the work through the
   remanga helper extension (temporary add-on, polls 127.0.0.1:47615). Don't "simplify" to
