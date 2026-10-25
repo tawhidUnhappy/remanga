@@ -205,7 +205,7 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   write-time width; a scrollbar appearing or a resize then cuts text). Now in `ui/widgets.py`:
   `SafeTable` keeps every row's cells and re-lays columns on resize (`add_column(..., drop=N)`: fixed
   widths shrink to their content, text columns share the rest, spare room grows cut columns, `drop`
-  columns leave a narrow window highest first, cells cut with an ellipsis; `update_cell_at` takes FULL
+  columns leave a narrow window highest first, cells cut with an ellipsis; `update_cell_at` takes a Coordinate OR a (row, col) tuple - chapters.py passes tuples, and assuming .row crashed Pick all - with FULL
   column indexes); `RowDetail` under each table shows the highlighted row's cut/left-out text (<= 1/4 of
   the window, scrolls); `KeyBar` replaces Footer everywhere (wraps whole items, click = `app.simulate_key`,
   tells a dialog's `_fit` when its line count changes); `TopBar` collapses middle path parts to "…" then

@@ -252,7 +252,9 @@ class SafeTable(DataTable):
         return super().clear(columns=columns)
 
     def update_cell_at(self, coordinate: Coordinate, value, *, update_width: bool = False) -> None:
-        """`coordinate`'s column counts every column, shown or not."""
+        """`coordinate`'s column counts every column, shown or not. A plain
+        (row, column) tuple works too, as it does for DataTable."""
+        coordinate = Coordinate(*coordinate)
         self._cells[coordinate.row][coordinate.column] = value
         if coordinate.column in self._shown:
             super().update_cell_at(Coordinate(coordinate.row, self._shown.index(coordinate.column)),
