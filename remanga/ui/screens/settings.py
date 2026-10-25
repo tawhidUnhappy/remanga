@@ -18,7 +18,13 @@ from remanga.paths import GLOBAL_DIR
 from remanga.ui import look, voice_settings
 from remanga.ui.dialogs import Choice, Result
 from remanga.ui.screens.common import _global_log
-from remanga.ui.screens.settings_sound import change_music, change_music_level, change_volume
+from remanga.ui.screens.settings_sound import (
+    change_loop_gap,
+    change_music,
+    change_music_level,
+    change_volume,
+    loop_gap_label,
+)
 from remanga.ui.screens.settings_video import (
     change_background_grid,
     change_intro,
@@ -82,6 +88,8 @@ class SettingsScreen(Screen):
             rows.append(Row("Music volume", f"{audio.bgm_below_voice_lu:g} LU quieter than voice", change_music_level,
                             "higher = quieter music", "Sound",
                             ("audio.bgm_below_voice_lu", "audio.bgm_custom_lu")))
+            rows.append(Row("Music loop pause", loop_gap_label(audio.bgm_loop_gap_s), change_loop_gap,
+                            "quiet before the song plays again", "Sound", ("audio.bgm_loop_gap_s",)))
         rows += [
             Row("Intro", Path(video.intro_path).name if video.intro_enabled and video.intro_path else "off",
                 change_intro, f"clip before every recap ({GLOBAL_DIR / 'intro'}/)", "Video",

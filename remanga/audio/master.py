@@ -29,9 +29,16 @@ BGM_FADE_OUT_MS = 2000
 BGM_LOOP_CROSSFADE_MS = 4000
 # What counts as dead air at a song's ends: this far under its typical level.
 BGM_SILENCE_UNDER_DB = 30.0
+# With a pause between passes (audio.bgm_loop_gap_s), each pass instead ends
+# on its own: faded out over this long (most songs already fade, this catches
+# the ones that stop dead), then the pause, then the song again from its
+# intro, which only gets a click-proof start - it is meant to be heard
+# beginning again, as a playlist would.
+BGM_LOOP_FADE_OUT_MS = 1500
+BGM_LOOP_RESTART_FADE_MS = 50
 # Bumped whenever music_bed changes what it makes, so a mix built the old way
 # is not mistaken for up to date (audio/mix.py's fingerprint carries it).
-BED_VERSION = 2
+BED_VERSION = 3
 
 # The master's true-peak ceiling, and how far under it the peak guard holds
 # samples (it limits samples; true peak between them reads a little higher).
@@ -149,18 +156,31 @@ def trim_dead_air(frames: np.ndarray, sample_rate: int) -> np.ndarray:
     return frames[loud[0] * step:(loud[-1] + 1) * step]
 
 
-def music_bed(narration: AudioSegment, bgm: AudioSegment) -> AudioSegment:
+def music_bed(narration: AudioSegment, bgm: AudioSegment, gap_ms: int = 0) -> AudioSegment:
     """The music looped to the narration's length, faded in and out once - the
     exact stretch the mix plays, so it is also what gets measured.
 
-    Each pass is the song with its dead air trimmed (trim_dead_air), and each
-    pass's end crossfades into the next one's start over BGM_LOOP_CROSSFADE_MS
-    with equal-power curves: the two halves sum to steady loudness through
-    the overlap, where a linear crossfade sags in the middle. So the music
-    never stops between passes and never restarts cold."""
+    Each pass is the song with its dead air trimmed (trim_dead_air). With no
+    gap, each pass's end crossfades into the next one's start over
+    BGM_LOOP_CROSSFADE_MS with equal-power curves: the two halves sum to
+    steady loudness through the overlap, where a linear crossfade sags in the
+    middle, so the music never stops. With `gap_ms`, each pass fades out
+    (BGM_LOOP_FADE_OUT_MS), the music rests for `gap_ms`, and the song starts
+    over - a breath between plays rather than a seam (user request,
+    2026-10-26: "a small delay between the loop to make it feel natural")."""
     song = trim_dead_air(_samples(bgm), bgm.frame_rate)
     need = int(len(narration) * bgm.frame_rate / 1000)
-    overlap = min(int(BGM_LOOP_CROSSFADE_MS * bgm.frame_rate / 1000), len(song) // 4)
+    if gap_ms > 0 and len(song):
+        bed = _paused_loop(song, need, gap_ms, bgm.frame_rate)
+    else:
+        bed = _crossfaded_loop(song, need, bgm.frame_rate)
+    return _segment(bed[:need], bgm).fade_in(BGM_FADE_IN_MS).fade_out(BGM_FADE_OUT_MS)
+
+
+def _crossfaded_loop(song: np.ndarray, need: int, sample_rate: int) -> np.ndarray:
+    """At least `need` frames of the song, each play's end crossfaded into the
+    next one's start (music_bed)."""
+    overlap = min(int(BGM_LOOP_CROSSFADE_MS * sample_rate / 1000), len(song) // 4)
     if overlap > 0:
         t = np.linspace(0.0, np.pi / 2, overlap)[:, None]
         fade_out, fade_in = np.cos(t), np.sin(t)
@@ -171,7 +191,21 @@ def music_bed(narration: AudioSegment, bgm: AudioSegment) -> AudioSegment:
             bed = np.concatenate([bed[:-overlap], joined, song[overlap:]])
         else:
             bed = np.concatenate([bed, song])
-    return _segment(bed[:need], bgm).fade_in(BGM_FADE_IN_MS).fade_out(BGM_FADE_OUT_MS)
+    return bed
+
+
+def _paused_loop(song: np.ndarray, need: int, gap_ms: int, sample_rate: int) -> np.ndarray:
+    """`need` frames of the song played over and over with `gap_ms` of
+    silence between plays (music_bed)."""
+    one = song.copy()
+    tail = min(int(BGM_LOOP_FADE_OUT_MS * sample_rate / 1000), len(one) // 4)
+    if tail > 0:
+        one[-tail:] *= np.cos(np.linspace(0.0, np.pi / 2, tail))[:, None]
+    head = min(int(BGM_LOOP_RESTART_FADE_MS * sample_rate / 1000), len(one) // 4)
+    if head > 0:
+        one[:head] *= np.sin(np.linspace(0.0, np.pi / 2, head))[:, None]
+    play = np.concatenate([one, np.zeros((int(gap_ms * sample_rate / 1000), one.shape[1]))])
+    return np.tile(play, (need // len(play) + 1, 1))[:need]
 
 
 def under_narration(narration: AudioSegment, bed: AudioSegment, volume_db: float) -> AudioSegment:

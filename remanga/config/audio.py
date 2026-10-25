@@ -33,3 +33,8 @@ class AudioConfig(ConfigModel):
     # it is offered again next time beside the presets, whichever level is in
     # use. None until one has been typed.
     bgm_custom_lu: float | None = None
+    # Seconds of quiet between one play of the song and the next, when a
+    # chapter outlasts it (audio/master.py:music_bed): the song fades out,
+    # rests, and starts again from its intro, as a playlist would. 0 = no
+    # pause, the end crossfades straight into the start.
+    bgm_loop_gap_s: float = 2.0

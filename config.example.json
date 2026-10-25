@@ -34,7 +34,8 @@
     "volume_lufs": -14.0,
     "bgm_enabled": false,
     "bgm_path": "",
-    "bgm_below_voice_lu": 14.0
+    "bgm_below_voice_lu": 14.0,
+    "bgm_loop_gap_s": 2.0
   },
   "video": {
     "width": 3840,

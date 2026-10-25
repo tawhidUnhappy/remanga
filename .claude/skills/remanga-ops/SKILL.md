@@ -480,6 +480,15 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     for 0.7s (their own soft ending into soft opening; a deeper 20 dB trim did not change it).
     `BED_VERSION` is in mix.py's fingerprint so old mixes re-mix. Side note: the master WAV is
     -1.1 dBTP but the 192k AAC in the MP4 measured -0.7 dBTP (encoder overshoot) - not clipping.
+  - **Music loop pause (2026-10-26, user: "a small delay between the loop to make it feel natural",
+    adjustable in settings).** `audio.bgm_loop_gap_s` (default 2.0 s, Settings - Music loop pause, shown
+    only while music is on; 0 / 1 / 2 / 4 or Custom 0-10). With a pause, `music_bed` -> `_paused_loop`:
+    each play is the dead-air-trimmed song with a 1.5 s cosine fade-out (`BGM_LOOP_FADE_OUT_MS`), then
+    the pause, then the song again from its intro with only a 50 ms anti-click start. 0 keeps the 4 s
+    crossfade above (`_crossfaded_loop`). The gap is in mix.py's fingerprint and the store's video
+    recipe, `BED_VERSION` 3. Long videos join each chapter's own master, so the pause happens inside
+    any chapter longer than its song. Measured: Arabian nights (178.2 s) under 445 s -> silent runs of
+    exactly 2.0 s at 178.2 s and 358.4 s, none with 0.
   - **Ming-3.0-tts-0.5B engine (`ming`, 2026-10-24, user asked for a better TTS; MIT).** Plug-in
     `plugins/ming_tts/`, venv `ming-tts` (torch 2.8 - upstream pins 2.6, no cu129 wheels;
     transformers 4.46.3 pinned; pynini for text normalization). Upstream is NOT pip-installable: its

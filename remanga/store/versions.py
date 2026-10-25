@@ -129,6 +129,7 @@ def video_recipe(project: str, chapter: str, config) -> dict[str, Any]:
         "timing": file_sha256(timing) if timing.is_file() else None,
         "bgm": bgm_id,
         "sound": {"volume_lufs": audio.volume_lufs, "below_voice_lu": audio.bgm_below_voice_lu,
+                  "loop_gap_s": audio.bgm_loop_gap_s,
                   "sample_rate": audio.sample_rate, "music_measure": MUSIC_MEASURE, "bed": BED_VERSION},
         "video": config.video.model_dump(),
         "panels": panels,

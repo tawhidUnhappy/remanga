@@ -1,6 +1,6 @@
-"""The settings screen's Sound rows - the volume, the music and how loud the
-music plays - and how each changes the config. The screen itself is
-settings.py."""
+"""The settings screen's Sound rows - the volume, the music, how loud the
+music plays and the pause between its plays - and how each changes the
+config. The screen itself is settings.py."""
 
 from __future__ import annotations
 
@@ -74,6 +74,33 @@ async def change_music_level(screen: SettingsScreen, config: RemangaConfig) -> N
         level = audio.bgm_custom_lu = float(typed)
     if level is not None:
         audio.bgm_below_voice_lu = level
+
+
+LOOP_GAPS = ((0.0, "none - the end crossfades straight into the start"), (1.0, "a short breath"),
+             (2.0, "a natural pause, recommended"), (4.0, "a clear rest, like a playlist"))
+
+
+def loop_gap_label(seconds: float) -> str:
+    return f"{seconds:g} s pause between plays" if seconds > 0 else "no pause (crossfade)"
+
+
+async def change_loop_gap(screen: SettingsScreen, config: RemangaConfig) -> None:
+    audio = config.audio
+    options = [(loop_gap_label(s), hint, s) for s, hint in LOOP_GAPS]
+    if all(audio.bgm_loop_gap_s != s for s, _ in LOOP_GAPS):
+        options.append((loop_gap_label(audio.bgm_loop_gap_s), "your custom pause", audio.bgm_loop_gap_s))
+    options.append(("Custom...", "type your own number of seconds", "custom"))
+    note = ("When a chapter is longer than the song, the song plays again. With a pause, it fades out, "
+            "goes quiet for this long, then starts again from its beginning. Changing it re-mixes the "
+            "chapter; nothing is narrated again.")
+    picked = await screen.app.push_screen_wait(Choice("Music loop pause", options,
+                                                      current=audio.bgm_loop_gap_s, note=note))
+    if picked == "custom":
+        picked = await screen.app.push_screen_wait(Ask(
+            "Music loop pause", "Seconds of quiet between plays (0 to 10)", value=f"{audio.bgm_loop_gap_s:g}",
+            check=number_check(0, 10), note=note))
+    if picked is not None:
+        audio.bgm_loop_gap_s = float(picked)
 
 
 VOLUMES = ((-14.0, "YouTube's level - recommended"), (-16.0, "a little quieter - podcasts, Apple"),

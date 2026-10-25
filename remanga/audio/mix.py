@@ -73,6 +73,7 @@ def _fingerprint(timing_path: Path, config: AudioConfig, bgm: Path | None) -> di
         "timing_mtime": timing_path.stat().st_mtime,
         "bgm": [str(bgm), bgm_stat.st_size, int(bgm_stat.st_mtime)] if bgm_stat else None,
         "bgm_below_voice_lu": config.bgm_below_voice_lu,
+        "bgm_loop_gap_s": config.bgm_loop_gap_s if bgm else None,
         "music_measure": MUSIC_MEASURE if bgm else None,
         "bed_version": BED_VERSION if bgm else None,
         "sample_rate": config.sample_rate,
@@ -107,7 +108,7 @@ def mix_master_audio(project_name: str, chapter_num: str, config: AudioConfig, f
 
     raw = master.with_name("master_audio_raw.wav")
     if bgm:
-        bed = music_bed(track, load_bgm(bgm, config.sample_rate))
+        bed = music_bed(track, load_bgm(bgm, config.sample_rate), gap_ms=round(config.bgm_loop_gap_s * 1000))
         bed_wav = master.with_name("music_bed.wav")
         track.export(raw, format="wav")
         bed.export(bed_wav, format="wav")
