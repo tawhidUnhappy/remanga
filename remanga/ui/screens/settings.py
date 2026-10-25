@@ -10,7 +10,7 @@ from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.screen import Screen
-from textual.widgets import DataTable, Footer
+from textual.widgets import DataTable
 
 from remanga import plugins
 from remanga.config import RemangaConfig
@@ -18,39 +18,7 @@ from remanga.paths import GLOBAL_DIR
 from remanga.ui import look, voice_settings
 from remanga.ui.dialogs import Choice, Result
 from remanga.ui.screens.common import _global_log
-from remanga.ui.screens.settings_sound import (
-    bass_label,
-    blended_noise_label,
-    breath_label,
-    change_bass_boost,
-    change_blended_noise,
-    change_breath,
-    change_compressor,
-    change_creak,
-    change_edge_fade,
-    change_limiter,
-    change_loudness,
-    change_max_gap,
-    change_microphone,
-    change_music,
-    change_music_level,
-    change_narration_takes,
-    change_panel_gap,
-    change_presence,
-    change_preset,
-    change_recording,
-    compressor_label,
-    creak_label,
-    lock_preset_rows,
-    loudness_label,
-    max_gap_label,
-    microphone_label,
-    presence_label,
-    preset_label,
-    recording_label,
-    save_preset,
-    take_length_label,
-)
+from remanga.ui.screens.settings_sound import change_music, change_music_level, change_volume
 from remanga.ui.screens.settings_video import (
     change_background_grid,
     change_intro,
@@ -60,7 +28,7 @@ from remanga.ui.screens.settings_video import (
     grid_label,
 )
 from remanga.ui.tasks import Step, TaskScreen
-from remanga.ui.widgets import SafeTable, TopBar
+from remanga.ui.widgets import KeyBar, RowDetail, SafeTable, TopBar
 
 
 async def change_look(screen: SettingsScreen, config: RemangaConfig) -> None:
@@ -86,14 +54,15 @@ class SettingsScreen(Screen):
     def compose(self) -> ComposeResult:
         yield TopBar(self.path, "applies to every project")
         yield SafeTable(id="settings")
-        yield Footer()
+        yield RowDetail()
+        yield KeyBar()
 
     def on_mount(self) -> None:
         table = self.query_one(SafeTable)
-        table.add_column("", width=9)
+        table.add_column("", width=9, drop=2)
         table.add_column("Setting", width=26)
         table.add_column("Value", width=26)
-        table.add_column("What it does")
+        table.add_column("What it does", drop=3)
         self.load()
         table.focus()
 
@@ -102,51 +71,15 @@ class SettingsScreen(Screen):
         audio, video, Row = config.audio, config.video, voice_settings.Row
         music_on = audio.bgm_enabled and bool(audio.bgm_path)
         rows = [
-            Row("Narration preset", preset_label(config), change_preset,
-                "a saved narration sound (presets/*.json)", "Narration", ("narration_preset",)),
-            Row("Save as preset", "save current settings", save_preset,
-                "keep these settings as a preset of your own", "Narration"),
             *voice_settings.narrator_rows(config),
-            Row("Narration take length",
-                take_length_label(audio.batch_target_minutes if audio.batch_narration else 0.0),
-                change_narration_takes, "how much is read in one go",
-                "Narration", ("audio.batch_narration", "audio.batch_target_minutes")),
-            Row("Longest pause", max_gap_label(audio.max_gap_ms), change_max_gap,
-                "cuts long pauses (recap pace)", "Narration", ("audio.max_gap_ms",)),
-            Row("Pause between panels",
-                f"{audio.pause_between_panels_ms} ms" if audio.pause_between_panels_ms else "none (continuous)",
-                change_panel_gap, "silence between panels", "Narration",
-                ("audio.pause_between_panels_ms",)),
-            Row("Fade at line edges", f"{audio.edge_fade_ms} ms" if audio.edge_fade_ms else "off",
-                change_edge_fade, "softens line edges (no clicks)", "Narration",
-                ("audio.edge_fade_ms",)),
-            Row("Compressor", compressor_label(audio.voice_compressor), change_compressor,
-                "thick, close-to-the-mic voice", "Voice", ("audio.voice_compressor",)),
-            Row("Bass boost", bass_label(audio.voice_bass_boost_db), change_bass_boost,
-                "deep radio-narrator resonance", "Voice", ("audio.voice_bass_boost_db",)),
-            Row("Presence", presence_label(audio.voice_presence_db), change_presence,
-                "voice cuts through, up front", "Voice", ("audio.voice_presence_db",)),
-            Row("Microphone", microphone_label(audio.voice_microphone), change_microphone,
-                "sounds recorded, not generated", "Voice", ("audio.voice_microphone",)),
-            Row("Blended noise", blended_noise_label(audio.voice_blended_noise_db), change_blended_noise,
-                "felt, not heard - less sterile", "Voice", ("audio.voice_blended_noise_db",)),
-            Row("Creaky endings", creak_label(audio.voice_creak), change_creak,
-                "softens the rhh at phrase ends", "Voice", ("audio.voice_creak",)),
-            Row("Breath on mic", breath_label(audio.voice_breath), change_breath,
-                "air pops and inhales, no pop filter", "Voice", ("audio.voice_breath",)),
-            Row("Recording", recording_label(audio.voice_recording), change_recording,
-                "phone: hiss blended in, voice codec", "Voice", ("audio.voice_recording",)),
-            Row("Limiter", "on" if audio.voice_limiter else "off", change_limiter,
-                "loud without distorting", "Voice", ("audio.voice_limiter",)),
-            Row("Loudness", loudness_label(audio), change_loudness,
-                "standard level (YouTube is -14)", "Voice",
-                ("audio.enable_loudnorm", "audio.loudness_target_lufs")),
+            Row("Volume", f"{audio.volume_lufs:g} LUFS", change_volume,
+                "how loud the finished chapter is (YouTube is -14)", "Sound", ("audio.volume_lufs",)),
             Row("Background music", Path(audio.bgm_path).name if music_on else "off", change_music,
                 f"music under the voice ({GLOBAL_DIR / 'bgm'}/)", "Sound",
                 ("audio.bgm_enabled", "audio.bgm_path")),
         ]
         if music_on:  # a level for music that isn't playing would only confuse
-            rows.append(Row("Music level", f"{audio.bgm_below_voice_lu:g} LU quieter than voice", change_music_level,
+            rows.append(Row("Music volume", f"{audio.bgm_below_voice_lu:g} LU quieter than voice", change_music_level,
                             "higher = quieter music", "Sound",
                             ("audio.bgm_below_voice_lu", "audio.bgm_custom_lu")))
         rows += [
@@ -168,7 +101,6 @@ class SettingsScreen(Screen):
             Row("Look", look.label(config.menus.look), change_look, "colours and shapes of these menus",
                 "Menus", ("menus.look",)),
         ]
-        lock_preset_rows(rows, config)
         return rows
 
     def load(self) -> None:

@@ -51,7 +51,14 @@ def fit_to_window(screen: Screen, scrollable, note=None) -> None:
         available = max(2, available - note.styles.margin.height)
         note_rows = note.virtual_size.height
         list_rows = scrollable.virtual_size.height
-        listed = max(1, min(list_rows, available - min(note_rows, NOTE_MIN_ROWS)))
+        if not list_rows:
+            # Not laid out yet (a list squeezed to one row early on reports
+            # nothing): two rows an option - a label, its hint under it.
+            list_rows = 2 * getattr(scrollable, "option_count", 1)
+        # In a tiny window the note keeps one row, not three: the list needs
+        # at least two to show one option with its hint under it.
+        keep = NOTE_MIN_ROWS if available >= 8 else 1
+        listed = max(1, min(list_rows, available - min(note_rows, keep)))
         scrollable.styles.max_height = listed
         note.styles.max_height = max(1, available - listed)
     # The box scrolls too, as a backstop - but once its content fits again it

@@ -8,7 +8,7 @@ from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.screen import Screen
-from textual.widgets import DataTable, Footer
+from textual.widgets import DataTable
 
 from remanga import workflow
 from remanga.config import RemangaConfig
@@ -19,7 +19,7 @@ from remanga.ui.screens.common import _global_log
 from remanga.ui.screens.queue import QueueScreen
 from remanga.ui.screens.settings import SettingsScreen
 from remanga.ui.tasks import Step, TaskOutcome, TaskScreen
-from remanga.ui.widgets import SafeTable, TopBar
+from remanga.ui.widgets import KeyBar, RowDetail, SafeTable, TopBar
 
 
 class ProjectsScreen(Screen):
@@ -39,13 +39,14 @@ class ProjectsScreen(Screen):
     def compose(self) -> ComposeResult:
         yield TopBar(["remanga"])
         yield SafeTable(id="projects")
-        yield Footer()
+        yield RowDetail()
+        yield KeyBar()
 
     def on_mount(self) -> None:
         table = self.query_one(SafeTable)
         table.add_column("Project", width=40)
-        table.add_column("Chapters", width=8)
-        table.add_column("Manga")
+        table.add_column("Chapters", width=8, drop=1)
+        table.add_column("Manga", drop=2)
         self.load()
         table.focus()
 

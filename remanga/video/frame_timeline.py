@@ -4,8 +4,8 @@ A recap is a slideshow: nothing moves between cuts, so all a frame does is
 say which picture is up, and the frame rate only sets how finely a cut can
 be placed. That is what makes a low rate safe - provided every cut lands
 somewhere nobody can tell. There is such a place: every panel's slot ends
-with the pause between panels (audio.pause_between_panels_ms, 350ms by default)
-before the next line starts. So each cut is snapped onto the LAST frame
+with a silence before the next line starts - inside a take, panels meet at
+the midpoint of the narrator's own pause between their words. So each cut is snapped onto the LAST frame
 boundary inside that silence, and a new picture always appears just before
 its line - never partway through the previous one.
 

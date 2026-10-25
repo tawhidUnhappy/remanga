@@ -1,5 +1,5 @@
 """Building a chapter's master audio track: the narration clips end to end,
-the music bed under them, and the loudness pass over the result."""
+the music bed under them, and the volume set over the result."""
 
 from __future__ import annotations
 
@@ -33,15 +33,19 @@ BGM_SILENCE_UNDER_DB = 30.0
 # is not mistaken for up to date (audio/mix.py's fingerprint carries it).
 BED_VERSION = 2
 
-# The normalized master's true-peak ceiling, and how far under it the peak
-# limiter holds samples (it limits samples; true peak between them reads a
-# little higher).
+# The master's true-peak ceiling, and how far under it the peak guard holds
+# samples (it limits samples; true peak between them reads a little higher).
 LOUDNORM_TRUE_PEAK = -1.0
 LIMITER_MARGIN_DB = 1.0
 
+# A take's two ends are faded over this long, so a take never starts or
+# stops on a click. The start only ever fades across the silence already
+# there (audio/clips.py:apply_edge_fades), so no word is ramped.
+EDGE_FADE_MS = 35
+
 
 def panel_segments(audio_dir: Path, panel: dict[str, Any], sample_rate: int,
-                   edge_fade_ms: int = 0) -> list[AudioSegment]:
+                   edge_fade_ms: int = EDGE_FADE_MS) -> list[AudioSegment]:
     """One panel's place in the narration track: its synthesized clip - or
     silence of the same length, for a panel whose clip is missing, so the
     track stays true to audio_timing.json either way - plus the pause held
@@ -164,49 +168,33 @@ def under_narration(narration: AudioSegment, bed: AudioSegment, volume_db: float
     return (bed + volume_db).overlay(narration)
 
 
-def write_master(raw_path: Path, final_path: Path, sample_rate: int, *, normalize: bool, target_lufs: float,
-                 limiter: bool = True, announcement: str = "",
-                 on_failure: str = "the un-normalized track") -> None:
-    """Puts the raw master in place as the finished one, normalized to
-    `target_lufs` when asked for.
+def write_master(raw_path: Path, final_path: Path, sample_rate: int, *, target_lufs: float,
+                 announcement: str = "", on_failure: str = "the track as it was") -> None:
+    """Puts the raw master in place as the finished one, at `target_lufs`.
 
-    Measure, then one linear gain - never a gain that rides up and down
-    through the track (single-pass loudnorm did, and pumped the music between
-    sentences). Measured with ebur128 and applied with `volume` rather than
-    two loudnorm passes: loudnorm upsamples to 192 kHz to do the same job, and
-    took 22 of a 7-minute chapter's 24 s of mixing; this takes ~2 s. Peaks the
-    gain would push over the ceiling are held by a limiter, not the track
-    turned down - unless `limiter` is off, when the gain is held back to what
-    the peaks allow and the track ends up quieter than the target. A failed
-    pass is a warning: the un-normalized master is used instead, because a
-    recap at the wrong loudness beats no recap at all."""
-    if not normalize and not limiter:
-        raw_path.replace(final_path)
-        return
-
-    if normalize:
-        console.print(f"[cyan]{announcement}[/]")
+    Measure, then one linear gain for the whole track - the level changes,
+    nothing else does (a gain that rode up and down pumped the music between
+    sentences). Measured with ebur128 and applied with `volume`: ~2 s for a
+    7-minute chapter. Only when that gain would push a peak over the ceiling
+    is a peak guard added, holding just those peaks; otherwise the track is
+    the voice and music exactly as mixed, louder or quieter. A failed pass is
+    a warning: the track as it was is used instead, because a recap at the
+    wrong volume beats no recap at all."""
+    console.print(f"[cyan]{announcement}[/]")
     try:
-        chain = []
-        if normalize:
-            loudness, peak = measure_loudness(raw_path)
-            if loudness is None:
-                raise ValueError("the track is silent or unreadable")
-            gain = target_lufs - loudness
-            if not limiter and peak is not None and peak + gain > LOUDNORM_TRUE_PEAK:
-                gain = LOUDNORM_TRUE_PEAK - peak
-                console.print(f"[yellow]The limiter is off, so the mix is held to {loudness + gain:.1f} LUFS "
-                              f"rather than {target_lufs:g} - any louder and its peaks would clip.[/]")
-            chain.append(f"volume={gain:.2f}dB")
-        if limiter:
-            # Holds just the peaks over the ceiling (a little under it, since
-            # it limits samples and the ceiling is in true peak) rather than
-            # lowering the whole track; nothing under it is touched.
+        loudness, peak = measure_loudness(raw_path)
+        if loudness is None:
+            raise ValueError("the track is silent or unreadable")
+        gain = target_lufs - loudness
+        chain = [f"volume={gain:.2f}dB"]
+        if peak is not None and peak + gain > LOUDNORM_TRUE_PEAK:
+            # A little under the ceiling, since it limits samples and the
+            # ceiling is in true peak; nothing under it is touched.
             ceiling = 10 ** ((LOUDNORM_TRUE_PEAK - LIMITER_MARGIN_DB) / 20)
             chain.append(f"alimiter=limit={ceiling:.4f}:level=disabled:attack=5:release=50")
         run_ffmpeg(["ffmpeg", "-y", "-i", str(raw_path), "-af", ",".join(chain), "-ar", str(sample_rate),
                     str(final_path)], check=True, capture=True)
         raw_path.unlink(missing_ok=True)
     except Exception as e:
-        console.print(f"[yellow]Loudness normalization failed ({_esc(str(e))}) - using {on_failure}.[/]")
+        console.print(f"[yellow]Setting the volume failed ({_esc(str(e))}) - using {on_failure}.[/]")
         raw_path.replace(final_path)

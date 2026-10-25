@@ -12,7 +12,7 @@ Manga panels to recap video, in five steps:
 4. **Give the PDF and `prompts/narration.md` to an LLM** (Gemini, ChatGPT, Claude, ...) and paste its
    one JSON reply into the chapter's `narration.json` - or write it yourself in the Narration Writer,
    and check what the LLM wrote in the Narration Reviewer.
-5. **Make the video**: each panel on screen while the narrator (Ming-3.0-tts by default) reads that panel's narration, with
+5. **Make the video**: each panel on screen while the narrator (Kokoro-82M by default) reads that panel's narration, with
    background music underneath.
 
 ## Install
@@ -45,7 +45,7 @@ click chooses it** - a single click never starts anything.
 | **Projects** | Your projects. `Enter` opens one, `d` deletes the highlighted one (after you type its name), `n` starts a new one: paste the manga's MangaDex URL (or ID, or a title to search). The project is named after the manga's English title, and its reading direction comes from the manga's original language. |
 | **Chapters** | The chapter list, fetched fresh from MangaDex each time, as a table: status (✓ downloaded, ◐ partial, + new), pages, what comes next (mark the panels, make the PDF, make the video, video done) and title. `Enter` opens a chapter's actions: download, **mark panels**, make PDF, make video, check pages, re-download, **delete chosen** (a checklist of what the chapter has on disk - pages, marks, panels, PDF, narration, audio, video - with sizes; tick what to delete, `d` deletes, red rows are what remanga can't make again), reset (deletes the cut panels, PDF, narration, audio and video, and the folders that leaves empty - the marks and pages stay) or delete. `space` (or clicking a row's `·`) picks several chapters to act on together, `r` picks every chapter from the last one picked to the highlighted one (chapter n to m), `a` downloads every new chapter. With several picked, **Long video...** makes one video of them - see [Long videos](#long-videos). Reset and delete ask first. |
 | **Work** | Downloads, panel cutting, PDFs and videos run in a task view: the steps, a progress bar and the last few lines of output. `Ctrl+C` stops. When the work ends you get a result: what was made and what to do next (for a PDF: which files to upload, where to paste the reply), or what went wrong. `l` opens the full log, `c` copies the paths to upload. |
-| **Settings** (`s`) | One flat list, grouped (Narration, Sound, Video, PDF), each row with a one-line "What it does": narrator engine and voice, take length, pauses, background music and its level (custom values kept), intro, video size, panel enlargement limit, PDF file size limit - one set for every project. |
+| **Settings** (`s`) | One short flat list, grouped (Narration, Sound, Video, PDF), each row with a one-line "What it does": narrator engine and voice, volume, background music and its volume (custom values kept), intro, video size, panel enlargement limit, PDF file size limit - one set for every project. |
 
 Logs are kept in `projects/<name>/logs/`: `chapter_N.log` for a chapter's PDF and video,
 `project.log` for downloads.
@@ -233,9 +233,16 @@ never touched. From there the PDF and the video work as for any manga.
 Five engines built in (each a plug-in - see [Plug-ins](#plug-ins)), switchable in **Settings → Narrator engine**; each keeps its own voice, so switching
 back and forth changes nothing else. A chapter narrated by the other one is narrated again.
 
+**The sound is the narrator as it read:** no effects, no pauses cut, the whole chapter read in as few
+takes as the engine handles well (one, for most), with a narrator's pause (420 ms) between takes. Three things are yours to set: the
+**Volume** of the finished chapter (-14 LUFS, YouTube's level, by default), the **Background
+music**, and how far under the voice the **Music volume** sits. (The narration presets and the voice
+effects - compressor, bass, microphone, breath, phone - are kept on the branch
+`backup/presets-effects-2026-10-25`.)
+
 | Engine | Voice | Speed |
 |---|---|---|
-| **Ming-3.0-tts** (default, via the Plain narrator preset) | five built-in English voices (Stella, James, Emma, Charlotte, George) | about 1.3x real time on a 3060 (a 13-minute chapter in ~17 minutes), ~4 GB of VRAM |
+| **Ming-3.0-tts** | five built-in English voices (Stella, James, Emma, Charlotte, George) | about 1.3x real time on a 3060 (a 13-minute chapter in ~17 minutes), ~4 GB of VRAM |
 | **Kokoro-82M** | its own studio voices, picked from a list | a 60-panel chapter in seconds |
 | **Edge voices** | Microsoft Edge's online US neural voices (Guy, Andrew, Brian, Christopher, Aria, Jenny...) - **needs the internet**, and it is Edge's Read Aloud service, not a licensed API: check Microsoft's terms before monetizing | a 14-minute chapter in ~90 seconds, no GPU |
 | **Qwen3-TTS** | nine preset narrators, steered by a line of plain English ("calm and unhurried") - or **a voice you design**: describe the narrator, and one sample is made and kept | about ten minutes for the same chapter |
@@ -419,12 +426,10 @@ Every setting is in `config.json` and applies to every project:
 | `tts.qwen.design` / `.designed_sample` | - | the voice you described, and the sample every panel is then spoken from |
 | `tts.index_tts.reference` / `.speed` | first file in `global/voice/` / 1.0 | the recording IndexTTS-2.5 clones, and its pace (0.5-2.0) |
 | `tts.index_tts.interval_silence_ms` | 450 | silence between the segments IndexTTS splits a take into (upstream default 200), on top of its own pauses inside one |
-| `tts.volume_boost_db` | 0 | gain on each clip; leave at 0 when loudness normalization is on |
+| `tts.volume_boost_db` | 0 | gain on each clip; leave at 0 - `audio.volume_lufs` sets the level |
 | `audio.bgm_enabled` / `bgm_path` | off / - | background music |
 | `audio.bgm_below_voice_lu` | 14 | how far the music sits under the voice, in LU - measured per track and chapter, so every music file sits at the same level (12 energetic, 14 balanced, 18 subtle) |
-| `audio.pause_between_panels_ms` | 0 | silence between panels (Settings - Pause between panels), and now the whole of it: each clip's own uneven lead-in is trimmed back to an even 25 ms margin first, so 0 is continuous narration with about 50 ms at each join rather than a hard butt-join |
-| `audio.edge_fade_ms` | 35 | fade at each clip's edges, applied when the chapter is mixed (Settings - Fade at line edges). The start is only ever faded across the silence the clip already has, so the first word is never ramped; the end may ramp up to 15% into the speech, which is what stops a line sounding cut off. Changing it re-mixes, it does not narrate again |
-| `audio.enable_loudnorm` / `loudness_target_lufs` | true / -14 | normalize the finished audio to YouTube's -14 LUFS - measured, then one linear gain, with a peak limiter only where the gain would pass -1 dBTP |
+| `audio.volume_lufs` | -14 | how loud the finished chapter is (Settings - Volume): measured, then one linear gain over the whole mix, with a peak guard only where that gain would pass -1 dBTP. -14 is YouTube's level |
 | `video.width` / `height` / `fps` | 1920 / 1080 / 24 | video size - 2560x1440 and 3840x2160 keep big panels sharp (see the quality warning), at a slower render |
 | `video.max_upscale` | 3 | how far a small panel may be enlarged to fill the frame; 0 means no cap |
 | `video.background_style` | `blur` | `blur` (the panel, blurred) or `solid` (`background_color`) |

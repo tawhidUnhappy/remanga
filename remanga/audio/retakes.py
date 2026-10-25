@@ -11,8 +11,8 @@ from typing import Any
 from remanga import activity
 from remanga.audio.batching import Batch
 from remanga.audio.clips import atomic_export
-from remanga.audio.gaps import load_take
 from remanga.audio.hums import Hum, find_hums
+from remanga.audio.take_audio import load_take
 from remanga.audio.takes import collapsed
 from remanga.config import AudioConfig, SubtitlesConfig
 from remanga.console import console, escape as _esc

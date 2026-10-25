@@ -1,8 +1,5 @@
-"""Subtitle settings: reading a batch's word timings back off its audio.
-
-Only needed when narration is batched (audio.batch_narration): a panel
-synthesized on its own already knows how long it is, while a batch has to be
-listened to."""
+"""Subtitle settings: reading a take's word timings back off its audio, to
+find where each panel falls inside it."""
 
 from __future__ import annotations
 

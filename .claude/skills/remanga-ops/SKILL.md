@@ -180,42 +180,37 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   0 = off, default 10) + `background_grid_strength` 0.5: a multiply layer built once per compositor
   (`FrameCompositor._lcd_grid`), over the blur only, before the panel is pasted. +40 ms per 4K frame. Frames
   re-composite on change via frames_settings.json (model_dump). If viewers see shimmer at 720p, go chunky.
-- **Microphone (2026-10-18):** `audio/microphone.py`, `audio.voice_microphone` off/close/studio, last in the
-  voice chain: dynamic-mic EQ + tanh drive (ffmpeg), then studio's small room (generated IR, RT60 0.22 s,
-  wet -16 dB, scipy oaconvolve) and pink room tone 56 dB under speech. User: TTS "too smooth, artificial".
-  17-min take: 14 s, 3.7 GB peak. Preset youtube-narrator-mic = no-gaps + studio + -12 LUFS ("louder like a
-  microphone"); LIMITER_MARGIN_DB 0.5 -> 1.0 so a -12 master stays under -1 dBTP (measured -1.3).
-- **Breath on mic + phone recording (2026-10-18):** `audio.voice_breath` off/light/strong (`audio/breath.py`:
-  low air-thump pops 8 ms after onsets loud within 10 ms of a pause, >= 2.5 s apart; mouth inhales in pauses
-  >= 120 ms). `audio.voice_recording` off/phone (`audio/phone.py`), matched to the user's reference (a recap
-  narration, `/mnt/datadisk/Isekaid Boy ... Relatives.mp3`): voice -3 dB shelf at 5.5 kHz, white hiss >2.5 kHz
-  37 dB under speech whose level FOLLOWS the voice (10 ms up, 90 ms down, floor -24 dB), then **Opus 24 kbps
-  voip round trip** (no delay, same length - verified), highpass 110 + lowpass 12 kHz last in the chain; no
-  room tone for phone. Speech spectrum 5-12.5 kHz within ~2 dB of the reference. Rejected on the way:
-  v1 Wiener suppressor (hiss carpet in pauses, "this one is not it"); v2 hard gate + mains hum ("sound at the
-  end of words like drum, not natural ... the noise isn't blended") - the gate chopped word tails and each
-  short pause exposed a hum burst. **Never synthesize a pitched thump** (sine falling ~100->40 Hz = a kick drum):
-  breath pops are toneless 40-500 Hz noise puffs, 1 ms attack, ~12 ms decay. Compare zoomed spectrograms
-  (`showspectrumpic` -> Read the PNG), not just band averages. afftdn: 25 ms delay, ~2 dB. Fingerprint names
-  the two keys only when on. Preset youtube-narrator-phone (mic-close + strong breath + phone) was removed
-  2026-10-18 after the user compared all presets; the two settings stay as rows.
-- **Blended noise (2026-10-18):** `audio/blend.py`, `audio.voice_blended_noise_db` (0 = off; preset key
-  `blended_noise_db`): random-phase noise with the voice's own spectral envelope per STFT frame (1024/256,
-  smoothed 600 Hz x 3 frames so no pitch passes: periodicity 0.20 vs voice 0.75, white 0.06), mixed N dB under
-  by overall RMS - follows every syllable, silent in pauses (-86 dB). First thing in `at_the_mic`, from the voice
-  alone. User asked for noise "not noticeable but can be felt" after a separate hiss layer was "not blended".
-  Preset youtube-narrator-mic-natural = microphone + 36 dB. 11.5-min chapter 20 s, 2.1 GB.
-- **Longest pause / no-gaps preset (2026-10-18):** `audio/gaps.py` cuts every inner silence over
-  `audio.max_gap_ms` to it (35 dB under the take's p95 frame = silent, middle cut, 8 ms crossfade) as the
-  take comes back (`load_take`: takes.py, retakes.py, per-panel tts.py) - BEFORE hums/whisper/spans, so the
-  video follows. In the identity only when > 0 (`narration_identity`), so natural chapters keep their keys.
-  Real run, IfHerFlagBreaks ch2: 19.5 -> 16.6 min, gaps >250 ms 372 -> 0, longest 0.94 -> 0.16 s, 96% match.
-  User wanted recap-channel pace: "natural but not normal" pauses were the complaint.
-- **Voice chain v2 (2026-10-18):** v1's bass shelf (`bass ... t=o:w=1` at 150 Hz) dipped -2.4 dB at 200 Hz,
-  where the voice's fundamental sits, so +3/+5 dB came out ~1 dB QUIETER on real narration. Measure an EQ
-  with tones (`sine=f=...`) before trusting it. v2: compressor first, then Butterworth shelf (q 0.707) at
-  180 Hz, then presence (`equalizer` 4 kHz, new `voice_presence_db` / preset `presence_db`). Measured on
-  Heart: default bass -10.2 -> -8.9 dB vs whole; powerful preset (strong, +5, +3, 1.1x) crest 23.8 -> 18.4.
+- **Presets and voice effects REMOVED from main (2026-10-25, user: "remove all the presets and effects
+  and just keep the original vocal and volume and background music volume, minimalistic settings").**
+  Everything is on branch `backup/presets-effects-2026-10-25` (presets/*.json, config/presets.py,
+  audio/voice_chain.py + microphone/breath/phone/blend/creak.py, gaps.py's pause cutting, the per-panel
+  narration path, Settings rows for take length, pauses, edge fade, compressor... limiter). Main now:
+  `audio.volume_lufs` (alias of the old `loudness_target_lufs`; one measured gain over the mix,
+  alimiter only when that gain would pass -1 dBTP - audio/master.py:write_master), `bgm_*` unchanged;
+  fixed in code: always batched takes (`plan_batches(panels, inf, ...)` = the engine's max_take_seconds),
+  TAKE_GAP_MS 420 between takes (never 0: the user hates a line starting the instant the last ends, 2026-10-04), EDGE_FADE_MS 35 at take edges, no gap tightening
+  (`audio/take_audio.py` = load + identity only). Old config.json keys are ignored by pydantic.
+  Verified on a copy of HimeSama ch3.1: Kokoro 27 panels -> 1 take, whisper 99%; mix -14 -> -14.2 LUFS
+  (peak guard on), -18 -> -18.0 (both before TAKE_GAP_MS; a one-take chapter has no join to change). Lessons kept from the effects era, if any come back: measure an EQ with
+  tones before trusting it (an octave-width shelf CUT 200 Hz); never synthesize a pitched breath thump (it
+  is a kick drum); compare zoomed spectrograms, not band averages; the vocal-fry "rhh" is pitched, a
+  breath detector misses it.
+- **Menus fit any window (2026-10-25, user: "make the terminal ui run on any size ... don't overflow or hide
+  content").** Measured first by rendering every screen as text at 30x8 .. 200x50 with Pilot
+  (`app.screen._compositor.render_strips()`, joined segment texts - no SVG converter on this box): fixed
+  column widths ran Title/Manga/What-it-does off the right edge, Footer dropped keys past it, TopBar ran
+  the path into the info ("...GolemMaster19 chapters"), RichLog CROPPED words mid-line (it wraps once at
+  write-time width; a scrollbar appearing or a resize then cuts text). Now in `ui/widgets.py`:
+  `SafeTable` keeps every row's cells and re-lays columns on resize (`add_column(..., drop=N)`: fixed
+  widths shrink to their content, text columns share the rest, spare room grows cut columns, `drop`
+  columns leave a narrow window highest first, cells cut with an ellipsis; `update_cell_at` takes FULL
+  column indexes); `RowDetail` under each table shows the highlighted row's cut/left-out text (<= 1/4 of
+  the window, scrolls); `KeyBar` replaces Footer everywhere (wraps whole items, click = `app.simulate_key`,
+  tells a dialog's `_fit` when its line count changes); `TopBar` collapses middle path parts to "…" then
+  puts the info on line 2 (`.android TopBar` must be `height: auto`); `WrapLog` replaces RichLog (re-wraps
+  on resize, follows the end). Choice/Checklist options are a `Columns` renderable: hint beside the label,
+  or under it when the width left is < 24. fit.py: an OptionList not laid out yet reports virtual height
+  0 - count 2 rows an option instead, or the note eats the list in a tiny window.
 - **Narration accuracy (2026-10-18):** user measured ~20% wrong lines per chapter (Gemini Flash, high
   thinking). Sampled GhostStoryClub ch1 + VillainParty ch4.2: the misses were lines given to the focused
   main character (001_039: classmates' complaints given to Lee Jun), captions split over panels told as
@@ -232,15 +227,6 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
 - **`skip: merged`:** a bubble-only story panel can leave the video and its lines open the next
   narrated panel's text (user request). check.py errors when nothing narrated follows it and warns past
   30% merged. load_narration drops it like any skip.
-- **Narration presets (2026-10-18):** `presets/*.json` (keys in presets/README.md), picked in Settings ->
-  Narration preset, stored as `narration_preset`; default since 2026-10-24 `plain-narrator` (Ming, see below);
-  before that `youtube-narrator` = Kokoro 1.08x, whole-chapter
-  take, voice af_heart, medium compressor, +3 dB bass, limiter, -14 LUFS. Settings -> Save as preset writes the
-  current settings to `global/presets/<id>.json` (gitignored, shown as "(yours)"; can't reuse a shipped id). `config/presets.py` applies it in RemangaConfig's
-  after-validator on every load, so it beats config.json; rows it fixes show `(preset)` and are locked.
-  "No preset" unlocks every row. A new sound = a new JSON file, never new code - the user rejected a
-  hard-coded lock as killing modularity. Voice chain: `audio/voice_chain.py` (bass shelf 150 Hz + acompressor
-  at mix time, loudness restored); bump VOICE_CHAIN_VERSION if its output changes for the same settings.
 - **The gap between panels is trimmed, not just padded.** Qwen bakes an uneven lead-in into every
   clip - measured over a finished 137-panel chapter: lead median 370 ms, range 0-460, stdev 164;
   tail median 60 ms. Added to a 350 ms pause that was a median 780 ms gap that wobbled by panel,
@@ -464,13 +450,13 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     (the other engines' downloaders still have this latent bug). Verified GhostStoryClubRemake ch2:
     14,890 chars -> one 798.6s take in 1045s (RTF 1.31, 18.65 chars/s), whisper 98.8% matched,
     pauses after sentences median 340ms (17/119 under 150ms - Kokoro's were ~420), raw -23.1 LUFS.
-    Preset `plain-narrator` (the default) = Ming US_Stella, whole chapter, every effect off,
+    Preset `plain-narrator` (the default then; presets removed 2026-10-25) = Ming US_Stella, whole chapter, every effect off,
     no limiter, loudness off (user: "don't add any effect or anything").
     **Male voice = UK_George, never US_James (2026-10-24, user asked for "its best male vocal").**
     Same 2,064 chars of HimeSama ch1: James matched the script 96.8% and SPOKE TWO SENTENCES THAT
     ARE NOT IN IT ("he is so happy that he doesn't want to leave the palace", "the girl stands up and
     says") at a rushed 213 wpm, pitch spread 5.82 st; George 98.4% (only name spellings), nothing
-    invented, 169 wpm, 4.52 st. Preset `plain-narrator-male`. George reads ~15.3 chars/s, slower than
+    invented, 169 wpm, 4.52 st. Preset `plain-narrator-male` (presets removed 2026-10-25). George reads ~15.3 chars/s, slower than
     the engine's 18.7 (Stella's) - takes run ~1.2x their estimate, inside RUNAWAY_FACTOR 1.4. Check a
     voice's script match with whisper before shipping it: an invented sentence passes every other check.
     **Ming's built-in voices wander over a long chapter (2026-10-24, user: "the vocal changes, at the start
@@ -490,34 +476,6 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     Guy measured on HimeSama ch1: 14,156 chars -> 842.9s in 90s (16.8 chars/s; `speed` -> rate "+N%"),
     timbre distance 4.1-8.6 over 14 min (George 5.5-18.3, Fenrir 2.0-4.7), F0 150-154 Hz. Preset
     `plain-narrator-edge-guy`. Online + not a licensed API - said in the README; don't hide it.
-- **Creaky endings (`audio.voice_creak` keep/soften/strong, preset key `creak`, 2026-10-24, user: "that
-  annoying rhh sound after each sentence" on youtube-narrator-no-gaps / af_heart).** It is VOCAL FRY on
-  the last syllable before a pause (F0 ~200 -> irregular 50-90 Hz, 10-20 dB under, ~all <1 kHz), NOT
-  breath after the word - a first attempt that quieted unpitched audio before pauses missed it (the fry
-  reads as pitched to a loose detector and IS the word). `audio/creak.py`: YIN (FFT form, 16 kHz,
-  60 ms windows, 50-400 Hz) min CMND > 0.3 + <1k share > 0.6 + audible, within 400 ms before a >=80 ms
-  pause; gain on <500 Hz (sosfiltfilt split) and the whole frame, 20 ms ramps; first in `at_the_mic`
-  (before compressor/bass, which lift it). Calibrated on 5 min of af_heart: 78% of pauses follow >=50 ms
-  of creak vs 12% of mid-sentence frames. Verified: creak <500 Hz -11.9/-15.9 dB (soften/strong) raw,
-  -11.7 dB in the real chain; all other samples bit-identical; whisper vs script 97.8 -> 97.9/97.7%.
-  Footguns hit: plain autocorrelation calls any low smooth sound pitched; deepest-dip YIN halves F0
-  (use min CMND as aperiodicity); a 1764-sample window with an 882 lag range silently returned "no pitch".
-  Preset `youtube-narrator-no-gaps-no-creak` = no-gaps + creak strong.
-  - **Kokoro reads the WHOLE CHAPTER as one take (2026-10-04, user: lines "immediately start"
-    when takes are fitted together).** Cause: `pause_between_panels_ms` was 0, and a take join
-    trims both takes to the word, so the next take began the instant the last word ended - with
-    1-min takes, ~25 times a chapter. Kokoro has no budget and no reference: it splits text into
-    ~510-phoneme pieces itself (each with ~0.33s lead + ~0.5s tail, so ~0.85s at its own joins).
-    So `KokoroSynthesizer.max_take_seconds = inf`, take-length menu has "the whole chapter"
-    (999 = WHOLE_CHAPTER, now the config default), and the 655s budget check in
-    `takes.collapsed` is per engine (`synth.ceiling_seconds`: Qwen's, None for Kokoro) - else a
-    16-min Kokoro take reads as a collapse. Verified Golem Master ch1: 141 panels, 16,424 chars ->
-    one 16.4-min take in 20s, whisper 100% matched, pauses median 420ms / max 930ms, none of the
-    zero-gap kind; final mix -14.1 LUFS, -1.2 dBTP, LRA 2.6. User's setup then: af_heart (only
-    grade A), speed 1.0, pause 500ms, music 20 LU under (was a custom 30). **A longer reference is not the lever**: 30s instead of 15 blew the 670s timeout on
-  a take the 15s reference finished in 325s. The tooling for this lives in the scratchpad
-  (voiceprint.py: MFCC means over voiced frames + median F0, calibrated before use) - rebuild it the
-  same way if this comes back, and calibrate before trusting any number.
 - **Delete chosen (user request, 2026-09-30)** - chapter menu "Delete chosen...":
   `workflow.cleanup.DELETABLES` (pages, strip, marks, panels, pdf, narration, review, audio, mix,
   subtitles, video) -> `deletable_items` (only what exists, sizes, "n of m" chapters) ->

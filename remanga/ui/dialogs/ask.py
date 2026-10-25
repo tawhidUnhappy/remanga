@@ -9,9 +9,9 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Footer, Input, Label, Static
+from textual.widgets import Input, Label, Static
 
-from remanga.ui.widgets import TextInput
+from remanga.ui.widgets import KeyBar, TextInput
 
 
 class Ask(ModalScreen[str | None]):
@@ -34,7 +34,7 @@ class Ask(ModalScreen[str | None]):
             yield Static("", id="message", classes="note")
             if self.note:
                 yield Static(self.note, classes="note")
-        yield Footer()
+        yield KeyBar()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         text = event.value.strip()

@@ -42,10 +42,9 @@ EDGE_SILENCE_DBFS = -50.0
 # standard deviation of 164 - so a clip used as it comes carries a pause
 # nobody chose and that changes every panel. That unevenness is what makes a
 # chapter sound like someone recording each panel separately rather than
-# reading it through. Trimmed to this, the gap between panels is
-# `pause_between_panels_ms` and nothing else, which is what that setting has
-# always claimed to be. Not zero: the fades need somewhere to land, and a
-# join with no silence at all on either side clicks.
+# reading it through. Trimmed to this, the gap between takes is the same
+# every time. Not zero: the fades need somewhere to land, and a join with no
+# silence at all on either side clicks.
 SILENCE_KEEP_MS = 25
 
 # How far below a clip's OWN speech level a stretch has to sit to count as

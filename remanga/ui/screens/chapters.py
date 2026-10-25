@@ -11,7 +11,7 @@ from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.screen import Screen
-from textual.widgets import DataTable, Footer, LoadingIndicator
+from textual.widgets import DataTable, LoadingIndicator
 
 from remanga import activity, workflow
 from remanga.config import RemangaConfig
@@ -22,7 +22,7 @@ from remanga.ui.screens.common import _STATUS, _fetch_listing, _merge_rows
 from remanga.ui.screens.queue import QueueScreen
 from remanga.ui.screens.settings import SettingsScreen
 from remanga.ui.screens.video_work import VideoWork
-from remanga.ui.widgets import SafeTable, TopBar
+from remanga.ui.widgets import KeyBar, RowDetail, SafeTable, TopBar
 
 
 class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
@@ -57,13 +57,17 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
         yield TopBar(self.path, "fetching the chapter list…")
         yield LoadingIndicator()
         yield SafeTable(id="chapters", mark_column=True)
-        yield Footer()
+        yield RowDetail()
+        yield KeyBar()
 
     def on_mount(self) -> None:
         table = self.query_one(SafeTable)
         table.display = False
-        for label, width in (("", 1), ("Ch", 6), ("Status", 13), ("Pages", 7), ("Next", 24), ("Title", None)):
-            table.add_column(label, width=width, key=label or "mark")
+        # Left out of a narrow window first to last: Next, Pages, Title (the
+        # highlighted chapter's show under the table then - widgets.RowDetail).
+        for label, width, drop in (("", 1, 0), ("Ch", 6, 0), ("Status", 13, 0), ("Pages", 7, 2), ("Next", 24, 3),
+                                   ("Title", None, 1)):
+            table.add_column(label, width=width, key=label or "mark", drop=drop)
         # Each source as it does on opening: MangaDex is asked again, a site
         # read through Firefox shows its saved list.
         self.fetch(refresh=None)

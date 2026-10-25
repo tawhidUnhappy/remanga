@@ -48,6 +48,7 @@ Result, Choice, Ask { align: center middle; }
 .task .dialog-title { margin: 0; }
 #steps { height: auto; }
 #bar-row { height: 1; }
+#bar-title { color: $text-muted; }
 #bar-label { width: auto; max-width: 40%; margin-right: 2; color: $text-muted;
              text-wrap: nowrap; text-overflow: ellipsis; }
 #bar { width: 1fr; min-width: 8; }
@@ -59,7 +60,7 @@ Result, Choice, Ask { align: center middle; }
 }
 
 LoadingIndicator { height: 1fr; }
-LogView RichLog { height: 1fr; overflow-x: hidden; }
+LogView WrapLog { height: 1fr; overflow-x: hidden; }
 """ + look.ANDROID_CSS
 
 

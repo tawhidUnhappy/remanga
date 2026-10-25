@@ -29,9 +29,9 @@ from pydub import AudioSegment
 
 from remanga.audio.batching import Batch, plan_batches
 from remanga.audio.clips import speech_bounds
-from remanga.audio.gaps import narration_identity
 from remanga.audio.manifest import verify_audio_manifest, write_audio_manifest
 from remanga.audio.retakes import hum_checked, retake_hums, transcribe
+from remanga.audio.take_audio import narration_identity
 from remanga.audio.takes import recorded_keys, source_key, synthesize_batches
 from remanga.audio.timing import panel_timing, write_timing
 from remanga.config import AudioConfig, SubtitlesConfig, TTSConfig
@@ -59,13 +59,21 @@ def _read_timings(subtitles_config: SubtitlesConfig, batches: list[Batch], audio
             for b in batches}
 
 
-def _batch_rows(batch: Batch, spans, timeline_ms: int, pause_after_batch_ms: int,
-                index_from: int) -> tuple[list[dict[str, Any]], int]:
-    """One batch's panels as audio_timing rows, laid end to end."""
+# The silence between one take and the next - a narrator's own pause between
+# sentences, Kokoro's measured median over a whole-chapter take. Inside a take
+# the engine's pauses are the only ones; between takes the edges are trimmed
+# to the speech, and butted together the next line started the instant the
+# last ended, which the user found weird (2026-10-04). Not a setting.
+TAKE_GAP_MS = 420
+
+
+def _batch_rows(batch: Batch, spans, timeline_ms: int, index_from: int) -> tuple[list[dict[str, Any]], int]:
+    """One batch's panels as audio_timing rows, laid end to end, and
+    TAKE_GAP_MS after the batch's last panel before the next take."""
     rows: list[dict[str, Any]] = []
     last = len(spans) - 1
     for offset, span in enumerate(spans):
-        pause = pause_after_batch_ms if offset == last else 0
+        pause = TAKE_GAP_MS if offset == last else 0
         rows.append(panel_timing(
             index_from + offset, span.panel_id, batch.panels[offset].text, f"{batch.name}.wav",
             start_ms=timeline_ms, duration_ms=span.end_ms - span.start_ms,
@@ -105,8 +113,9 @@ def narrate_in_batches(synth, tts_config: TTSConfig, audio_config: AudioConfig,
         verify_audio_manifest(audio_dir, chapter_num)
         verify_subtitle_manifest(subs_dir, chapter_num)
 
-    planned = plan_batches(panels, audio_config.batch_target_minutes, synth.chars_per_second,
-                           synth.max_take_seconds)
+    # As long a take as the engine reads well: the whole chapter for most,
+    # its own longest for an engine that drifts or has a token limit.
+    planned = plan_batches(panels, float("inf"), synth.chars_per_second, synth.max_take_seconds)
     voice_identity = narration_identity(tts_config, audio_config)
     timing_path = get_audio_timing_path(project_name, chapter_num)
     recorded = recorded_keys(timing_path)
@@ -138,8 +147,7 @@ def narrate_in_batches(synth, tts_config: TTSConfig, audio_config: AudioConfig,
         spans = _trim_edges(alignment.spans, audio_dir / f"{batch.name}.wav")
         console.print(f"[dim]{_esc(batch.name)}: {alignment.match_ratio:.0%} of the narration "
                       f"matched what was said[/]")
-        batch_rows, timeline_ms = _batch_rows(
-            batch, spans, timeline_ms, audio_config.pause_between_panels_ms, len(rows) + 1)
+        batch_rows, timeline_ms = _batch_rows(batch, spans, timeline_ms, len(rows) + 1)
         rows.extend(batch_rows)
 
     write_timing(timing_path, chapter_num, rows, total_ms=timeline_ms, voice=voice_identity,

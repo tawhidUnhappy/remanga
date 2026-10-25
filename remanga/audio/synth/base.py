@@ -89,7 +89,7 @@ class BaseWorkerSynthesizer(ToolWorker):
     # or every take it makes sits on the collapse line.
     chars_per_second: float = CHARS_PER_SECOND
 
-    # The longest one take may be, whatever 'Narration take length' says. A
+    # The longest one take may be - a chapter is read in takes this long. A
     # voice cloned from a recording drifts off it as a take goes on, so a
     # cloning engine lowers this to CLONE_MAX_TAKE_SECONDS (audio/batching.py).
     max_take_seconds: float = MAX_TAKE_SECONDS

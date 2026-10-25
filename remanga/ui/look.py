@@ -69,8 +69,9 @@ ANDROID_LIGHT = Theme(
 
 ANDROID_CSS = """
 /* Bars: one tonal surface, no hairline. */
-.android TopBar { background: $surface; border-bottom: none; height: 1; margin-bottom: 1; }
-.android Footer { background: $surface; }
+.android TopBar { background: $surface; border-bottom: none; height: auto; margin-bottom: 1; }
+.android KeyBar { background: $surface; }
+.android RowDetail { background: $surface; border-top: none; }
 .android DataTable { background: $background; }
 .android DataTable > .datatable--header { background: $background; color: $primary; text-style: bold; }
 
