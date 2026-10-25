@@ -62,10 +62,12 @@ class Drama3Config(ConfigModel):
     # (each ~0.45 GB), slower but safer; 0 ran a 12 GB card out of memory.
     gpu_headroom_gb: float = 2.5
     # Read every take from a voice file of the described voice (made once)
-    # rather than in the model's own voice: the same narrator for certain,
-    # but less natural to the ear (scripts/drama3_worker.py). Off: the user
-    # picked the model's own voice for quality (2026-10-25).
-    voice_file: bool = False
+    # rather than in the model's own voice (scripts/drama3_worker.py). On: in
+    # its own voice the narrator changed from page to page (per-take median
+    # pitch 79-123 Hz over a chapter, against 90-107 from a voice file) -
+    # the user heard it ("voice don't match") and asked for it fixed,
+    # 2026-10-25.
+    voice_file: bool = True
 
     def voice_options(self) -> list[tuple[str, str]]:
         """Every voice it can read in - see KokoroConfig.voice_options."""

@@ -10,20 +10,20 @@ JSON Lines with (speech.cpp's docs/worker.md, protocol 3). This script turns
 that protocol - the audio as base64 PCM chunks, then an `end` - into remanga's:
 one request in, one WAV written, one answer out.
 
-Drama 3 has no named voices. By default a take is read in the model's own
-voice (voice "none"): a description cue in brackets opens the text and the
-seed picks the voice it describes - the user's pick for quality (2026-10-25:
-"smooth and more natural" than a voice file). Long, it drops whole sentences
-(a chapter in one take: 73% of the script), so takes are a page and a take
-that leaves words out is read again (audio/retakes.py:retake_mismatches).
-
-With `voice_file`, every take is read from a voice file instead: made once
-per described voice - the reference line read with the voice's cue under its
-seed, then `speech voice` turns that recording into the file, kept in
-`--voices_dir` and added to the running worker. The voice is then fixed (the
-seed only changes the delivery), and the worst take that had dropped
-sentences read 93-98% - but it sounds less natural, and speech.cpp's chunk
+Drama 3 has no named voices: it is a voice-cloning model. With `voice_file`
+(the default), every take is read from a voice file - made once per
+described voice: the reference line read with the voice's cue under its seed
+in the model's own voice, then `speech voice` turns that recording into the
+file, kept in `--voices_dir` and added to the running worker. The voice is
+then fixed - the seed only changes the delivery - and speech.cpp's chunk
 joins click in it, so it is read a sentence per request.
+
+Without it, a take is read in the model's own voice (voice "none"): the cue
+opens the text and the seed picks the voice. It sounded smoother to the user,
+but the narrator changed from page to page (per-take median pitch 79-123 Hz
+over a chapter, against 90-107 from a voice file) - "voice don't match" -
+and long takes drop whole sentences (a chapter in one take: 73% of its
+script), which page takes and audio/retakes.py:retake_mismatches cover.
 
 Protocol (newline-delimited JSON, one message per line):
   Parent -> worker: {"cmd": "synthesize", "text": ..., "voice": name, "cue": "[...]",

@@ -486,8 +486,9 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     checkpoints/speech_cpp/<owner>--<repo>/<sha256>/, path + size pinned in synth.py so a load never
     re-hashes it). Plug-in `plugins/drama3/`: empty venv `drama3` for a stdlib worker that bridges
     remanga's one-line protocol to `speech worker` JSON Lines (protocol 3: base64 PCM chunks -> WAV).
-    **DEFAULT IS THE BUILT-IN VOICE (voice "none", cue + seed per take), user's call 2026-10-25 after listening:
-    "for best quality lets go with it's builtin vocal".** The voice-file path below is `voice_file: true`.
+    **DEFAULT IS THE VOICE FILE (`voice_file: true`), since 2026-10-25.** The user first chose the built-in voice
+    by ear ("for best quality lets go with it's builtin vocal"), then heard the full chapter: "voice don't
+    match" - the built-in narrator changes from page to page. Built-in (voice "none", cue + seed per take):
     Built-in has NO chunk-join clicks (0 on the 2048 grid over 2,000 chars in one request), so a take is one
     request; its sentence drops are what page takes + retake_mismatches are for. Its other failure: a take
     STICKS ON A DRONE (steady ~150/300/450 Hz tone at -45 dB for ~20 s, sometimes then "thanks for watching")
@@ -497,6 +498,11 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     in 27.5 min, -14.1 LUFS - BUT per-take median F0 79-123 Hz (spread 11.2 Hz; the voice file's was 90-107,
     4.2): in its own voice the narrator's pitch moves between pages. Kept for the user to judge by ear:
     `global/voice/samples/drama3/9-HimeSama-ch1-FULL-CHAPTER-builtin-voice-with-music.mp3`.
+    Then the same chapter with the voice file (a sentence per request, the default again): 32 takes, no
+    reseed or retake, all >= 90%, 16.2 min in 25.8 min, -14.1 LUFS, per-take F0 91-103 Hz (spread 2.9), grid
+    jumps at chance level (16 vs 18.8 of 38,507), none of the strong kind: `.../10-...voice-file-with-music.mp3`.
+    Drama 3 is a cloning model - a "voice" is a reference recording; a real-recording clone is not built yet
+    (offered; licence forbids imitating a person without consent).
     **Voice "none" drops sentences in long takes; a voice file fixes that but sounds less natural.** Read with the model's own pick
     (a bracketed cue `[deep, calm male narrator voice]` + seed, cue not spoken - whisper-checked), Drama 3
     DROPS WHOLE SENTENCES and babbles (whisper hears "thanks for watching"): HimeSama ch1 as one take 73%
