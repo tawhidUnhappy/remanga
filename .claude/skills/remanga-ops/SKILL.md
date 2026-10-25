@@ -489,6 +489,19 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     recipe, `BED_VERSION` 3. Long videos join each chapter's own master, so the pause happens inside
     any chapter longer than its song. Measured: Arabian nights (178.2 s) under 445 s -> silent runs of
     exactly 2.0 s at 178.2 s and 358.4 s, none with 0.
+  - **Long videos get ONE music bed (2026-10-26, user: in ch1-3.3 at 3:00 "the current looping background
+    music just stop and another start", "attached to the chapter instead of the long video").** The join
+    used each chapter's master (its own bed) end to end, so the song restarted at every chapter, and
+    `prepare_chapter` reuses a master that exists even when stale (that file's chapters were still
+    BED_VERSION 2 = crossfade, so the loop pause never reached it). Now `long_video._join_chapters` ->
+    `audio/mix.py:mix_long_audio`: each chapter's narration (`narration_track`, no music) fitted to its
+    picture's length, concatenated with `wave`, ONE bed streamed by ffmpeg (`master.write_music_bed`:
+    `loop_parts` head + `-stream_loop -1` unit, atrim, afades), amix normalize=0, one `write_master`;
+    pictures concat video-only + that sound. Chapter masters are no longer read by the join. `music_bed`
+    is head + tiled unit: identical to before with a pause; with crossfade only the final 0.8 s under
+    the 2 s fade-out differs (the next crossfade has begun). Checked on ch1-3.3 (48.5 min, Thapin
+    183.2 s trimmed): rejoin 79 s, a/v both 2908.29 s, -14.2 LUFS / -1.1 dBTP, bed pauses 2.0 s every
+    185.2 s, nothing at chapter starts.
   - **Ming-3.0-tts-0.5B engine (`ming`, 2026-10-24, user asked for a better TTS; MIT).** Plug-in
     `plugins/ming_tts/`, venv `ming-tts` (torch 2.8 - upstream pins 2.6, no cu129 wheels;
     transformers 4.46.3 pinned; pynini for text normalization). Upstream is NOT pip-installable: its

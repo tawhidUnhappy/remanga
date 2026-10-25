@@ -168,44 +168,65 @@ def music_bed(narration: AudioSegment, bgm: AudioSegment, gap_ms: int = 0) -> Au
     (BGM_LOOP_FADE_OUT_MS), the music rests for `gap_ms`, and the song starts
     over - a breath between plays rather than a seam (user request,
     2026-10-26: "a small delay between the loop to make it feel natural")."""
-    song = trim_dead_air(_samples(bgm), bgm.frame_rate)
     need = int(len(narration) * bgm.frame_rate / 1000)
-    if gap_ms > 0 and len(song):
-        bed = _paused_loop(song, need, gap_ms, bgm.frame_rate)
-    else:
-        bed = _crossfaded_loop(song, need, bgm.frame_rate)
-    return _segment(bed[:need], bgm).fade_in(BGM_FADE_IN_MS).fade_out(BGM_FADE_OUT_MS)
+    parts = loop_parts(bgm, gap_ms)
+    if parts is None:
+        return AudioSegment.silent(duration=len(narration), frame_rate=bgm.frame_rate).set_channels(bgm.channels)
+    head, unit = parts
+    repeats = max(0, -(-(need - len(head)) // len(unit)))
+    bed = np.concatenate([head, np.tile(unit, (repeats, 1))])[:need]
+    return _segment(bed, bgm).fade_in(BGM_FADE_IN_MS).fade_out(BGM_FADE_OUT_MS)
 
 
-def _crossfaded_loop(song: np.ndarray, need: int, sample_rate: int) -> np.ndarray:
-    """At least `need` frames of the song, each play's end crossfaded into the
-    next one's start (music_bed)."""
-    overlap = min(int(BGM_LOOP_CROSSFADE_MS * sample_rate / 1000), len(song) // 4)
-    if overlap > 0:
-        t = np.linspace(0.0, np.pi / 2, overlap)[:, None]
-        fade_out, fade_in = np.cos(t), np.sin(t)
-    bed = song
-    while len(bed) < need:
-        if overlap > 0:
-            joined = bed[-overlap:] * fade_out + song[:overlap] * fade_in
-            bed = np.concatenate([bed[:-overlap], joined, song[overlap:]])
-        else:
-            bed = np.concatenate([bed, song])
-    return bed
+def loop_parts(bgm: AudioSegment, gap_ms: int) -> tuple[np.ndarray, np.ndarray] | None:
+    """The looped song as its first play and the part that then repeats for
+    ever: head + unit + unit + ... is the bed (music_bed), cut to length.
+    With a gap both are one play and its pause; with a crossfade the unit is
+    the crossfade and the song after it. None for a song that is all silence."""
+    song = trim_dead_air(_samples(bgm), bgm.frame_rate)
+    if not len(song):
+        return None
+    rate = bgm.frame_rate
+    if gap_ms > 0:
+        one = song.copy()
+        tail = min(int(BGM_LOOP_FADE_OUT_MS * rate / 1000), len(one) // 4)
+        if tail > 0:
+            one[-tail:] *= np.cos(np.linspace(0.0, np.pi / 2, tail))[:, None]
+        head = min(int(BGM_LOOP_RESTART_FADE_MS * rate / 1000), len(one) // 4)
+        if head > 0:
+            one[:head] *= np.sin(np.linspace(0.0, np.pi / 2, head))[:, None]
+        play = np.concatenate([one, np.zeros((int(gap_ms * rate / 1000), one.shape[1]))])
+        return play, play
+    overlap = min(int(BGM_LOOP_CROSSFADE_MS * rate / 1000), len(song) // 4)
+    if overlap <= 0:
+        return song, song
+    t = np.linspace(0.0, np.pi / 2, overlap)[:, None]
+    joined = song[-overlap:] * np.cos(t) + song[:overlap] * np.sin(t)
+    return song[:-overlap], np.concatenate([joined, song[overlap:-overlap]])
 
 
-def _paused_loop(song: np.ndarray, need: int, gap_ms: int, sample_rate: int) -> np.ndarray:
-    """`need` frames of the song played over and over with `gap_ms` of
-    silence between plays (music_bed)."""
-    one = song.copy()
-    tail = min(int(BGM_LOOP_FADE_OUT_MS * sample_rate / 1000), len(one) // 4)
-    if tail > 0:
-        one[-tail:] *= np.cos(np.linspace(0.0, np.pi / 2, tail))[:, None]
-    head = min(int(BGM_LOOP_RESTART_FADE_MS * sample_rate / 1000), len(one) // 4)
-    if head > 0:
-        one[:head] *= np.sin(np.linspace(0.0, np.pi / 2, head))[:, None]
-    play = np.concatenate([one, np.zeros((int(gap_ms * sample_rate / 1000), one.shape[1]))])
-    return np.tile(play, (need // len(play) + 1, 1))[:need]
+def write_music_bed(seconds: float, bgm: AudioSegment, gap_ms: int, out: Path) -> bool:
+    """music_bed for `seconds` of narration, written to `out` - streamed by
+    ffmpeg from one play and the repeating part, so a long video of many
+    chapters never holds hours of music in memory. False for a silent song."""
+    parts = loop_parts(bgm, gap_ms)
+    if parts is None:
+        return False
+    head_wav, unit_wav = out.with_name(out.stem + "_head.wav"), out.with_name(out.stem + "_unit.wav")
+    try:
+        for frames, path in zip(parts, (head_wav, unit_wav), strict=True):
+            _segment(frames, bgm).export(path, format="wav")
+        fade_out_at = max(seconds - BGM_FADE_OUT_MS / 1000, 0.0)
+        chain = (f"[0:a][1:a]concat=n=2:v=0:a=1,atrim=duration={seconds:.6f},"
+                 f"afade=t=in:d={BGM_FADE_IN_MS / 1000:g},"
+                 f"afade=t=out:st={fade_out_at:.6f}:d={BGM_FADE_OUT_MS / 1000:g}")
+        run_ffmpeg(["ffmpeg", "-y", "-i", str(head_wav), "-stream_loop", "-1", "-i", str(unit_wav),
+                    "-filter_complex", chain, "-t", f"{seconds:.6f}", "-c:a", "pcm_f32le", str(out)],
+                   check=True, capture=True)
+    finally:
+        head_wav.unlink(missing_ok=True)
+        unit_wav.unlink(missing_ok=True)
+    return True
 
 
 def under_narration(narration: AudioSegment, bed: AudioSegment, volume_db: float) -> AudioSegment:

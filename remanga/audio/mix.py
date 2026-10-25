@@ -8,8 +8,11 @@ doesn't make the render think the sound changed."""
 
 from __future__ import annotations
 
+import wave
 from pathlib import Path
 from typing import Any
+
+from pydub import AudioSegment
 
 from remanga.audio.join import join_segments
 from remanga.audio.manifest import verify_audio_manifest
@@ -22,9 +25,11 @@ from remanga.audio.master import (
     panel_segments,
     under_narration,
     write_master,
+    write_music_bed,
 )
 from remanga.config import AudioConfig
 from remanga.console import console, escape as _esc
+from remanga.ffmpeg_io import run_ffmpeg
 from remanga.json_io import read_json, read_json_or, write_json
 from remanga.paths import get_audio_dir, get_audio_timing_path, get_master_audio_path
 
@@ -81,6 +86,23 @@ def _fingerprint(timing_path: Path, config: AudioConfig, bgm: Path | None) -> di
     }
 
 
+def narration_track(project_name: str, chapter_num: str, config: AudioConfig) -> AudioSegment:
+    """A chapter's narration as the engine read it, every take end to end
+    with its pauses - no music, no volume set yet."""
+    timing_path = get_audio_timing_path(project_name, chapter_num)
+    if not timing_path.exists():
+        raise FileNotFoundError(f"No narration audio for chapter {chapter_num} yet: {timing_path}")
+    audio_dir = get_audio_dir(project_name, chapter_num)
+    # Zero trust on the folder before reading a single clip out of it - the
+    # mix is exactly the point where "some of the raw audio" would otherwise
+    # quietly become "a chapter missing a few lines" with nothing to say so.
+    verify_audio_manifest(audio_dir, chapter_num)
+    segments = []
+    for panel in read_json(timing_path).get("panels", []):
+        segments.extend(panel_segments(audio_dir, panel, config.sample_rate))
+    return join_segments(segments).set_channels(2).set_frame_rate(config.sample_rate)
+
+
 def mix_master_audio(project_name: str, chapter_num: str, config: AudioConfig, force: bool = False) -> Path:
     timing_path = get_audio_timing_path(project_name, chapter_num)
     if not timing_path.exists():
@@ -96,15 +118,7 @@ def mix_master_audio(project_name: str, chapter_num: str, config: AudioConfig, f
         return master
 
     console.print(f"[cyan]Mixing chapter {chapter_num}'s audio...[/]")
-    audio_dir = get_audio_dir(project_name, chapter_num)
-    # Zero trust on the folder before reading a single clip out of it - the
-    # mix is exactly the point where "some of the raw audio" would otherwise
-    # quietly become "a chapter missing a few lines" with nothing to say so.
-    verify_audio_manifest(audio_dir, chapter_num)
-    segments = []
-    for panel in read_json(timing_path).get("panels", []):
-        segments.extend(panel_segments(audio_dir, panel, config.sample_rate))
-    track = join_segments(segments).set_channels(2).set_frame_rate(config.sample_rate)
+    track = narration_track(project_name, chapter_num, config)
 
     raw = master.with_name("master_audio_raw.wav")
     if bgm:
@@ -126,3 +140,46 @@ def mix_master_audio(project_name: str, chapter_num: str, config: AudioConfig, f
     write_json(fingerprint_path, _fingerprint(timing_path, config, bgm))
     console.print(f"[bold green]✓ Audio mixed:[/] {_esc(str(master))}")
     return master
+
+
+def mix_long_audio(project_name: str, chapters: list[str], lengths: list[float], config: AudioConfig,
+                   work: Path, out: Path) -> Path:
+    """A long video's sound (workflow/long_video.py): every chapter's
+    narration, each fitted to its picture's length, then ONE music bed under
+    the whole of it and one volume over the result. Not the chapters' own
+    masters end to end: each of those carries its own bed, so the song cut
+    off and started again from its intro at every chapter change, whatever
+    the loop pause (user report, 2026-10-26: at 3:00 of ch1-3.3 "the current
+    looping background music just stop and another start")."""
+    rate = config.sample_rate
+    narration = work / "narration.wav"
+    with wave.open(str(narration), "wb") as joined:
+        joined.setnchannels(2)
+        joined.setsampwidth(2)
+        joined.setframerate(rate)
+        for chapter, seconds in zip(chapters, lengths, strict=True):
+            track = narration_track(project_name, chapter, config).set_sample_width(2)
+            frames = round(seconds * rate)
+            if track.frame_count() < frames:
+                track += AudioSegment.silent(duration=(frames - track.frame_count()) * 1000 / rate + 50,
+                                             frame_rate=rate)
+            joined.writeframes(track.get_sample_slice(0, frames).raw_data)
+
+    raw, bgm = narration, _bgm_file(config)
+    bed_wav = work / "music_bed.wav"
+    if bgm and write_music_bed(sum(lengths), load_bgm(bgm, rate), round(config.bgm_loop_gap_s * 1000), bed_wav):
+        gain_db = music_gain_db(narration, bed_wav, config.bgm_below_voice_lu)
+        console.print(f"[cyan]Adding background music across all {len(chapters)} chapters:[/] {_esc(str(bgm))} "
+                      f"[dim](its loud parts {config.bgm_below_voice_lu:g} LU under the voice, "
+                      f"gain {gain_db:+.1f} dB)[/]")
+        raw = work / "sound_raw.wav"
+        run_ffmpeg(["ffmpeg", "-y", "-i", str(narration), "-i", str(bed_wav), "-filter_complex",
+                    f"[1:a]volume={gain_db:.2f}dB[m];[0:a][m]amix=inputs=2:normalize=0:duration=first",
+                    "-c:a", "pcm_f32le", str(raw)], check=True, capture=True)
+        narration.unlink(missing_ok=True)
+    bed_wav.unlink(missing_ok=True)
+    write_master(raw, out, rate, target_lufs=config.volume_lufs,
+                 announcement=f"Setting the volume to {config.volume_lufs:g} LUFS...",
+                 on_failure="the mix as it was")
+    narration.unlink(missing_ok=True)
+    return out

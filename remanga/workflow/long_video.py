@@ -7,12 +7,14 @@ Two ways to make one, both ending on the same join:
 - from source: every chapter remade from its pages, marks and
   narration.json first (remake_from_source), then joined.
 
-The join takes each chapter's picture stream and mixed sound (not its
-finished MP4, which may carry the intro), so the long video has the intro
-once, in front. A chapter's sound is fitted to its picture's exact length,
-so no chapter can pull the ones after it out of sync. The pictures are
-stream-copied when every one was encoded alike, and re-encoded together
-when not."""
+The join takes each chapter's picture stream (not its finished MP4, which
+may carry the intro), so the long video has the intro once, in front. The
+sound is made for the long video as a whole (audio/mix.py:mix_long_audio):
+each chapter's narration fitted to its picture's exact length, so no
+chapter can pull the ones after it out of sync, and one music bed under
+all of it - the song loops by the loop pause, not at every chapter. The
+pictures are stream-copied when every one was encoded alike, and
+re-encoded together when not."""
 
 from __future__ import annotations
 
@@ -163,6 +165,7 @@ def join_chapters(project: str, chapters: list[str], config: RemangaConfig) -> P
 
 
 def _join_chapters(project: str, chapters: list[str], config: RemangaConfig) -> Path:
+    from remanga.audio.mix import mix_long_audio
     from remanga.ffmpeg_io import run_ffmpeg
     from remanga.store.versions import keep_long
     from remanga.video import VideoRenderer
@@ -184,50 +187,43 @@ def _join_chapters(project: str, chapters: list[str], config: RemangaConfig) -> 
                          "made": time.strftime("%Y-%m-%d %H:%M", time.localtime(final.stat().st_mtime))})
 
     missing = [ch for ch in chapters if not get_video_picture_path(project, ch, create=False).exists()
-               or not get_master_audio_path(project, ch, create=False).exists()]
+               or not get_audio_timing_path(project, ch, create=False).exists()]
     if missing:
         raise FileNotFoundError(f"Chapter(s) {', '.join(missing)} have no video to join yet - make them first.")
 
     renderer = VideoRenderer(config.system, config.video)
-    segments: list[Path] = []
-    lengths: list[float] = []
+    pictures = [get_video_picture_path(project, ch) for ch in chapters]
+    lengths = [_duration(p) for p in pictures]
+    sound = work / "sound.wav"
     try:
-        # 1. Each chapter's picture with its own sound, the sound padded or cut
-        # to the picture's exact length.
-        for chapter in chapters:
-            picture = get_video_picture_path(project, chapter)
-            seconds = _duration(picture)
-            lengths.append(seconds)
-            segment = work / f"chapter_{chapter}.mp4"
-            result = run_ffmpeg(["ffmpeg", "-y", "-i", str(picture), "-i", str(get_master_audio_path(project, chapter)),
-                                 "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-af", "apad",
-                                 *AUDIO_CODEC_ARGS, "-t", f"{seconds:.3f}", str(segment)],
-                                capture=True, show_progress=True, total_seconds=seconds,
-                                description=f"Chapter {chapter}: sound")
-            if result.returncode != 0:
-                raise RuntimeError(f"Could not prepare chapter {chapter}:\n{result.stderr[-1500:]}")
-            segments.append(segment)
+        # 1. The sound: every chapter's narration, each fitted to its
+        # picture's exact length, and one music bed under all of it.
+        console.print(f"[cyan]Mixing the sound of {len(chapters)} chapters as one[/]")
+        mix_long_audio(project, chapters, lengths, config.audio, work, sound)
 
-        # 2. One after another: a stream copy when every picture was encoded
-        # alike (the same settings and encoder), otherwise one re-encode.
+        # 2. The pictures one after another, over that sound: a stream copy
+        # when every picture was encoded alike (the same settings and
+        # encoder), otherwise one re-encode.
         body = work / "body.part.mp4"
-        signatures = {stream_signature(s) for s in segments}
-        total = sum(_duration(s) for s in segments)
-        console.print(f"[cyan]Joining {len(segments)} chapters[/] [dim]({total / 60:.1f} minutes)[/]")
+        signatures = {stream_signature(p) for p in pictures}
+        total = sum(lengths)
+        console.print(f"[cyan]Joining {len(pictures)} chapters[/] [dim]({total / 60:.1f} minutes)[/]")
         if len(signatures) == 1 and None not in signatures:
             listing = work / "segments.txt"
-            listing.write_text("".join(f"file '{s.resolve().as_posix()}'\n" for s in segments), encoding="utf-8")
-            result = run_ffmpeg(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listing),
-                                 "-map", "0:v:0", "-map", "0:a:0", "-c", "copy", *MUX_ARGS, str(body)], capture=True)
+            listing.write_text("".join(f"file '{p.resolve().as_posix()}'\n" for p in pictures), encoding="utf-8")
+            result = run_ffmpeg(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listing), "-i", str(sound),
+                                 "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", *AUDIO_CODEC_ARGS, *MUX_ARGS,
+                                 str(body)], capture=True, show_progress=True, total_seconds=total,
+                                description="Joining the chapters")
             listing.unlink(missing_ok=True)
         else:
             console.print("[dim](the chapters' pictures were encoded differently - joining by re-encoding)[/]")
             ffmpeg_bin, codec, use_gpu, _ = renderer.encoder()
-            inputs = [arg for s in segments for arg in ("-i", str(s))]
-            streams = "".join(f"[{i}:v][{i}:a]" for i in range(len(segments)))
+            inputs = [arg for p in [*pictures, sound] for arg in ("-i", str(p))]
+            streams = "".join(f"[{i}:v]" for i in range(len(pictures)))
             result = run_ffmpeg([ffmpeg_bin, "-y", *inputs, "-filter_complex",
-                                 f"{streams}concat=n={len(segments)}:v=1:a=1[v][a]", "-map", "[v]", "-map", "[a]",
-                                 *COLOR_TAG_ARGS, "-bf", "0",
+                                 f"{streams}concat=n={len(pictures)}:v=1:a=0[v]", "-map", "[v]",
+                                 "-map", f"{len(pictures)}:a:0", *COLOR_TAG_ARGS, "-bf", "0",
                                  *picture_codec_args(codec, use_gpu, config.system.threads),
                                  *AUDIO_CODEC_ARGS, *MUX_ARGS, str(body)],
                                 capture=True, show_progress=True, total_seconds=total,
@@ -247,8 +243,7 @@ def _join_chapters(project: str, chapters: list[str], config: RemangaConfig) -> 
         else:
             body.replace(final)
     finally:
-        for segment in segments:
-            segment.unlink(missing_ok=True)
+        sound.unlink(missing_ok=True)
     # The intro's leader is cached here for the next join; with no intro the
     # folder is left empty, and goes.
     if not any(work.iterdir()):
