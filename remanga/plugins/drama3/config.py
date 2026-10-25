@@ -1,0 +1,83 @@
+"""Fish Audio Drama 3's settings block: which narrator it is asked for, and
+the seed that keeps that narrator the same from chapter to chapter."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+from remanga.config.base import ConfigModel
+
+
+@dataclass(frozen=True)
+class DramaVoice:
+    name: str
+    label: str
+    cue: str
+    use: str
+
+
+# Drama 3 has no named voices: with no recording it picks a voice itself, and
+# a cue in brackets at the start of the text steers which (speech.cpp's
+# docs/models/drama3.md, "A voice described in words"). The cue is not read
+# aloud. The voice it picks for a cue and seed is recorded once and made into
+# a voice file every take is read from (scripts/drama3_worker.py).
+DRAMA_VOICES: tuple[DramaVoice, ...] = (
+    DramaVoice("deep_male", "Deep male narrator", "[deep, calm male narrator voice]",
+               "low and steady, documentary"),
+    DramaVoice("warm_male", "Warm male narrator", "[warm, clear male narrator voice]",
+               "friendly storyteller"),
+    DramaVoice("warm_female", "Warm female narrator", "[warm, clear female narrator voice]",
+               "friendly storyteller"),
+    DramaVoice("calm_female", "Calm female narrator", "[soft, calm female narrator voice]",
+               "gentle, audiobook"),
+    DramaVoice("model", "Model's choice", "",
+               "no description - the model picks, and the seed decides"),
+)
+
+VOICE_BY_NAME = {v.name: v for v in DRAMA_VOICES}
+DEFAULT_VOICE = "deep_male"
+
+
+def voice_spec(name: str) -> DramaVoice:
+    """The voice named, or the default for a name it doesn't have - a typo in
+    config.json narrates in the default voice rather than failing mid-chapter."""
+    return VOICE_BY_NAME.get((name or "").strip(), VOICE_BY_NAME[DEFAULT_VOICE])
+
+
+class Drama3Config(ConfigModel):
+    """fishaudio/drama-3 as speech.cpp's Q4_K file (20.8 GB), run by speech.cpp
+    on Vulkan with the experts the GPU cannot hold on the CPU. A described
+    voice, no reference recording; `seed` is fixed so the same description
+    gives the same narrator every chapter."""
+
+    voice: str = DEFAULT_VOICE
+    seed: int = 1
+    model_name: str = "drama-3"
+    model_dir: str = "checkpoints/speech_cpp"
+    threads: int = 0   # 0 = speech.cpp's own default (the performance cores)
+    # GPU memory kept free for speech.cpp's working buffers, in GiB - see
+    # scripts/drama3_worker.py. More = fewer layers' experts on the GPU
+    # (each ~0.45 GB), slower but safer; 0 ran a 12 GB card out of memory.
+    gpu_headroom_gb: float = 2.5
+
+    def voice_options(self) -> list[tuple[str, str]]:
+        """Every voice it can read in - see KokoroConfig.voice_options."""
+        return [(v.name, f"{v.label} - {v.use}") for v in DRAMA_VOICES]
+
+    @property
+    def spec(self) -> DramaVoice:
+        return voice_spec(self.voice)
+
+    @property
+    def voice_label(self) -> str:
+        return self.spec.label
+
+    @property
+    def voice_detail(self) -> str:
+        return f"{self.spec.label} ({self.spec.name}, seed {self.seed})"
+
+    def identity(self) -> dict[str, Any]:
+        # "voice_file": the takes are read from a voice file, not the model's
+        # own pick - takes made before that are made again.
+        return {"engine": "drama3", "voice": self.spec.name, "seed": self.seed, "voice_file": 1}

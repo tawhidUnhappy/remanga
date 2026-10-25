@@ -230,13 +230,14 @@ never touched. From there the PDF and the video work as for any manga.
 
 ## The narrator
 
-Five engines built in (each a plug-in - see [Plug-ins](#plug-ins)), switchable in **Settings → Narrator engine**; each keeps its own voice, so switching
+Six engines built in (each a plug-in - see [Plug-ins](#plug-ins)), switchable in **Settings → Narrator engine**; each keeps its own voice, so switching
 back and forth changes nothing else. A chapter narrated by the other one is narrated again.
 
 | Engine | Voice | Speed |
 |---|---|---|
 | **Ming-3.0-tts** (default, via the Plain narrator preset) | five built-in English voices (Stella, James, Emma, Charlotte, George) | about 1.3x real time on a 3060 (a 13-minute chapter in ~17 minutes), ~4 GB of VRAM |
 | **Kokoro-82M** | its own studio voices, picked from a list | a 60-panel chapter in seconds |
+| **Fish Audio Drama 3** | the #1 open-weights voice on Artificial Analysis's leaderboard (Oct 2026); no named voices - a narrator described in words (deep male, warm male, warm female, calm female, or the model's own choice): the first time, it reads a reference line in that voice and keeps it as a voice file, and every take is read from that file, so it is the same narrator every chapter. Read about a page per take (it drops sentences from longer ones). A 20.8 GB download (speech.cpp's Q4 port); Fish Audio Community License - free under US$500k a year of revenue, and say "Built with Fish Audio" | about 0.7x real time on a 3060 - a 14,000-character chapter in about 30 minutes; the experts that don't fit the 12 GB run on the CPU, ~15 GB of RAM |
 | **Edge voices** | Microsoft Edge's online US neural voices (Guy, Andrew, Brian, Christopher, Aria, Jenny...) - **needs the internet**, and it is Edge's Read Aloud service, not a licensed API: check Microsoft's terms before monetizing | a 14-minute chapter in ~90 seconds, no GPU |
 | **Qwen3-TTS** | nine preset narrators, steered by a line of plain English ("calm and unhurried") - or **a voice you design**: describe the narrator, and one sample is made and kept | about ten minutes for the same chapter |
 | **IndexTTS-2.5** | **a clone of any recording** in `global/voice/` - no transcript needed, it takes the voice from the first 15 seconds | about real time on a 3060 (a 40s take in ~45s), ~7 GB of VRAM |
@@ -385,7 +386,7 @@ particular one:
 
 | Kind | What it is | Built in (`remanga/plugins/`) |
 |---|---|---|
-| `tts` | a narrator engine: its settings block, synthesizer, worker, Settings rows | `kokoro/`, `ming_tts/`, `qwen_tts/`, `index_tts/` |
+| `tts` | a narrator engine: its settings block, synthesizer, worker, Settings rows | `kokoro/`, `ming_tts/`, `drama3/`, `edge_tts/`, `qwen_tts/`, `index_tts/` |
 | `tool` | an isolated environment (`.tools/venv-<name>`) | registered by `kokoro/`, `ming_tts/`, `qwen_tts/`, `index_tts/`, `magi/`, `faster_whisper/` |
 | `layout` | how a chapter is marked into panels | `pages/` (Panel Marker + MAGI), `long_strip/` (Strip Marker) |
 | `source` | where manga come from | `mangadex/` |
@@ -414,6 +415,8 @@ Every setting is in `config.json` and applies to every project:
 |---|---|---|
 | `tts.engine` | `kokoro` | who narrates - any `tts` plug-in: `kokoro` (fixed voices, seconds a chapter) or `ming` (five built-in English voices, about 1.3x real time) or `qwen` (preset narrators or a voice you design, minutes a chapter) or `index_tts` (a clone of a recording, about real time) |
 | `tts.ming.voice` | `US_Stella` | Ming-3.0-tts's built-in voice: `US_Stella`, `US_James`, `US_Emma`, `UK_Charlotte`, `UK_George` |
+| `tts.drama3.voice` / `.seed` | `deep_male` / 1 | Drama 3's described narrator (`deep_male`, `warm_male`, `warm_female`, `calm_female`, `model`) and the seed its voice file is made under (`checkpoints/speech_cpp/voices/`) - another seed is another narrator |
+| `tts.drama3.gpu_headroom_gb` | 2.5 | GPU memory kept free for Drama 3's working buffers; 0 ran a 12 GB card out of memory |
 | `tts.kokoro.voice` / `.speed` | `af_heart` / 1.0 | Kokoro's voice and pace - 1.0 is its own (about 185 words a minute); past about 1.35 it drops the pauses between sentences |
 | `tts.qwen.speaker` / `.instruct` | `Ryan` / monotone... | Qwen3-TTS's preset narrator and how it reads - the default asks for a monotone read, because anything warmer makes the model act |
 | `tts.qwen.design` / `.designed_sample` | - | the voice you described, and the sample every panel is then spoken from |

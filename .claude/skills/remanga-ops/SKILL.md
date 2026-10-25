@@ -490,6 +490,65 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     Guy measured on HimeSama ch1: 14,156 chars -> 842.9s in 90s (16.8 chars/s; `speed` -> rate "+N%"),
     timbre distance 4.1-8.6 over 14 min (George 5.5-18.3, Fenrir 2.0-4.7), F0 150-154 Hz. Preset
     `plain-narrator-edge-guy`. Online + not a licensed API - said in the README; don't hide it.
+  - **Fish Audio Drama 3 engine (`drama3`, 2026-10-25, user asked for the #1 of Artificial Analysis's
+    open-weights TTS board).** 35B MoE (3B active), Fish Audio Community License (free < US$500k/yr,
+    "Built with Fish Audio"). The official checkpoint needs 24 GB+ (int4 is 20.8 GB of weights), so it
+    runs through speech.cpp (nyosegawa, MIT, C++/ggml, prebuilt Linux **Vulkan** release - no CUDA
+    toolkit) and its Q4_K GGUF (sakasegawa/drama-3-GGUF, 20.8 GB, `speech pull` into
+    checkpoints/speech_cpp/<owner>--<repo>/<sha256>/, path + size pinned in synth.py so a load never
+    re-hashes it). Plug-in `plugins/drama3/`: empty venv `drama3` for a stdlib worker that bridges
+    remanga's one-line protocol to `speech worker` JSON Lines (protocol 3: base64 PCM chunks -> WAV).
+    **Voice "none" is unusable for narration; a voice file fixes it.** Read with the model's own pick
+    (a bracketed cue `[deep, calm male narrator voice]` + seed, cue not spoken - whisper-checked), Drama 3
+    DROPS WHOLE SENTENCES and babbles (whisper hears "thanks for watching"): HimeSama ch1 as one take 73%
+    of the script, in ~3-min takes 33-100% (3 of 9 under the 90% alignment floor). The user guessed it
+    first: "most likely it's not for generating very long audio". speech.cpp's own benchmark is one
+    sentence per request AND a voice file - that is the regime it works in. Now: the worker makes, per
+    described voice, `checkpoints/speech_cpp/voices/<voice>-s<seed>-v1.voice.gguf` once (the reference line
+    read with cue+seed under voice "none", then `speech voice MODEL ref.wav --transcript ... out`, ~10 s on
+    CPU) and `add_voice`s it; every take is read from it, so the seed only changes delivery (retakes are
+    safe, `synth.seed` -> request seed + 1000*n). Takes ~one page (max_take_seconds 45). Measured, same
+    chapter: 32 takes, 29 >= 95%, median 99%, two dropped a sentence (85%, 49%) -> needs the
+    alignment-failure retake. temperature/top_p 0.7 made things worse (ran to max_seconds, 30%).
+    **Footgun: speech.cpp OOMs a 12 GB card** (`ErrorOutOfDeviceMemory` on the first request, or at load
+    "cannot reserve the memory of the codec's decoding"): it puts as many layers' experts on the GPU as
+    free memory at load holds beside a fixed 1.5 GiB allowance, too little under NVIDIA's Vulkan driver,
+    and has no knob (no env var either - checked `strings`). Fix: the worker holds `gpu_headroom_gb`
+    (2.5) through libcuda/ctypes (cuMemAlloc + cuMemsetD8 + 1 s so the Vulkan budget sees it) while
+    speech.cpp loads, frees it once ready, and retries a load that OOMs with +1 GiB (3 tries); 2.0 and
+    2.5 each failed once without the memset/retry. Measured: 1.5 GiB -> 11 of 40 layers on GPU, 2.0 -> 10,
+    3.0 -> 7; load 46-61 s; RTFx 0.82 on a line, ~0.7 a chapter in page takes; ~15 GB RAM; deep_male 10.3
+    chars/s over a chapter (12.6-14.1 on a line, others 15.5-17.2); F0 deep/warm male ~100 Hz, females ~165.
+  - **Edge voices engine (`edge`, 2026-10-24, user asked for Edge's Guy).** Plug-in `plugins/edge_tts/`,
+    venv `edge-tts` (edge-tts 7.3, no torch, no weights - `NoWeights` hands the worker base a dummy dir).
+    Worker: Communicate(text, voice, rate).save(mp3) with 4 tries, then system ffmpeg -> 24 kHz PCM_16 WAV.
+    edge-tts splits a whole chapter itself; the voice doesn't sample, so whole-chapter takes are safe.
+    Guy measured on HimeSama ch1: 14,156 chars -> 842.9s in 90s (16.8 chars/s; `speed` -> rate "+N%"),
+    timbre distance 4.1-8.6 over 14 min (George 5.5-18.3, Fenrir 2.0-4.7), F0 150-154 Hz. Preset
+    `plain-narrator-edge-guy`. Online + not a licensed API - said in the README; don't hide it.
+  - **Fish Audio Drama 3 engine (`drama3`, 2026-10-25, user asked for the #1 of Artificial Analysis's
+    open-weights TTS board).** 35B MoE (3B active), Fish Audio Community License (free < US$500k/yr,
+    "Built with Fish Audio"). The official checkpoint needs 24 GB+ (int4 is 20.8 GB of weights), so it
+    runs through speech.cpp (nyosegawa, MIT, C++/ggml, prebuilt Linux **Vulkan** release - no CUDA
+    toolkit) and its Q4_K GGUF (sakasegawa/drama-3-GGUF, 20.8 GB, `speech pull` into
+    checkpoints/speech_cpp/<owner>--<repo>/<sha256>/, path + size pinned in synth.py so a load never
+    re-hashes it). Plug-in `plugins/drama3/`: empty venv `drama3` for a stdlib worker that bridges
+    remanga's one-line protocol to `speech worker` JSON Lines (protocol 3: base64 PCM chunks -> WAV).
+    No named voices: a bracketed cue at the start (`[deep, calm male narrator voice]`, not read aloud -
+    whisper-checked) + fixed seed; speech.cpp chunks ~300 bytes and prompts each chunk with the first
+    and the latest, so the voice holds over a take. **Drama 3 drops sentences from a long take**
+    (user guessed it first: "most likely it's not for generating very long audio"): HimeSama ch1 as ONE take
+    (14,156 chars, 22 min) had a sentence or two missing every 30-60 s, whisper matched 73% (< 90% needed,
+    AlignmentError); 2,000 chars of it as one take: 96%, none dropped. temperature/top_p 0.7 made it worse
+    (ran to max_seconds, 30%). So max_take_seconds = 180 (~1,900 chars, ~8 takes a chapter).
+    **Footgun: speech.cpp OOMs a 12 GB card** (`ErrorOutOfDeviceMemory` on the first request): it puts
+    as many layers' experts on the GPU as free memory at load holds beside a fixed 1.5 GiB allowance,
+    too little under NVIDIA's Vulkan driver, and has no knob (no env var either - checked `strings`).
+    Fix: the worker holds `gpu_headroom_gb` (2.5; 2.0 was borderline - one load OOMed reserving the codec) through libcuda/ctypes while speech.cpp loads, frees it
+    once ready. 1.5 GiB -> 11 of 40 layers on GPU, peak 11.8/12.3 GB. Measured: load 46-61 s, RTFx
+    0.82 on a line but ~0.66 on a whole chapter (longer prompts), ~15 GB RAM, deep_male 12.6-14.1 chars/s
+    on a line but 10.3 over HimeSama ch1's 14,156 chars (others 15.5-17.2 on a line), F0 deep/warm male ~100 Hz,
+    females ~165; same seed + cue on two texts stayed one narrator (101 vs 95 Hz).
 - **Creaky endings (`audio.voice_creak` keep/soften/strong, preset key `creak`, 2026-10-24, user: "that
   annoying rhh sound after each sentence" on youtube-narrator-no-gaps / af_heart).** It is VOCAL FRY on
   the last syllable before a pause (F0 ~200 -> irregular 50-90 Hz, 10-20 dB under, ~all <1 kHz), NOT
