@@ -503,6 +503,16 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     17.2 min of narration in 28.7 min incl. whisper; per-take median F0 90-107 Hz (one narrator), quiet at
     the 32 joins median 430 ms (min 200), master -14.2 LUFS / -1.8 dBTP.
     temperature/top_p 0.7 made things worse (ran to max_seconds, 30%).
+    **Clicks at speech.cpp's chunk joins (user heard them, 2026-10-25: "artifact repeatedly, first at 9-10
+    seconds").** speech.cpp cuts a request into ~300-byte chunks; with a voice file, each join landed on a
+    sentence onset as a click - all three found sat EXACTLY on the codec's 2048-sample frame grid (frames
+    204/442/779 of their request; find them with `(i + 1) % 2048 == 0` on sample-step outliers - plain
+    step detection also flags real consonants, so filter by the grid). Fix: the worker sends ONE SENTENCE
+    PER REQUEST (`sentences()`: split after .!? before a capital/digit) -> 0 on-grid jumps, 98% match, same
+    speed (0.66x). Each request ends on its own silent tail, so butted joins left 600-1000 ms (outliers 1.8,
+    2.9 s): `trim_tail` cuts a sentence's trailing silence to 350 ms (10 ms fade); in-sentence comma pauses
+    (500-800 ms in deep_male) are the model's delivery and are left alone. The user found voice "none"
+    smoother and more natural than the voice file, but "none" drops sentences.
     **Footgun: speech.cpp OOMs a 12 GB card** (`ErrorOutOfDeviceMemory` on the first request, or at load
     "cannot reserve the memory of the codec's decoding"): it puts as many layers' experts on the GPU as
     free memory at load holds beside a fixed 1.5 GiB allowance, too little under NVIDIA's Vulkan driver,

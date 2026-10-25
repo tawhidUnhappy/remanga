@@ -48,9 +48,11 @@ Without libcuda (no NVIDIA driver) nothing is held."""
 from __future__ import annotations
 
 import argparse
+import array
 import base64
 import ctypes
 import json
+import re
 import subprocess
 import sys
 import time
@@ -70,6 +72,53 @@ VOICE_FILE_VERSION = 1
 # A load that runs out of GPU memory is tried again holding this much more.
 LOAD_ATTEMPTS = 3
 HEADROOM_STEP_GB = 1.0
+
+
+# Where a text is cut into requests: after a sentence's closing mark. One
+# request per sentence, because speech.cpp cuts a longer text into ~300-byte
+# chunks itself and the joins between its chunks CLICK - measured on a page of
+# HimeSama ch1 read from a voice file: three clicks, each exactly on a codec
+# frame boundary (frames 204, 442, 779 of their request) at the first word of
+# a sentence. A request of one sentence starts and ends in the model's own
+# silence, so the only joins are these, in a pause. It is also how speech.cpp
+# measured the model: one sentence per request, from a voice file. A mark
+# followed by a small letter ("Yes... she said") is no end.
+SENTENCE_END = re.compile(r"(?<=[.!?])[\"')\]]*\s+(?=[A-Z0-9\"'(])")
+
+
+def sentences(text: str) -> list[str]:
+    return [part.strip() for part in SENTENCE_END.split(text.strip()) if part.strip()] or [text]
+
+
+# How much of the silence a sentence ends on is kept. Read a sentence per
+# request, each comes back with a tail of its own, and two of them butted
+# together left 600-1,000 ms between sentences (Kokoro reading straight
+# through pauses ~420 ms): a tail is cut to this, with a short fade, so the
+# next sentence comes in after a narrator's pause. The start is left as it
+# is - it comes back 20-30 ms long.
+TAIL_KEEP_MS = 350
+TAIL_FADE_MS = 10
+# A 10 ms frame this far under the sentence's loud frames is silence.
+SILENCE_UNDER_DB = 40.0
+
+
+def trim_tail(pcm: bytes, sample_rate: int) -> bytes:
+    """16-bit mono `pcm` with the silence after its last sound cut to
+    TAIL_KEEP_MS (stdlib only: this runs in the tool's empty venv)."""
+    samples = array.array("h", pcm)
+    step = sample_rate // 100
+    levels = [max((abs(v) for v in samples[i:i + step]), default=0) for i in range(0, len(samples), step)]
+    if not levels:
+        return pcm
+    loud = sorted(levels)[int(len(levels) * 0.9)]
+    floor = loud * 10 ** (-SILENCE_UNDER_DB / 20)
+    last = max((n for n, level in enumerate(levels) if level > floor), default=len(levels) - 1)
+    end = min(len(samples), (last + 1) * step + sample_rate * TAIL_KEEP_MS // 1000)
+    kept = samples[:end]
+    fade = min(len(kept), sample_rate * TAIL_FADE_MS // 1000)
+    for k in range(fade):
+        kept[len(kept) - fade + k] = int(kept[len(kept) - fade + k] * (fade - k) / fade)
+    return kept.tobytes()
 
 
 def send(obj: dict) -> None:
@@ -125,9 +174,10 @@ class Worker:
         self.speech.stdin.flush()
         return answer(self.speech, line["id"], on_chunk)
 
-    def to_wav(self, line: dict, output_path: Path, sample_rate: int) -> dict:
-        """One synthesis, its chunks written as they come into a 16-bit mono
-        WAV, as every other engine writes."""
+    def to_wav(self, lines: list[dict], output_path: Path, sample_rate: int) -> dict:
+        """Synthesis requests one after another, their audio written end to
+        end into one 16-bit mono WAV, as every other engine writes. Returns
+        the last request's answer, or the first one that failed."""
         output_path.parent.mkdir(parents=True, exist_ok=True)
         partial = output_path.with_name(output_path.stem + ".part.wav")
         try:
@@ -135,9 +185,14 @@ class Worker:
                 out.setnchannels(1)
                 out.setsampwidth(2)
                 out.setframerate(sample_rate)
-                msg = self.request(line, out.writeframes)
-            if failure(msg) is None:
-                partial.replace(output_path)
+                for line in lines:
+                    pieces: list[bytes] = []
+                    msg = self.request(line, pieces.append)
+                    if failure(msg):
+                        return msg
+                    out.writeframes(trim_tail(b"".join(pieces), sample_rate) if len(lines) > 1
+                                    else b"".join(pieces))
+            partial.replace(output_path)
             return msg
         finally:
             partial.unlink(missing_ok=True)
@@ -153,8 +208,8 @@ class Worker:
         if not path.is_file():
             self.voices_dir.mkdir(parents=True, exist_ok=True)
             recording = self.voices_dir / f"{key}.wav"
-            msg = self.to_wav({"type": "synthesize", "voice": "none", "seed": seed,
-                               "text": f"{cue} {REFERENCE_TEXT}" if cue else REFERENCE_TEXT},
+            msg = self.to_wav([{"type": "synthesize", "voice": "none", "seed": seed,
+                                "text": f"{cue} {REFERENCE_TEXT}" if cue else REFERENCE_TEXT}],
                               recording, sample_rate)
             if failure(msg):
                 raise RuntimeError(f"reading the reference line for {name} failed: {failure(msg)}")
@@ -170,12 +225,14 @@ class Worker:
         return key
 
     def synthesize(self, req: dict, sample_rate: int) -> dict:
+        """The text read a sentence per request (see SENTENCE_END), in the
+        voice file of the voice asked for."""
         voice = self.voice(req["voice"], req.get("cue", ""), int(req.get("voice_seed", 1)), sample_rate)
-        line = {"type": "synthesize", "text": req["text"], "voice": voice}
-        for key in ("seed", "temperature", "top_p", "top_k", "max_seconds"):
-            if req.get(key) is not None:
-                line[key] = req[key]
-        msg = self.to_wav(line, Path(req["output_path"]), sample_rate)
+        options = {key: req[key] for key in ("seed", "temperature", "top_p", "top_k", "max_seconds")
+                   if req.get(key) is not None}
+        lines = [{"type": "synthesize", "text": sentence, "voice": voice, **options}
+                 for sentence in sentences(req["text"])]
+        msg = self.to_wav(lines, Path(req["output_path"]), sample_rate)
         if failure(msg):
             return {"ok": False, "error": failure(msg)}
         # "max_seconds": a chunk ran to its cap and was cut there - the take
