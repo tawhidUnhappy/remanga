@@ -5,17 +5,47 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
+from rich.padding import Padding
 from rich.table import Table
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Footer, Label, Static
+from textual.widgets import Label, Static
 from textual.widgets.option_list import Option
 
 from remanga.ui.dialogs.fit import fit_to_window
-from remanga.ui.widgets import SafeOptionList
+from remanga.ui.widgets import KeyBar, SafeOptionList
+
+# The least room a hint gets beside its label; any narrower and it goes under
+# the label instead.
+MIN_HINT_WIDTH = 24
+
+
+class Columns:
+    """A list option's cells side by side - or, in a window too narrow for
+    that, the first cells on a line and the last one (the hint) under them,
+    indented. Decided each time it is drawn, at the width it is drawn at, so
+    a resize relays every option out."""
+
+    def __init__(self, cells: list[tuple[Text | str, int | None, str]], hint: Text | str) -> None:
+        self.cells, self.hint = cells, hint   # cells: (content, width, justify)
+
+    def __rich_console__(self, console, options):
+        lead = sum((width or len(str(content))) + 2 for content, width, _ in self.cells)
+        hint = self.hint if isinstance(self.hint, Text) else Text(self.hint, style="dim")
+        grid = Table.grid(padding=(0, 2))
+        for _, width, justify in self.cells:
+            grid.add_column(width=width, justify=justify)
+        if not hint.plain or options.max_width - lead >= MIN_HINT_WIDTH:
+            grid.add_column(style="dim")
+            grid.add_row(*(content for content, _, _ in self.cells), *([hint] if hint.plain else []))
+            yield grid
+            return
+        grid.add_row(*(content for content, _, _ in self.cells))
+        yield grid
+        yield Padding(hint, (0, 0, 0, 2))
 
 
 def note_scroller(note: str) -> VerticalScroll:
@@ -46,16 +76,13 @@ class Choice(NoteScrolling, ModalScreen[Any]):
         self.title_text, self.note = title, note
         self.values = [value for _, _, value in options]
         self.options = []
+        # Room for the label, plus the "◂ current" badge when there is one.
+        width = max(len(o[0]) for o in options) + (12 if current is not None else 0)
         for label, hint, value in options:
-            row = Table.grid(padding=(0, 2))
-            # Room for the label, plus the "◂ current" badge when there is one.
-            row.add_column(width=max(len(o[0]) for o in options) + (12 if current is not None else 0))
-            row.add_column(style="dim")
             name = Text(label, style="bold red" if value in danger else "bold")
             if current is not None and value == current:
                 name.append("  ◂ current", style="dim")
-            row.add_row(name, hint)
-            self.options.append(Option(row))
+            self.options.append(Option(Columns([(name, width, "left")], hint)))
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog"):
@@ -63,7 +90,7 @@ class Choice(NoteScrolling, ModalScreen[Any]):
             if self.note:
                 yield note_scroller(self.note)
             yield SafeOptionList(*self.options)
-        yield Footer()
+        yield KeyBar()
 
     def on_mount(self) -> None:
         self.call_after_refresh(self._fit)
@@ -123,16 +150,13 @@ class Checklist(NoteScrolling, ModalScreen[list[Any] | None]):
         self.ticked: set[int] = set()
         self.done_label = done_label
 
-    def _prompt(self, index: int) -> Table:
+    def _prompt(self, index: int) -> Columns:
         label, detail, hint, value = self.rows[index]
-        grid = Table.grid(padding=(0, 2))
-        grid.add_column(width=3)
-        grid.add_column(width=max(len(r[0]) for r in self.rows))
-        grid.add_column(width=max(len(r[1]) for r in self.rows), justify="right")
-        grid.add_column(style="dim")
         box = Text("[x]" if index in self.ticked else "[ ]", style="bold" if index in self.ticked else "dim")
-        grid.add_row(box, Text(label, style="bold red" if value in self.danger else "bold"), detail, hint)
-        return grid
+        return Columns([(box, 3, "left"),
+                        (Text(label, style="bold red" if value in self.danger else "bold"),
+                         max(len(r[0]) for r in self.rows), "left"),
+                        (detail, max(len(r[1]) for r in self.rows), "right")], hint)
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog wide"):
@@ -141,7 +165,7 @@ class Checklist(NoteScrolling, ModalScreen[list[Any] | None]):
                 yield note_scroller(self.note)
             yield _TickList(*[Option(self._prompt(i)) for i in range(len(self.rows))])
             yield Static("", classes="note", id="checklist-count")
-        yield Footer()
+        yield KeyBar()
 
     def on_mount(self) -> None:
         self._count()

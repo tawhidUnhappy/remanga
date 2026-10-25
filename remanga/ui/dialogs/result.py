@@ -11,10 +11,10 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Label, RichLog, Static
+from textual.widgets import Button, Label, Static
 
 from remanga.ui.dialogs.fit import fit_to_window
-from remanga.ui.widgets import TopBar
+from remanga.ui.widgets import KeyBar, TopBar, WrapLog
 
 
 class Result(Screen[None]):
@@ -52,7 +52,7 @@ class Result(Screen[None]):
                     yield Button("View log", id="log")
                 if self.copy:
                     yield Button("Copy paths", id="copy")
-        yield Footer()
+        yield KeyBar()
 
     def on_mount(self) -> None:
         self.call_after_refresh(self._fit)
@@ -100,13 +100,13 @@ class LogView(Screen[None]):
 
     def compose(self) -> ComposeResult:
         yield TopBar([*self.path, "Log"], str(self.log_path))
-        yield RichLog(wrap=True, markup=False, highlight=False, id="log")
-        yield Footer()
+        yield WrapLog(id="log")
+        yield KeyBar()
 
     def on_mount(self) -> None:
         exists = self.log_path.exists()
         text = self.log_path.read_text(encoding="utf-8", errors="replace") if exists else "The log is empty."
-        log = self.query_one(RichLog)
+        log = self.query_one(WrapLog)
         for line in text.splitlines():
             log.write(Text(line))
         log.scroll_end(animate=False)

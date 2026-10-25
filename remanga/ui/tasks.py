@@ -27,12 +27,12 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Footer, Label, ProgressBar, RichLog, Static
+from textual.widgets import Label, ProgressBar, Static
 
 from remanga import activity
 from remanga.console import console
 from remanga.ui.task_io import SPINNER, LogSink, Reporter, stop_child_processes
-from remanga.ui.widgets import TopBar
+from remanga.ui.widgets import KeyBar, TopBar, WrapLog
 
 
 @dataclass
@@ -73,14 +73,18 @@ class TaskScreen(Screen[TaskOutcome]):
         with Vertical(classes="task"):
             yield Label(self.title_text, classes="dialog-title")
             yield Static(id="steps")
+            # The bar's description on a line of its own when the bar's row
+            # can't give it room - never cut to fit beside the bar.
+            yield Label(id="bar-title")
             with Horizontal(id="bar-row"):
                 yield Label(id="bar-label")
                 yield ProgressBar(show_eta=False, id="bar")
                 yield Label(id="bar-detail")
-            output = RichLog(wrap=True, markup=False, highlight=False, id="output")
+            # The last 2,000 lines; all of it is in the log file.
+            output = WrapLog(max_lines=2000, id="output")
             output.border_subtitle = str(self.log_path)
             yield output
-        yield Footer()
+        yield KeyBar()
 
     def on_mount(self) -> None:
         self.refresh_view()
@@ -100,14 +104,21 @@ class TaskScreen(Screen[TaskOutcome]):
 
         bar, row = self.reporter.bar, self.query_one("#bar-row")
         row.display = bar is not None
+        title = self.query_one("#bar-title", Label)
+        title.display = False
         if bar is not None:
+            # #bar-label is at most 40% of the row (ui/app.py).
+            beside = len(bar.description) <= row.size.width * 0.4 - 2
+            title.display = not beside
+            title.update(bar.description)
+            self.query_one("#bar-label", Label).display = beside
             self.query_one("#bar-label", Label).update(bar.description)
             self.query_one("#bar", ProgressBar).update(total=bar.total, progress=bar.completed)
             count = f"{bar.completed:.0f}/{bar.total:.0f}" if bar.total else ""
             self.query_one("#bar-detail", Label).update(" ".join(x for x in (count, bar.detail) if x))
         text = self.partial + self.sink.take().replace("\r\n", "\n").replace("\r", "\n")
         *lines, self.partial = text.split("\n")
-        output = self.query_one("#output", RichLog)
+        output = self.query_one("#output", WrapLog)
         for line in lines:
             output.write(Text(line))
 

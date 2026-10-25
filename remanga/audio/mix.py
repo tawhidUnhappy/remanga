@@ -1,5 +1,5 @@
-"""A chapter's master track: every panel's narration clip with the pause after
-it, background music under the whole of it, normalized.
+"""A chapter's master track: the narration as the engine read it, background
+music under it, brought to the volume asked for.
 
 Skipped when master_audio.wav already matches: the synthesized audio
 (audio_timing.json, rewritten only when its content changes) and every mix
@@ -22,7 +22,6 @@ from remanga.audio.master import (
     under_narration,
     write_master,
 )
-from remanga.audio.voice_chain import VOICE_CHAIN_VERSION, polish_voice
 from remanga.config import AudioConfig
 from remanga.console import console, escape as _esc
 from remanga.json_io import read_json, read_json_or, write_json
@@ -57,28 +56,13 @@ def music_gain_db(narration_wav: Path, bed_wav: Path, below_voice_lu: float) -> 
 
 def _fingerprint(timing_path: Path, config: AudioConfig, bgm: Path | None) -> dict[str, Any]:
     bgm_stat = bgm.stat() if bgm else None
-    # Named only when on, so the chapters mixed before they existed stay up to date.
-    extras = {key: value for key, value in (("voice_breath", config.voice_breath),
-                                            ("voice_recording", config.voice_recording),
-                                            ("voice_blended_noise_db", config.voice_blended_noise_db),
-                                            ("voice_creak", config.voice_creak))
-              if value not in ("off", "keep", 0, 0.0)}
     return {
-        **extras,
         "timing_mtime": timing_path.stat().st_mtime,
         "bgm": [str(bgm), bgm_stat.st_size, int(bgm_stat.st_mtime)] if bgm_stat else None,
         "bgm_below_voice_lu": config.bgm_below_voice_lu,
         "bed_version": BED_VERSION if bgm else None,
-        "edge_fade_ms": config.edge_fade_ms,
         "sample_rate": config.sample_rate,
-        "voice_compressor": config.voice_compressor,
-        "voice_bass_boost_db": config.voice_bass_boost_db,
-        "voice_presence_db": config.voice_presence_db,
-        "voice_microphone": config.voice_microphone,
-        "voice_limiter": config.voice_limiter,
-        "voice_chain_version": VOICE_CHAIN_VERSION,
-        "enable_loudnorm": config.enable_loudnorm,
-        "loudness_target_lufs": config.loudness_target_lufs,
+        "volume_lufs": config.volume_lufs,
     }
 
 
@@ -104,11 +88,8 @@ def mix_master_audio(project_name: str, chapter_num: str, config: AudioConfig, f
     verify_audio_manifest(audio_dir, chapter_num)
     segments = []
     for panel in read_json(timing_path).get("panels", []):
-        segments.extend(panel_segments(audio_dir, panel, config.sample_rate, config.edge_fade_ms))
+        segments.extend(panel_segments(audio_dir, panel, config.sample_rate))
     track = join_segments(segments).set_channels(2).set_frame_rate(config.sample_rate)
-    # The voice chain over the narration alone, before the music goes under
-    # it - so the music is measured against the voice as it will be heard.
-    track = polish_voice(track, master.parent, config)
 
     raw = master.with_name("master_audio_raw.wav")
     if bgm:
@@ -123,10 +104,9 @@ def mix_master_audio(project_name: str, chapter_num: str, config: AudioConfig, f
         track = under_narration(track, bed, gain_db)
 
     track.export(raw, format="wav")
-    write_master(raw, master, config.sample_rate, normalize=config.enable_loudnorm,
-                 target_lufs=config.loudness_target_lufs, limiter=config.voice_limiter,
-                 announcement=f"Normalizing loudness to {config.loudness_target_lufs:g} LUFS...",
-                 on_failure="the un-normalized mix")
+    write_master(raw, master, config.sample_rate, target_lufs=config.volume_lufs,
+                 announcement=f"Setting the volume to {config.volume_lufs:g} LUFS...",
+                 on_failure="the mix as it was")
     write_json(fingerprint_path, _fingerprint(timing_path, config, bgm))
     console.print(f"[bold green]✓ Audio mixed:[/] {_esc(str(master))}")
     return master

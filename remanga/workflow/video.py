@@ -117,8 +117,8 @@ def remix_video(project: str, chapter: str, config: RemangaConfig) -> Path:
 
     Refuses when narration.json no longer says what the clips say - a video
     whose words and pictures disagree is worse than waiting for Make video."""
-    from remanga.audio.gaps import narration_identity
     from remanga.audio.narration_voice import voice_changed_from
+    from remanga.audio.take_audio import narration_identity
 
     timing = _narrated_timing(project, chapter)
     if not timing:

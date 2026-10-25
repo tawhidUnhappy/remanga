@@ -1,5 +1,4 @@
 {
-  "narration_preset": "youtube-narrator",
   "system": {
     "prefer_gpu": true,
     "gpu_codec": "auto",
@@ -35,14 +34,10 @@
   },
   "audio": {
     "sample_rate": 44100,
-    "edge_fade_ms": 35,
-    "pause_between_pages_ms": 350,
+    "volume_lufs": -14.0,
     "bgm_enabled": false,
     "bgm_path": "",
-    "bgm_below_voice_lu": 14.0,
-    "enable_loudnorm": true,
-    "loudness_target_lufs": -14.0,
-    "pause_between_panels_ms": 0
+    "bgm_below_voice_lu": 14.0
   },
   "video": {
     "width": 3840,

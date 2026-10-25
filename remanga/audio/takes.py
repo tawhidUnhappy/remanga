@@ -13,7 +13,7 @@ from typing import Any
 from remanga import activity
 from remanga.audio.batching import Batch
 from remanga.audio.clips import atomic_export
-from remanga.audio.gaps import load_take
+from remanga.audio.take_audio import load_take
 from remanga.config import AudioConfig
 from remanga.console import console, escape as _esc
 from remanga.json_io import read_json_or
@@ -105,8 +105,8 @@ def _make_take(synth, batch: Batch, audio_dir: Path, audio_config: AudioConfig,
     halves = batch.split()
     if halves is None or depth >= MAX_SPLIT_DEPTH:
         raise RuntimeError(
-            f"Batch {batch.name} did not come back as its script: {problem}. It cannot be split any "
-            f"further, so narrating it needs a shorter take - lower 'Narration take length' in settings."
+            f"Batch {batch.name} did not come back as its script: {problem}. It was split as far as it "
+            f"goes and still failed - try narrating the chapter again, or another narrator engine."
         )
     console.print(f"[yellow]{_esc(batch.name)} did not come back as its script - {problem}. "
                   f"Narrating it as two shorter takes instead.[/]")

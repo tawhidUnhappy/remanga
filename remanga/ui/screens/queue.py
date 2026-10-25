@@ -12,13 +12,12 @@ from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.screen import Screen
-from textual.widgets import Footer
 
 from remanga.config import RemangaConfig
 from remanga.ui.dialogs import Confirm, Result
 from remanga.ui.screens.common import _global_log
 from remanga.ui.tasks import Step, TaskOutcome, TaskScreen
-from remanga.ui.widgets import SafeTable, TopBar
+from remanga.ui.widgets import KeyBar, RowDetail, SafeTable, TopBar
 from remanga.workflow.queue import DONE, FAILED, Job, load_queue, record, run_job, save_queue, to_run
 
 _STATE = {"waiting": ("· waiting", "cyan"), DONE: ("✓ done", "green"), FAILED: ("✗ failed", "red")}
@@ -44,12 +43,14 @@ class QueueScreen(Screen):
     def compose(self) -> ComposeResult:
         yield TopBar(self.path)
         yield SafeTable(id="queue")
-        yield Footer()
+        yield RowDetail()
+        yield KeyBar()
 
     def on_mount(self) -> None:
         table = self.query_one(SafeTable)
-        for label, width in (("State", 9), ("Project", 36), ("Ch", 6), ("Job", 24), ("Note", None)):
-            table.add_column(label, width=width)
+        for label, width, drop in (("State", 9, 0), ("Project", 36, 0), ("Ch", 6, 0), ("Job", 24, 1),
+                                   ("Note", None, 2)):
+            table.add_column(label, width=width, drop=drop)
         self.load()
         table.focus()
 
