@@ -16,6 +16,7 @@ when not."""
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from remanga.chapters import chapter_sort_key
@@ -125,7 +126,10 @@ def prepare_chapter(project: str, chapter: str, config: RemangaConfig) -> None:
         return
     if not get_master_audio_path(project, chapter, create=False).exists():
         mix(project, chapter, config)
-    render(project, chapter, config)
+    # The join takes the chapter's picture, not its finished video: render
+    # makes sure it is there and current, rather than putting a finished
+    # video back from the store without one.
+    render(project, chapter, config, picture=True)
 
 
 def make_long_video(project: str, chapters: list[str], config: RemangaConfig, from_source: bool = False) -> Path:
@@ -147,17 +151,37 @@ def make_long_video(project: str, chapters: list[str], config: RemangaConfig, fr
 def join_chapters(project: str, chapters: list[str], config: RemangaConfig) -> Path:
     """The chapters' pictures and sound, already made, one after another into
     one MP4 - with the intro once, in front."""
+    import contextlib
+
+    from remanga.store import chapter_lock
+
+    chapters = ordered(project, chapters)
+    with contextlib.ExitStack() as locks:
+        for chapter in chapters:   # nothing may change a chapter while it is joined
+            locks.enter_context(chapter_lock(project, chapter))
+        return _join_chapters(project, chapters, config)
+
+
+def _join_chapters(project: str, chapters: list[str], config: RemangaConfig) -> Path:
     from remanga.ffmpeg_io import run_ffmpeg
+    from remanga.store.versions import keep_long
     from remanga.video import VideoRenderer
     from remanga.video.encoding import AUDIO_CODEC_ARGS, COLOR_TAG_ARGS, MUX_ARGS, picture_codec_args, stream_signature
     from remanga.video.intro import _duration, chosen_intro, intro_identity, join as join_intro, leader
 
-    chapters = ordered(project, chapters)
     label = long_label(project, chapters)
     folder = get_long_video_dir(project, label)
     work = folder / "_work"
     work.mkdir(parents=True, exist_ok=True)
     final = get_long_video_path(project, label)
+    # The long video of these chapters made before: kept in the store before
+    # this one takes its place, and listed in long.json, so it is never lost.
+    previous = read_json_or(folder / INFO, {}).get("previous", [])
+    if final.is_file():
+        old = read_json_or(folder / INFO, {})
+        previous.append({"key": keep_long(project, final, {"label": label, "chapters": old.get("chapters", [])}),
+                         "chapters": old.get("chapters", []),
+                         "made": time.strftime("%Y-%m-%d %H:%M", time.localtime(final.stat().st_mtime))})
 
     missing = [ch for ch in chapters if not get_video_picture_path(project, ch, create=False).exists()
                or not get_master_audio_path(project, ch, create=False).exists()]
@@ -229,8 +253,9 @@ def join_chapters(project: str, chapters: list[str], config: RemangaConfig) -> P
     # folder is left empty, and goes.
     if not any(work.iterdir()):
         work.rmdir()
+    keep_long(project, final, {"label": label, "chapters": chapters})
     write_json(folder / INFO, {"label": label, "chapters": chapters, "intro": intro_identity(config.video),
-                               "starts": _starts(chapters, lengths, _duration(final))})
+                               "starts": _starts(chapters, lengths, _duration(final)), "previous": previous})
     console.print(f"[bold green]✓ Long video of chapters {_esc(label)}:[/] {_esc(str(final))}")
     stamp_quietly(project, label, final)
     return final

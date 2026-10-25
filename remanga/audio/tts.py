@@ -23,7 +23,7 @@ class TTSEngine:
         self._synth = create_synthesizer(tts_config, audio_config)
 
     def generate_narration_audio(self, project_name: str, chapter_num: str, panels: list[StoryPanel],
-                                 force: bool = False) -> Path:
+                                 force: bool = False, fresh: str | None = None) -> Path:
         if not panels:
             raise ValueError(f"Chapter {chapter_num} has no panels to narrate.")
 
@@ -38,5 +38,5 @@ class TTSEngine:
         # with one row per panel all the same.
         return narrate_in_batches(
             self._synth, self.tts_config, self.audio_config, self.subtitles_config,
-            project_name, chapter_num, panels, force=force,
+            project_name, chapter_num, panels, force=force, fresh=fresh,
         )

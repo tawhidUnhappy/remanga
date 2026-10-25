@@ -43,7 +43,7 @@ click chooses it** - a single click never starts anything.
 | Screen | What it does |
 |---|---|
 | **Projects** | Your projects. `Enter` opens one, `d` deletes the highlighted one (after you type its name), `n` starts a new one: paste the manga's MangaDex URL (or ID, or a title to search). The project is named after the manga's English title, and its reading direction comes from the manga's original language. |
-| **Chapters** | The chapter list, fetched fresh from MangaDex each time, as a table: status (✓ downloaded, ◐ partial, + new), pages, what comes next (mark the panels, make the PDF, make the video, video done) and title. `Enter` opens a chapter's actions: download, **mark panels**, make PDF, make video, check pages, re-download, **delete chosen** (a checklist of what the chapter has on disk - pages, marks, panels, PDF, narration, audio, video - with sizes; tick what to delete, `d` deletes, red rows are what remanga can't make again), reset (deletes the cut panels, PDF, narration, audio and video, and the folders that leaves empty - the marks and pages stay) or delete. `space` (or clicking a row's `·`) picks several chapters to act on together, `r` picks every chapter from the last one picked to the highlighted one (chapter n to m), `a` downloads every new chapter. With several picked, **Long video...** makes one video of them - see [Long videos](#long-videos). Reset and delete ask first. |
+| **Chapters** | The chapter list, fetched fresh from MangaDex each time, as a table: status (✓ downloaded, ◐ partial, + new), pages, what comes next (mark the panels, make the PDF, make the video, video done), how many versions are kept (Ver) and title. `Enter` opens a chapter's actions: download, **mark panels**, make PDF, make video, **make video fresh**, **versions**, check pages, re-download, **delete chosen** (a checklist of what the chapter has on disk - pages, marks, panels, PDF, narration, audio, video - with sizes; tick what to delete, `d` deletes, red rows are what remanga can't make again), reset (deletes the cut panels, PDF, narration, audio and video, and the folders that leaves empty - the marks and pages stay) or delete. `space` (or clicking a row's `·`) picks several chapters to act on together, `r` picks every chapter from the last one picked to the highlighted one (chapter n to m), `a` downloads every new chapter. With several picked, **Long video...** makes one video of them - see [Long videos](#long-videos). Reset and delete ask first. |
 | **Work** | Downloads, panel cutting, PDFs and videos run in a task view: the steps, a progress bar and the last few lines of output. `Ctrl+C` stops. When the work ends you get a result: what was made and what to do next (for a PDF: which files to upload, where to paste the reply), or what went wrong. `l` opens the full log, `c` copies the paths to upload. |
 | **Settings** (`s`) | One short flat list, grouped (Narration, Sound, Video, PDF), each row with a one-line "What it does": narrator engine and voice, volume, background music and its volume (custom values kept), intro, video size, panel enlargement limit, PDF file size limit - one set for every project. |
 
@@ -257,6 +257,37 @@ voice the engine has, into `global/voice/samples/<engine>/`, with a text file sa
 The model loads once for the whole set.
 
 An engine's environment and weights download the first time you use it, not at install time.
+
+## Versions: nothing is lost, nothing is made twice
+
+Everything slow that remanga makes - each narration take, its word timings, each finished video - goes
+into the project's `store/`, filed under the exact recipe that made it (the text, engine, voice, seed,
+music file, levels, video settings, panels, intro). A store file is written once, in one step, with its
+SHA-256 recorded, and is read-only from then on; a chapter's own folders (`audio/`, `subtitles/`,
+`video/`) only link to it. So:
+
+- **Nothing is made twice.** Before a take is narrated or a video rendered, remanga looks for that exact
+  recipe; changing one page's narration re-narrates only that page, switching the voice back brings the
+  old takes back at once, and the same settings again cost seconds. Every file is checked against its
+  SHA-256 before it is reused; a damaged one is never used - it is moved to `store/damaged/` and made
+  again.
+- **Nothing is overwritten or lost.** Every video made of a chapter is a *version* of it, kept with what it
+  was made with. The chapter menu's **Versions** lists them (the chapter list's **Ver** column counts
+  them): pick one to use it again - its narration and video come back from the store, nothing is made
+  again - or delete it (only the files no other version uses go). What a chapter held before versions
+  existed is kept as its first version the first time it is made again. A long video made again keeps the
+  one before it in the store too (listed in its `long.json`).
+- **One job per chapter.** A chapter being narrated, mixed or rendered is locked: the queue, a menu action
+  and another terminal can never write it at once.
+- **Kept: what is slow to make.** Every version's takes, word timings and video stay; the mixed master
+  (large, and made again in about 30 seconds) is kept for the version in use only.
+
+**Don't trust the reuse? Make it fresh.** The chapter menu's **Make video fresh** makes everything again
+from scratch - no take or video reused - and keeps it as a new version beside the others, so nothing is
+replaced. At the end it says how its takes compare with the ones made before: byte for byte, or the same
+reading (the same words at the same moments - a model on a GPU never repeats its arithmetic exactly).
+**Versions → c (Check files)** reads every file of every version back against its SHA-256 and shows ✓ or
+what is wrong, at a glance.
 
 ## The other two web UIs
 

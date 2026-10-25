@@ -97,5 +97,8 @@ def deletable_items(project: str, chapters: list[str]) -> list[tuple[Deletable, 
 def delete_items(project: str, chapter: str, keys: list[str]) -> list[Path]:
     """Deletes the chosen Deletables of one chapter; returns what was removed,
     the folders that left empty included (as reset_chapter does)."""
+    from remanga.store.locks import chapter_lock
+
     targets = [path for key in keys for path in _deletable_paths(project, chapter, key)]
-    return delete_paths(targets, project)
+    with chapter_lock(project, chapter):
+        return delete_paths(targets, project)

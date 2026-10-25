@@ -15,6 +15,7 @@ from textual.widgets import DataTable, LoadingIndicator
 
 from remanga import activity, workflow
 from remanga.config import RemangaConfig
+from remanga.store import versions as store_versions
 from remanga.ui.dialogs import Ask, Choice, Confirm, Result
 from remanga.ui.screens.chapter_menu import ChapterMenu
 from remanga.ui.screens.chapter_work import ChapterWork
@@ -63,10 +64,11 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
     def on_mount(self) -> None:
         table = self.query_one(SafeTable)
         table.display = False
-        # Left out of a narrow window first to last: Next, Pages, Title (the
+        # Left out of a narrow window first to last: Ver, Next, Pages, Title (the
         # highlighted chapter's show under the table then - widgets.RowDetail).
+        # Ver: how many versions of the chapter are kept (store/versions.py).
         for label, width, drop in (("", 1, 0), ("Ch", 6, 0), ("Status", 13, 0), ("Pages", 7, 2), ("Next", 24, 3),
-                                   ("Title", None, 1)):
+                                   ("Ver", 3, 4), ("Title", None, 1)):
             table.add_column(label, width=width, key=label or "mark", drop=drop)
         # Each source as it does on opening: MangaDex is asked again, a site
         # read through Firefox shows its saved list.
@@ -139,8 +141,10 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
             title = Text(chapter.get("title") or "", style="dim")
             if several:  # which site each chapter comes from
                 title = Text.assemble((f"{chapter.get('source') or 'local'}  ", "cyan"), title)
+            kept = len(store_versions.load(self.project, chapter["chapter"])["versions"])
             table.add_row(self._mark(index), chapter["chapter"], Text(label, style=style), pages,
-                          Text(stage, style="green" if stage == "video done" else ""), title)
+                          Text(stage, style="green" if stage == "video done" else ""),
+                          Text(str(kept) if kept else "", justify="right", style="cyan"), title)
         if row is not None and self.rows:
             table.move_cursor(row=min(row, len(self.rows) - 1))
         table.focus()

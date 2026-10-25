@@ -180,6 +180,27 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   0 = off, default 10) + `background_grid_strength` 0.5: a multiply layer built once per compositor
   (`FrameCompositor._lcd_grid`), over the blur only, before the panel is pasted. +40 ms per 4K frame. Frames
   re-composite on change via frames_settings.json (model_dump). If viewers see shimmer at 720p, go chunky.
+- **The store + versions (2026-10-25, user: "nothing gets overwritten or corrupt or lost ... save compute if already
+  computed ... automate"; then "a choice to generate fresh new ones ... safe for trust issues people").**
+  `remanga/store/`: `objects.py` (content-addressed: `store/<kind>/<key[:2]>/<key>/` + object.json recipe, sizes,
+  SHA-256; staged in `.tmp/<pid>-*`, renamed whole, files chmod read-only; `place` hardlinks into a chapter folder
+  after a FULL SHA-256 verify - a bad object goes to `store/damaged/`, never deleted), `locks.py` (flock per
+  chapter, re-entrant in-process, ChapterBusy names the holder), `versions.py` (versions/chapter_N.json; kinds take
+  / words / timing / video / long; TakeCache; video_recipe; adopt; record; make_current; delete (refuses the
+  current, frees only objects no version of the project uses); check; compare_fresh). Wired in: takes._make_take
+  asks the cache first, batched keeps every take after alignment; workflow narrate/mix/render/make_video/remix/
+  remake/cleanup/deletables take the lock; narrate + make_video adopt what the folders hold first; render reuses a
+  video by key unless `picture=True` (long videos join PICTURES - a store-placed video has none) or `fresh`;
+  long videos keep the previous one in the store (long.json "previous"). Kept per the user's pick "keep
+  expensive, drop cheap": takes, words, videos - never the master WAV or picture.mp4. Footguns: every writer must
+  write tmp + rename (they do: write_json, atomic_export, render partial.replace) - writing INTO a placed file hits
+  the read-only store file; a version's label must come from the narration's own voice (audio_timing.json
+  "voice"), not the settings now (a re-mixed old Fenrir narration was labelled Heart); Kokoro is NOT byte-
+  deterministic on the GPU (fresh take: same length to the sample, diff -45 dB RMS) - compare_fresh judges "same
+  reading" by size within 1%, identical word list, 95th-pct word-time drift <= 0.15 s (one whisper word drifted
+  0.4 s). Measured (zzStoreTest, Kokoro, 1 take): first make 58 s, same again 3 s, music change 26 s (take
+  reused), voice back 3 s, make current 0.01 s. **UI tests must never open a comix.to project's chapter list**: it
+  waits for the Firefox helper and remanga opens an about:debugging tab in the user's Firefox (it happened).
 - **Engines cut to three + first-run chooser (2026-10-25, user: "remove ming, qwen and indextts just keep fish audio
   drama 3, kokoro and edge ... first check the user machine and let them choose").** Ming/Qwen/IndexTTS plug-ins are
   on `backup/presets-effects-2026-10-25`; their venvs + weights (~33 GB freed) were deleted at the user's OK.

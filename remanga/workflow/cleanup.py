@@ -13,6 +13,7 @@ from remanga.paths import (
     get_panels_dir,
     get_project_dir,
 )
+from remanga.store.locks import chapter_lock
 
 # What making a video produces, and nothing else. The PDF is deliberately
 # not in here: it is slow to make, it is what the user hands to the LLM, and
@@ -119,7 +120,8 @@ def drop_mix_and_video(project: str, chapter: str) -> list[Path]:
     over."""
     paths = [get_generated_dir(project, kind, chapter, create=False) for kind in ("audio_modified", "video")]
     guard(paths, project)
-    return delete_paths(paths, project, prune=False)
+    with chapter_lock(project, chapter):
+        return delete_paths(paths, project, prune=False)
 
 
 def drop_audio_and_video(project: str, chapter: str) -> list[Path]:
@@ -129,9 +131,10 @@ def drop_audio_and_video(project: str, chapter: str) -> list[Path]:
 
     Both Make video and Remake video do this, which is what makes a run mean
     the same thing every time: what is on disk afterwards is what THIS run
-    produced, not a layer over whatever an earlier one left. It costs the
-    reuse - a chapter is narrated again whether or not anything changed - and
-    that was the choice, made knowing narration is the slow part.
+    produced, not a layer over whatever an earlier one left. It no longer
+    costs the reuse: the folders are a view of the store (store/versions.py),
+    so a take or a video made before comes back from there, and what was here
+    is kept as a version before a run clears it.
 
     It is also what clears a folder that has been through a change of
     approach: switching from a clip per panel to batched takes leaves the old
@@ -141,7 +144,8 @@ def drop_audio_and_video(project: str, chapter: str) -> list[Path]:
     run is made from."""
     paths = [get_generated_dir(project, kind, chapter, create=False) for kind in REMADE_KINDS]
     guard(paths, project)
-    return delete_paths(paths, project, prune=False)
+    with chapter_lock(project, chapter):
+        return delete_paths(paths, project, prune=False)
 
 
 def drop_derived(project: str, chapter: str) -> list[Path]:
@@ -152,7 +156,8 @@ def drop_derived(project: str, chapter: str) -> list[Path]:
     paths = [get_generated_dir(project, kind, chapter, create=False) for kind in GENERATED_KINDS]
     paths.append(get_panels_dir(project, chapter, create=False))
     guard(paths, project, ("chapter_", "panels"))
-    return delete_paths(paths, project)
+    with chapter_lock(project, chapter):
+        return delete_paths(paths, project)
 
 
 def reset_chapter(project: str, chapter: str, *, delete_pages: bool = False) -> list[Path]:
@@ -164,8 +169,11 @@ def reset_chapter(project: str, chapter: str, *, delete_pages: bool = False) -> 
     put the project back as it was.
 
     Nothing has to recreate them: every folder here is made on demand the
-    next time something is written to it (remanga/paths/projects.py)."""
-    return delete_paths(_chapter_paths(project, chapter, with_pages=delete_pages), project)
+    next time something is written to it (remanga/paths/projects.py). The
+    chapter's versions (store/versions.py) are not touched - they are deleted
+    one by one, in the Versions menu, or with the project."""
+    with chapter_lock(project, chapter):
+        return delete_paths(_chapter_paths(project, chapter, with_pages=delete_pages), project)
 
 
 def project_footprint(project: str) -> dict:

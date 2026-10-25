@@ -79,7 +79,7 @@ def recorded_keys(timing_path: Path) -> dict[str, str]:
 
 def _make_take(synth, batch: Batch, audio_dir: Path, audio_config: AudioConfig,
                voice: dict[str, Any], recorded: dict[str, str], force: bool,
-               reused: set[str], depth: int = 0) -> list[Batch]:
+               reused: set[str], depth: int = 0, cache=None) -> list[Batch]:
     """`batch` as audio on disk, halved and retried if the take collapses.
 
     Returns the batches actually made - the one asked for, or the pieces it
@@ -88,6 +88,11 @@ def _make_take(synth, batch: Batch, audio_dir: Path, audio_config: AudioConfig,
     have broken anyway (a page boundary)."""
     clip = audio_dir / f"{batch.name}.wav"
     if not force and clip.exists() and recorded.get(batch.name) == source_key(batch.text, voice):
+        reused.add(batch.name)
+        return [batch]
+    # Made before - this text, this voice - in any version of the chapter: put
+    # back from the store (store/versions.py:TakeCache), with its word timings.
+    if not force and cache is not None and cache.restore(batch.name, source_key(batch.text, voice)):
         reused.add(batch.name)
         return [batch]
 
@@ -136,16 +141,21 @@ def _make_take(synth, batch: Batch, audio_dir: Path, audio_config: AudioConfig,
                   f"Narrating it as two shorter takes instead.[/]")
     return [made for half in halves
             for made in _make_take(synth, half, audio_dir, audio_config, voice, recorded,
-                                   force, reused, depth + 1)]
+                                   force, reused, depth + 1, cache)]
 
 
 def synthesize_batches(synth, planned: list[Batch], audio_dir: Path, audio_config: AudioConfig,
                         voice: dict[str, Any], recorded: dict[str, str], force: bool,
-                        reused: set[str]) -> list[Batch]:
-    """Every planned take made, in order. The list that comes back is what is
-    actually on disk, which is not the plan when a take had to be split."""
-    if any(force or not (audio_dir / f"{b.name}.wav").exists()
-           or recorded.get(b.name) != source_key(b.text, voice) for b in planned):
+                        reused: set[str], cache=None) -> list[Batch]:
+    """Every planned take made, in order - or put back from the store when it
+    was made before (`cache`). The list that comes back is what is actually on
+    disk, which is not the plan when a take had to be split."""
+    def have(b: Batch) -> bool:
+        key = source_key(b.text, voice)
+        return (((audio_dir / f"{b.name}.wav").exists() and recorded.get(b.name) == key)
+                or (cache is not None and cache.has(key)))
+
+    if any(force or not have(b) for b in planned):
         # One generation per take, whole: chunking it back into bounded calls
         # would put back exactly the seams this is here to remove.
         synth.use_whole_text()
@@ -155,6 +165,6 @@ def synthesize_batches(synth, planned: list[Batch], audio_dir: Path, audio_confi
     with activity.progress("Narrating takes", total=len(planned), unit="takes") as bar:
         for batch in planned:
             made.extend(_make_take(synth, batch, audio_dir, audio_config, voice,
-                                   recorded, force, reused))
+                                   recorded, force, reused, cache=cache))
             bar.advance()
     return made

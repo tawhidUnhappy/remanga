@@ -38,6 +38,7 @@ from remanga.config import AudioConfig, SubtitlesConfig, TTSConfig
 from remanga.console import console, escape as _esc
 from remanga.narration import StoryPanel
 from remanga.paths import get_audio_dir, get_audio_timing_path, get_subtitles_dir
+from remanga.store.versions import TakeCache
 from remanga.subtitles.align import align, check
 from remanga.subtitles.manifest import verify_subtitle_manifest, write_subtitle_manifest
 
@@ -102,8 +103,10 @@ def _trim_edges(spans, clip: Path):
 
 def narrate_in_batches(synth, tts_config: TTSConfig, audio_config: AudioConfig,
                        subtitles_config: SubtitlesConfig, project_name: str, chapter_num: str,
-                       panels: list[StoryPanel], force: bool = False) -> Path:
-    """A chapter narrated in batches, from planning to audio_timing.json."""
+                       panels: list[StoryPanel], force: bool = False, fresh: str | None = None) -> Path:
+    """A chapter narrated in batches, from planning to audio_timing.json.
+    `fresh`: a run made fresh on purpose - nothing reused, its takes kept as
+    their own (store/versions.py:TakeCache)."""
     audio_dir = get_audio_dir(project_name, chapter_num)
     subs_dir = get_subtitles_dir(project_name, chapter_num)
     for stray in audio_dir.glob("*.wav.tmp"):
@@ -125,17 +128,23 @@ def narrate_in_batches(synth, tts_config: TTSConfig, audio_config: AudioConfig,
                   f"{synth.display_name}[/] [dim]({_esc(tts_config.voice_detail)})[/]")
 
     # What comes back is what is on disk, which is not the plan when a take
-    # collapsed and had to be split.
+    # collapsed and had to be split. A take made before, in any version of the
+    # chapter, comes back from the store (store/versions.py:TakeCache).
+    cache = TakeCache(project_name, chapter_num, audio_config, subtitles_config, fresh=fresh)
     reused: set[str] = set()
     batches = synthesize_batches(synth, planned, audio_dir, audio_config, voice_identity,
-                                  recorded, force, reused)
+                                  recorded, force, reused, cache)
+    if cache.from_store:
+        console.print(f"[cyan]{len(cache.from_store)} of {len(batches)} take(s) made before - back from "
+                      f"the store, not narrated again[/]")
     # The TTS model is done; let go of the GPU before whisper asks for it.
     synth.shutdown()
 
     keys = {b.name: source_key(b.text, voice_identity) for b in batches}
     timings = _read_timings(subtitles_config, batches, audio_dir, subs_dir, reused)
+    # A take from the store passed every check when it was kept.
     retakes = retake_hums(synth, batches, timings, audio_dir, subs_dir, subtitles_config,
-                           audio_config, checked=reused & already_checked)
+                           audio_config, checked=(reused & already_checked) | cache.from_store)
     retake_mismatches(synth, batches, timings, audio_dir, subs_dir, subtitles_config, audio_config)
 
     rows: list[dict[str, Any]] = []
@@ -150,6 +159,11 @@ def narrate_in_batches(synth, tts_config: TTSConfig, audio_config: AudioConfig,
                       f"matched what was said[/]")
         batch_rows, timeline_ms = _batch_rows(batch, spans, timeline_ms, len(rows) + 1)
         rows.extend(batch_rows)
+
+    # Every take checked and placed: kept, so no version of the chapter ever
+    # narrates it again.
+    for batch in batches:
+        cache.keep(batch.name, keys[batch.name], {"chapter": chapter_num, "voice": voice_identity})
 
     write_timing(timing_path, chapter_num, rows, total_ms=timeline_ms, voice=voice_identity,
                  batches=[{"name": b.name, "source_sha256": keys[b.name],

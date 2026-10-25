@@ -7,6 +7,7 @@ from __future__ import annotations
 from textual import work
 
 from remanga import workflow
+from remanga.store import versions as store_versions
 from remanga.ui.dialogs import Choice, Confirm, Result
 from remanga.workflow.queue import add_jobs, jobs
 
@@ -94,6 +95,15 @@ class ChapterMenu:
                                 "whole, and as many as the site says", "pagecheck"))
             options += [("Check pages", "fix any missing or broken page", "download"),
                         ("Re-download", "delete the pages and fetch them all again", "redownload")]
+        if narrated:
+            options.append(("Make video fresh", "everything made again from scratch - no take or video reused "
+                            "from before - and kept as a new version beside the others; says at the end how it "
+                            "compares with what was made before", "fresh"))
+        if len(chapters) == 1:
+            kept = store_versions.versions(project, chapters[0])
+            if kept:
+                options.append((f"Versions ({len(kept)})", "every video made of this chapter and what it was "
+                                "made with - bring one back, nothing made again, or delete one", "versions"))
         options.append(("Add to queue", "line it up to run later with other chapters, from any "
                         "project - j opens the queue", "queue"))
         if some_on_disk:
@@ -107,7 +117,11 @@ class ChapterMenu:
                                                         danger=["remark", "pick", "reset", "delete"]))
         if action is None:
             return
-        if action == "queue":
+        if action == "versions":
+            from remanga.ui.screens.versions import VersionsScreen
+
+            await self.app.push_screen_wait(VersionsScreen(project, chapters[0], self.path))
+        elif action == "queue":
             await self.queue_chapters(project, chapters, on_disk, narrated,
                              any(workflow.has_marks(project, ch) for ch in chapters), title)
         elif action == "download":
@@ -138,11 +152,19 @@ class ChapterMenu:
             await self.make_pdfs(chapters, config)
         elif action == "video":
             if narrated and not await self.app.push_screen_wait(Confirm(
-                    "Make video", f"{title} already has a narration. Make video narrates it all again - the "
-                    f"slow part. To keep the narration and only remake the music, intro and video, choose "
-                    f"Rebuild video instead.", yes="Narrate again")):
+                    "Make video", f"{title} already has a narration. Make video makes it all again from "
+                    f"narration.json - but every take and video made before with the same text and settings "
+                    f"comes back from the store instead of being made again, and what is there now is kept as "
+                    f"a version (Versions). To only remake the music, intro and video, choose Rebuild video.",
+                    yes="Make video")):
                 return
             await self.make_videos(chapters, config)
+        elif action == "fresh":
+            if await self.app.push_screen_wait(Confirm(
+                    "Make video fresh", f"Make {title.lower()} all again from scratch - narrated, mixed and "
+                    f"rendered anew, nothing reused (the slow part, every time)? Nothing is replaced: it becomes "
+                    f"a new version, and the ones made before stay in Versions.", yes="Make it fresh")):
+                await self.make_videos(chapters, config, fresh=True)
         elif action == "source":
             if await self.app.push_screen_wait(Confirm(
                     "Remake from source", f"Delete everything made for {title.lower()} - the cut panels, the "
@@ -158,9 +180,10 @@ class ChapterMenu:
             await self.remix_videos(chapters, config)
         elif action == "reaudio":
             if await self.app.push_screen_wait(Confirm(
-                    "Narrate again, no video", f"Throw away the narration of {title.lower()} and narrate it all "
-                    f"again (the slow part)? Only the new narration is kept; Rebuild video then makes the video "
-                    f"from it.", yes="Narrate again")):
+                    "Narrate again, no video", f"Narrate {title.lower()} all again from scratch (the slow "
+                    f"part) - not reusing any take made before? What is there now is kept as a version "
+                    f"(Versions); Rebuild video then makes the video from the new narration.",
+                    yes="Narrate again")):
                 await self.make_videos(chapters, config, force=True, audio_only=True)
         elif action == "pick":
             await self.delete_chosen(chapters, title)
