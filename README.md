@@ -230,50 +230,31 @@ never touched. From there the PDF and the video work as for any manga.
 
 ## The narrator
 
-Six engines built in (each a plug-in - see [Plug-ins](#plug-ins)), switchable in **Settings → Narrator engine**; each keeps its own voice, so switching
-back and forth changes nothing else. A chapter narrated by the other one is narrated again.
+Three engines built in (each a plug-in - see [Plug-ins](#plug-ins)), switchable in **Settings → Narrator engine**;
+each keeps its own voice, so switching back and forth changes nothing else. A chapter narrated by another one is
+narrated again.
+
+**The first time remanga opens** it looks at the machine - the GPU and its memory, the RAM, the free disk, the
+internet - and asks which engine to narrate with, listing only the ones this machine can run (and why the others
+can't). The one picked gets its recommended settings: its best voice and how it is read. Settings → Narrator
+engine changes it later.
 
 **The sound is the narrator as it read:** no effects, no pauses cut, the whole chapter read in as few
 takes as the engine handles well (one, for most), with a narrator's pause (420 ms) between takes. Three things are yours to set: the
 **Volume** of the finished chapter (-14 LUFS, YouTube's level, by default), the **Background
 music**, and how far under the voice the **Music volume** sits. (The narration presets and the voice
 effects - compressor, bass, microphone, breath, phone - are kept on the branch
-`backup/presets-effects-2026-10-25`.)
+`backup/presets-effects-2026-10-25`, as are the Ming-3.0-tts, Qwen3-TTS and IndexTTS-2.5 engines.)
 
-| Engine | Voice | Speed |
-|---|---|---|
-| **Ming-3.0-tts** | five built-in English voices (Stella, James, Emma, Charlotte, George) | about 1.3x real time on a 3060 (a 13-minute chapter in ~17 minutes), ~4 GB of VRAM |
-| **Kokoro-82M** | its own studio voices, picked from a list | a 60-panel chapter in seconds |
-| **Fish Audio Drama 3** | the #1 open-weights voice on Artificial Analysis's leaderboard (Oct 2026); no named voices - a narrator described in words (deep male, warm male, warm female, calm female, or the model's own choice) under a fixed seed. Drama 3 is a voice-cloning model, so the first time a voice is used it reads a reference line in it and keeps that as a voice file; every page is read from the file, a sentence at a time, so it is the same narrator all chapter and every chapter. A take that leaves words out, or sticks, is read again. (`tts.drama3.voice_file: false` reads in the model's own voice instead - smoother, but the narrator changes from page to page.) A 20.8 GB download (speech.cpp's Q4 port); Fish Audio Community License - free under US$500k a year of revenue, and say "Built with Fish Audio" | about 0.7x real time on a 3060 - a 14,000-character chapter in about 30 minutes; the experts that don't fit the 12 GB run on the CPU, ~15 GB of RAM |
-| **Edge voices** | Microsoft Edge's online US neural voices (Guy, Andrew, Brian, Christopher, Aria, Jenny...) - **needs the internet**, and it is Edge's Read Aloud service, not a licensed API: check Microsoft's terms before monetizing | a 14-minute chapter in ~90 seconds, no GPU |
-| **Qwen3-TTS** | nine preset narrators, steered by a line of plain English ("calm and unhurried") - or **a voice you design**: describe the narrator, and one sample is made and kept | about ten minutes for the same chapter |
-| **IndexTTS-2.5** | **a clone of any recording** in `global/voice/` - no transcript needed, it takes the voice from the first 15 seconds | about real time on a 3060 (a 40s take in ~45s), ~7 GB of VRAM |
+| Engine | Voice | Speed | Needs |
+|---|---|---|---|
+| **Fish Audio Drama 3** | the #1 open-weights voice on Artificial Analysis's leaderboard (Oct 2026); no named voices - a narrator described in words (deep male, warm male, warm female, calm female, or the model's own choice) under a fixed seed. Drama 3 is a voice-cloning model, so the first time a voice is used it reads a reference line in it and keeps that as a voice file; every page is read from the file, a sentence at a time, so it is the same narrator all chapter and every chapter. A take that leaves words out, or sticks, is read again. (`tts.drama3.voice_file: false` reads in the model's own voice instead - smoother, but the narrator changes from page to page.) Fish Audio Community License - free under US$500k a year of revenue, and say "Built with Fish Audio" | about 0.65x real time on a 3060 - a 16-minute chapter in about 26 minutes | a GPU with Vulkan and 6 GB+ of memory, its memory and the RAM together 26 GB+ (the experts that don't fit the GPU run on the CPU), 22 GB of disk |
+| **Kokoro-82M** | its own studio voices, picked from a list | a chapter in seconds | nothing special - runs on the CPU too |
+| **Edge voices** | Microsoft Edge's online US neural voices (Guy, Andrew, Brian, Christopher, Aria, Jenny...) - it is Edge's Read Aloud service, not a licensed API: check Microsoft's terms before monetizing | a 14-minute chapter in ~90 seconds | the internet, no GPU |
 
 **Hearing them first:** `./run.sh voices` (or Settings → Hear the voices) reads one line in every
 voice the engine has, into `global/voice/samples/<engine>/`, with a text file saying which is which.
 The model loads once for the whole set.
-
-**Delivery** (Qwen3-TTS): a line of plain English steering how it reads, and it matters more than it
-sounds like it should. Left to itself the model performs; asked for "a calm narrator telling a story"
-it still performs. The default asks for a technical manual, which is what actually reads level -
-measured on one line, pitch swing fell from 5.9 semitones (no instruction) and 4.0 ("calm narrator")
-to 3.1. `global/voice/samples/qwen/delivery/` has the same line in all four, to hear for yourself.
-
-**Cloning a recording** (Qwen3-TTS): put a clean recording of one person in `global/voice/` and pick
-`Clone <file>` in Settings → Narrator voice. Every panel is then read in that voice. Ten to fifteen
-seconds of speech is plenty - a longer file is trimmed to its first 15 seconds, because the whole
-reference rides along in the model's context and only slows every line down.
-
-**Cloning a recording** (IndexTTS-2.5): the same `global/voice/` folder, picked in Settings →
-Narrator voice. Every voice it has is a recording there, so Settings → Hear the voices reads one line
-in each. It reads at the recording's own delivery - no emotion is ever asked of it - and `Speaking
-speed` is applied by the model itself, so the pitch stays put. First use installs `.tools/venv-index-tts`
-and downloads about 10 GB of weights into `checkpoints/index_tts_2_5/`.
-
-**Designing a voice** (Qwen3-TTS only): Settings → Design a voice, describe the narrator, and one
-sample is generated into `global/voice/designed.wav`. Listen to it; design again if it is not right.
-Every panel is then spoken *from that sample*, which is what keeps one voice across a chapter -
-describing the voice again for each panel is what makes a designed voice wander.
 
 An engine's environment and weights download the first time you use it, not at install time.
 
@@ -393,8 +374,8 @@ particular one:
 
 | Kind | What it is | Built in (`remanga/plugins/`) |
 |---|---|---|
-| `tts` | a narrator engine: its settings block, synthesizer, worker, Settings rows | `kokoro/`, `ming_tts/`, `drama3/`, `edge_tts/`, `qwen_tts/`, `index_tts/` |
-| `tool` | an isolated environment (`.tools/venv-<name>`) | registered by `kokoro/`, `ming_tts/`, `qwen_tts/`, `index_tts/`, `magi/`, `faster_whisper/` |
+| `tts` | a narrator engine: its settings block, synthesizer, worker, Settings rows | `kokoro/`, `drama3/`, `edge_tts/` |
+| `tool` | an isolated environment (`.tools/venv-<name>`) | registered by `kokoro/`, `drama3/`, `edge_tts/`, `magi/`, `faster_whisper/` |
 | `layout` | how a chapter is marked into panels | `pages/` (Panel Marker + MAGI), `long_strip/` (Strip Marker) |
 | `source` | where manga come from | `mangadex/` |
 | `job` | something the queue can do to a chapter | `jobs/` |
@@ -402,10 +383,10 @@ particular one:
 Each built-in is one folder holding all of its own code; its `__init__.py` only registers a short
 description that names that code. `./run.sh plugins` lists what is loaded and where from.
 
-**Each tool sets itself up:** every plug-in that runs in its own environment (Kokoro, Qwen3-TTS,
-IndexTTS-2.5, MAGI, faster-whisper) has a `setup.py` in its folder that builds that environment and fetches its
+**Each tool sets itself up:** every plug-in that runs in its own environment (Kokoro, Drama 3,
+Edge voices, MAGI, faster-whisper) has a `setup.py` in its folder that builds that environment and fetches its
 weights. remanga runs it the first time the tool is used, from `bootstrap.sh`, or on request:
-`./run.sh setup --tool qwen-tts` (no `--tool`: the chosen narrator and MAGI). Each also runs on its
+`./run.sh setup --tool drama3` (no `--tool`: the chosen narrator and MAGI). Each also runs on its
 own: `.venv/bin/python -m remanga.plugins.kokoro.setup [--force] [--no-weights]`.
 
 **Your own:** drop a `.py` file or a package into the top-level `plugins/` folder (see
@@ -420,18 +401,13 @@ Every setting is in `config.json` and applies to every project:
 
 | Key | Default | Meaning |
 |---|---|---|
-| `tts.engine` | `kokoro` | who narrates - any `tts` plug-in: `kokoro` (fixed voices, seconds a chapter) or `ming` (five built-in English voices, about 1.3x real time) or `qwen` (preset narrators or a voice you design, minutes a chapter) or `index_tts` (a clone of a recording, about real time) |
-| `tts.ming.voice` | `US_Stella` | Ming-3.0-tts's built-in voice: `US_Stella`, `US_James`, `US_Emma`, `UK_Charlotte`, `UK_George` |
+| `tts.engine` | picked the first time remanga opens | who narrates - any `tts` plug-in: `drama3` (best quality, slow, a big GPU), `kokoro` (fixed voices, seconds a chapter, any machine) or `edge` (online, fast) |
 | `tts.drama3.voice` / `.seed` / `.voice_file` | `deep_male` / 1 / true | Drama 3's described narrator (`deep_male`, `warm_male`, `warm_female`, `calm_female`, `model`), the seed that picks it - another seed is another narrator - and whether takes are read from a voice file of it (`checkpoints/speech_cpp/voices/`) |
 | `tts.drama3.gpu_headroom_gb` | 2.5 | GPU memory kept free for Drama 3's working buffers; 0 ran a 12 GB card out of memory |
 | `tts.kokoro.voice` / `.speed` | `af_heart` / 1.0 | Kokoro's voice and pace - 1.0 is its own (about 185 words a minute); past about 1.35 it drops the pauses between sentences |
-| `tts.qwen.speaker` / `.instruct` | `Ryan` / monotone... | Qwen3-TTS's preset narrator and how it reads - the default asks for a monotone read, because anything warmer makes the model act |
-| `tts.qwen.design` / `.designed_sample` | - | the voice you described, and the sample every panel is then spoken from |
-| `tts.index_tts.reference` / `.speed` | first file in `global/voice/` / 1.0 | the recording IndexTTS-2.5 clones, and its pace (0.5-2.0) |
-| `tts.index_tts.interval_silence_ms` | 450 | silence between the segments IndexTTS splits a take into (upstream default 200), on top of its own pauses inside one |
 | `tts.volume_boost_db` | 0 | gain on each clip; leave at 0 - `audio.volume_lufs` sets the level |
 | `audio.bgm_enabled` / `bgm_path` | off / - | background music |
-| `audio.bgm_below_voice_lu` | 14 | how far the music sits under the voice, in LU - measured per track and chapter, so every music file sits at the same level (12 energetic, 14 balanced, 18 subtle) |
+| `audio.bgm_below_voice_lu` | 18 | how far the music's LOUD PARTS sit under the voice, in LU - the music measured by its loud parts (a chorus, a drop), per track and chapter, so every music file, loud or quiet, peaks at the same level under the words (14 balanced, 18 subtle, 20 barely there) |
 | `audio.volume_lufs` | -14 | how loud the finished chapter is (Settings - Volume): measured, then one linear gain over the whole mix, with a peak guard only where that gain would pass -1 dBTP. -14 is YouTube's level |
 | `video.width` / `height` / `fps` | 1920 / 1080 / 24 | video size - 2560x1440 and 3840x2160 keep big panels sharp (see the quality warning), at a slower render |
 | `video.max_upscale` | 3 | how far a small panel may be enlarged to fill the frame; 0 means no cap |

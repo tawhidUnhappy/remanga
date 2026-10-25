@@ -17,14 +17,14 @@ if TYPE_CHECKING:
 MUSIC_EXTS = (".mp3", ".wav", ".m4a", ".ogg", ".opus", ".flac")
 
 
-MUSIC_LEVELS = ((12.0, "energetic - music clearly felt"), (14.0, "balanced - recommended"),
-                (18.0, "subtle - a quiet bed"))
+MUSIC_LEVELS = ((14.0, "balanced - music clearly part of it"), (18.0, "subtle - a quiet bed, recommended"),
+                (20.0, "barely there - adds a mood, never in the way"))
 
 
 # Reference points for typing a level, loudest music first.
 MUSIC_LADDER = ((8.0, "loud - fights the words, hard to follow"), (12.0, "energetic - clearly felt"),
-                (14.0, "balanced - recommended"), (18.0, "subtle - a quiet bed"),
-                (24.0, "barely there - felt more than heard"))
+                (14.0, "balanced - clearly part of it"), (18.0, "subtle - a quiet bed, recommended"),
+                (20.0, "barely there - adds a mood, never in the way"), (24.0, "almost silent - lost on a phone"))
 
 
 async def change_music(screen: SettingsScreen, config: RemangaConfig) -> None:
@@ -42,14 +42,14 @@ async def change_music(screen: SettingsScreen, config: RemangaConfig) -> None:
 
 def music_guide(current: float) -> str:
     """What a music level number means, in plain words, with the level in use marked."""
-    lines = ["The number is how much QUIETER the music is than the narrator's voice,",
-             "in loudness units (LU, the same scale as dB). Bigger number = quieter music.", ""]
+    lines = ["The number is how much QUIETER the music's loud parts are than the narrator's",
+             "voice, in loudness units (LU, the same scale as dB). Bigger number = quieter music.", ""]
     for lu, text in MUSIC_LADDER:
         lines.append(f"  {lu:>4g}   {text}{'   <- now' if abs(lu - current) < 1e-9 else ''}")
     if all(abs(lu - current) > 1e-9 for lu, _ in MUSIC_LADDER):
         lines.append(f"  {current:>4g}   <- now")
-    lines += ["", "About 10 LU more sounds half as loud. Every song is measured, so the same",
-              "number sits at the same level whichever music file is chosen."]
+    lines += ["", "About 10 LU more sounds half as loud. Every song is measured by its loud parts,",
+              "so the same number holds whichever music file is chosen - a loud chorus included."]
     return "\n".join(lines)
 
 

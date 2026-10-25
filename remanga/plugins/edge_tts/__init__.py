@@ -16,10 +16,13 @@ register("tool", TOOL)   # setup.py: its environment (no weights)
 
 register("tts", TTSEngine(
     "edge", "Edge voices",
-    "Microsoft Edge's online neural voices (Guy, Andrew, Brian...) - needs internet",
+    "Clear and fast - Microsoft's online voices (Guy, Andrew...); needs the internet",
     tool_name="edge-tts",
     config="remanga.plugins.edge_tts.config:EdgeConfig",
     synthesizer="remanga.plugins.edge_tts.synth:EdgeSynthesizer",
     settings_rows="remanga.plugins.edge_tts.rows:edge_rows",
+    fits="remanga.plugins.edge_tts.fit:fits",
+    recommend="remanga.plugins.edge_tts.fit:recommend",
+    quality=10,
     order=17,
 ))

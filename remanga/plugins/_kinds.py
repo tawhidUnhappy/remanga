@@ -32,7 +32,15 @@ class TTSEngine:
     tool_name       its isolated environment (`.tools/venv-<tool_name>`),
                     registered as a `tool` plug-in
     clones_voice    whether its voice is built from a recording/description
-                    rather than picked from a list"""
+                    rather than picked from a list
+    fits            (machine.Machine) -> str | None: why this machine cannot run
+                    it, or None when it can - optional (None: any machine)
+    recommend       (RemangaConfig, machine.Machine) -> None: its recommended
+                    settings, applied when it is picked the first time
+                    remanga opens (ui/first_run.py) - optional
+    quality         how good its narration is next to the others - the engine
+                    offered first the first time remanga opens is the best a
+                    machine can run"""
 
     name: str
     display_name: str
@@ -43,6 +51,9 @@ class TTSEngine:
     settings_rows: Ref = None
     prepare: Ref = None
     clones_voice: bool = False
+    fits: Ref = None
+    recommend: Ref = None
+    quality: int = 0
     order: int = 100
 
     @property

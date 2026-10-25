@@ -180,6 +180,24 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   0 = off, default 10) + `background_grid_strength` 0.5: a multiply layer built once per compositor
   (`FrameCompositor._lcd_grid`), over the blur only, before the panel is pasted. +40 ms per 4K frame. Frames
   re-composite on change via frames_settings.json (model_dump). If viewers see shimmer at 720p, go chunky.
+- **Engines cut to three + first-run chooser (2026-10-25, user: "remove ming, qwen and indextts just keep fish audio
+  drama 3, kokoro and edge ... first check the user machine and let them choose").** Ming/Qwen/IndexTTS plug-ins are
+  on `backup/presets-effects-2026-10-25`; their venvs + weights (~33 GB freed) were deleted at the user's OK.
+  `remanga/machine.py:detect()` (nvidia-smi VRAM, sysconf RAM, disk free, Vulkan loader + ICD json, TCP to
+  huggingface.co / bing). TTSEngine gained `fits(machine) -> reason|None`, `recommend(config, machine)` and
+  `quality` (plugins/<engine>/fit.py; Drama 3 needs Vulkan, 8 GB+ VRAM, VRAM+RAM 28 GB+, 22 GB disk unless
+  downloaded; Edge needs the internet; Kokoro anything). `ui/first_run.py`: while `menus.engine_chosen` is
+  false, the app asks on start (engines that fit, best quality first, the rest named with why), applies
+  the pick's `recommend`, saves. Tested in Pilot with `RemangaConfig.save` stubbed - **a test must never
+  save the user's config.json** (md5-checked before/after). The user's config was set by hand: Drama 3
+  deep_male voice_file, music 20 LU, engine_chosen true; the old one is global/config.json.before-2026-10-25.
+- **Music measured by its loud parts (2026-10-25, user: a level for "phone and earphone and earbuds ... not too
+  loud, barely there ... even the loud and uncommon" music).** `audio/master.py:loud_parts_loudness` = ebur128's
+  "LRA high" (95th percentile of 3 s loudness); `mix.music_gain_db` = voice integrated - level - music loud
+  parts (was: music integrated). Over the 12 tracks in global/bgm the loud parts sit 0.6-3.0 LU over the
+  average, so the old way gave up to 3 LU more music at one song's chorus than another's. `MUSIC_MEASURE` in
+  the fingerprint re-mixes old chapters. Default level 14 -> 18; user's 20. Measured: Thapin gain -30 dB,
+  Orchestral and HAADSE -34 dB, all masters -14.2 LUFS.
 - **Presets and voice effects REMOVED from main (2026-10-25, user: "remove all the presets and effects
   and just keep the original vocal and volume and background music volume, minimalistic settings").**
   Everything is on branch `backup/presets-effects-2026-10-25` (presets/*.json, config/presets.py,

@@ -105,6 +105,17 @@ def measure_loudness(path: Path) -> tuple[float | None, float | None]:
     return (loudness if loudness is not None and loudness > -70 else None), true_peak
 
 
+def loud_parts_loudness(path: Path) -> float | None:
+    """How loud a file's loud parts are, in LUFS: EBU R128's "LRA high", the
+    95th percentile of its 3-second loudness - a chorus or a drop, not the
+    average. ~1 s for a 7-minute chapter. None when it can't be measured."""
+    result = run_ffmpeg(["ffmpeg", "-hide_banner", "-nostats", "-i", str(path), "-af", "ebur128",
+                         "-f", "null", "-"], capture=True)
+    found = re.findall(r"LRA high:\s+(-?[\d.]+) LUFS", result.stderr or "")
+    value = float(found[-1]) if found else None
+    return value if value is not None and value > -70 else None
+
+
 def integrated_loudness(path: Path) -> float | None:
     """A file's integrated loudness in LUFS, or None (see measure_loudness)."""
     return measure_loudness(path)[0]

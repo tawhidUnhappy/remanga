@@ -22,13 +22,13 @@ class AudioConfig(ConfigModel):
     # Background music: off until a file is chosen.
     bgm_enabled: bool = False
     bgm_path: str = ""
-    # How far the music sits under the narration, in loudness units (LU). Both
-    # are measured at mix time and the music's gain is set to match, so every
-    # track sits at the same level however loud its file is mastered - a fixed
-    # dB gain left one track 6 LU louder than another. 14 keeps the music
-    # present enough to carry energy while every word stays clear; 18+ is a
-    # quiet bed, under 12 starts to mask consonants on phone speakers.
-    bgm_below_voice_lu: float = 14.0
+    # How far the music's LOUD PARTS sit under the narration, in loudness
+    # units (LU): the voice measured whole, the music by its loud parts
+    # (audio/mix.py:music_gain_db), so a chorus or a drop never comes up
+    # louder than this, whatever the track. 18 is a quiet bed felt under every
+    # word; 20+ is barely there; under 14 it starts to mask consonants on
+    # phone speakers, which lose the music's bass but not the voice.
+    bgm_below_voice_lu: float = 18.0
     # The level last typed in as "Custom..." (Settings - Music volume), kept so
     # it is offered again next time beside the presets, whichever level is in
     # use. None until one has been typed.

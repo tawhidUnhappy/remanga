@@ -15,6 +15,7 @@ from textual.app import App
 from remanga.config import RemangaConfig
 from remanga.console import console
 from remanga.ui import look
+from remanga.ui.first_run import choose_engine
 from remanga.ui.screens import ProjectsScreen
 from remanga.ui.tasks import TaskScreen
 
@@ -77,6 +78,8 @@ class RemangaApp(App):
 
     def on_mount(self) -> None:
         self.push_screen(ProjectsScreen(self.machine))
+        if not self.machine.menus.engine_chosen:
+            self.run_worker(choose_engine(self, self.machine), exclusive=True, group="first-run")
 
     async def action_quit(self) -> None:
         if isinstance(self.screen, TaskScreen):

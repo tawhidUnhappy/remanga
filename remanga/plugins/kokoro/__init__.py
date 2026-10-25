@@ -15,10 +15,12 @@ register("tool", TOOL)   # setup.py: its environment and weights
 # First in order: the default engine, and the fallback for a name config.json
 # doesn't know.
 register("tts", TTSEngine(
-    "kokoro", "Kokoro-82M", "Fixed studio voices - fast, and the same every time",
+    "kokoro", "Kokoro-82M", "Good and fast - a chapter in seconds, any machine; a little flat next to Drama 3",
     tool_name="kokoro",
     config="remanga.plugins.kokoro.config:KokoroConfig",
     synthesizer="remanga.plugins.kokoro.synth:KokoroSynthesizer",
     settings_rows="remanga.plugins.kokoro.rows:kokoro_rows",
+    recommend="remanga.plugins.kokoro.fit:recommend",
+    quality=20,
     order=10,
 ))

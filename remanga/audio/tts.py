@@ -28,8 +28,8 @@ class TTSEngine:
             raise ValueError(f"Chapter {chapter_num} has no panels to narrate.")
 
         # Before the model loads: whatever the engine needs done first with
-        # the GPU still free (Qwen reads its reference recording with
-        # faster-whisper - plugins/qwen_tts/reference_text.py).
+        # the GPU still free (its `prepare` hook - none of the engines now
+        # built in has one).
         if self.tts_config.spec.prepare:
             plugins.call(self.tts_config.spec.prepare, self.tts_config, self.subtitles_config)
 

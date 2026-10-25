@@ -17,6 +17,7 @@ from remanga.audio.master import (
     BED_VERSION,
     integrated_loudness,
     load_bgm,
+    loud_parts_loudness,
     music_bed,
     panel_segments,
     under_narration,
@@ -44,11 +45,23 @@ def _bgm_file(config: AudioConfig) -> Path | None:
 FALLBACK_MUSIC_GAIN_DB = -30.0
 
 
+# How the music is measured against the voice; bumped when that changes, so
+# a mix made the old way is mixed again (it is in the fingerprint).
+MUSIC_MEASURE = "loud-parts-v1"
+
+
 def music_gain_db(narration_wav: Path, bed_wav: Path, below_voice_lu: float) -> float:
-    """The gain that puts the music bed `below_voice_lu` under the narration,
-    both measured (EBU R128 integrated loudness) over exactly what the mix
-    plays - a song's quieter opening minutes measure lower than the whole file."""
-    voice, music = integrated_loudness(narration_wav), integrated_loudness(bed_wav)
+    """The gain that puts the music bed's LOUD PARTS `below_voice_lu` under
+    the narration: the voice by its integrated loudness, the music by its
+    loud parts (master.loud_parts_loudness, the 95th percentile of its
+    3-second loudness) - both over exactly what the mix plays. By its average
+    instead, a song with quiet verses and a loud chorus came in quiet on
+    average and loud at the chorus: over the twelve tracks in global/bgm the
+    loud parts sit 0.6-3.0 LU over the average, so one setting meant up to
+    3 LU more music at the peaks of one song than of another (user request,
+    2026-10-25: a level that works "for almost all background music even
+    the loud and uncommon ones")."""
+    voice, music = integrated_loudness(narration_wav), loud_parts_loudness(bed_wav)
     if voice is None or music is None:
         return FALLBACK_MUSIC_GAIN_DB
     return round(voice - below_voice_lu - music, 1)
@@ -60,6 +73,7 @@ def _fingerprint(timing_path: Path, config: AudioConfig, bgm: Path | None) -> di
         "timing_mtime": timing_path.stat().st_mtime,
         "bgm": [str(bgm), bgm_stat.st_size, int(bgm_stat.st_mtime)] if bgm_stat else None,
         "bgm_below_voice_lu": config.bgm_below_voice_lu,
+        "music_measure": MUSIC_MEASURE if bgm else None,
         "bed_version": BED_VERSION if bgm else None,
         "sample_rate": config.sample_rate,
         "volume_lufs": config.volume_lufs,
@@ -100,7 +114,8 @@ def mix_master_audio(project_name: str, chapter_num: str, config: AudioConfig, f
         gain_db = music_gain_db(raw, bed_wav, config.bgm_below_voice_lu)
         bed_wav.unlink(missing_ok=True)
         console.print(f"[cyan]Adding background music:[/] {_esc(str(bgm))} "
-                      f"[dim]({config.bgm_below_voice_lu:g} LU under the voice, gain {gain_db:+.1f} dB)[/]")
+                      f"[dim](its loud parts {config.bgm_below_voice_lu:g} LU under the voice, "
+                      f"gain {gain_db:+.1f} dB)[/]")
         track = under_narration(track, bed, gain_db)
 
     track.export(raw, format="wav")

@@ -17,10 +17,13 @@ register("tool", TOOL)   # setup.py: its environment, speech.cpp and the model
 
 register("tts", TTSEngine(
     "drama3", "Fish Audio Drama 3",
-    "Top open-weights voice (Oct 2026) - described voices, 20.8 GB, slow",
+    "Best quality - a natural narrator, the same every chapter; slow (a 16-min chapter ~26 min on an RTX 3060), 21 GB",
     tool_name="drama3",
     config="remanga.plugins.drama3.config:Drama3Config",
     synthesizer="remanga.plugins.drama3.synth:Drama3Synthesizer",
     settings_rows="remanga.plugins.drama3.rows:drama3_rows",
+    fits="remanga.plugins.drama3.fit:fits",
+    recommend="remanga.plugins.drama3.fit:recommend",
+    quality=30,
     order=16,
 ))

@@ -17,7 +17,7 @@ The kinds, and what each one describes (full field list in
 
 | kind     | object       | built-in examples                       |
 |----------|--------------|-----------------------------------------|
-| `tts`    | `TTSEngine`  | `remanga/plugins/kokoro/`, `qwen_tts/`  |
+| `tts`    | `TTSEngine`  | `remanga/plugins/kokoro/`, `drama3/`, `edge_tts/`  |
 | `tool`   | `ToolSpec`   | each engine's / model's isolated venv   |
 | `layout` | `Layout`     | `remanga/plugins/pages/`, `long_strip/` |
 | `source` | `Source`     | `remanga/plugins/mangadex/`             |

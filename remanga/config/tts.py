@@ -3,7 +3,7 @@ voice.
 
 Engines are plug-ins (remanga/plugins/, kind "tts"), and each brings its own
 settings block, so TTSConfig is BUILT from whichever engines are registered:
-one field per engine, named after it (`tts.kokoro`, `tts.qwen`), holding that
+one field per engine, named after it (`tts.kokoro`, `tts.drama3`), holding that
 engine's own config model. config.json keeps the same shape it always had.
 
 What every engine shares (which one is active, how long a synthesis may take)
