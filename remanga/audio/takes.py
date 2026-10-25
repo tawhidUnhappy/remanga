@@ -25,6 +25,13 @@ from remanga.plugins.faster_whisper.transcribe import audio_seconds
 RUNAWAY_FACTOR = 1.4
 
 
+# How many other seeds a take that collapsed is read under before it is
+# split, for an engine with a `seed` (audio/retakes.py uses 1-2 for hums and
+# 11-13 for left-out words; these are 21-23).
+COLLAPSE_RESEEDS = 3
+COLLAPSE_SEED_FROM = 20
+
+
 # How many times a take may be halved before giving up. Three takes a batch
 # down to an eighth, which is far below anything that has ever collapsed.
 MAX_SPLIT_DEPTH = 3
@@ -86,14 +93,31 @@ def _make_take(synth, batch: Batch, audio_dir: Path, audio_config: AudioConfig,
 
     console.print(f"[dim]{_esc(batch.name)}: {len(batch.panels)} panels, {len(batch.text)} chars, "
                   f"about {batch.estimated_seconds / 60:.1f} min[/]")
-    raw = audio_dir / f"{batch.name}_raw.wav"
-    synth.synthesize(text=batch.text, output_wav=raw)
-    atomic_export(load_take(raw, audio_config), clip)
-    raw.unlink(missing_ok=True)
-
-    problem = collapsed(clip, batch, synth.ceiling_seconds)
-    if problem is None:
-        return [batch]
+    # An engine that samples gets the same text again under other seeds
+    # before the take is split: Drama 3 in its own voice sometimes sticks on
+    # a drone instead of reading a take's last sentence, and under another
+    # seed reads all of it (one panel: seeds 1 and 1001 stuck, 2001 and 3001
+    # read it in 12s).
+    seeds = range(1 + (COLLAPSE_RESEEDS if hasattr(synth, "seed") else 0))
+    for seed in seeds:
+        if seed:
+            synth.seed = COLLAPSE_SEED_FROM + seed
+        try:
+            raw = audio_dir / f"{batch.name}_raw.wav"
+            synth.synthesize(text=batch.text, output_wav=raw)
+            atomic_export(load_take(raw, audio_config), clip)
+            raw.unlink(missing_ok=True)
+        finally:
+            if seed:
+                synth.seed = 0
+        problem = collapsed(clip, batch, synth.ceiling_seconds)
+        if problem is None:
+            if seed:
+                console.print(f"[green]{_esc(batch.name)}: read in full under another seed[/]")
+            return [batch]
+        if seed + 1 < len(seeds):
+            console.print(f"[yellow]{_esc(batch.name)} did not come back as its script - {problem}. "
+                          f"Reading it again under another seed.[/]")
 
     # Gone either way: a take that is not a reading of its script is not
     # something to leave lying in the audio folder, whether it is about to be

@@ -72,19 +72,18 @@ class Drama3Synthesizer(BaseWorkerSynthesizer):
         self.engine_config = tts_config.drama3
         super().__init__(audio_config, model_manager(self.engine_config))
 
-    # Set by audio/retakes.py to read a take again another way: the voice is
-    # the voice file's, so another seed changes the delivery, not the narrator.
+    # Set by audio/retakes.py to read a take again another way. In the model's
+    # own voice another seed may also shift the voice a little for that take;
+    # from a voice file it changes only the delivery.
     seed = 0
 
-    # Short takes, read from a voice file (scripts/drama3_worker.py): Drama 3
-    # drops whole sentences from a long take. Measured on HimeSama ch1 with the
-    # model choosing the voice: the whole chapter as one take matched 73% of
-    # its script; in ~3-minute takes, 33-100% (three of nine under the 90% the
-    # alignment needs, with babble whisper heard as "thanks for watching").
-    # The worst of those takes (1,858 characters) from a voice file: 93% as
-    # one request, 98% a page per request. So about a page - most pages are
-    # 400-600 characters, and a short page shares a take with the next.
-    # (Lower temperature is not the fix: 0.7/0.7 ran to max_seconds, 30%.)
+    # Short takes - about a page (most are 400-600 characters; a short page
+    # shares a take with the next). Drama 3 drops whole sentences from a long
+    # take: on HimeSama ch1 in its own voice, the chapter as one take matched
+    # 73% of the script, ~3-minute takes 33-100%. A page is short enough that
+    # a take that still leaves words out is cheap to read again
+    # (audio/retakes.py:retake_mismatches). Lower temperature is not the fix:
+    # 0.7/0.7 ran to max_seconds, 30%.
     max_take_seconds = 45
 
     # Measured on the 3060: the deep male voice read a whole chapter (HimeSama
@@ -122,6 +121,7 @@ class Drama3Synthesizer(BaseWorkerSynthesizer):
             "text": text,
             "voice": spec.name,
             "cue": spec.cue,
+            "voice_file": self.engine_config.voice_file,
             "voice_seed": self.engine_config.seed,
             "seed": self.engine_config.seed + 1000 * self.seed,
             "output_path": str(output_wav.resolve()),

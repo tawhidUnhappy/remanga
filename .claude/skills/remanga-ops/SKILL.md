@@ -486,7 +486,18 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     checkpoints/speech_cpp/<owner>--<repo>/<sha256>/, path + size pinned in synth.py so a load never
     re-hashes it). Plug-in `plugins/drama3/`: empty venv `drama3` for a stdlib worker that bridges
     remanga's one-line protocol to `speech worker` JSON Lines (protocol 3: base64 PCM chunks -> WAV).
-    **Voice "none" is unusable for narration; a voice file fixes it.** Read with the model's own pick
+    **DEFAULT IS THE BUILT-IN VOICE (voice "none", cue + seed per take), user's call 2026-10-25 after listening:
+    "for best quality lets go with it's builtin vocal".** The voice-file path below is `voice_file: true`.
+    Built-in has NO chunk-join clicks (0 on the 2048 grid over 2,000 chars in one request), so a take is one
+    request; its sentence drops are what page takes + retake_mismatches are for. Its other failure: a take
+    STICKS ON A DRONE (steady ~150/300/450 Hz tone at -45 dB for ~20 s, sometimes then "thanks for watching")
+    instead of reading its last sentence - seed-specific (one panel: seeds 1, 1001 stuck; 2001, 3001 fine).
+    So `takes._make_take` rereads a collapsed take under COLLAPSE_RESEEDS 3 other seeds (21-23) before
+    splitting it. Full HimeSama ch1, built-in: 32 takes, one reseed, all >= 90% (lowest 90, 94, 96), 16.8 min
+    in 27.5 min, -14.1 LUFS - BUT per-take median F0 79-123 Hz (spread 11.2 Hz; the voice file's was 90-107,
+    4.2): in its own voice the narrator's pitch moves between pages. Kept for the user to judge by ear:
+    `global/voice/samples/drama3/9-HimeSama-ch1-FULL-CHAPTER-builtin-voice-with-music.mp3`.
+    **Voice "none" drops sentences in long takes; a voice file fixes that but sounds less natural.** Read with the model's own pick
     (a bracketed cue `[deep, calm male narrator voice]` + seed, cue not spoken - whisper-checked), Drama 3
     DROPS WHOLE SENTENCES and babbles (whisper hears "thanks for watching"): HimeSama ch1 as one take 73%
     of the script, in ~3-min takes 33-100% (3 of 9 under the 90% alignment floor). The user guessed it

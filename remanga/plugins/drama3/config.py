@@ -20,8 +20,9 @@ class DramaVoice:
 # Drama 3 has no named voices: with no recording it picks a voice itself, and
 # a cue in brackets at the start of the text steers which (speech.cpp's
 # docs/models/drama3.md, "A voice described in words"). The cue is not read
-# aloud. The voice it picks for a cue and seed is recorded once and made into
-# a voice file every take is read from (scripts/drama3_worker.py).
+# aloud. Each take opens with the cue under the same seed, so each take picks
+# the same narrator (or, with `voice_file`, every take is read from a voice
+# file made once from it - scripts/drama3_worker.py).
 DRAMA_VOICES: tuple[DramaVoice, ...] = (
     DramaVoice("deep_male", "Deep male narrator", "[deep, calm male narrator voice]",
                "low and steady, documentary"),
@@ -60,6 +61,11 @@ class Drama3Config(ConfigModel):
     # scripts/drama3_worker.py. More = fewer layers' experts on the GPU
     # (each ~0.45 GB), slower but safer; 0 ran a 12 GB card out of memory.
     gpu_headroom_gb: float = 2.5
+    # Read every take from a voice file of the described voice (made once)
+    # rather than in the model's own voice: the same narrator for certain,
+    # but less natural to the ear (scripts/drama3_worker.py). Off: the user
+    # picked the model's own voice for quality (2026-10-25).
+    voice_file: bool = False
 
     def voice_options(self) -> list[tuple[str, str]]:
         """Every voice it can read in - see KokoroConfig.voice_options."""
@@ -78,6 +84,7 @@ class Drama3Config(ConfigModel):
         return f"{self.spec.label} ({self.spec.name}, seed {self.seed})"
 
     def identity(self) -> dict[str, Any]:
-        # "voice_file": the takes are read from a voice file, not the model's
-        # own pick - takes made before that are made again.
-        return {"engine": "drama3", "voice": self.spec.name, "seed": self.seed, "voice_file": 1}
+        # "voice_file": 1 when the takes are read from a voice file - a take
+        # made the other way is another reading, made again.
+        return {"engine": "drama3", "voice": self.spec.name, "seed": self.seed,
+                "voice_file": int(self.voice_file)}

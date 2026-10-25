@@ -10,21 +10,24 @@ JSON Lines with (speech.cpp's docs/worker.md, protocol 3). This script turns
 that protocol - the audio as base64 PCM chunks, then an `end` - into remanga's:
 one request in, one WAV written, one answer out.
 
-Every request is read in a voice FILE, never in the model's free choice
-(voice "none"). Drama 3 has no named voices; asked with "none" it picks one
-from a description cue and the seed, and read that way it dropped whole
-sentences and babbled (whisper heard "thanks for watching") - one take of a
-real chapter matched 33% of its script. The same text read from a voice file
-matched 93%, and a page at a time 98%. So each described voice gets a voice
-file, made once: the reference line read with the voice's cue under its seed
-(voice "none"), then `speech voice` turns that recording into the file, kept
-in `--voices_dir` and added to the running worker. The voice is then fixed -
-the request's seed only changes how a take is delivered, so a retake under
-another seed is the same narrator.
+Drama 3 has no named voices. By default a take is read in the model's own
+voice (voice "none"): a description cue in brackets opens the text and the
+seed picks the voice it describes - the user's pick for quality (2026-10-25:
+"smooth and more natural" than a voice file). Long, it drops whole sentences
+(a chapter in one take: 73% of the script), so takes are a page and a take
+that leaves words out is read again (audio/retakes.py:retake_mismatches).
+
+With `voice_file`, every take is read from a voice file instead: made once
+per described voice - the reference line read with the voice's cue under its
+seed, then `speech voice` turns that recording into the file, kept in
+`--voices_dir` and added to the running worker. The voice is then fixed (the
+seed only changes the delivery), and the worst take that had dropped
+sentences read 93-98% - but it sounds less natural, and speech.cpp's chunk
+joins click in it, so it is read a sentence per request.
 
 Protocol (newline-delimited JSON, one message per line):
   Parent -> worker: {"cmd": "synthesize", "text": ..., "voice": name, "cue": "[...]",
-                     "voice_seed": n, "seed": n, "output_path": ...}
+                     "voice_file": bool, "voice_seed": n, "seed": n, "output_path": ...}
   Worker -> parent (once ready): {"event": "ready", "device": ...}
   Worker -> parent (per request): {"ok": true, "stop": ...} or {"ok": false, "error": "..."}
   Parent -> worker: {"cmd": "shutdown"}  (or just close stdin)
@@ -225,13 +228,19 @@ class Worker:
         return key
 
     def synthesize(self, req: dict, sample_rate: int) -> dict:
-        """The text read a sentence per request (see SENTENCE_END), in the
+        """The text in the model's own voice (one request, the cue first), or
+        with `voice_file` a sentence per request (see SENTENCE_END) in the
         voice file of the voice asked for."""
-        voice = self.voice(req["voice"], req.get("cue", ""), int(req.get("voice_seed", 1)), sample_rate)
         options = {key: req[key] for key in ("seed", "temperature", "top_p", "top_k", "max_seconds")
                    if req.get(key) is not None}
-        lines = [{"type": "synthesize", "text": sentence, "voice": voice, **options}
-                 for sentence in sentences(req["text"])]
+        cue = req.get("cue", "")
+        if req.get("voice_file"):
+            voice = self.voice(req["voice"], cue, int(req.get("voice_seed", 1)), sample_rate)
+            lines = [{"type": "synthesize", "text": sentence, "voice": voice, **options}
+                     for sentence in sentences(req["text"])]
+        else:
+            lines = [{"type": "synthesize", "voice": "none", **options,
+                      "text": f"{cue} {req['text']}" if cue else req["text"]}]
         msg = self.to_wav(lines, Path(req["output_path"]), sample_rate)
         if failure(msg):
             return {"ok": False, "error": failure(msg)}
