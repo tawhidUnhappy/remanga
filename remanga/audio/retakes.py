@@ -1,6 +1,7 @@
-"""Retakes: a take that hums between two words (audio/hums.py) made again
-under other seeds, a retake kept only where it hums less and still reads its
-script. Also the one place takes are sent to whisper for word timings."""
+"""Retakes: a take made again under other seeds, a retake kept only where it
+is better - one that hums between two words (audio/hums.py), and one that
+left part of its script out. Also the one place takes are sent to whisper for
+word timings."""
 
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ from remanga.config import AudioConfig, SubtitlesConfig
 from remanga.console import console, escape as _esc
 from remanga.json_io import read_json_or, write_json
 from remanga.plugins.faster_whisper.transcribe import Transcriber
-from remanga.subtitles.align import align
+from remanga.subtitles.align import MIN_MATCH_RATIO, align
 
 # How many times a take with a hum in it (audio/hums.py) is made again under
 # another seed. Only the takes that hummed pay for it: a take's synthesis
@@ -88,36 +89,13 @@ def retake_hums(synth, batches: list[Batch], timings: dict[str, dict[str, Any]],
         return tried
 
     for attempt in range(1, MAX_RETAKES + 1):
-        synth.seed = attempt
-        synth.use_whole_text()
-        synth.ensure_ready()
-        retakes: dict[str, Path] = {}
-        try:
-            with activity.progress(f"Retaking hums (try {attempt} of {MAX_RETAKES})",
-                                   total=len(humming), unit="takes") as bar:
-                for name, (batch, _) in humming.items():
-                    raw = audio_dir / f"{name}_raw.wav"
-                    clip = audio_dir / f"{name}_retake.wav"
-                    synth.synthesize(text=batch.text, output_wav=raw)
-                    atomic_export(load_take(raw, audio_config), clip)
-                    raw.unlink(missing_ok=True)
-                    tried[name] = attempt
-                    if collapsed(clip, batch, synth.ceiling_seconds):
-                        clip.unlink(missing_ok=True)
-                    else:
-                        retakes[name] = clip
-                    bar.advance()
-        finally:
-            synth.seed = 0
-            # Whisper needs the GPU next.
-            synth.shutdown()
-
-        pairs = [(clip, subs_dir / f"{name}_retake.json") for name, clip in retakes.items()]
-        if pairs:
-            transcribe(subtitles_config, pairs, "Reading the retakes")
-        for (clip, out_json), name in zip(pairs, retakes, strict=True):
+        read = _read_again(synth, {name: batch for name, (batch, _) in humming.items()}, attempt,
+                           f"Retaking hums (try {attempt} of {MAX_RETAKES})", audio_dir, subs_dir,
+                           subtitles_config, audio_config)
+        for name in humming:
+            tried[name] = attempt
+        for name, (clip, out_json, document) in read.items():
             batch, old = humming[name]
-            document = json.loads(out_json.read_text(encoding="utf-8"))
             new = find_hums(clip, document["words"])
             better = (_hum_seconds(new) < _hum_seconds(old)
                       and _match_ratio(batch, document) >= _match_ratio(batch, timings[name]) - 0.01)
@@ -125,12 +103,7 @@ def retake_hums(synth, batches: list[Batch], timings: dict[str, dict[str, Any]],
                 clip.unlink(missing_ok=True)
                 out_json.unlink(missing_ok=True)
                 continue
-            clip.replace(audio_dir / f"{name}.wav")
-            # The json names the audio it was read from; it now IS that audio.
-            document["audio_file"] = f"{name}.wav"
-            write_json(subs_dir / f"{name}.json", document)
-            out_json.unlink(missing_ok=True)
-            timings[name] = document
+            _keep(name, clip, out_json, document, audio_dir, subs_dir, timings)
             if new:
                 humming[name] = (batch, new)
             else:
@@ -144,3 +117,89 @@ def retake_hums(synth, batches: list[Batch], timings: dict[str, dict[str, Any]],
                       f"{MAX_RETAKES} retakes ({_esc('; '.join(h.describe() for h in hums))}) - "
                       f"kept the take with the least of it[/]")
     return tried
+
+
+def _read_again(synth, batches: dict[str, Batch], attempt: int, label: str, audio_dir: Path, subs_dir: Path,
+                subtitles_config: SubtitlesConfig, audio_config: AudioConfig) -> dict[str, tuple[Path, Path, dict]]:
+    """Each batch read again under seed `attempt` and transcribed: name ->
+    (the retake, its word timings' file, those timings). A retake that
+    collapsed (audio/takes.py) is dropped here."""
+    synth.seed = attempt
+    synth.use_whole_text()
+    synth.ensure_ready()
+    retakes: dict[str, Path] = {}
+    try:
+        with activity.progress(label, total=len(batches), unit="takes") as bar:
+            for name, batch in batches.items():
+                raw = audio_dir / f"{name}_raw.wav"
+                clip = audio_dir / f"{name}_retake.wav"
+                synth.synthesize(text=batch.text, output_wav=raw)
+                atomic_export(load_take(raw, audio_config), clip)
+                raw.unlink(missing_ok=True)
+                if collapsed(clip, batch, synth.ceiling_seconds):
+                    clip.unlink(missing_ok=True)
+                else:
+                    retakes[name] = clip
+                bar.advance()
+    finally:
+        synth.seed = 0
+        # Whisper needs the GPU next.
+        synth.shutdown()
+
+    pairs = [(clip, subs_dir / f"{name}_retake.json") for name, clip in retakes.items()]
+    if pairs:
+        transcribe(subtitles_config, pairs, "Reading the retakes")
+    return {name: (clip, out_json, json.loads(out_json.read_text(encoding="utf-8")))
+            for (clip, out_json), name in zip(pairs, retakes, strict=True)}
+
+
+def _keep(name: str, clip: Path, out_json: Path, document: dict, audio_dir: Path, subs_dir: Path,
+          timings: dict[str, dict[str, Any]]) -> None:
+    """A retake put in place of its take, with its word timings."""
+    clip.replace(audio_dir / f"{name}.wav")
+    # The json names the audio it was read from; it now IS that audio.
+    document["audio_file"] = f"{name}.wav"
+    write_json(subs_dir / f"{name}.json", document)
+    out_json.unlink(missing_ok=True)
+    timings[name] = document
+
+
+# How many times a take that left part of its script out is read again. The
+# seeds start past the hum retakes' so the two never read a take the same way.
+MAX_MISMATCH_RETAKES = 3
+MISMATCH_SEED_FROM = 10
+
+
+def retake_mismatches(synth, batches: list[Batch], timings: dict[str, dict[str, Any]], audio_dir: Path,
+                      subs_dir: Path, subtitles_config: SubtitlesConfig, audio_config: AudioConfig) -> None:
+    """Takes under MIN_MATCH_RATIO of their script (subtitles/align.py) read
+    again under other seeds, keeping the best reading. `timings` is updated in
+    place. A take still under it afterwards is left for align.check to refuse.
+
+    Fish Audio Drama 3 leaves out a sentence now and then even a page at a
+    time (2 of 32 takes of a chapter: 85% and 49%); read again, the sentence
+    is there. An engine that reads a text the same way every time has no
+    `seed`, and nothing is retaken."""
+    failing = {b.name: b for b in batches if _match_ratio(b, timings[b.name]) < MIN_MATCH_RATIO}
+    if not failing or not hasattr(synth, "seed"):
+        return
+    for name, batch in failing.items():
+        console.print(f"[yellow]{_esc(name)}: only {_match_ratio(batch, timings[name]):.0%} of its script "
+                      f"is in the take - reading it again[/]")
+    for attempt in range(1, MAX_MISMATCH_RETAKES + 1):
+        read = _read_again(synth, failing, MISMATCH_SEED_FROM + attempt,
+                           f"Retaking takes that left words out (try {attempt} of {MAX_MISMATCH_RETAKES})",
+                           audio_dir, subs_dir, subtitles_config, audio_config)
+        for name, (clip, out_json, document) in read.items():
+            batch = failing[name]
+            new, old = _match_ratio(batch, document), _match_ratio(batch, timings[name])
+            if new <= old:
+                clip.unlink(missing_ok=True)
+                out_json.unlink(missing_ok=True)
+                continue
+            _keep(name, clip, out_json, document, audio_dir, subs_dir, timings)
+            if new >= MIN_MATCH_RATIO:
+                del failing[name]
+                console.print(f"[green]{_esc(name)}: retake {attempt} reads {new:.0%} of its script[/]")
+        if not failing:
+            return

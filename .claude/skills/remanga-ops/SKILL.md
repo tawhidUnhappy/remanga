@@ -186,7 +186,9 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   audio/voice_chain.py + microphone/breath/phone/blend/creak.py, gaps.py's pause cutting, the per-panel
   narration path, Settings rows for take length, pauses, edge fade, compressor... limiter). Main now:
   `audio.volume_lufs` (alias of the old `loudness_target_lufs`; one measured gain over the mix,
-  alimiter only when that gain would pass -1 dBTP - audio/master.py:write_master), `bgm_*` unchanged;
+  alimiter only when that gain would pass -1 dBTP - audio/master.py:write_master - and then the loudness
+  it took re-measured and given back, up to GUARD_PASSES 3: Drama 3's peaky voice landed -15.0 for -14
+  with one pass, -14.2 now), `bgm_*` unchanged;
   fixed in code: always batched takes (`plan_batches(panels, inf, ...)` = the engine's max_take_seconds),
   TAKE_GAP_MS 420 between takes (never 0: the user hates a line starting the instant the last ends, 2026-10-04), EDGE_FADE_MS 35 at take edges, no gap tightening
   (`audio/take_audio.py` = load + identity only). Old config.json keys are ignored by pydantic.
@@ -494,8 +496,13 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     read with cue+seed under voice "none", then `speech voice MODEL ref.wav --transcript ... out`, ~10 s on
     CPU) and `add_voice`s it; every take is read from it, so the seed only changes delivery (retakes are
     safe, `synth.seed` -> request seed + 1000*n). Takes ~one page (max_take_seconds 45). Measured, same
-    chapter: 32 takes, 29 >= 95%, median 99%, two dropped a sentence (85%, 49%) -> needs the
-    alignment-failure retake. temperature/top_p 0.7 made things worse (ran to max_seconds, 30%).
+    chapter: 32 takes, 29 >= 95%, median 99%, two dropped a sentence (85%, 49%) -> `audio/retakes.py:
+    retake_mismatches` (any engine with a `seed`): a take under align.MIN_MATCH_RATIO is read again under
+    seeds 11-13 (hum retakes use 1-2), the better reading kept; both came back on retake 1 (100%, 96%),
+    32/32 pass. End to end on merged main (2026-10-25): 103 panels, 32 takes, one retake (89.6% -> 97%),
+    17.2 min of narration in 28.7 min incl. whisper; per-take median F0 90-107 Hz (one narrator), quiet at
+    the 32 joins median 430 ms (min 200), master -14.2 LUFS / -1.8 dBTP.
+    temperature/top_p 0.7 made things worse (ran to max_seconds, 30%).
     **Footgun: speech.cpp OOMs a 12 GB card** (`ErrorOutOfDeviceMemory` on the first request, or at load
     "cannot reserve the memory of the codec's decoding"): it puts as many layers' experts on the GPU as
     free memory at load holds beside a fixed 1.5 GiB allowance, too little under NVIDIA's Vulkan driver,

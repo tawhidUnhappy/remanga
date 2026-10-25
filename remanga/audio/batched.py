@@ -30,7 +30,7 @@ from pydub import AudioSegment
 from remanga.audio.batching import Batch, plan_batches
 from remanga.audio.clips import speech_bounds
 from remanga.audio.manifest import verify_audio_manifest, write_audio_manifest
-from remanga.audio.retakes import hum_checked, retake_hums, transcribe
+from remanga.audio.retakes import hum_checked, retake_hums, retake_mismatches, transcribe
 from remanga.audio.take_audio import narration_identity
 from remanga.audio.takes import recorded_keys, source_key, synthesize_batches
 from remanga.audio.timing import panel_timing, write_timing
@@ -136,6 +136,7 @@ def narrate_in_batches(synth, tts_config: TTSConfig, audio_config: AudioConfig,
     timings = _read_timings(subtitles_config, batches, audio_dir, subs_dir, reused)
     retakes = retake_hums(synth, batches, timings, audio_dir, subs_dir, subtitles_config,
                            audio_config, checked=reused & already_checked)
+    retake_mismatches(synth, batches, timings, audio_dir, subs_dir, subtitles_config, audio_config)
 
     rows: list[dict[str, Any]] = []
     timeline_ms = 0

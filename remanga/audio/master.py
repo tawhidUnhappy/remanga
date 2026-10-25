@@ -168,6 +168,24 @@ def under_narration(narration: AudioSegment, bed: AudioSegment, volume_db: float
     return (bed + volume_db).overlay(narration)
 
 
+# How far under its target a guarded master may land before the gain is
+# raised by the shortfall and the guard run again.
+LOUDNESS_TOLERANCE_LU = 0.3
+GUARD_PASSES = 3
+
+
+def _apply_gain(raw_path: Path, final_path: Path, sample_rate: int, gain_db: float, guarded: bool) -> None:
+    """`raw_path` turned up by `gain_db` into `final_path`, with the peak guard
+    when `guarded`: a little under the ceiling, since it limits samples and
+    the ceiling is in true peak; nothing under it is touched."""
+    chain = [f"volume={gain_db:.2f}dB"]
+    if guarded:
+        ceiling = 10 ** ((LOUDNORM_TRUE_PEAK - LIMITER_MARGIN_DB) / 20)
+        chain.append(f"alimiter=limit={ceiling:.4f}:level=disabled:attack=5:release=50")
+    run_ffmpeg(["ffmpeg", "-y", "-i", str(raw_path), "-af", ",".join(chain), "-ar", str(sample_rate),
+                str(final_path)], check=True, capture=True)
+
+
 def write_master(raw_path: Path, final_path: Path, sample_rate: int, *, target_lufs: float,
                  announcement: str = "", on_failure: str = "the track as it was") -> None:
     """Puts the raw master in place as the finished one, at `target_lufs`.
@@ -176,8 +194,9 @@ def write_master(raw_path: Path, final_path: Path, sample_rate: int, *, target_l
     nothing else does (a gain that rode up and down pumped the music between
     sentences). Measured with ebur128 and applied with `volume`: ~2 s for a
     7-minute chapter. Only when that gain would push a peak over the ceiling
-    is a peak guard added, holding just those peaks; otherwise the track is
-    the voice and music exactly as mixed, louder or quieter. A failed pass is
+    is a peak guard added, holding just those peaks (and what loudness it
+    took is given back); otherwise the track is the voice and music exactly
+    as mixed, louder or quieter. A failed pass is
     a warning: the track as it was is used instead, because a recap at the
     wrong volume beats no recap at all."""
     console.print(f"[cyan]{announcement}[/]")
@@ -186,14 +205,18 @@ def write_master(raw_path: Path, final_path: Path, sample_rate: int, *, target_l
         if loudness is None:
             raise ValueError("the track is silent or unreadable")
         gain = target_lufs - loudness
-        chain = [f"volume={gain:.2f}dB"]
-        if peak is not None and peak + gain > LOUDNORM_TRUE_PEAK:
-            # A little under the ceiling, since it limits samples and the
-            # ceiling is in true peak; nothing under it is touched.
-            ceiling = 10 ** ((LOUDNORM_TRUE_PEAK - LIMITER_MARGIN_DB) / 20)
-            chain.append(f"alimiter=limit={ceiling:.4f}:level=disabled:attack=5:release=50")
-        run_ffmpeg(["ffmpeg", "-y", "-i", str(raw_path), "-af", ",".join(chain), "-ar", str(sample_rate),
-                    str(final_path)], check=True, capture=True)
+        guarded = peak is not None and peak + gain > LOUDNORM_TRUE_PEAK
+        _apply_gain(raw_path, final_path, sample_rate, gain, guarded)
+        # The guard takes loudness off with the peaks it holds - a peaky voice
+        # measured a whole LU short (Drama 3: -15.0 for -14, then -14.4 after
+        # one pass) - so what it took is measured and given back, through it
+        # again, until it is close.
+        for _ in range(GUARD_PASSES if guarded else 0):
+            reached, _ = measure_loudness(final_path)
+            if reached is None or target_lufs - reached <= LOUDNESS_TOLERANCE_LU:
+                break
+            gain += target_lufs - reached
+            _apply_gain(raw_path, final_path, sample_rate, gain, True)
         raw_path.unlink(missing_ok=True)
     except Exception as e:
         console.print(f"[yellow]Setting the volume failed ({_esc(str(e))}) - using {on_failure}.[/]")
