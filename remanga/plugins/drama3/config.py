@@ -93,5 +93,8 @@ class Drama3Config(ConfigModel):
     def identity(self) -> dict[str, Any]:
         # "voice_file": 1 when the takes are read from a voice file - a take
         # made the other way is another reading, made again.
+        # "pauses": how the worker sets the pause after each sentence
+        # (scripts/drama3_worker.py:fit_pause) - a take made under the old
+        # rule (every pause cut to 350 ms) is another reading, made again.
         return {"engine": "drama3", "voice": self.spec.name, "seed": self.seed,
-                "voice_file": int(self.voice_file)}
+                "voice_file": int(self.voice_file), "pauses": "350-1200"}

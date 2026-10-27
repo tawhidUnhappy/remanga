@@ -93,21 +93,28 @@ def sentences(text: str) -> list[str]:
     return [part.strip() for part in SENTENCE_END.split(text.strip()) if part.strip()] or [text]
 
 
-# How much of the silence a sentence ends on is kept. Read a sentence per
-# request, each comes back with a tail of its own, and two of them butted
-# together left 600-1,000 ms between sentences (Kokoro reading straight
-# through pauses ~420 ms): a tail is cut to this, with a short fade, so the
-# next sentence comes in after a narrator's pause. The start is left as it
-# is - it comes back 20-30 ms long.
-TAIL_KEEP_MS = 350
+# The pause after a sentence: Drama 3's own, kept between these two. Read a
+# sentence per request, each comes back with silence of its own after it -
+# measured over 24 sentences of a real chapter in smooth_young_male: median
+# 180 ms, a quarter under 90 ms (run straight into the next - rushed), a
+# quarter 0.9 s or more, the longest 2.5 s (dead air). Cutting every tail to
+# 350 ms (until 2026-10-27) flattened the long natural pauses and left the
+# rushed ones. The user wants a narrator who is "casual calm not rush, stop
+# whenever it feels like it": so a pause is never under PAUSE_MIN_MS (padded
+# with silence), never over PAUSE_MAX_MS (cut, with a short fade), and in
+# between exactly what the model chose. The start is left as it is - it comes
+# back 10-40 ms long.
+PAUSE_MIN_MS = 350
+PAUSE_MAX_MS = 1200
 TAIL_FADE_MS = 10
 # A 10 ms frame this far under the sentence's loud frames is silence.
 SILENCE_UNDER_DB = 40.0
 
 
-def trim_tail(pcm: bytes, sample_rate: int) -> bytes:
-    """16-bit mono `pcm` with the silence after its last sound cut to
-    TAIL_KEEP_MS (stdlib only: this runs in the tool's empty venv)."""
+def fit_pause(pcm: bytes, sample_rate: int) -> bytes:
+    """16-bit mono `pcm` with the silence after its last sound held between
+    PAUSE_MIN_MS and PAUSE_MAX_MS (stdlib only: this runs in the tool's
+    empty venv)."""
     samples = array.array("h", pcm)
     step = sample_rate // 100
     levels = [max((abs(v) for v in samples[i:i + step]), default=0) for i in range(0, len(samples), step)]
@@ -116,8 +123,14 @@ def trim_tail(pcm: bytes, sample_rate: int) -> bytes:
     loud = sorted(levels)[int(len(levels) * 0.9)]
     floor = loud * 10 ** (-SILENCE_UNDER_DB / 20)
     last = max((n for n, level in enumerate(levels) if level > floor), default=len(levels) - 1)
-    end = min(len(samples), (last + 1) * step + sample_rate * TAIL_KEEP_MS // 1000)
-    kept = samples[:end]
+    sound_end = (last + 1) * step
+    tail = len(samples) - sound_end
+    shortest, longest = sample_rate * PAUSE_MIN_MS // 1000, sample_rate * PAUSE_MAX_MS // 1000
+    if tail < shortest:
+        return (samples + array.array("h", bytes(2 * (shortest - tail)))).tobytes()
+    if tail <= longest:
+        return pcm
+    kept = samples[:sound_end + longest]
     fade = min(len(kept), sample_rate * TAIL_FADE_MS // 1000)
     for k in range(fade):
         kept[len(kept) - fade + k] = int(kept[len(kept) - fade + k] * (fade - k) / fade)
@@ -193,7 +206,7 @@ class Worker:
                     msg = self.request(line, pieces.append)
                     if failure(msg):
                         return msg
-                    out.writeframes(trim_tail(b"".join(pieces), sample_rate) if len(lines) > 1
+                    out.writeframes(fit_pause(b"".join(pieces), sample_rate) if len(lines) > 1
                                     else b"".join(pieces))
             partial.replace(output_path)
             return msg

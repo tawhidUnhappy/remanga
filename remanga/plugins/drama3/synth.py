@@ -86,6 +86,12 @@ class Drama3Synthesizer(BaseWorkerSynthesizer):
     # 0.7/0.7 ran to max_seconds, 30%.
     max_take_seconds = 45
 
+    # Between two takes (about a page each): as long as one of the voice's
+    # own longer pauses, not Kokoro's 420 ms - inside a take Drama 3 pauses
+    # 350-1,200 ms after a sentence (scripts/drama3_worker.py:fit_pause), and
+    # a page turn shorter than that sounded rushed beside them.
+    take_gap_ms = 700
+
     # Measured on the 3060: the deep male voice read a whole chapter (HimeSama
     # ch1, 14,156 characters) at 10.3 characters a second - slower than on a
     # short line (12.6-14.1), and the other voices read short lines at
