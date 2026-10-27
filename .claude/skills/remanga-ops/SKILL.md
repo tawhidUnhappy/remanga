@@ -955,6 +955,20 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   still read). `refresh=None` = each source as on opening; `list_fresh_on_open` is gone. `list_projects`
   has `manga_ids`, so `new` with any source's link opens the project. UI: `o` Sources on Chapters; rows
   name their source when there are several. Verified on a scratch copy + Pilot with the comix list stubbed.
+- **Webtoon detector tuned + a scoring harness kept (2026-10-28, user: "fix the gutter detection in webtoon
+  style manga").** `strip_score.py` (this folder) scores the proposal against all four user-marked chapters
+  (Invincible 1, Urban 1, Ghost 1+2; 369 cuts) and replays the cheap steps per setting from a cached
+  measurement (`.cache/strip_score.pkl`; delete it after touching signals/gutters/borders). Scoring that is
+  fair: a cut anywhere in the same gutter, or across rows of one flat tone (busy < 4), is the same cut -
+  exact-row matching called 25 good cuts in tall white gaps "missed". Baseline 346/369 found, 47 false;
+  the false ones were captions split off their picture, app/news screens cut along their own bands and
+  tall pictures cut through figures. Tuned (detect.py SMALL_SHARE 0.6, STRONG_BORDER 0.8; quiet.py
+  CALM_SHARE 0.12; SLICER_VERSION 6): 336/369, 23 false - fewer false cuts in EVERY chapter, the user's
+  old complaint was "cuts panels in half". What is left is for Claude: `remanga-long-recap/crop.py`.
+- **AMV_CD's .venv is broken (seen 2026-10-27):** its python links into VS Code's snap revision 261, which
+  is gone (`/home/fake/snap/code/261/...`). Demucs still ran with the same CPython from
+  `~/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu` and `PYTHONPATH=AMV_CD/.venv/lib/python3.12/site-packages`.
+  Not fixed (another project) - tell the user; `uv venv` there would rebuild it.
 - **Voices are used raw (2026-10-27, user: "make sure kokoro and other tts are used raw instead of speed up or any
   other modification").** Kokoro's and Edge's `speed` settings are GONE (config field, Settings row - which even
   recommended 1.08x "YouTube pacing" - first-run recommend, worker request); both workers always read at the voice's

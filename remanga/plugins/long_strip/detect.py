@@ -14,6 +14,14 @@
                  forced; one with neither stays whole and is reported as tall,
                  for a look.
 
+2026-10-27, scored on all four of the user's marked chapters (369 cuts; a cut
+matches inside the same gutter, or across rows of one flat tone): the false
+cuts were captions split off their picture and tall pictures cut at a
+caption's edge or through a figure - so small pieces up to 0.6 (was 0.45) of
+the width are glued, a border needs 0.8 (was 0.6) to split a tall picture,
+and a calm split needs half the energy (quiet.py). False cuts 47 -> 23, cuts
+missed 23 -> 33, down in every one of the four chapters.
+
 Borders never cut a picture on their own. Measured against the user's marks
 on three chapters (253 panels), about 140 rows passed the border vote, and
 only 3 were cuts the user kept: a straight line inside a picture - a horizon,
@@ -40,8 +48,8 @@ from remanga.plugins.long_strip.signals import border_score, measure
 
 Range = tuple[int, int]
 
-SMALL_SHARE = 0.45      # a piece shorter than this x the width is glued, not a panel
-STRONG_BORDER = 0.6     # fused border score a border needs to split a tall picture
+SMALL_SHARE = 0.6       # a piece shorter than this x the width is glued, not a panel
+STRONG_BORDER = 0.8     # fused border score a border needs to split a tall picture
 # A piece whose busiest row has less grey spread than this is blank (a fade,
 # paper, JPEG noise on white): every panel the user marked on three chapters
 # has a row over 36, a soft white fade between two gutters 6.

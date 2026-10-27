@@ -30,18 +30,24 @@ Read remanga-ops (how remanga works) and remanga-thumbnails (the upload style) a
 2. **Download:** `./run.sh download -p P` lists the chapters (a fallback chapter shows its language),
    then `-c all`. comix.to goes through the user's own Firefox helper - they must be at the PC to pass
    Cloudflare checks; say so before starting.
-3. **Panel marks:** `PYTHONPATH=. .venv/bin/python .claude/skills/remanga-long-recap/detect.py P 1,2.1,...`
-   (MAGI v3, headless, reading order from project.json). Then review EVERY page:
-   `.venv/bin/python -I .claude/skills/remanga-long-recap/overlay.py projects/P/chapters/chapter_N OUT 4 460`
-   (4 pages a sheet, numbered boxes, a 0-1000 grid); zoom a doubtful page with `1 900 N-N`.
-   Fix crops.json directly: `box_1000` is **[ymin, xmin, ymax, xmax]** in thousandths; edited pages
-   get `src: "manual"`, `user_decided: true`, `custom_order: true`, panel_ids renumbered 1..n;
-   `"exact": true` only for a page whose marks overlap on purpose (no snapping). MAGI misses seen:
-   a thin sliver between panels marked as a panel (drop it, or join it to its panel); a caption box
-   straddling two panels split between them (one mark); a top box swallowing the panel under an
-   overhanging figure; a tall figure over several frames given one whole-page box. Lilina-san: 6 of
-   80 pages. Then `./run.sh pdf -p P -c all` cuts the panels; check every fixed page's panels with
-   `panelsheet.py OUT.jpg 330 330 6 <panel pngs>` and that marks == panel files per page.
+3. **Panel marks** - with `crop.py` (this folder), the same way for page manga and webtoons:
+   first the machine's proposal, then Claude reads sheets with coordinates on them and writes a few
+   lines of plain text. Page manga: `PYTHONPATH=. .venv/bin/python .claude/skills/remanga-long-recap/detect.py P 1,2.1,...`
+   (MAGI v3, headless); a webtoon proposes itself (the long-strip detector). Then, per chapter:
+   - `crop.py show P N OUT [first-last]` - page manga: 4 pages a sheet, the marks numbered in reading
+     order on a 0-1000 grid (zoom one page with `overlay.py chapter_dir OUT 1 900 N-N`); webtoon: the
+     strip in columns of 2,400 rows with a ruler in chapter rows and every proposed cut labelled.
+   - write `plan.txt` and `crop.py apply P N plan.txt` - page manga: `page 6: y1,x1,y2,x2 / ...`
+     (thousandths, reading order; `page 5 exact: ...` keeps overlaps; `page 13: none`); webtoon:
+     `split ROW`, `join ROW`, `move ROW NEWROW`, `drop ROW`, `add TOP BOTTOM` on the proposal.
+   - `crop.py check P N OUT` cuts the panels with remanga's cutter and writes contact sheets - look
+     at every fixed page. (Or run `./run.sh pdf -p P -c all`, which also cuts.)
+   MAGI misses seen on page manga: a thin sliver between panels marked as a panel; a caption box
+   straddling two panels split between them; a top box swallowing the panel under an overhanging
+   figure; a tall figure over several frames given one whole-page box (Lilina-san: 6 of 80 pages).
+   The webtoon detector's leftovers (2026-10-27, 90% of the user's cuts found): captions split off
+   their picture, app/news screens cut along their own bands, tall pictures cut in a calm stretch -
+   `join` them; a picture split by the artist with no gutter can be missed - `split` it.
 4. **Narration** - the long part, done well. Read `prompts/narration.md` whole first. Read the pages
    2 a sheet with the final ids drawn: `overlay.py chapter_dir OUT 2 620`. Write one JSON object a
    line per panel, in order, as you go ({"panel", "text"}; credits/ads/titles `{"panel", "skip": ...,

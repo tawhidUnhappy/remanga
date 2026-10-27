@@ -19,7 +19,7 @@ import numpy as np
 
 TALL = 1.8              # height / width above which a picture is split
 MIDDLE = (0.25, 0.75)   # where in the picture a cut may go
-CALM_SHARE = 0.25
+CALM_SHARE = 0.12       # 0.25 until 2026-10-27: cut tall pictures through figures (detect.py)
 MIN_PIECE = 0.6         # height / width a piece must keep
 
 
