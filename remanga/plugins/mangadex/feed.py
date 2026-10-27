@@ -10,6 +10,7 @@ from typing import Any
 
 from remanga import activity
 from remanga.chapters import chapter_key
+from remanga.languages import language_rank, wanted_languages
 
 BASE_URL = "https://api.mangadex.org"
 
@@ -19,15 +20,11 @@ class ChapterFeed:
 
     def wanted_languages(self) -> list[str]:
         """The configured language, then the fallbacks in order ("*" = any)."""
-        return list(dict.fromkeys([self.config.language, *self.config.fallback_languages]))
+        return wanted_languages(self.config)
 
     def language_rank(self, language: str) -> int | None:
-        """How wanted an upload in `language` is: 0 = the configured language,
-        then each fallback in order; None = not wanted at all."""
-        for rank, wanted in enumerate(self.wanted_languages()):
-            if wanted in (language, "*"):
-                return rank
-        return None
+        """How wanted an upload in `language` is (remanga.languages)."""
+        return language_rank(language, self.wanted_languages())
 
     def list_chapters(self, manga_id: str) -> list[dict[str, Any]]:
         """Fetch all chapters for a manga in the wanted languages (every

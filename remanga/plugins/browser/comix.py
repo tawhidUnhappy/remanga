@@ -26,6 +26,7 @@ from remanga import activity
 from remanga.chapters import chapter_key, chapter_sort_key, page_stem
 from remanga.config import DownloaderConfig
 from remanga.console import console, escape as _esc
+from remanga.languages import language_rank, wanted_languages
 from remanga.paths import (
     get_chapter_dir,
     load_project_metadata,
@@ -80,22 +81,26 @@ def _well_formed(chapter: dict[str, Any], site: str) -> bool:
     return not url or (urlparse(url).scheme in ("http", "https") and urlparse(url).netloc == urlparse(site).netloc)
 
 
-def _best_per_number(chapters: list[dict[str, Any]], language: str, site: str = "") -> list[dict[str, Any]]:
+def _best_per_number(chapters: list[dict[str, Any]], wanted: list[str], site: str = "") -> list[dict[str, Any]]:
     """One upload per chapter number - several groups often post the same
-    chapter: the official one, else the most voted, else the newest."""
+    chapter: in the most wanted language it is out in (remanga.languages:
+    the configured one, then each fallback), then the official one, else the
+    most voted, else the newest. Until 2026-10-27 the language was filtered
+    over the whole list, so a chapter out only in another language vanished
+    whenever any other chapter was in English."""
     chapters = [c for c in chapters if _well_formed(c, site)] if site else chapters
-    if any(c.get("language") for c in chapters):
-        same = [c for c in chapters if str(c.get("language", "")).lower().startswith(language.lower())]
-        chapters = same or chapters
     best: dict[str, dict[str, Any]] = {}
     for c in chapters:
+        place = language_rank(str(c.get("language") or ""), wanted)
+        if place is None:
+            continue
         key = chapter_key(c["number"])
-        rank = (bool(c.get("official")), c.get("votes") or 0, int(c["id"]) if str(c["id"]).isdigit() else 0)
+        rank = (-place, bool(c.get("official")), c.get("votes") or 0, int(c["id"]) if str(c["id"]).isdigit() else 0)
         if key not in best or rank > best[key]["_rank"]:
             best[key] = {**c, "_rank": rank}
     listing = [{"chapter": str(c["number"]), "chapter_id": str(c["id"]), "pages": c.get("pages") or None,
                 "title": (c.get("name") or "").strip(), "group": (c.get("group") or "").strip(),
-                "url": c.get("url", "")} for c in best.values()]
+                "url": c.get("url", ""), "language": str(c.get("language") or "").lower()} for c in best.values()]
     return sorted(listing, key=lambda c: chapter_sort_key(c["chapter"]))
 
 
@@ -213,7 +218,7 @@ class ComixClient(ChapterListMixin):
     def _rows(self, project: str, hid: str, state: ListState) -> list[dict[str, Any]]:
         """The chapter list as known: the best upload of every chapter seen, and
         a row for every chapter number between not looked up yet."""
-        chapters = _best_per_number(state.listed() or list(state.items.values()), self.config.language,
+        chapters = _best_per_number(state.listed() or list(state.items.values()), wanted_languages(self.config),
                                     self._urls.get(hid, ""))
         rows = chapters + state.placeholders({chapter_key(c["chapter"]) for c in chapters})
         rows.sort(key=lambda c: chapter_sort_key(c["chapter"]))
@@ -276,8 +281,12 @@ class ComixClient(ChapterListMixin):
                                   force_refresh: bool = False, session: Session | None = None) -> list[dict[str, Any]]:
         hid = self._resolve_manga_id(project_name, manga_id_or_url)
         chapters = [dict(c) for c in self._remote_chapters(project_name, hid, force_refresh, session)]
+        wanted = wanted_languages(self.config)
         for entry in chapters:
             entry["status"] = self._local_chapter_status(project_name, entry["chapter"], None)
+            # Out only in a fallback language: shown with it, and another
+            # source with it in the configured language is preferred.
+            entry["fallback"] = language_rank(entry.get("language", ""), wanted) not in (0, None)
         return chapters
 
     # ---- downloading
@@ -344,7 +353,7 @@ class ComixClient(ChapterListMixin):
             update_manifest_chapter(project, chapter, "pages", {
                 "source": SOURCE, "chapter_id": entry["chapter_id"], "manga_id": hid, "url": url,
                 "total_pages": total, "quality": "original", "timestamp": time.time(), "verified": verified,
-                **(extra or {}),
+                "language": entry.get("language", ""), **(extra or {}),
             })
 
         record(0, False)

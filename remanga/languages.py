@@ -24,6 +24,26 @@ NAMES = {
 }
 
 
+def wanted_languages(config) -> list[str]:
+    """A downloader config's languages in order of preference: its language,
+    then each fallback ("*" = any)."""
+    return list(dict.fromkeys([config.language, *config.fallback_languages]))
+
+
+def language_rank(language: str, wanted: list[str]) -> int | None:
+    """Where an upload in `language` stands among `wanted`: 0 = the first,
+    None = not wanted at all. A code also covers its regional forms ("en"
+    takes "en-us"), and an upload that names no language counts as the
+    first - a site that does not say is taken at its word."""
+    code = (language or "").lower()
+    if not code:
+        return 0
+    for rank, want in enumerate(w.lower() for w in wanted):
+        if want == "*" or code == want or code.startswith(want + "-"):
+            return rank
+    return None
+
+
 def language_name(code: str) -> str:
     """"Indonesian (id)" - the code alone when it is not a known one."""
     name = NAMES.get(code.lower())
