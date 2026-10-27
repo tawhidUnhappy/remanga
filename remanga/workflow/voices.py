@@ -62,5 +62,10 @@ def sample_voices(config: RemangaConfig, text: str = SAMPLE_TEXT) -> list[Path]:
         f"{engine.display_name} voices, each reading:\n\n{text}\n\n"
         + (f"Delivery asked for: {delivery}\n\n" if delivery else "")
         + "\n".join(f"{name}.wav - {hint}" for name, hint in voices) + "\n", encoding="utf-8")
-    console.print(f"[bold green]✓ {len(written)} sample(s) in[/] {_esc(str(out_dir))}")
+    from remanga.workflow.voice_video import labelled_video
+
+    video = labelled_video([(name, hint, wav) for (name, hint), wav in zip(voices, written, strict=True)],
+                           f"{engine.display_name} voices", out_dir / "ALL-in-a-row.mp4", config.audio.sample_rate)
+    console.print(f"[bold green]✓ {len(written)} sample(s) in[/] {_esc(str(out_dir))} [dim](and {_esc(video.name)}: "
+                  f"every voice in a row, each under a card naming it)[/]")
     return written

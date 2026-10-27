@@ -8,6 +8,7 @@ from remanga.config.base import ConfigModel
 from remanga.plugins.kokoro.voices import (
     DEFAULT_VOICE,
     KOKORO_VOICES,
+    VOICE_BY_NAME,
     KokoroVoice,
     lang_code_for,
     marked_label,
@@ -23,6 +24,11 @@ class KokoroConfig(ConfigModel):
     # own pace: no speed setting (user, 2026-10-27: "used raw instead of
     # speed up or any other modification"). An old config's "speed" is ignored.
     voice: str = DEFAULT_VOICE
+    # A second voice blended into it (Settings - Mix with; user request,
+    # 2026-10-27): the two voice packs averaged, `mix_share` of the second -
+    # a voice of its own. "" = no mix. The accent stays the first voice's.
+    mix_voice: str = ""
+    mix_share: float = 0.3
     hf_repo_id: str = "hexgrad/Kokoro-82M"
     model_dir: str = "checkpoints/kokoro_82m"
     # Kokoro's native output rate; the pipeline resamples from here.
@@ -39,12 +45,25 @@ class KokoroConfig(ConfigModel):
         return voice_spec(self.voice)
 
     @property
+    def mix(self) -> KokoroVoice | None:
+        """The voice blended in, when a real mix is set."""
+        other = VOICE_BY_NAME.get((self.mix_voice or "").strip())
+        return other if other and other.name != self.spec.name and 0 < self.mix_share < 1 else None
+
+    @property
+    def mix_percent(self) -> int:
+        return round(self.mix_share * 100)
+
+    @property
     def voice_label(self) -> str:
-        return marked_label(self.spec)
+        mix = self.mix
+        return f"{self.spec.label} + {self.mix_percent}% {mix.label}" if mix else marked_label(self.spec)
 
     @property
     def voice_detail(self) -> str:
-        return f"{self.spec.label} ({self.spec.name}, grade {self.spec.grade})"
+        mix = self.mix
+        blend = f", {self.mix_percent}% {mix.name} mixed in" if mix else ""
+        return f"{self.spec.label} ({self.spec.name}, grade {self.spec.grade}{blend})"
 
     @property
     def lang_code(self) -> str:
@@ -55,4 +74,7 @@ class KokoroConfig(ConfigModel):
     def identity(self) -> dict[str, Any]:
         # "speed": 1.0 stays so takes made before the setting went are still
         # the same recipe (store/versions.py) and are reused, not read again.
-        return {"engine": "kokoro", "voice": self.voice, "speed": 1.0}
+        identity: dict[str, Any] = {"engine": "kokoro", "voice": self.voice, "speed": 1.0}
+        if self.mix:  # another voice: its takes are its own
+            identity.update(mix=self.mix.name, mix_percent=self.mix_percent)
+        return identity

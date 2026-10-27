@@ -71,10 +71,16 @@ class KokoroSynthesizer(BaseWorkerSynthesizer):
 
     def _build_request(self, text: str, output_wav: Path, voice: str | None = None) -> dict[str, Any]:
         """One panel's request: the text in the voice, read raw - at the
-        voice's own pace, nothing done to the audio afterwards."""
-        return {
+        voice's own pace, nothing done to the audio afterwards. The
+        configured voice comes with its mix, if one is set; a voice named for
+        one call (the voice sampler) is that voice alone."""
+        request = {
             "cmd": "synthesize",
             "voice": voice or self.engine_config.voice,
             "text": text,
             "output_path": str(output_wav.resolve()),
         }
+        mix = None if voice else self.engine_config.mix
+        if mix:
+            request.update(mix_voice=mix.name, mix_percent=self.engine_config.mix_percent)
+        return request

@@ -21,7 +21,8 @@ handed over without it reaching for huggingface_hub.
 
 Protocol (newline-delimited JSON, one message per line):
   Parent -> worker: {"cmd": "synthesize", "voice": ..., "text": ...,
-                     "output_path": ...}   (read at the voice's own pace)
+                     "output_path": ..., ["mix_voice": ..., "mix_percent": n]}
+                     (read at the voice's own pace; a mix blends in another voice)
   `voice` is one of Kokoro's built-in voice names (see
   remanga/plugins/kokoro/voices.py) - there is no reference clip and no
   cloning. It is sent per request rather than fixed at spawn because
@@ -54,6 +55,21 @@ warnings.filterwarnings("ignore")
 def send(obj: dict) -> None:
     real_stdout.write(json.dumps(obj) + "\n")
     real_stdout.flush()
+
+
+def mixed_pack(model_dir: Path, voice: str, other: str, percent: int) -> str:
+    """A voice of two: `other`'s pack blended into `voice`'s, `percent` of
+    it - made once, then kept beside the voice packs."""
+    import torch
+
+    path = model_dir / "voices" / "mixes" / f"{voice}+{other}-{percent:02d}.pt"
+    if not path.exists():
+        packs = [torch.load(model_dir / "voices" / f"{name}.pt", weights_only=True) for name in (voice, other)]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        partial = path.with_name(path.stem + ".part.pt")
+        torch.save(packs[0] * (1 - percent / 100) + packs[1] * (percent / 100), partial)
+        partial.replace(path)
+    return str(path)
 
 
 def main() -> None:
@@ -114,6 +130,8 @@ def main() -> None:
             # skips the Hub entirely; anything else it would try to download.
             voice_pack = model_dir / "voices" / f"{req['voice']}.pt"
             voice = str(voice_pack) if voice_pack.exists() else req["voice"]
+            if req.get("mix_voice"):
+                voice = mixed_pack(model_dir, req["voice"], req["mix_voice"], int(req["mix_percent"]))
 
             chunks: list = []
             with contextlib.redirect_stdout(io.StringIO()):
