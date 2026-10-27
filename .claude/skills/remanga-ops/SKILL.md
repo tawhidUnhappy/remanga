@@ -953,6 +953,20 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   still read). `refresh=None` = each source as on opening; `list_fresh_on_open` is gone. `list_projects`
   has `manga_ids`, so `new` with any source's link opens the project. UI: `o` Sources on Chapters; rows
   name their source when there are several. Verified on a scratch copy + Pilot with the comix list stubbed.
+- **New Drama 3 voices by audition (2026-10-27, user: deep_male "ok but not my favorite", "make some more
+  voice and let me hear them").** A described voice = cue + seed: the worker makes
+  `checkpoints/speech_cpp/voices/<name>-s<seed>-v1.voice.gguf` once (keyed by NAME and SEED, not the cue - change
+  a cue and the old file is still used; keep a shipped cue word for word). Auditions went through
+  Drama3Synthesizer with `_build_request` overridden (voice, cue, voice_seed), the same passage for every voice,
+  `write_master` to -14 LUFS (it MOVES the raw take), faster-whisper + `align()` for dropped words (all 17: 97-100%,
+  misses were only name spellings), autocorrelation F0. Seed beats description: 3 of 8 "male" cues came out at
+  179-204 Hz (female range) under seeds 2/3 - measure pitch before presenting. ~65-75 s a voice incl. its voice
+  file. The user wanted a VIDEO, not an mp3 roll-up: one card per voice (number, name, pitch, pace, file, the
+  batch list with this one lit) - build it from looped stills (`-loop 1 -t` per card + concat FILTER); the
+  concat demuxer cut the last card short or ran 23 s long. Picked: `smooth_young_male` (batch 2 #8, ~82 Hz,
+  14.8 chars/s on the passage), now in DRAMA_VOICES and the user's config. Samples:
+  global/voice/samples/drama3-{new,casual}-voices-2026-10-27/. A voice-file clone of a REAL recording is
+  still not built; only the user's own voice or a consenting speaker (a YouTuber's video was declined).
 - **Chapters not out in English (2026-10-27, user: "even if all chapters are not english translated hope you
   can handle other language as well"; Lilina-san ch 2.2 was on MangaDex in Indonesian only).**
   `downloader.fallback_languages` (default `["*"]`): `feed.py` asks MangaDex for every wanted language (no

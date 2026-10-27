@@ -32,6 +32,11 @@ DRAMA_VOICES: tuple[DramaVoice, ...] = (
                "friendly storyteller"),
     DramaVoice("calm_female", "Calm female narrator", "[soft, calm female narrator voice]",
                "gentle, audiobook"),
+    # Picked by ear from 17 auditioned descriptions (2026-10-27): seed 1 gives a smooth,
+    # slightly deep young man (~82 Hz). The cue must stay word for word - with the seed,
+    # it is what the voice file was made from.
+    DramaVoice("smooth_young_male", "Smooth young male narrator",
+               "[smooth, slightly deep young man's voice, casual]", "smooth, slightly deep, casual"),
     DramaVoice("model", "Model's choice", "",
                "no description - the model picks, and the seed decides"),
 )

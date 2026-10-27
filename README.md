@@ -440,7 +440,7 @@ Every setting is in `config.json` and applies to every project:
 | Key | Default | Meaning |
 |---|---|---|
 | `tts.engine` | picked the first time remanga opens | who narrates - any `tts` plug-in: `drama3` (best quality, slow, a big GPU), `kokoro` (fixed voices, seconds a chapter, any machine) or `edge` (online, fast) |
-| `tts.drama3.voice` / `.seed` / `.voice_file` | `deep_male` / 1 / true | Drama 3's described narrator (`deep_male`, `warm_male`, `warm_female`, `calm_female`, `model`), the seed that picks it - another seed is another narrator - and whether takes are read from a voice file of it (`checkpoints/speech_cpp/voices/`) |
+| `tts.drama3.voice` / `.seed` / `.voice_file` | `deep_male` / 1 / true | Drama 3's described narrator (`deep_male`, `warm_male`, `warm_female`, `calm_female`, `smooth_young_male`, `model`), the seed that picks it - another seed is another narrator - and whether takes are read from a voice file of it (`checkpoints/speech_cpp/voices/`) |
 | `tts.drama3.gpu_headroom_gb` | 2.5 | GPU memory kept free for Drama 3's working buffers; 0 ran a 12 GB card out of memory |
 | `tts.kokoro.voice` / `.speed` | `af_heart` / 1.0 | Kokoro's voice and pace - 1.0 is its own (about 185 words a minute); past about 1.35 it drops the pauses between sentences |
 | `tts.volume_boost_db` | 0 | gain on each clip; leave at 0 - `audio.volume_lufs` sets the level |
