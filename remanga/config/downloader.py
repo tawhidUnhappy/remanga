@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+from pydantic import Field
+
 from remanga.config.base import ConfigModel
 
 
 class DownloaderConfig(ConfigModel):
     language: str = "en"
+    # A chapter nobody has put out in `language` is taken in the first of
+    # these that has it ("*" = any language, the newest upload). The
+    # narration is still written in English: the PDF tells the LLM which
+    # language the lettering is in (remanga/languages.py).
+    fallback_languages: list[str] = Field(default_factory=lambda: ["*"])
     image_quality: str = "data"  # 'data' (high quality) or 'data-saver'
     max_retries: int = 3
     retry_delay_seconds: int = 2

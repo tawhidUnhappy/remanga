@@ -185,7 +185,8 @@ def merge_listings(per_source: list[tuple[str, list[dict[str, Any]]]],
                    downloaded_by: dict[str, str]) -> list[dict[str, Any]]:
     """One row per chapter number from several sources' lists (in order of
     preference): the row of the source that downloaded it, else the first
-    with pages, else the first listing it at all."""
+    with pages in the configured language, else the first with pages, else
+    the first listing it at all."""
     chosen: dict[str, dict[str, Any]] = {}
     for name, rows in per_source:
         for row in rows:
@@ -197,7 +198,8 @@ def merge_listings(per_source: list[tuple[str, list[dict[str, Any]]]],
                 continue
             if downloaded_by.get(key) == have["source"]:
                 continue
-            if downloaded_by.get(key) == name or (not _has_pages(have) and _has_pages(row)):
+            if downloaded_by.get(key) == name or (not _has_pages(have) and _has_pages(row)) or (
+                    have.get("fallback") and not row.get("fallback") and _has_pages(row)):
                 chosen[key] = row
     return sorted(chosen.values(), key=lambda row: chapter_sort_key(row["chapter"]))
 
@@ -208,12 +210,14 @@ def plan_downloads(project: str, chapters: list[str], config) -> list[tuple[plug
     the first source listing it with pages. A source whose list costs nothing
     (MangaDex's API) is asked; one read through a browser is not opened just
     to plan - it takes whatever the cheap ones don't have, and its own
-    download looks each chapter up."""
+    download looks each chapter up. A chapter a cheap source has only in a
+    fallback language goes to it last, when no other source took it."""
     sources = project_sources(project)
     names = {source.name for source, _ in sources}
     before = _downloaded_by(project)
     todo = {chapter_key(ch): ch for ch in chapters}
     plan: dict[str, list[str]] = {source.name: [] for source, _ in sources}
+    fallback: dict[str, str] = {}  # chapter key -> a cheap source with it in another language
     for key, chapter in list(todo.items()):
         if before.get(key) in names:
             plan[before[key]].append(chapter)
@@ -223,12 +227,18 @@ def plan_downloads(project: str, chapters: list[str], config) -> list[tuple[plug
             break
         if source.fresh_on_open:
             rows = client(source, config).list_chapters_with_status(project, entry["manga_url"] or entry["manga_id"])
-            listed = {chapter_key(row["chapter"]) for row in rows if _has_pages(row)}
+            rows = [row for row in rows if _has_pages(row)]
+            for row in rows:
+                if row.get("fallback"):
+                    fallback.setdefault(chapter_key(row["chapter"]), source.name)
+            listed = {chapter_key(row["chapter"]) for row in rows if not row.get("fallback")}
             claimed = [key for key in todo if key in listed]
         else:
             claimed = list(todo)
         for key in claimed:
             plan[source.name].append(todo.pop(key))
+    for key in [key for key in todo if key in fallback]:
+        plan[fallback[key]].append(todo.pop(key))
     if todo:
         raise ValueError(f"No source of this project has chapter {', '.join(todo.values())} with pages.")
     return [(source, entry, sorted(plan[source.name], key=chapter_sort_key))

@@ -308,6 +308,13 @@ Upload **`prompts/narration.md`** and the chapter's PDF (all parts, if it was sp
 The PDF's first page tells the LLM the manga, the chapter, the reading direction, the panel list, and
 the story so far, so there is nothing to type.
 
+**A chapter that is not out in English** is still downloaded, in another language: MangaDex's
+English upload is taken when there is one, and otherwise the newest upload in any language
+(`downloader.fallback_languages`, `["*"]`; list languages there, like `["es", "*"]`, to prefer some, or
+`[]` for English only). The chapter list shows such a chapter's language (`id`, `pt-br`, ...), and its
+PDF says `lettering: Indonesian (id)`, so the LLM reads the bubbles in that language and narrates in
+English as always. In a project with several sites, a chapter in English on any of them comes first.
+
 The LLM replies with one JSON block in two sections. Paste all of it into
 `chapters/chapter_N/narration.json` (the code fence can come along):
 - `narration` - one entry per panel, in reading order: the narration read while that panel is on
@@ -449,5 +456,6 @@ Every setting is in `config.json` and applies to every project:
 | `marker.min_mark_ratio` | 0.03 | the smallest a panel mark may be, as a fraction of the page's shorter side. A drag under it makes no mark (the box says so while you drag), and a resize handle stops there instead of collapsing a panel to a sliver |
 | `cropper.margin_padding_pixels` / `snap_to_gutters` | 8 / true | breathing room around a cut panel, and snapping its edges to the real gutters |
 | `downloader.language` | `en` | MangaDex translation language |
+| `downloader.fallback_languages` | `["*"]` | the languages a chapter not out in `language` is taken in, in order; `*` = any (the newest upload), `[]` = none |
 | `downloader.browser_profile` | `""` | the Firefox profile a [browser site](#sites-that-need-a-real-browser) is downloaded in (Firefox's default when empty) |
 | `downloader.browser_chapter_pause_seconds` / `browser_scroll_seconds` / `browser_list_pause_seconds` | 10 / 0.8 / 8 | the pause between two chapters, between two screens of one, and between two pages of the chapter list, each varied by ±30% |

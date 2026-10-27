@@ -8,6 +8,7 @@ from pathlib import Path
 from remanga.chapters import chapter_sort_key
 from remanga.config import RemangaConfig
 from remanga.console import console, display_path, escape as _esc
+from remanga.languages import lettering as chapter_lettering
 from remanga.narration import PROMPT_PATH, panel_files, story_so_far
 from remanga.paths import chapter_identity_fields, get_narration_path, get_pdf_dir
 from remanga.pdf import build_panels_pdf
@@ -44,6 +45,11 @@ def make_pdf(project: str, chapter: str, config: RemangaConfig) -> PdfResult:
     settle_reading_direction(project)
 
     info = dict(chapter_identity_fields(project, chapter))
+    # A chapter downloaded in a fallback language: the LLM is told which, so
+    # it reads the bubbles in it and still narrates in the narration's language.
+    lettering = chapter_lettering(project, chapter, config.subtitles.language)
+    if lettering:
+        info["lettering"] = lettering
     # The story so far: the memory section of the nearest earlier chapter's
     # pasted narration - only ever an earlier chapter's, so re-making a PDF
     # never hands the LLM what happens later.

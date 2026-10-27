@@ -19,6 +19,8 @@ def print_chapter_list(listing: list[dict]) -> None:
         title = f"  [dim]{_esc(entry['title'])}[/]" if entry.get("title") else ""
         if several:
             title = f"  [cyan]{_esc(entry.get('source', ''))}[/]{title}"
+        if entry.get("fallback"):  # not out in the configured language - this is the language it comes in
+            title = f"  [magenta]{_esc(entry.get('language', ''))}[/]{title}"
         pages = f"[dim]{entry['pages']}p[/]" if entry.get("pages") else ""
         console.print(f"  ch {entry['chapter']:>6}  {marks.get(entry['status'], entry['status']):<24} {pages}{title}")
 

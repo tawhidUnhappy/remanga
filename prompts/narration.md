@@ -9,6 +9,11 @@ panel. The viewers have not read the manga: what they hear is the story.
 A PDF of one chapter's panels, already cut out and in reading order (sometimes split into
 `panels_1.pdf`, `panels_2.pdf`, ...; wait for every part). Each part starts with a text page giving:
 - the manga, the chapter, and `reading_direction` (`right_to_left` for Japanese manga);
+- `lettering`, only when the chapter is not lettered in English (it was not out in English, so it
+  came in another language): the language its bubbles, captions and signs are in. Read them in
+  that language and narrate in English as always - the viewers hear English. Names and terms keep
+  the spelling the story so far gives them, since the same people should sound the same in every
+  chapter;
 - the panel IDs in this part and in the whole chapter (`001_001_01`, `001_001_02`, ...), in reading
   order. The images that follow are those panels, in that order. An ID is
   `chapter_page_panel`, so `001_004_02` is the second panel of page four;

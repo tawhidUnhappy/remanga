@@ -77,13 +77,14 @@ def pages_to_fetch(project: str, chapter: str, pages: list[PageFile], chapter_id
 
 
 def record_pages(project: str, chapter: str, chapter_id: str, manga_id: str, total: int, quality: str,
-                 verified: bool) -> None:
+                 verified: bool, language: str) -> None:
     """The chapter's record in manifest.json, replaced on every attempt:
     `verified` is False before the first page is fetched and True only once
     every page is on disk and checked, so a run killed mid-download leaves a
-    record saying so - the chapter listing reads it."""
+    record saying so - the chapter listing reads it. `language` is the one
+    the pages are lettered in (remanga.languages reads it for the PDF)."""
     update_manifest_chapter(project, chapter, "pages", {
         "source": "mangadex", "chapter_id": chapter_id, "manga_id": manga_id, "total_pages": total,
-        "quality": quality,
+        "quality": quality, "language": language,
         "timestamp": time.time(), "verified": verified,
     })

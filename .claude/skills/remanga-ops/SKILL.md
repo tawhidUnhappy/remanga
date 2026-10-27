@@ -953,6 +953,26 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   still read). `refresh=None` = each source as on opening; `list_fresh_on_open` is gone. `list_projects`
   has `manga_ids`, so `new` with any source's link opens the project. UI: `o` Sources on Chapters; rows
   name their source when there are several. Verified on a scratch copy + Pilot with the comix list stubbed.
+- **Chapters not out in English (2026-10-27, user: "even if all chapters are not english translated hope you
+  can handle other language as well"; Lilina-san ch 2.2 was on MangaDex in Indonesian only).**
+  `downloader.fallback_languages` (default `["*"]`): `feed.py` asks MangaDex for every wanted language (no
+  `translatedLanguage[]` filter when `*`), `latest_versions` keeps per chapter the best `language_rank`
+  (configured language 0, then each fallback; `*` = any), newest within a rank. `chapter_uploads` /
+  `find_chapter` (were chapter_ids / find_chapter_id) return `{"id", "language"}`; the download records
+  `language` in manifest pages; listing rows carry `language` + `fallback` (computed at read time) and the
+  list cache is reused only for the same `languages` list. `sources.merge_listings`/`plan_downloads`: a
+  configured-language row from ANY source beats a fallback row (a browser source takes what is left first;
+  cheap sources' fallback rows go last) - so HimeSama's comix.to English chapters never lose to a MangaDex
+  Spanish one. `remanga/languages.py:lettering` -> the PDF text page's `lettering: Indonesian (id)` line,
+  explained in prompts/narration.md "What you receive". `[]` restores English-only. Verified live: default
+  -> 1 en, 2.1 en, 2.2 id; `[]` -> 2.2 absent; stubbed sources for the merge/plan rules.
+- **MAGI misses seen on page manga (Lilina-san, 2026-10-27; 6 of 80 pages needed a hand fix):** a thin
+  sliver between two panels (sky gap, a strip of forest canopy) marked as its own panel - drop it or join it
+  to the panel it belongs to; a caption box straddling two panels split between them - one mark for both; a
+  top box swallowing the panel under its overhanging figure; a tall figure drawn over three frames got ONE
+  whole-page box plus a strip - three marks and the page `"exact": true` (no snapping: the overlap is
+  wanted). Marker crops are never painted out (`paint_out` is for structured crops only), so an overlap is
+  cut exactly as drawn. Review at 4 pages a sheet with numbered boxes, then cut panels on a contact sheet.
 - **Browser sites (comix.to, `remanga/plugins/browser/`), 2026-10-15.** comix.to = Cloudflare
   managed challenge + signed/encrypted API, so the user's own Firefox does the work through the
   remanga helper extension (temporary add-on, polls 127.0.0.1:47615). Don't "simplify" to

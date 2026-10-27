@@ -141,6 +141,8 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
             title = Text(chapter.get("title") or "", style="dim")
             if several:  # which site each chapter comes from
                 title = Text.assemble((f"{chapter.get('source') or 'local'}  ", "cyan"), title)
+            if chapter.get("fallback"):  # not out in the configured language: the one it comes in
+                title = Text.assemble((f"{chapter.get('language')}  ", "magenta"), title)
             kept = len(store_versions.load(self.project, chapter["chapter"])["versions"])
             table.add_row(self._mark(index), chapter["chapter"], Text(label, style=style), pages,
                           Text(stage, style="green" if stage == "video done" else ""),

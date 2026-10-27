@@ -63,9 +63,11 @@ class ChapterListMixin:
         manga_id = self._resolve_manga_id(project_name, manga_id_or_url)
 
         cached = read_remote_chapter_cache(project_name, manga_id)
+        languages = self.resolver.wanted_languages()
         cache_is_fresh = (
             not force_refresh
             and cached.get("manga_id") == manga_id
+            and cached.get("languages") == languages  # a list picked for other languages is no answer
             and (time.time() - cached.get("fetched_at", 0)) < CHAPTER_LIST_CACHE_TTL_SECONDS
         )
         if cache_is_fresh:
@@ -82,13 +84,17 @@ class ChapterListMixin:
                     "chapter_id": ch["id"],
                     "pages": ch.get("attributes", {}).get("pages"),
                     "title": ch.get("attributes", {}).get("title") or "",
+                    "language": ch.get("attributes", {}).get("translatedLanguage") or "",
                 }
                 for ch in raw_chapters
                 if ch.get("attributes", {}).get("chapter")  # skip the odd chapterless "oneshot" entry
             ]
             remote_chapters.sort(key=lambda c: chapter_sort_key(c["chapter"]))
-            write_remote_chapter_cache(project_name, manga_id, remote_chapters, time.time())
+            write_remote_chapter_cache(project_name, manga_id, remote_chapters, time.time(), languages)
 
         for entry in remote_chapters:
             entry["status"] = self._local_chapter_status(project_name, entry["chapter"], entry.get("pages"))
+            # Out only in a fallback language: listed with its language, and
+            # any source with it in the configured one is preferred.
+            entry["fallback"] = entry.get("language", self.config.language) != self.config.language
         return remote_chapters

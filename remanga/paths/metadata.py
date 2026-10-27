@@ -84,11 +84,15 @@ def read_remote_chapter_cache(project_name: str, manga_id: str | None = None) ->
 
 
 def write_remote_chapter_cache(
-    project_name: str, manga_id: str, chapters: list[dict[str, Any]], fetched_at: float
+    project_name: str, manga_id: str, chapters: list[dict[str, Any]], fetched_at: float,
+    languages: list[str] | None = None,
 ) -> None:
+    """`languages`: the language preference the list was picked for, when
+    the source has one - a list read under another one is not reused."""
     manifest = read_manifest(project_name)
     manifest.setdefault("remote_chapter_lists", {})[manga_id] = {
-        "manga_id": manga_id, "fetched_at": fetched_at, "chapters": chapters}
+        "manga_id": manga_id, "fetched_at": fetched_at, "chapters": chapters,
+        **({"languages": languages} if languages is not None else {})}
     write_json(get_manifest_path(project_name), manifest)
 
 

@@ -1,7 +1,7 @@
-"""A manga's chapter feed on MangaDex: every chapter in the configured language,
-paged politely, one entry kept per chapter number (the newest upload), and a
-chapter's id looked up in it. Mixed into MangaDexResolver (resolve.py), which
-provides request_with_retry and config."""
+"""A manga's chapter feed on MangaDex: every chapter in the configured language
+(or, where it has none, in a fallback language), paged politely, one entry
+kept per chapter number, and a chapter's upload looked up in it. Mixed into
+MangaDexResolver (resolve.py), which provides request_with_retry and config."""
 
 from __future__ import annotations
 
@@ -17,11 +17,26 @@ BASE_URL = "https://api.mangadex.org"
 class ChapterFeed:
     """The feed half of MangaDexResolver."""
 
+    def wanted_languages(self) -> list[str]:
+        """The configured language, then the fallbacks in order ("*" = any)."""
+        return list(dict.fromkeys([self.config.language, *self.config.fallback_languages]))
+
+    def language_rank(self, language: str) -> int | None:
+        """How wanted an upload in `language` is: 0 = the configured language,
+        then each fallback in order; None = not wanted at all."""
+        for rank, wanted in enumerate(self.wanted_languages()):
+            if wanted in (language, "*"):
+                return rank
+        return None
+
     def list_chapters(self, manga_id: str) -> list[dict[str, Any]]:
-        """Fetch all chapters for a manga filtered by language with pagination and polite pacing."""
+        """Fetch all chapters for a manga in the wanted languages (every
+        language when a fallback is "*"), with pagination and polite pacing."""
         chapters: list[dict[str, Any]] = []
         limit = 100
         offset = 0
+        wanted = self.wanted_languages()
+        languages = {} if "*" in wanted else {"translatedLanguage[]": wanted}
 
         with activity.progress("Fetching the chapter list from MangaDex") as bar:
             while True:
@@ -29,7 +44,7 @@ class ChapterFeed:
                     "GET",
                     f"{BASE_URL}/manga/{manga_id}/feed",
                     params={
-                        "translatedLanguage[]": [self.config.language],
+                        **languages,
                         "order[chapter]": "asc",
                         "limit": limit,
                         "offset": offset
@@ -65,9 +80,9 @@ class ChapterFeed:
                 return str(value)
         return ""
 
-    @classmethod
-    def latest_versions(cls, chapters: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """One entry per chapter number - the most recently readable one.
+    def latest_versions(self, chapters: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """One entry per chapter number: in the most wanted language it is out
+        in (language_rank), and in that language the most recently readable.
 
         A manga's feed routinely carries the same chapter number more than
         once in the same language: two scanlation groups translated it, or
@@ -81,34 +96,42 @@ class ChapterFeed:
         compared by chapter_key (leading zeros and "7" vs "7.0" are the same
         chapter), and the input order is preserved - the feed is already in
         reading order and this must not disturb it."""
-        best: dict[str, dict[str, Any]] = {}
+        best: dict[str, tuple[int, dict[str, Any]]] = {}
         order: list[str] = []
         for chapter in chapters:
-            key = chapter_key(str(chapter.get("attributes", {}).get("chapter") or ""))
-            if key not in best:
-                best[key] = chapter
+            attributes = chapter.get("attributes", {})
+            rank = self.language_rank(str(attributes.get("translatedLanguage") or ""))
+            if rank is None:
+                continue
+            key = chapter_key(str(attributes.get("chapter") or ""))
+            have = best.get(key)
+            if have is None:
                 order.append(key)
-            elif cls._published_at(chapter) > cls._published_at(best[key]):
-                best[key] = chapter
-        return [best[key] for key in order]
+            if have is None or rank < have[0] or (
+                    rank == have[0] and self._published_at(chapter) > self._published_at(have[1])):
+                best[key] = (rank, chapter)
+        return [best[key][1] for key in order]
 
-    def chapter_ids(self, manga_id: str) -> dict[str, str]:
-        """Every chapter this manga's feed lists, as chapter_key -> the id of
-        its latest upload (see latest_versions). One feed fetch, however many
-        chapters are then looked up in it - a bulk download resolves every
-        chapter from a single call instead of paging the whole feed again
-        per chapter."""
+    def chapter_uploads(self, manga_id: str) -> dict[str, dict[str, str]]:
+        """Every chapter this manga's feed lists, as chapter_key -> the upload
+        latest_versions takes: {"id", "language"}. One feed fetch, however
+        many chapters are then looked up in it - a bulk download resolves
+        every chapter from a single call instead of paging the whole feed
+        again per chapter."""
         return {
-            chapter_key(str(ch.get("attributes", {}).get("chapter") or "")): ch["id"]
+            chapter_key(str(ch["attributes"]["chapter"])): {
+                "id": ch["id"], "language": str(ch["attributes"].get("translatedLanguage") or "")}
             for ch in self.latest_versions(self.list_chapters(manga_id))
             if ch.get("attributes", {}).get("chapter")
         }
 
-    def find_chapter_id(self, manga_id: str, chapter_num: str,
-                        ids: dict[str, str] | None = None) -> str:
-        """The id of this chapter's latest upload. `ids` is a chapter_ids()
-        result to look it up in; without one, the feed is fetched for it."""
-        found = (ids if ids is not None else self.chapter_ids(manga_id)).get(chapter_key(chapter_num))
+    def find_chapter(self, manga_id: str, chapter_num: str,
+                     uploads: dict[str, dict[str, str]] | None = None) -> dict[str, str]:
+        """This chapter's upload, {"id", "language"}. `uploads` is a
+        chapter_uploads() result to look it up in; without one, the feed is
+        fetched for it."""
+        found = (uploads if uploads is not None else self.chapter_uploads(manga_id)).get(chapter_key(chapter_num))
         if found is None:
-            raise ValueError(f"Chapter '{chapter_num}' not found for manga ID: {manga_id}")
+            raise ValueError(f"Chapter '{chapter_num}' not found for manga ID {manga_id} in "
+                             f"{', '.join(self.wanted_languages())}")
         return found

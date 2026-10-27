@@ -15,6 +15,7 @@ from remanga import activity
 from remanga.chapters import chapter_key
 from remanga.config import DownloaderConfig
 from remanga.console import console, escape as _esc
+from remanga.languages import language_name
 from remanga.paths import (
     get_chapter_dir,
     load_project_metadata,
@@ -42,7 +43,7 @@ class MangaDexDownloader(ChapterListMixin):
 
     def download_chapter(
         self, manga_id_or_url: str | None, chapter_num: str, project_name: str, force: bool = False,
-        chapter_ids: dict[str, str] | None = None,
+        chapter_uploads: dict[str, dict[str, str]] | None = None,
     ) -> Path:
         """Downloads a chapter's pages - or, for a chapter already here,
         re-verifies them and fetches only what's wrong or missing.
@@ -58,9 +59,11 @@ class MangaDexDownloader(ChapterListMixin):
         - a freshly fetched page is checked the same way before it's written.
         `force=True` wipes pages/ first and fetches every page from scratch.
 
-        `chapter_ids` is a MangaDexResolver.chapter_ids() result, passed by
-        download_chapters so a bulk download reads the feed once rather than
-        once per chapter."""
+        `chapter_uploads` is a MangaDexResolver.chapter_uploads() result,
+        passed by download_chapters so a bulk download reads the feed once
+        rather than once per chapter. A chapter not out in the configured
+        language comes in a fallback one (downloader.fallback_languages), and
+        the language it came in is recorded for the PDF's text page."""
         dest_dir = get_chapter_dir(project_name, chapter_num) / "pages"
         if force and dest_dir.exists():
             remove_paths(dest_dir.iterdir())
@@ -74,7 +77,13 @@ class MangaDexDownloader(ChapterListMixin):
         remember_manga(self.resolver, project_name, source, manga_id, chapter_num)
 
         dest_dir.mkdir(parents=True, exist_ok=True)
-        chapter_id = self.resolver.find_chapter_id(manga_id, chapter_num, chapter_ids)
+        upload = self.resolver.find_chapter(manga_id, chapter_num, chapter_uploads)
+        chapter_id, language = upload["id"], upload["language"]
+        if language != self.config.language:
+            wanted = language_name(self.config.language)
+            console.print(f"[yellow]Chapter {_esc(chapter_num)} is not out in {_esc(wanted)} - taking the "
+                          f"{_esc(language_name(language))} upload. The PDF tells the LLM, which still narrates "
+                          f"in English.[/]")
         console.print(f"[cyan]Retrieving MangaDex node for chapter {chapter_num}...[/]")
         server_info = self.resolver.request_with_retry("GET", f"{BASE_URL}/at-home/server/{chapter_id}").json()
         chapter_data = server_info["chapter"]
@@ -86,7 +95,7 @@ class MangaDexDownloader(ChapterListMixin):
         todo = pages_to_fetch(project_name, chapter_num, pages, chapter_id, quality)
 
         def record(verified: bool) -> None:
-            record_pages(project_name, chapter_num, chapter_id, manga_id, len(pages), quality, verified)
+            record_pages(project_name, chapter_num, chapter_id, manga_id, len(pages), quality, verified, language)
 
         if not todo:
             record(True)
@@ -174,12 +183,12 @@ class MangaDexDownloader(ChapterListMixin):
         per chapter downloaded."""
         seen: set = set()
         ordered_nums = [n for n in chapter_nums if not (chapter_key(n) in seen or seen.add(chapter_key(n)))]
-        ids = self.resolver.chapter_ids(self._resolve_manga_id(project_name, manga_id_or_url))
+        uploads = self.resolver.chapter_uploads(self._resolve_manga_id(project_name, manga_id_or_url))
 
         results: list[Path] = []
         for i, chapter_num in enumerate(ordered_nums, start=1):
             console.print(f"[bold cyan]({i}/{len(ordered_nums)}) Chapter {chapter_num}[/]")
             results.append(self.download_chapter(
-                manga_id_or_url, chapter_num, project_name, force=force, chapter_ids=ids,
+                manga_id_or_url, chapter_num, project_name, force=force, chapter_uploads=uploads,
             ))
         return results
