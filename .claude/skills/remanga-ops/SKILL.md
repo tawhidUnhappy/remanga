@@ -9,6 +9,8 @@ Repo: github.com/tawhidUnhappy/remanga · push straight to `main`, no PR flow.
 Entry points: `./bootstrap.sh` (idempotent setup) · `./pipeline.sh` (menus) · `./run.sh <cmd>`.
 
 **User rules**
+- **"<manga link> start to end long" = the whole job** (download -> marks -> narration by Claude -> videos ->
+  long video -> A/B/C titles + thumbnails + ONE description): follow `remanga-long-recap` (its SKILL.md + tools).
 - After code/repo changes, commit and push to `origin/main` without being asked (hold off only on
   something clearly unfinished or broken).
 - Your job is the CODE, not the user's manga. A chapter that comes out wrong means fixing the code or

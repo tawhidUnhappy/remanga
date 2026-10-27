@@ -17,9 +17,11 @@ Each finished video gets its own copy beside it, named like it:
 titles and thumbnails sit beside them as title_b.txt, thumbnail_b.json, ...;
 then each set gets a folder of its own beside the video instead - A/ (title.txt,
 thumbnail.json), B/ (title_b.txt, thumbnail_b.json), ... - each holding its
-title.txt, thumbnail.jpg and description.txt, so a pair is never mixed up
-(user request, 2026-10-14). description_b.txt, ... give a set its own
-description (user request, 2026-10-24); a set without one gets description.txt.
+title.txt and thumbnail.jpg, so a pair is never mixed up (user request,
+2026-10-14), and the one description is written once beside the video as
+<P>_ch<N>_description.txt (user request, 2026-10-27). Only description_b.txt,
+... (user request, 2026-10-24) put a description in each set's folder - its
+own, or description.txt for a set without one.
 Make video empties the
 video folder, so the copies are written again after every render (make_video,
 remix_video, join_chapters) - the templates in upload/ are never touched.
@@ -85,7 +87,9 @@ def has_templates(project: str) -> bool:
 def stamp(project: str, label: str, video: Path) -> list[Path]:
     """Writes this video's title, description and thumbnail beside it from
     the project's templates - whichever exist; with A/B variants, one folder
-    per letter. Returns what it wrote."""
+    per letter, and the one description (when there is only description.txt)
+    once beside the video rather than a copy in every folder. Returns what
+    it wrote."""
     templates = get_upload_dir(project)
     fields = chapter_fields(label)
     base = video.name.removesuffix("_recap.mp4")
@@ -95,6 +99,10 @@ def stamp(project: str, label: str, video: Path) -> list[Path]:
     letters = sorted(set(titles) | set(thumbnails) | set(descriptions)) or ["A"]
 
     stamp_fields = {**fields, "timestamps": timestamps(project, label, video)} if descriptions else fields
+    # Test & Compare tests titles and thumbnails only, so variants usually
+    # share one description: it is written once, beside the video (user
+    # request, 2026-10-27 - three identical copies were noise).
+    one_description = len(letters) > 1 and set(descriptions) == {"A"}
 
     _clear_stamps(video.parent, base)
     written: list[Path] = []
@@ -117,10 +125,9 @@ def stamp(project: str, label: str, video: Path) -> list[Path]:
                               f"YouTube cuts it at {YOUTUBE_TITLE_LIMIT}[/]")
             names["title"].write_text(title + "\n", encoding="utf-8")
             written.append(names["title"])
-        template = descriptions.get(letter) or descriptions.get("A")
+        template = None if one_description else descriptions.get(letter) or descriptions.get("A")
         if template is not None:
-            text = _fill(template.read_text(encoding="utf-8").strip(), stamp_fields)
-            names["description"].write_text(re.sub(r"\n{3,}", "\n\n", text) + "\n", encoding="utf-8")
+            _write_description(template, stamp_fields, names["description"])
             written.append(names["description"])
         if letter in thumbnails:
             from remanga.video.thumbnail import compose
@@ -129,7 +136,16 @@ def stamp(project: str, label: str, video: Path) -> list[Path]:
             spec.setdefault("project", project)
             compose(spec, fields=fields).save(names["thumbnail"], quality=92)
             written.append(names["thumbnail"])
+    if one_description:
+        shared = video.with_name(f"{base}_description.txt")
+        _write_description(descriptions["A"], stamp_fields, shared)
+        written.append(shared)
     return written
+
+
+def _write_description(template: Path, fields: dict[str, str], out: Path) -> None:
+    text = _fill(template.read_text(encoding="utf-8").strip(), fields)
+    out.write_text(re.sub(r"\n{3,}", "\n\n", text) + "\n", encoding="utf-8")
 
 
 def _variants(folder: Path, name: str) -> list[Path]:

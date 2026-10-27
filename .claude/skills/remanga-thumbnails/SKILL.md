@@ -32,8 +32,10 @@ YouTube cuts at 100).
 
 `title_b.txt`, `thumbnail_b.json`, `_c`, ... beside the plain ones are stamped too - one per angle
 of the hook, title and thumbnail paired by letter, for YouTube Test & Compare. With variants, each
-video gets a folder per letter beside it - `A/` `B/` `C/`, each holding title.txt, thumbnail.jpg,
-description.txt (user: flat `_b`/`_c` files were confusing to pair); a single set stays flat files. `description_b.txt`, ... give a set its own description (user asked for three, 2026-10-24); a set without one gets description.txt. **Newer word (2026-10-27, Lilina-san): "ab testing material (thumbnail, title) three times and make description just one time"** - three title/thumbnail pairs (A/B/C, YouTube Test & Compare's maximum) and ONE description.txt shared by all; only write description_b/_c when asked. YouTube's Test & Compare only tests titles and thumbnails, so a B/C description is pasted by hand. Each variant a different angle (premise / role swap /
+video gets a folder per letter beside it - `A/` `B/` `C/`, each holding title.txt and thumbnail.jpg
+(user: flat `_b`/`_c` files were confusing to pair), and the ONE description is written once beside
+the video as `<P>_ch<N>_description.txt` (user, 2026-10-27: not a copy per folder); a single set stays
+flat files. `description_b.txt`, ... give a set its own description inside its folder (user asked for three, 2026-10-24); a set without one then gets description.txt. **Newer word (2026-10-27, Lilina-san): "ab testing material (thumbnail, title) three times and make description just one time"** - three title/thumbnail pairs (A/B/C, YouTube Test & Compare's maximum) and ONE description.txt shared by all; only write description_b/_c when asked. YouTube's Test & Compare only tests titles and thumbnails, so a B/C description is pasted by hand. Each variant a different angle (premise / role swap /
 power), not the same idea reworded. Keep graphic gore out of a thumbnail (Ghost Story Club's bleeding eye 001_114_01): YouTube restricts it, which costs reach - a creepy face sells as well.
 
 **The user's corrections (2026-10-14), over the style below:** never let an arrow touch a face - a
