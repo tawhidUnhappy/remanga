@@ -33,7 +33,7 @@ YouTube cuts at 100).
 `title_b.txt`, `thumbnail_b.json`, `_c`, ... beside the plain ones are stamped too - one per angle
 of the hook, title and thumbnail paired by letter, for YouTube Test & Compare. With variants, each
 video gets a folder per letter beside it - `A/` `B/` `C/`, each holding title.txt, thumbnail.jpg,
-description.txt (user: flat `_b`/`_c` files were confusing to pair); a single set stays flat files. `description_b.txt`, ... give a set its own description (user asked for three, 2026-10-24); a set without one gets description.txt. YouTube's Test & Compare only tests titles and thumbnails, so a B/C description is pasted by hand. Each variant a different angle (premise / role swap /
+description.txt (user: flat `_b`/`_c` files were confusing to pair); a single set stays flat files. `description_b.txt`, ... give a set its own description (user asked for three, 2026-10-24); a set without one gets description.txt. **Newer word (2026-10-27, Lilina-san): "ab testing material (thumbnail, title) three times and make description just one time"** - three title/thumbnail pairs (A/B/C, YouTube Test & Compare's maximum) and ONE description.txt shared by all; only write description_b/_c when asked. YouTube's Test & Compare only tests titles and thumbnails, so a B/C description is pasted by hand. Each variant a different angle (premise / role swap /
 power), not the same idea reworded. Keep graphic gore out of a thumbnail (Ghost Story Club's bleeding eye 001_114_01): YouTube restricts it, which costs reach - a creepy face sells as well.
 
 **The user's corrections (2026-10-14), over the style below:** never let an arrow touch a face - a
@@ -66,6 +66,9 @@ one label each - the two roles of the premise:
 | Ghost Story Club A (upload/, 2026-10-18) | principal's swollen grin 001_056_02 (zoom 1.08 cy 0.47 clears his bubble), w 0.55 -> red WELCOME | teacher frozen in terror 001_067_01 zoom 1.15 -> YOU'RE NEXT under her chin |
 | Ghost Story Club B (thumbnail_b) | Lee Jun's blank stare 001_063_01 zoom 1.25 cy 0.47 -> HE DIED. | the "Restarting from the checkpoint." window 001_117_01 zoom 1.3 cx 0.6 -> red LOOP?! |
 | Ghost Story Club C (thumbnail_c) | teacher's cheeks bulging 001_076_01 zoom 1.9 cx 0.74 cy 0.58 -> red CURSED top-left | Lee Jun panicking 001_084_01 zoom 1.55 cx 0.38 cy 0.43 -> NO WAY OUT; CH badge bottom-left |
+| Lilina-san A (upload/, 2026-10-27) | colour COVER page 001_001.jpg box [395,300,912,918] (right edge stops before the orange logo, which starts ~x 920 at her shoulder; heart hands kept) w 0.47 | Rex sweating, bread in arms 001_014_02 cy 0.47 (caption box below cropped out) -> SHE HATES ME?! (was WHY ONLY ME?!, which repeated the title's "every adventurer but me") |
+| Lilina-san B (thumbnail_b) | cold stare 001_014_01 zoom 1.5 cx 0.57 cy 0.475 (clears her bubble's tail), navy/ice duotone -> light-blue ICE COLD | blushing, hands on cheeks 001_050_01 zoom 1.8 cx 0.69 cy 0.33, maroon/pink duotone -> SECRETLY IN LOVE |
+| Lilina-san C (thumbnail_c) | roaring red bear 001_030_01 zoom 1.5 cy 0.3, maroon/peach duotone -> ONE HIT (116) | Rex calm 001_034_02 zoom 2.1 cx 0.77 cy 0.62 (zoomed past Belze and a bubble tail) |
 | If Her Flag Breaks (ch1, old) | Souta beside a flag on a classmate's head (001_034_02, zoom 1.2 cx 0.4: crops out a YEAH. bubble) -> FLAG BREAKER | Nanami from the COLOUR cover (page 001_002.jpg, box 530,60,1085,1000 - between the title text and the spine) -> NO FLAG?! |
 
 ## Steps (run with remanga's `.venv/bin/python`)
