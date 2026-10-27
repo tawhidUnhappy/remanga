@@ -194,7 +194,7 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   long videos keep the previous one in the store (long.json "previous"). Kept per the user's pick "keep
   expensive, drop cheap": takes, words, videos - never the master WAV or picture.mp4. Footguns: every writer must
   write tmp + rename (they do: write_json, atomic_export, render partial.replace) - writing INTO a placed file hits
-  the read-only store file; a version's label must come from the narration's own voice (audio_timing.json
+  the read-only store file; **`link_or_copy` leaked a hidden `.<video>.<hex>.tmp` hard link every time a video was placed over a link of itself** (rename() between two links of one file is a POSIX no-op; 29 found 2026-10-27 in three projects) - now it returns early when dest is already src and always unlinks tmp. Leftovers in older projects are harmless extra names for the same inode; a version's label must come from the narration's own voice (audio_timing.json
   "voice"), not the settings now (a re-mixed old Fenrir narration was labelled Heart); Kokoro is NOT byte-
   deterministic on the GPU (fresh take: same length to the sample, diff -45 dB RMS) - compare_fresh judges "same
   reading" by size within 1%, identical word list, 95th-pct word-time drift <= 0.15 s (one whisper word drifted

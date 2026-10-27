@@ -64,12 +64,18 @@ def link_or_copy(src: Path, dest: Path) -> None:
     """`src` at `dest` as a hard link (a copy across disks), in one step: a
     reader of `dest` sees the old file or the new one, nothing between."""
     dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.exists() and dest.samefile(src):
+        return  # already this very file
     tmp = dest.with_name(f".{dest.name}.{uuid.uuid4().hex[:8]}.tmp")
     try:
         os.link(src, tmp)
     except OSError:
         shutil.copy2(src, tmp)
     tmp.replace(dest)
+    # rename() between two links of one file does nothing and leaves both
+    # names (POSIX) - which left a hidden .tmp beside every video placed
+    # again (2026-10-27: 29 of them across three projects).
+    tmp.unlink(missing_ok=True)
 
 
 def _pid_alive(pid: int) -> bool:
