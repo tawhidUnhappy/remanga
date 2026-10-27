@@ -249,6 +249,14 @@ class Worker:
         return {"ok": True, "stop": msg.get("stop"), "seed": msg.get("seed")}
 
 
+def out_of_memory(error: dict) -> bool:
+    """A load that ran short of GPU memory: speech.cpp's out_of_memory, or its
+    "cannot reserve the memory of the codec's decoding", which came back under
+    another code and so was not tried again (2026-10-27: the whole chapter run
+    stopped on the first load, with the card free a minute later)."""
+    return error.get("code") == "out_of_memory" or "cannot reserve the memory" in str(error.get("message", ""))
+
+
 def hold_gpu_memory(gib: float):
     """`gib` GiB taken on the first GPU through the CUDA driver, as a release
     function - or a no-op one when there is no CUDA driver or nothing to
@@ -303,13 +311,14 @@ def main() -> None:
             sys.exit(1)
         release()
         error = ready.get("error") or {}
-        if ready.get("type") == "ready" or error.get("code") != "out_of_memory" or headroom <= 0:
+        if ready.get("type") == "ready" or not out_of_memory(error) or headroom <= 0:
             break
         print(f"drama3_worker: the load ran out of GPU memory with {headroom:g} GiB held - trying again "
               f"with more", file=sys.stderr, flush=True)
         worker.speech.wait(timeout=30)
     if ready.get("type") != "ready":
-        send({"event": "error", "error": f"Failed to load Drama 3: {error.get('message', ready)}"})
+        send({"event": "error", "error": f"Failed to load Drama 3 ({error.get('code', '?')}): "
+                                         f"{error.get('message', ready)}"})
         sys.exit(1)
     if ready.get("protocol") != PROTOCOL:
         send({"event": "error", "error": f"speech.cpp speaks worker protocol {ready.get('protocol')}, "

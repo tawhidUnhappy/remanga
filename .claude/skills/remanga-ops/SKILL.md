@@ -597,7 +597,7 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
     and has no knob (no env var either - checked `strings`). Fix: the worker holds `gpu_headroom_gb`
     (2.5) through libcuda/ctypes (cuMemAlloc + cuMemsetD8 + 1 s so the Vulkan budget sees it) while
     speech.cpp loads, frees it once ready, and retries a load that OOMs with +1 GiB (3 tries); 2.0 and
-    2.5 each failed once without the memset/retry. Measured: 1.5 GiB -> 11 of 40 layers on GPU, 2.0 -> 10,
+    2.5 each failed once without the memset/retry. **2026-10-27: "cannot reserve the memory of the codec's decoding on Vulkan0" came back under a code other than out_of_memory, so it was NOT retried and a whole 3-chapter run stopped on the first load (card free a minute later).** `drama3_worker.out_of_memory` now retries that message too, and the load error names speech.cpp's code. Measured: 1.5 GiB -> 11 of 40 layers on GPU, 2.0 -> 10,
     3.0 -> 7; load 46-61 s; RTFx 0.82 on a line, ~0.7 a chapter in page takes; ~15 GB RAM; deep_male 10.3
     chars/s over a chapter (12.6-14.1 on a line, others 15.5-17.2); F0 deep/warm male ~100 Hz, females ~165.
 - **Delete chosen (user request, 2026-09-30)** - chapter menu "Delete chosen...":
