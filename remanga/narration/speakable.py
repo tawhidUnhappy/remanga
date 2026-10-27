@@ -47,7 +47,7 @@ _PUNCTUATION = set(".,;:?!'\"()-—")
 
 
 def _keeps(char: str) -> bool:
-    return char.isascii() and (char.isalnum() or char == " ") or char in _PUNCTUATION
+    return (char.isascii() and (char.isalnum() or char == " ")) or char in _PUNCTUATION
 
 
 def _fold_accents(text: str) -> str:

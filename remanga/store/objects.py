@@ -21,6 +21,7 @@ when it was made. The rules, which nothing in remanga goes around:
 from __future__ import annotations
 
 import contextlib
+import glob
 import hashlib
 import json
 import os
@@ -65,6 +66,7 @@ def link_or_copy(src: Path, dest: Path) -> None:
     reader of `dest` sees the old file or the new one, nothing between."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists() and dest.samefile(src):
+        _sweep_leftovers(dest)
         return  # already this very file
     tmp = dest.with_name(f".{dest.name}.{uuid.uuid4().hex[:8]}.tmp")
     try:
@@ -76,6 +78,18 @@ def link_or_copy(src: Path, dest: Path) -> None:
     # names (POSIX) - which left a hidden .tmp beside every video placed
     # again (2026-10-27: 29 of them across three projects).
     tmp.unlink(missing_ok=True)
+    _sweep_leftovers(dest)
+
+
+def _sweep_leftovers(dest: Path) -> None:
+    """The hidden temp names that leak left beside `dest`: only those that
+    are this very file (a second name for it, no data of their own) go."""
+    for stray in dest.parent.glob(f".{glob.escape(dest.name)}.*.tmp"):
+        try:
+            if stray.samefile(dest):
+                stray.unlink()
+        except OSError:
+            pass
 
 
 def _pid_alive(pid: int) -> bool:

@@ -248,9 +248,15 @@ def _join_chapters(project: str, chapters: list[str], config: RemangaConfig) -> 
     # folder is left empty, and goes.
     if not any(work.iterdir()):
         work.rmdir()
-    keep_long(project, final, {"label": label, "chapters": chapters})
+    made = keep_long(project, final, {"label": label, "chapters": chapters})
+    # Each earlier video once, and never the one now in place: joining the
+    # same chapters again used to list the same video twice (2026-10-27).
+    history: list[dict] = []
+    for entry in previous:
+        if entry.get("key") != made and all(entry.get("key") != kept.get("key") for kept in history):
+            history.append(entry)
     write_json(folder / INFO, {"label": label, "chapters": chapters, "intro": intro_identity(config.video),
-                               "starts": _starts(chapters, lengths, _duration(final)), "previous": previous})
+                               "starts": _starts(chapters, lengths, _duration(final)), "previous": history})
     console.print(f"[bold green]✓ Long video of chapters {_esc(label)}:[/] {_esc(str(final))}")
     stamp_quietly(project, label, final)
     return final

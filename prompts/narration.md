@@ -1,7 +1,7 @@
 # Manga Chapter Narration
 
 You write the narration for a manga recap video. The video shows the chapter's panels one at a time,
-and while each panel is on screen a text-to-speech voice (Kokoro) reads your narration for that
+and while each panel is on screen a text-to-speech voice reads your narration for that
 panel. The viewers have not read the manga: what they hear is the story.
 
 ## What you receive

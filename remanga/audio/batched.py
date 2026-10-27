@@ -64,17 +64,19 @@ def _read_timings(subtitles_config: SubtitlesConfig, batches: list[Batch], audio
 # sentences, Kokoro's measured median over a whole-chapter take. Inside a take
 # the engine's pauses are the only ones; between takes the edges are trimmed
 # to the speech, and butted together the next line started the instant the
-# last ended, which the user found weird (2026-10-04). Not a setting.
+# last ended, which the user found weird (2026-10-04). Not a setting; an
+# engine whose own pauses run longer sets `take_gap_ms` (Drama 3).
 TAKE_GAP_MS = 420
 
 
-def _batch_rows(batch: Batch, spans, timeline_ms: int, index_from: int) -> tuple[list[dict[str, Any]], int]:
+def _batch_rows(batch: Batch, spans, timeline_ms: int, index_from: int,
+                gap_ms: int = TAKE_GAP_MS) -> tuple[list[dict[str, Any]], int]:
     """One batch's panels as audio_timing rows, laid end to end, and
-    TAKE_GAP_MS after the batch's last panel before the next take."""
+    `gap_ms` after the batch's last panel before the next take."""
     rows: list[dict[str, Any]] = []
     last = len(spans) - 1
     for offset, span in enumerate(spans):
-        pause = TAKE_GAP_MS if offset == last else 0
+        pause = gap_ms if offset == last else 0
         rows.append(panel_timing(
             index_from + offset, span.panel_id, batch.panels[offset].text, f"{batch.name}.wav",
             start_ms=timeline_ms, duration_ms=span.end_ms - span.start_ms,
@@ -126,6 +128,14 @@ def narrate_in_batches(synth, tts_config: TTSConfig, audio_config: AudioConfig,
 
     console.print(f"[cyan]Narrating {len(panels)} panel(s) as {len(planned)} take(s) with "
                   f"{synth.display_name}[/] [dim]({_esc(tts_config.voice_detail)})[/]")
+    # A voice name the engine does not know (a typo in config.json) narrates
+    # in the engine's default - said here, before a chapter is read in it.
+    block = tts_config.engine_block
+    names = {name for name, _ in block.voice_options()} if hasattr(block, "voice_options") else set()
+    asked = str(getattr(block, "voice", "") or "")
+    if names and asked and asked not in names:
+        console.print(f"[bold yellow]Voice {_esc(asked)!r} is not one of {synth.display_name}'s voices - "
+                      f"narrating in its default instead. Pick one in Settings.[/]")
 
     # What comes back is what is on disk, which is not the plan when a take
     # collapsed and had to be split. A take made before, in any version of the
@@ -157,7 +167,8 @@ def narrate_in_batches(synth, tts_config: TTSConfig, audio_config: AudioConfig,
         spans = _trim_edges(alignment.spans, audio_dir / f"{batch.name}.wav")
         console.print(f"[dim]{_esc(batch.name)}: {alignment.match_ratio:.0%} of the narration "
                       f"matched what was said[/]")
-        batch_rows, timeline_ms = _batch_rows(batch, spans, timeline_ms, len(rows) + 1)
+        batch_rows, timeline_ms = _batch_rows(batch, spans, timeline_ms, len(rows) + 1,
+                                              getattr(synth, "take_gap_ms", TAKE_GAP_MS))
         rows.extend(batch_rows)
 
     # Every take checked and placed: kept, so no version of the chapter ever

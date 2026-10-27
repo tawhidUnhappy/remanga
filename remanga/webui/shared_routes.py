@@ -37,13 +37,13 @@ def add_guard(app: Flask) -> None:
         if not _host_ok(request.host):
             abort(403)
         if request.method in _SAFE_METHODS:
-            return None
+            return
         origin = request.headers.get("Origin")
         if origin is not None and origin.rstrip("/") != request.host_url.rstrip("/"):
             abort(403)
         if request.headers.get("Sec-Fetch-Site", "same-origin") not in ("same-origin", "none"):
             abort(403)
-        return None
+        return
 
     @app.after_request
     def headers(response):
