@@ -21,7 +21,7 @@ handed over without it reaching for huggingface_hub.
 
 Protocol (newline-delimited JSON, one message per line):
   Parent -> worker: {"cmd": "synthesize", "voice": ..., "text": ...,
-                     "output_path": ..., "speed": ...}
+                     "output_path": ...}   (read at the voice's own pace)
   `voice` is one of Kokoro's built-in voice names (see
   remanga/plugins/kokoro/voices.py) - there is no reference clip and no
   cloning. It is sent per request rather than fixed at spawn because
@@ -117,9 +117,8 @@ def main() -> None:
 
             chunks: list = []
             with contextlib.redirect_stdout(io.StringIO()):
-                for _, _, audio in pipeline(
-                    req["text"], voice=voice, speed=float(req.get("speed", 1.0)),
-                ):
+                # Always the voice's own pace (speed 1): read raw, never sped up.
+                for _, _, audio in pipeline(req["text"], voice=voice, speed=1):
                     if audio is None:
                         continue
                     arr = audio.detach().cpu().numpy() if hasattr(audio, "detach") else np.asarray(audio)

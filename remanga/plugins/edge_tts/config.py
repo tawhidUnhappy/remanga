@@ -44,12 +44,11 @@ def voice_spec(name: str) -> EdgeVoice:
 
 
 class EdgeConfig(ConfigModel):
-    """Microsoft Edge's online voices in `.tools/venv-edge-tts`. `speed` is
-    sent to the service as its rate (1.1 = "+10%"), so it changes the pace,
-    not the pitch."""
+    """Microsoft Edge's online voices in `.tools/venv-edge-tts`, read raw at
+    the service's own pace: no speed/rate setting (user, 2026-10-27: "used
+    raw instead of speed up"). An old config's "speed" is ignored."""
 
     voice: str = DEFAULT_VOICE
-    speed: float = 1.0
 
     def voice_options(self) -> list[tuple[str, str]]:
         """Every voice it can read in - see KokoroConfig.voice_options."""
@@ -60,11 +59,6 @@ class EdgeConfig(ConfigModel):
         return voice_spec(self.voice)
 
     @property
-    def rate(self) -> str:
-        """The service's rate string: 1.0 -> "+0%", 1.08 -> "+8%"."""
-        return f"{round((self.speed - 1.0) * 100):+d}%"
-
-    @property
     def voice_label(self) -> str:
         return self.spec.label
 
@@ -73,4 +67,6 @@ class EdgeConfig(ConfigModel):
         return f"{self.spec.label} ({self.spec.name})"
 
     def identity(self) -> dict[str, Any]:
-        return {"engine": "edge", "voice": self.spec.name, "speed": round(self.speed, 3)}
+        # "speed": 1.0 stays so takes made before the setting went are still
+        # the same recipe (store/versions.py) and are reused.
+        return {"engine": "edge", "voice": self.spec.name, "speed": 1.0}

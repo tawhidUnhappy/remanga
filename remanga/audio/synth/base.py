@@ -14,7 +14,6 @@ from typing import Any
 
 from remanga.audio.batching import CHARS_PER_SECOND, MAX_TAKE_SECONDS
 from remanga.config import AudioConfig
-from remanga.ffmpeg_io import run_ffmpeg
 from remanga.models import ModelManager
 from remanga.narration.speakable import speakable
 from remanga.workers import ToolWorker
@@ -134,34 +133,11 @@ class BaseWorkerSynthesizer(ToolWorker):
         raise NotImplementedError
 
     def _post_synthesize(self, output_wav: Path, request: dict[str, Any]) -> None:
-        """Optional per-engine post-processing after a successful synthesis
-        (e.g. an ffmpeg-atempo speed fallback). No-op by default."""
+        """Optional per-engine step after a successful synthesis. No engine
+        uses one: every voice is used raw - never sped up, slowed or filtered
+        (user, 2026-10-27; the old ffmpeg-atempo speed fallback is gone)."""
 
     # --- requests to the worker -----------------------------------------
-    def _adjust_audio_speed(self, wav_path: Path, speed: float) -> None:
-        """Adjusts speaking tempo using pitch-preserving FFmpeg atempo filter -
-        the fallback path for an engine/request that couldn't apply speed on
-        the model side itself."""
-        if abs(speed - 1.0) < 0.02 or not wav_path.exists():
-            return
-        temp_wav = wav_path.with_name(f"{wav_path.stem}_speedtmp.wav")
-        wav_path.rename(temp_wav)
-        tempo = max(0.5, min(2.0, speed))
-        cmd = [
-            "ffmpeg", "-y",
-            "-i", str(temp_wav),
-            "-filter:a", f"atempo={tempo}",
-            "-ar", str(self.audio_config.sample_rate),
-            str(wav_path)
-        ]
-        try:
-            run_ffmpeg(cmd, check=True)
-            if temp_wav.exists():
-                temp_wav.unlink()
-        except Exception:
-            if temp_wav.exists() and not wav_path.exists():
-                temp_wav.rename(wav_path)
-
     def synthesize(self, text: str, output_wav: Path, voice: str | None = None) -> None:
         """Synthesizes speech via this engine's worker process. Text longer
         than `chunk_max_chars` (when the engine sets one) is split on

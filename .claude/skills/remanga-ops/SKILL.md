@@ -955,6 +955,16 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   still read). `refresh=None` = each source as on opening; `list_fresh_on_open` is gone. `list_projects`
   has `manga_ids`, so `new` with any source's link opens the project. UI: `o` Sources on Chapters; rows
   name their source when there are several. Verified on a scratch copy + Pilot with the comix list stubbed.
+- **Voices are used raw (2026-10-27, user: "make sure kokoro and other tts are used raw instead of speed up or any
+  other modification").** Kokoro's and Edge's `speed` settings are GONE (config field, Settings row - which even
+  recommended 1.08x "YouTube pacing" - first-run recommend, worker request); both workers always read at the voice's
+  own pace (Kokoro `speed=1`, Edge no rate). Identities keep `"speed": 1.0` so stored takes stay the same recipe.
+  The unused ffmpeg-atempo fallback (`BaseWorkerSynthesizer._adjust_audio_speed`) is deleted. Drama 3 never had a
+  speed. What still touches TTS audio, all of it joins or level, none of it the voice: take-edge silence trimmed +
+  TAKE_GAP_MS 420 between takes + a 35 ms fade on the edge silence; Drama 3's per-sentence tail silence cut to 350 ms
+  (raw it is 0.6-1 s, outliers 2-3 s - kept, ask the user before changing it); one gain to the Volume target with a
+  peak guard only where that gain would clip; resample to 44.1 kHz; the music bed. Don't add a speed or effect knob
+  back unasked. Verified: Kokoro af_heart 15.1 chars/s, Edge Guy 14.6 on a line after the change.
 - **New Drama 3 voices by audition (2026-10-27, user: deep_male "ok but not my favorite", "make some more
   voice and let me hear them").** A described voice = cue + seed: the worker makes
   `checkpoints/speech_cpp/voices/<name>-s<seed>-v1.voice.gguf` once (keyed by NAME and SEED, not the cue - change

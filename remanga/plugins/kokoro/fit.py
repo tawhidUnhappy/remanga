@@ -6,4 +6,4 @@ from __future__ import annotations
 
 def recommend(config, machine) -> None:
     """Heart, the one voice hexgrad grades A, at its own pace."""
-    config.tts.kokoro.voice, config.tts.kokoro.speed = "af_heart", 1.0
+    config.tts.kokoro.voice = "af_heart"

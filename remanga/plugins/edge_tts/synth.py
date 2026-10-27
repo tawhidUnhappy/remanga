@@ -40,13 +40,9 @@ class EdgeSynthesizer(BaseWorkerSynthesizer):
     # the way Ming's built-in voices do. A whole chapter is one take.
     max_take_seconds = float("inf")
 
-    # Measured in en-US-GuyNeural at +0%: HimeSama chapter 1, 14,156 chars ->
-    # 842.9s (in 90s). `speed` scales it, since the service rate is the pace.
-    chars_per_second_at_1x = 16.8
-
-    @property
-    def chars_per_second(self) -> float:
-        return self.chars_per_second_at_1x * max(self.engine_config.speed, 0.1)
+    # Measured in en-US-GuyNeural at the service's own pace: HimeSama chapter
+    # 1, 14,156 chars -> 842.9s (in 90s).
+    chars_per_second = 16.8
 
     def _spawn_worker(self, model_dir: Path) -> subprocess.Popen:
         return spawn_script_worker("edge-tts", "plugins/edge_tts", "edge_tts_worker.py")
@@ -58,7 +54,6 @@ class EdgeSynthesizer(BaseWorkerSynthesizer):
         return {
             "cmd": "synthesize",
             "voice": voice or self.engine_config.spec.name,
-            "rate": self.engine_config.rate,
             "text": text,
             "output_path": str(output_wav.resolve()),
         }

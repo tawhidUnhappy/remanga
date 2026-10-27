@@ -12,4 +12,4 @@ def fits(machine: Machine) -> str | None:
 
 def recommend(config, machine: Machine) -> None:
     """Guy - the classic recap voice - at the service's own pace."""
-    config.tts.edge.voice, config.tts.edge.speed = "en-US-GuyNeural", 1.0
+    config.tts.edge.voice = "en-US-GuyNeural"

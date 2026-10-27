@@ -1,4 +1,4 @@
-"""Kokoro-82M's settings block: a named voice and a speed."""
+"""Kokoro-82M's settings block: a named voice, read at its own pace."""
 
 from __future__ import annotations
 
@@ -19,10 +19,10 @@ class KokoroConfig(ConfigModel):
     """hexgrad/Kokoro-82M in `.tools/venv-kokoro`: fixed, named voices
     (voices.py), no reference recording and no design."""
 
-    # Which of Kokoro's built-in voices narrates.
+    # Which of Kokoro's built-in voices narrates - read raw, at the voice's
+    # own pace: no speed setting (user, 2026-10-27: "used raw instead of
+    # speed up or any other modification"). An old config's "speed" is ignored.
     voice: str = DEFAULT_VOICE
-    # Speaking rate, applied by the model itself (1.0 = normal).
-    speed: float = 1.0
     hf_repo_id: str = "hexgrad/Kokoro-82M"
     model_dir: str = "checkpoints/kokoro_82m"
     # Kokoro's native output rate; the pipeline resamples from here.
@@ -53,4 +53,6 @@ class KokoroConfig(ConfigModel):
         return lang_code_for(self.voice)
 
     def identity(self) -> dict[str, Any]:
-        return {"engine": "kokoro", "voice": self.voice, "speed": round(float(self.speed), 3)}
+        # "speed": 1.0 stays so takes made before the setting went are still
+        # the same recipe (store/versions.py) and are reused, not read again.
+        return {"engine": "kokoro", "voice": self.voice, "speed": 1.0}

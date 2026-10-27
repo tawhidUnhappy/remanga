@@ -239,8 +239,11 @@ internet - and asks which engine to narrate with, listing only the ones this mac
 can't). The one picked gets its recommended settings: its best voice and how it is read. Settings → Narrator
 engine changes it later.
 
-**The sound is the narrator as it read:** no effects, no pauses cut, the whole chapter read in as few
-takes as the engine handles well (one, for most), with a narrator's pause (420 ms) between takes. Three things are yours to set: the
+**The sound is the narrator as it read:** every voice at its own pace - there is no speed setting, and nothing
+speeds up, slows down, pitches or filters a voice. remanga only joins what the engine read: the whole chapter in
+as few takes as the engine handles well (one, for most), each take's own edge silence trimmed and a narrator's
+pause (420 ms) put between takes; Drama 3 reads a sentence at a time and each comes back with silence of its own
+after it, which is cut to 350 ms (left whole it ran 0.6-1 s, sometimes 2-3 s). Three things are yours to set: the
 **Volume** of the finished chapter (-14 LUFS, YouTube's level, by default), the **Background
 music**, and how far under the voice the **Music volume** sits. (The narration presets and the voice
 effects - compressor, bass, microphone, breath, phone - are kept on the branch
@@ -442,7 +445,7 @@ Every setting is in `config.json` and applies to every project:
 | `tts.engine` | picked the first time remanga opens | who narrates - any `tts` plug-in: `drama3` (best quality, slow, a big GPU), `kokoro` (fixed voices, seconds a chapter, any machine) or `edge` (online, fast) |
 | `tts.drama3.voice` / `.seed` / `.voice_file` | `deep_male` / 1 / true | Drama 3's described narrator (`deep_male`, `warm_male`, `warm_female`, `calm_female`, `smooth_young_male`, `model`), the seed that picks it - another seed is another narrator - and whether takes are read from a voice file of it (`checkpoints/speech_cpp/voices/`) |
 | `tts.drama3.gpu_headroom_gb` | 2.5 | GPU memory kept free for Drama 3's working buffers; 0 ran a 12 GB card out of memory |
-| `tts.kokoro.voice` / `.speed` | `af_heart` / 1.0 | Kokoro's voice and pace - 1.0 is its own (about 185 words a minute); past about 1.35 it drops the pauses between sentences |
+| `tts.kokoro.voice` | `af_heart` | Kokoro's voice - read at its own pace (about 185 words a minute); there is no speed setting |
 | `tts.volume_boost_db` | 0 | gain on each clip; leave at 0 - `audio.volume_lufs` sets the level |
 | `audio.bgm_enabled` / `bgm_path` | off / - | background music |
 | `audio.bgm_below_voice_lu` | 18 | how far the music's LOUD PARTS sit under the voice, in LU - the music measured by its loud parts (a chorus, a drop), per track and chapter, so every music file, loud or quiet, peaks at the same level under the words (14 balanced, 18 subtle, 20 barely there) |

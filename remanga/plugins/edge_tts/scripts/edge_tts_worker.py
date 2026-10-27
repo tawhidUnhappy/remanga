@@ -11,7 +11,7 @@ WAV with ffmpeg, as every other engine writes. A dropped connection is tried
 again a few times before the request fails.
 
 Protocol (newline-delimited JSON, one message per line):
-  Parent -> worker: {"cmd": "synthesize", "voice": ..., "rate": "+0%", "text": ..., "output_path": ...}
+  Parent -> worker: {"cmd": "synthesize", "voice": ..., "text": ..., "output_path": ...}
   Worker -> parent (once ready): {"event": "ready"}
   Worker -> parent (per request): {"ok": true} or {"ok": false, "error": "..."}
   Parent -> worker: {"cmd": "shutdown"}  (or just close stdin)"""
@@ -38,10 +38,11 @@ def send(obj: dict) -> None:
     sys.stdout.flush()
 
 
-async def _save(text: str, voice: str, rate: str, mp3: Path) -> None:
+async def _save(text: str, voice: str, mp3: Path) -> None:
     import edge_tts
 
-    await edge_tts.Communicate(text, voice, rate=rate).save(str(mp3))
+    # The service's own pace - read raw, never sped up (no rate is sent).
+    await edge_tts.Communicate(text, voice).save(str(mp3))
 
 
 def synthesize(req: dict, ffmpeg: str) -> None:
@@ -51,7 +52,7 @@ def synthesize(req: dict, ffmpeg: str) -> None:
     error: Exception | None = None
     for attempt in range(ATTEMPTS):
         try:
-            asyncio.run(_save(req["text"], req["voice"], req.get("rate") or "+0%", mp3))
+            asyncio.run(_save(req["text"], req["voice"], mp3))
             if mp3.exists() and mp3.stat().st_size > 0:
                 break
             raise RuntimeError("the service sent no audio")
