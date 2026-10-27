@@ -17,14 +17,16 @@ if TYPE_CHECKING:
 MUSIC_EXTS = (".mp3", ".wav", ".m4a", ".ogg", ".opus", ".flac")
 
 
-MUSIC_LEVELS = ((14.0, "balanced - music clearly part of it"), (18.0, "subtle - a quiet bed, recommended"),
-                (20.0, "barely there - adds a mood, never in the way"))
+MUSIC_LEVELS = ((14.0, "balanced - music clearly part of it"), (18.0, "subtle - a quiet bed"),
+                (20.0, "barely there - adds a mood, never in the way"),
+                (23.5, "where recap channels sit (measured) - recommended"))
 
 
 # Reference points for typing a level, loudest music first.
 MUSIC_LADDER = ((8.0, "loud - fights the words, hard to follow"), (12.0, "energetic - clearly felt"),
-                (14.0, "balanced - clearly part of it"), (18.0, "subtle - a quiet bed, recommended"),
-                (20.0, "barely there - adds a mood, never in the way"), (24.0, "almost silent - lost on a phone"))
+                (14.0, "balanced - clearly part of it"), (18.0, "subtle - a quiet bed"),
+                (20.0, "barely there - adds a mood, never in the way"),
+                (23.5, "where recap channels sit (measured) - recommended"), (28.0, "almost silent - lost on a phone"))
 
 
 async def change_music(screen: SettingsScreen, config: RemangaConfig) -> None:

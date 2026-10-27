@@ -448,7 +448,7 @@ Every setting is in `config.json` and applies to every project:
 | `tts.kokoro.voice` | `af_heart` | Kokoro's voice - read at its own pace (about 185 words a minute); there is no speed setting |
 | `tts.volume_boost_db` | 0 | gain on each clip; leave at 0 - `audio.volume_lufs` sets the level |
 | `audio.bgm_enabled` / `bgm_path` | off / - | background music |
-| `audio.bgm_below_voice_lu` | 18 | how far the music's LOUD PARTS sit under the voice, in LU - the music measured by its loud parts (a chorus, a drop), per track and chapter, so every music file, loud or quiet, peaks at the same level under the words (14 balanced, 18 subtle, 20 barely there) |
+| `audio.bgm_below_voice_lu` | 23.5 | how far the music's LOUD PARTS sit under the voice, in LU - each music file measured by its loud parts (a chorus, a drop), so every track, loud or quiet, peaks at the same level under the words. 23.5 is where recap channels sit (measured against one, 2026-10-27); 14 balanced, 18 subtle, 20 barely there |
 | `audio.volume_lufs` | -14 | how loud the finished chapter is (Settings - Volume): measured, then one linear gain over the whole mix, with a peak guard only where that gain would pass -1 dBTP. -14 is YouTube's level |
 | `video.width` / `height` / `fps` | 1920 / 1080 / 24 | video size - 2560x1440 and 3840x2160 keep big panels sharp (see the quality warning), at a slower render |
 | `video.max_upscale` | 3 | how far a small panel may be enlarged to fill the frame; 0 means no cap |

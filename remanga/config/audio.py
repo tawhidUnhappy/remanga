@@ -25,10 +25,12 @@ class AudioConfig(ConfigModel):
     # How far the music's LOUD PARTS sit under the narration, in loudness
     # units (LU): the voice measured whole, the music by its loud parts
     # (audio/mix.py:music_gain_db), so a chorus or a drop never comes up
-    # louder than this, whatever the track. 18 is a quiet bed felt under every
-    # word; 20+ is barely there; under 14 it starts to mask consonants on
-    # phone speakers, which lose the music's bass but not the voice.
-    bgm_below_voice_lu: float = 18.0
+    # louder than this, whatever the track. 23.5 is where a recap channel the
+    # user likes sits, measured 2026-10-27 the same way (its voice and music
+    # pulled apart with Demucs, our own video too, to cancel the method's
+    # error): its music 3.5 LU further under than our old 20. Under 14 the
+    # music starts to mask consonants on phone speakers.
+    bgm_below_voice_lu: float = 23.5
     # The level last typed in as "Custom..." (Settings - Music volume), kept so
     # it is offered again next time beside the presets, whichever level is in
     # use. None until one has been typed.
