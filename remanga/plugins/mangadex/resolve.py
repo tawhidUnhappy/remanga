@@ -14,6 +14,20 @@ from remanga.plugins.mangadex.feed import BASE_URL, ChapterFeed
 
 # MangaDex's "Long Strip" format tag: a webtoon, read by scrolling.
 LONG_STRIP_TAG = "3e2b8dae-350e-4ab8-a8ce-016e844b9f0d"
+LONGEST_RATE_WAIT = 120  # seconds - a rate-limit wait MangaDex asks for longer than this is not believed
+
+
+def rate_limit_wait(res: requests.Response, attempt: int) -> float:
+    """Seconds to wait after a 429: what MangaDex says (X-RateLimit-Retry-After is the moment as a Unix
+    time, Retry-After a number of seconds), else a growing guess. The guess alone - 3, 6, 9, 12 s - ran out
+    before the at-home endpoint's one-minute window did while re-verifying 48 chapters (2026-10-28)."""
+    for header, moment in (("X-RateLimit-Retry-After", True), ("Retry-After", False)):
+        try:
+            seconds = float(res.headers[header]) - (time.time() if moment else 0)
+        except (KeyError, TypeError, ValueError):
+            continue
+        return min(max(seconds, 0) + 1, LONGEST_RATE_WAIT)
+    return (attempt + 1) * 3
 
 
 class MangaDexResolver(ChapterFeed):
@@ -30,8 +44,8 @@ class MangaDexResolver(ChapterFeed):
             try:
                 res = self.session.request(method, url, **kwargs)
                 if res.status_code == 429:
-                    wait_time = (attempt + 1) * 3
-                    console.print(f"[yellow]MangaDex rate limit encountered. Waiting {wait_time}s...[/]")
+                    wait_time = rate_limit_wait(res, attempt)
+                    console.print(f"[yellow]MangaDex rate limit encountered. Waiting {wait_time:.0f}s...[/]")
                     time.sleep(wait_time)
                     continue
                 res.raise_for_status()

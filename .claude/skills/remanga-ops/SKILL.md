@@ -844,6 +844,11 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   on any visible widget means content nobody can reach.
 - Decimal chapters are chapters of their own: `1-5` takes 4.5, not 5.1 (`chapters.expand_chapter_selection`).
 - MangaDex chapter list is cached 24h in manifest.json.
+- **Re-verifying a whole manga hit MangaDex's at-home rate limit (2026-10-28, 48 chapters):** `download -c all`
+  on downloaded chapters asks `at-home/server` once a chapter in quick succession (~40/min allowed); the 429
+  retry guessed 3+6+9+12 s, gave up at chapter 41 ("Request failed after retries"). `resolve.py:rate_limit_wait`
+  now waits what MangaDex says (`X-RateLimit-Retry-After` = Unix time, or `Retry-After` seconds; capped 120 s),
+  the guess only without a header. 1-40 + 41-48: all 1,576 pages "verified ... nothing to download".
 
 - **Long-strip manga / webtoons (user request, 2026-09-30)** - `remanga/plugins/long_strip/` (was `longstrip/`). A webtoon
   chapter is ~15 images of 720x5000-9900 cut through panels. `layout.is_long_strip`: project.json
