@@ -13,6 +13,12 @@ Entry points: `./bootstrap.sh` (idempotent setup) · `./pipeline.sh` (menus) · 
   long video -> A/B/C titles + thumbnails + ONE description): follow `remanga-long-recap` (its SKILL.md + tools).
 - After code/repo changes, commit and push to `origin/main` without being asked (hold off only on
   something clearly unfinished or broken).
+- **Tools live in remanga, not in a private folder of Claude's (user, 2026-10-28).** A tool Claude needs
+  for a job goes into remanga itself or into a skill folder here (`.claude/skills/<skill>/`, like
+  `remanga-long-recap/verify.py`), and adjusting existing tools is fine; new skills go in
+  `.claude/skills/`. Only drafts and notes may sit outside the repo (on /mnt/datadisk - /tmp is wiped
+  at a power-off). The same day: "make sure all pages of all chapters are downloaded and that all
+  audio are generated and not corrupt" - `remanga-long-recap/verify.py` proves it.
 - Your job is the CODE, not the user's manga. A chapter that comes out wrong means fixing the code or
   the prompt for every chapter - never hand-patching that chapter's data. Test on throwaway
   `projects/zz*` copies (or scratch dirs) and delete them after. **Never modify the user's

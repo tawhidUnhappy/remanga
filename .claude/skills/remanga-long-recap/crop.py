@@ -18,7 +18,8 @@ apply  Page manga - a line per page to set, boxes [ymin,xmin,ymax,xmax] in thous
            move 81738 81900     the cut nearest 81738 moves to 81900
            drop 1248            the panel holding row 1248 goes (credits)
            add 1000 2400        a panel of its own (overlaps allowed)
-check  Cuts the panels (remanga's own cutter) and writes contact sheets of them to OUT.
+check  Cuts the panels (remanga's own cutter), writes contact sheets of them to OUT and lists any panel
+       cut much smaller or larger than its mark (the snapper's failures) - look at those.
 Lines starting with # are comments. Nothing is touched outside the chapter."""
 
 from __future__ import annotations
@@ -42,6 +43,7 @@ COLUMN_ROWS = 2400
 COLUMN_WIDTH = 300
 COLUMNS = 6
 NEAREST = 400     # how far a join/move looks for the cut it names
+SIZE_RANGE = (0.7, 1.5)   # cut area / marked area outside this is reported by check
 
 
 def is_strip(project: str, chapter: str) -> bool:
@@ -239,6 +241,36 @@ def check(project: str, chapter: str, out: Path) -> None:
         sheet.save(target, quality=82)
         print(target)
     print(f"{len(panels)} panel(s) cut")
+    if not is_strip(project, chapter):
+        size_report(project, chapter)
+
+
+def size_report(project: str, chapter: str) -> None:
+    """Cut panels much smaller or larger than their mark - the snapper's failure shape (a sliver, or a
+    panel grown into its neighbour or the page's blurb) under a mark that looks right on the sheets."""
+    chapter_dir = get_chapter_dir(project, chapter)
+    cuts: dict[int, list[Path]] = {}
+    for path in sorted((chapter_dir / "panels").glob("*.png")):
+        cuts.setdefault(int(path.stem.rsplit("_", 2)[1]), []).append(path)
+    flagged = []
+    for page in page_record(project, chapter)["pages"]:
+        marks = [p["box_1000"] for p in page.get("panels", []) if "box_1000" in p]
+        files = cuts.get(page["page_index"], [])
+        if not marks or len(marks) != len(files):
+            continue
+        with Image.open(chapter_dir / "pages" / page["page_filename"]) as image:
+            width, height = image.size
+        for (y0, x0, y1, x1), path in zip(marks, files, strict=True):
+            mark_w, mark_h = (x1 - x0) * width / 1000, (y1 - y0) * height / 1000
+            with Image.open(path) as image:
+                cut_w, cut_h = image.size
+            area = cut_w * cut_h / max(1.0, mark_w * mark_h)
+            if not SIZE_RANGE[0] <= area <= SIZE_RANGE[1]:
+                flagged.append(f"  {path.stem}: marked {mark_w:.0f}x{mark_h:.0f}, "
+                               f"cut {cut_w}x{cut_h} (area x{area:.2f})")
+    if flagged:
+        print(f"{len(flagged)} panel(s) cut much smaller or larger than marked - look at them:")
+        print("\n".join(flagged))
 
 
 def main() -> None:
