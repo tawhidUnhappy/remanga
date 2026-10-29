@@ -32,7 +32,9 @@ import time
 from pathlib import Path
 
 STATE = re.compile(r"^\s*STATE:\s*([A-Za-z]+)", re.MULTILINE)
-LIMIT = re.compile(r"usage limit|hit your limit|limit reached|out of usage|rate[ _-]?limit", re.IGNORECASE)
+# "You've hit your 5-hour limit · resets 7:20pm (Asia/Dhaka)" (2026-10-29) - the limit's kind sits between
+LIMIT = re.compile(r"usage limit|hit your\b[^\n]{0,30}?\blimit|limit reached|out of usage|rate[ _-]?limit",
+                   re.IGNORECASE)
 EPOCH = re.compile(r"(?:limit reached\||\"resets_?[aA]t\"\s*:\s*)(\d{10})")
 ISO = re.compile(r"resets?\s+(?:at\s+)?(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})\s*(UTC|Z)?", re.IGNORECASE)
 MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]

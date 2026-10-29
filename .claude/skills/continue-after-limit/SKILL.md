@@ -72,6 +72,12 @@ that left the notes unchanged, so a stuck job cannot burn the usage.
   ($0.36) once the mode was passed. **A headless run does not apply the project's `defaultMode` by
   itself** - it ran in "default", where nobody can approve a command - so the watchdog passes the
   configured mode with `--permission-mode` (never a looser one).
+- **First real use, the same evening:** the VS Code session ended its turn at 5:33 PM; at 6:03 PM the
+  watchdog started a headless run, which narrated chapters 19-23 of the long recap (the playbook's
+  voice kept: present tense, reported speech, no quotes or contractions) until the 5-hour limit at
+  6:37 PM. Its message was "You've hit your **5-hour** limit · resets 7:20pm (Asia/Dhaka)" - the
+  matcher only knew "hit your limit", so it took three refused runs for no progress and gave up at
+  6:40 PM instead of waiting for 7:30 PM. Fixed: any "hit your ... limit" counts.
 - Reset times it reads: `...limit reached|<epoch>`, `resets 7pm`, `resets at 11:30 PM`, `resets 3am
   (Asia/Dhaka)`, `resets Nov 3, 9am`, `resets Mon 9am`, `resets 2026-08-08 00:00 UTC`. Anything else: it
   looks again in an hour (a run refused at the limit costs nothing). Only the run's final result event is
