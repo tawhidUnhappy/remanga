@@ -122,4 +122,10 @@ panels (`skip merged` rather than re-marking). The PC was powered off mid-job: e
 went, the render loop with it - hence drafts on /mnt/datadisk and the restartable render queue. The
 user asked mid-job (2026-10-28) for every page and every take to be proved whole - verify.py - and
 said tools belong in this folder (or remanga itself), new skills in remanga's .claude/skills, never
-in a private folder of Claude's.
+in a private folder of Claude's. Paused 2026-10-29 at the user's word after chapter 14 with a long
+video of 1-14: 2:47:18, 896 MB at 1080p. Timings: Claude narrated ~4-6 min a chapter (~120-160
+panels, 1,650-2,150 words), Drama 3 rendered ~17-20 min a chapter (10-14 min of video each), so
+the render is the bottleneck - start the queue early; the 1-14 join took 4 min, stamping 3 s,
+verify.py 1 min. A chapter failed twice overnight on a whisper spelling ("Manowar" for Man O' War,
+87%) - fixed in align.py, and the queue's log said exactly which take; check the queue log first
+when a chapter is missing.
