@@ -26,11 +26,11 @@ Read remanga-ops (how remanga works) and remanga-thumbnails (the upload style) a
 
 ## The steps (from the remanga repo root; tools in this folder)
 
-0. **Notes + watchdog first, on a long manga** (more than a few chapters): a notes file on /mnt/datadisk
-   with `STATE: RUNNING` and a "Next" section a fresh session can follow, then start the
-   `continue-after-limit` watchdog on it (that skill). If Claude's usage limit runs out, the editor is
-   closed or the session crashes, the job carries on by itself after the refill (user request,
-   2026-10-29). Keep the notes current after every chapter - they are what a resumed run reads.
+0. **Notes first, on a long manga** (more than a few chapters): a notes file on /mnt/datadisk with
+   what is done and a "Next" section a fresh session can follow; keep it current after every chapter.
+   Claude's usage limit is Claude Code's own job: "Continue automatically at usage limit"
+   (`autoContinueAtUsageLimit: true` in ~/.claude/settings.json since 2026-10-29) waits for the refill
+   and continues. A watchdog skill for it was built and deleted the same day at the user's word.
 1. **Project:** `./run.sh new "<link>"` - prints the project name (P).
 2. **Download:** `./run.sh download -p P` lists the chapters (a fallback chapter shows its language),
    then `-c all`. comix.to goes through the user's own Firefox helper - they must be at the PC to pass
