@@ -10,7 +10,8 @@ narration.json changes after it was narrated; a chapter whose video already says
 is skipped. verify.py checks every chapter after its render. It waits while another render or MAGI run
 holds the GPU (Drama 3 needs all 12 GB) and runs once per project (a lock in logs/). A chapter that fails
 twice, or fails its check, is left for a look and the long video is not joined; the log ends "EXIT n".
-After a power-off just start it again: every finished take comes back from the store."""
+After a power-off just start it again: every finished take comes back from the store.
+With CHAPTERS (1-14), --long joins exactly those - a long video of the story so far while the rest wait."""
 from __future__ import annotations
 
 import fcntl
@@ -72,7 +73,8 @@ def main() -> None:
         raise SystemExit(__doc__)
     project = args[0]
     every = discover_chapters(project)
-    chapters = [str(c) for c in (expand_chapter_selection(args[1], every) if len(args) > 1 else every)]
+    chapters = [str(c) for c in (expand_chapter_selection(args[1], every) if len(args) > 1 and args[1] != "all"
+                                 else every)]
     logs = get_project_dir(project) / "logs"
     logs.mkdir(parents=True, exist_ok=True)
     lock = (logs / "render_queue.lock").open("w")
@@ -127,9 +129,10 @@ def main() -> None:
     code = 0
     if join:
         say("every chapter rendered - joining the long video")
-        code = (run(["./run.sh", "long", "-p", project, "-c", "all"])
+        selection = args[1] if len(args) > 1 else "all"  # the long video is of the chapters asked for
+        code = (run(["./run.sh", "long", "-p", project, "-c", selection])
                 or run(["./run.sh", "upload", "-p", project])
-                or run([sys.executable, str(HERE / "verify.py"), project]))
+                or run([sys.executable, str(HERE / "verify.py"), project, selection]))
     say("finished")
     print(f"EXIT {code}", flush=True)
     sys.exit(code)

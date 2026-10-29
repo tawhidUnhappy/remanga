@@ -238,7 +238,7 @@ def main() -> None:
         raise SystemExit(__doc__)
     project = args[0]
     every = discover_chapters(project)
-    chapters = expand_chapter_selection(args[1], every) if len(args) > 1 else every
+    chapters = expand_chapter_selection(args[1], every) if len(args) > 1 and args[1] != "all" else every
     config = RemangaConfig.load()
     manifest_path = get_project_dir(project) / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}

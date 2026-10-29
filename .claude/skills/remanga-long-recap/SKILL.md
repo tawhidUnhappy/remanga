@@ -83,6 +83,9 @@ Read remanga-ops (how remanga works) and remanga-thumbnails (the upload style) a
    narrated, runs verify.py on each, waits while MAGI or another render holds the GPU, runs once per
    project (lock), and with `--long` joins the long video + stamps the upload set when every chapter
    is done; the log ends `EXIT n`. After a power-off, start it again - takes come back from the store.
+   With a range (`render_queue.py P 1-14 --long`) it joins exactly those chapters: the user may stop a
+   long job midway and ask for "the long video up to the chapter you narrated latest" (2026-10-29) -
+   the upload set is stamped on it as usual, and a later full join just makes a new long video.
    Watch the chapter log (`projects/P/logs/`, or the queue log) for "worker ready" before calling it
    running (a load can fail). Drama 3 takes ~39 s a take, about 1.3x the narration's length plus a few
    minutes a chapter: Lilina-san (28 min, 3 chapters) ~50 min; Expelled ch1 (18:16) ~25 min. Give the
