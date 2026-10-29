@@ -26,6 +26,11 @@ Read remanga-ops (how remanga works) and remanga-thumbnails (the upload style) a
 
 ## The steps (from the remanga repo root; tools in this folder)
 
+0. **Notes + watchdog first, on a long manga** (more than a few chapters): a notes file on /mnt/datadisk
+   with `STATE: RUNNING` and a "Next" section a fresh session can follow, then start the
+   `continue-after-limit` watchdog on it (that skill). If Claude's usage limit runs out, the editor is
+   closed or the session crashes, the job carries on by itself after the refill (user request,
+   2026-10-29). Keep the notes current after every chapter - they are what a resumed run reads.
 1. **Project:** `./run.sh new "<link>"` - prints the project name (P).
 2. **Download:** `./run.sh download -p P` lists the chapters (a fallback chapter shows its language),
    then `-c all`. comix.to goes through the user's own Firefox helper - they must be at the PC to pass
@@ -118,7 +123,11 @@ run it in the background and start reading chapter 1 as soon as its marks exist)
 art: right about 9 pages in 10; the misses were a talk panel and an inset in one box, duplicate
 boxes over one panel, a publisher blurb boxed as a panel, bubbles hanging over a frame edge split
 between two marks (widen the panel that owns the bubble, `exact`), and slivers of sky between
-panels (`skip merged` rather than re-marking). The PC was powered off mid-job: everything in /tmp
+panels (`skip merged` rather than re-marking). **Reading order: MAGI's right-to-left order was right
+on every page Claude "fixed" in chapter 17** (a tall right panel before the stacked left ones, the
+upper-right bubble first) - six reorders had to be undone, and one had given Cyril's thought to
+Jeanne. Reorder only when the dialogue proves it: an answer before its question, a sentence finished
+before it starts. The PC was powered off mid-job: everything in /tmp
 went, the render loop with it - hence drafts on /mnt/datadisk and the restartable render queue. The
 user asked mid-job (2026-10-28) for every page and every take to be proved whole - verify.py - and
 said tools belong in this folder (or remanga itself), new skills in remanga's .claude/skills, never

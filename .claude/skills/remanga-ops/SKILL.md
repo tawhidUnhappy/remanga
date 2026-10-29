@@ -13,6 +13,8 @@ Entry points: `./bootstrap.sh` (idempotent setup) · `./pipeline.sh` (menus) · 
   long video -> A/B/C titles + thumbnails + ONE description): follow `remanga-long-recap` (its SKILL.md + tools).
 - After code/repo changes, commit and push to `origin/main` without being asked (hold off only on
   something clearly unfinished or broken).
+- **A long job survives Claude's usage limit (user, 2026-10-29):** skill `continue-after-limit` (its
+  watchdog relaunches Claude Code headless after the refill when no session carries on by itself).
 - **Tools live in remanga, not in a private folder of Claude's (user, 2026-10-28).** A tool Claude needs
   for a job goes into remanga itself or into a skill folder here (`.claude/skills/<skill>/`, like
   `remanga-long-recap/verify.py`), and adjusting existing tools is fine; new skills go in
