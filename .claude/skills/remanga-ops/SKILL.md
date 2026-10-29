@@ -327,6 +327,11 @@ one entry per PANEL id (`2.2_004_02` = chapter_page_panel), in reading order.
   take back with faster-whisper and matches the known script against it, so every panel still gets
   its own audio_timing row - pointing into its batch with `clip_start_ms`/`duration_ms` - and the
   mix, frame timeline and render never learn anything changed.
+  - **A name whisper writes its own way no longer sinks a take (2026-10-29).** A 16 s take that said every word
+    read 87% because whisper wrote "Man O' War" as "Manowar" (3 script words, 1 heard) and "Guigou" as
+    "Guigo"; all three retakes read the same and the chapter failed twice. `align.py:_spelled_alike` now counts
+    a replace run of up to 4 words a side as heard when its letters are >= 80% alike, time shared by word
+    length. Re-aligned 384 real takes: 76 rose, 0 fell; a dropped sentence still reads 71%, babble 40%.
   - **Whisper is trusted for WHEN, never WHAT.** A misheard word just fails to match; mangled
     proper nouns, not numbers, are the common error in manga narration. It REFUSES below 90% match
     or with too many panels unanchored, because a misalignment is silent: the audio sounds perfect

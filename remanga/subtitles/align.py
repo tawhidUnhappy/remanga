@@ -36,6 +36,16 @@ MIN_MATCH_RATIO = 0.90
 # dropping a short line; a lot of them means the alignment is not working.
 MAX_UNANCHORED_SHARE = 0.05
 
+# A few script words that whisper wrote as other words with nearly the same
+# letters are the same words, spelled its way: a name it joins ("Man O' War"
+# -> "Manowar") or spells ("Guigou" -> "Guigo"). Counted as heard when the
+# letters are this alike, in runs of up to SPELLING_RUN words a side. A
+# dropped sentence (script words with nothing heard) and babble (unrelated
+# letters) still count against the take. Measured 2026-10-29: a 16 s take
+# that said every word read 87% only because of one name and one town.
+SPELLING_SIMILARITY = 0.8
+SPELLING_RUN = 4
+
 
 class AlignmentError(RuntimeError):
     """The narration and the audio could not be lined up well enough to cut
@@ -119,17 +129,40 @@ def align(panels: list[tuple[str, str]], heard: list[dict], audio_seconds: float
     last: dict[int, float] = {}
     counts: dict[int, int] = {}
     matched = 0
-    for block in matcher.get_matching_blocks():
-        for offset in range(block.size):
-            panel = owners[block.a + offset]
-            start, end = times[block.b + offset]
-            first.setdefault(panel, start)
-            last[panel] = end
-            counts[panel] = counts.get(panel, 0) + 1
-            matched += 1
+
+    def heard_at(token: int, start: float, end: float) -> None:
+        nonlocal matched
+        panel = owners[token]
+        first.setdefault(panel, start)
+        last[panel] = end
+        counts[panel] = counts.get(panel, 0) + 1
+        matched += 1
+
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            for offset in range(i2 - i1):
+                heard_at(i1 + offset, *times[j1 + offset])
+        elif tag == "replace" and _spelled_alike(script[i1:i2], tokens[j1:j2]):
+            # The heard words' time, shared out by the script words' lengths.
+            start, end = times[j1][0], times[j2 - 1][1]
+            lengths = [len(word) for word in script[i1:i2]]
+            at = start
+            for offset, length in enumerate(lengths):
+                step = (end - start) * length / sum(lengths)
+                heard_at(i1 + offset, at, at + step)
+                at += step
 
     bounds = _fill_and_close(panels, first, last, counts, audio_seconds)
     return Alignment(spans=tuple(bounds), match_ratio=matched / len(script))
+
+
+def _spelled_alike(script: list[str], heard: list[str]) -> bool:
+    """Whether a short run of script words is what whisper heard, written
+    another way (see SPELLING_SIMILARITY)."""
+    if len(script) > SPELLING_RUN or len(heard) > SPELLING_RUN:
+        return False
+    letters = SequenceMatcher(a="".join(script), b="".join(heard), autojunk=False)
+    return letters.ratio() >= SPELLING_SIMILARITY
 
 
 def _fill_and_close(panels: list[tuple[str, str]], first: dict[int, float], last: dict[int, float],
