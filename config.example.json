@@ -1,0 +1,53 @@
+{
+  "system": {
+    "prefer_gpu": true,
+    "gpu_codec": "auto",
+    "fallback_codec": "libx264",
+    "threads": 4,
+    "log_level": "INFO",
+    "hf_token_path": "global/hf_token.json"
+  },
+  "downloader": {
+    "language": "en",
+    "image_quality": "data",
+    "max_retries": 3,
+    "retry_delay_seconds": 2,
+    "request_delay_seconds": 0.35,
+    "browser_profile": "",
+    "browser_chapter_pause_seconds": 10.0,
+    "browser_scroll_seconds": 0.8,
+    "browser_list_pause_seconds": 8.0
+  },
+  "pdf": {
+    "max_mb": 50.0
+  },
+  "tts": {
+    "voice": "af_heart",
+    "speed": 1.0,
+    "synth_timeout_seconds": 300,
+    "hf_repo_id": "hexgrad/Kokoro-82M",
+    "model_dir": "checkpoints/kokoro_82m",
+    "sample_rate": 24000
+  },
+  "audio": {
+    "sample_rate": 44100,
+    "volume_lufs": -14.0,
+    "bgm_enabled": false,
+    "bgm_path": "",
+    "bgm_below_voice_lu": 23.5,
+    "bgm_loop_gap_s": 2.0
+  },
+  "video": {
+    "width": 3840,
+    "height": 2160,
+    "fps": 24,
+    "background_style": "blur",
+    "blur_brightness": 0.42,
+    "background_color": "#000000",
+    "page_padding_percent": 4,
+    "auto_adaptive_padding": true,
+    "page_border_width": 2,
+    "page_border_color": "#222222",
+    "max_upscale": 3.0
+  }
+}

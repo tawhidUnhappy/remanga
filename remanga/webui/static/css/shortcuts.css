@@ -1,0 +1,129 @@
+/* The Shortcuts menu: full-screen overlay + card opened from the topbar's
+   keyboard icon, listing every configurable action and its key-combo chips.
+   See remanga/webui/static/js/shortcuts.js for the behavior. */
+
+.shortcuts-overlay {
+  position: fixed; inset: 0;
+  background: rgba(10, 8, 13, 0.72);
+  display: none;
+  align-items: center; justify-content: center;
+  z-index: 90;
+}
+.shortcuts-overlay.visible { display: flex; }
+
+.shortcuts-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  width: min(520px, calc(100vw - 48px));
+  max-height: min(640px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  padding: 22px 24px 16px;
+}
+
+.shortcuts-head { display: flex; align-items: center; justify-content: space-between; }
+.shortcuts-head h2 { margin: 0; font-size: 16px; }
+.shortcuts-x {
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 12px;
+}
+.shortcuts-x:hover { color: var(--text); background: var(--surface-3); }
+
+.shortcuts-sub { margin: 8px 0 14px; font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+.shortcuts-sub b { color: var(--text); }
+
+.shortcuts-list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 -8px;
+  padding: 0 8px;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.shortcut-row:last-child { border-bottom: none; }
+.shortcut-label { font-size: 12.5px; font-weight: 600; flex: 1; min-width: 0; }
+
+.shortcut-combos { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+.combo-chip {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 6px 4px 9px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--text);
+  white-space: nowrap;
+}
+.combo-chip button {
+  display: grid; place-items: center;
+  width: 15px; height: 15px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 10px;
+}
+.combo-chip button:hover { background: var(--danger); color: #2a0808; }
+
+.combo-add {
+  width: 24px; height: 24px;
+  display: grid; place-items: center;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 13px;
+}
+.combo-add:hover { color: var(--accent); border-color: var(--accent); }
+.combo-add.recording {
+  width: auto;
+  padding: 0 8px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10.5px;
+  color: var(--accent);
+  border-color: var(--accent);
+  border-style: solid;
+  background: var(--accent-ink);
+}
+
+.shortcut-conflict { font-size: 10.5px; color: var(--danger); width: 100%; }
+
+.shortcuts-foot { display: flex; align-items: center; gap: 8px; padding-top: 14px; }
+.shortcuts-foot-spacer { flex: 1; }
+.shortcuts-btn {
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+}
+.shortcuts-btn:hover { background: var(--surface-3); }
+.shortcuts-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #1a0a05;
+}
+.shortcuts-btn.primary:hover { filter: brightness(1.08); }

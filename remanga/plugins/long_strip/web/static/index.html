@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>remanga - Strip Marker</title>
+<link rel="icon" href="/shared/img/favicon.ico" sizes="any">
+<link rel="stylesheet" href="/shared/css/theme.css">
+<link rel="stylesheet" href="/shared/css/screens.css">
+<link rel="stylesheet" href="/static/css/strip.css">
+</head>
+<body>
+<header>
+  <div class="brand"><img class="logo" src="/shared/img/logo.png" alt="">remanga<span class="brand-sub">Strip Marker</span></div>
+  <span class="where" id="where"></span>
+  <span class="count mono"><b id="count">0</b> panels</span>
+  <span id="status"></span>
+  <button id="newBtn" title="Mark a new panel: the next drag on the strip draws it">＋ New panel <kbd>A</kbd></button>
+  <button id="undoBtn" title="Take back the last change">Undo <kbd>Ctrl+Z</kbd></button>
+  <button id="redoBtn" title="Put it back again">Redo <kbd>Ctrl+Y</kbd></button>
+  <button id="autoBtn" title="Propose every panel again from the gutters - replaces the marks (undoable)">Auto <kbd>R</kbd></button>
+  <button id="clearBtn" title="Remove every mark (undoable)">Clear <kbd>C</kbd></button>
+  <button id="finishBtn" class="primary" title="Save the marks and close">Finish <kbd>Ctrl+S</kbd></button>
+</header>
+<main>
+  <div id="readerWrap">
+  <div id="selbar">
+    <b id="selTitle"></b><span id="selRows" class="mono"></span>
+    <span class="grow"></span>
+    <button id="selSplit" title="Split this panel where the mouse is (or in the middle)">Split <kbd>S</kbd></button>
+    <button id="selMerge" title="Join this panel with the next one">Merge with next <kbd>M</kbd></button>
+    <button id="selDelete" title="Delete this panel">Delete <kbd>Del</kbd></button>
+    <button id="selDone" title="Deselect">Done <kbd>Esc</kbd></button>
+  </div>
+  <div id="reader">
+    <div id="stage">
+      <div id="tiles"></div>
+      <div id="gutters"></div>
+      <div id="marks"></div>
+      <div id="guide" class="line"></div>
+      <div id="pendingLine" class="line"></div>
+      <div id="dragBox"></div>
+      <div id="readout" class="mono"></div>
+    </div>
+  </div>
+  </div>
+  <aside>
+    <section>
+      <h3>Gutter colours</h3>
+      <div id="gutterColors" class="swatches"></div>
+      <label class="switch"><input type="checkbox" id="gutterToggle" checked> Show gutters <kbd>G</kbd></label>
+    </section>
+    <section class="grow">
+      <h3>Panels <span class="legend"><i class="flag tall"></i>tall <i class="flag overlap"></i>overlap</span></h3>
+      <div id="panelList"></div>
+    </section>
+    <section class="keys">
+      <div><b>＋ New panel</b> (<kbd>A</kbd>) then drag, or <b>drag</b> on bare strip or the canvas beside it - panels are always full width</div>
+      <div><b>Click</b> the canvas beside the strip: deselect</div>
+      <div><b>Double-click</b> art no panel covers: a panel fitted to it</div>
+      <div><b>Click</b> a panel to focus it; drag it to move, its top / bottom edge to resize</div>
+      <div><kbd>M</kbd> merge with the next panel · <kbd>S</kbd> split at the mouse</div>
+      <div><kbd>Shift</kbd> while dragging: don't snap to gutters</div>
+      <div><kbd>N</kbd> line after the last panel · hatched = in no panel</div>
+      <div><kbd>↑</kbd><kbd>↓</kbd> nudge (<kbd>Shift</kbd> ×10) · <kbd>Tab</kbd> top / bottom / whole</div>
+      <div><kbd>J</kbd><kbd>K</kbd> next / previous · <kbd>Del</kbd> delete · <b>Right-click</b> delete</div>
+      <div><kbd>+</kbd><kbd>-</kbd><kbd>0</kbd> zoom · <kbd>Esc</kbd> deselect</div>
+    </section>
+  </aside>
+</main>
+<script type="module" src="/static/js/main.js"></script>
+</body>
+</html>

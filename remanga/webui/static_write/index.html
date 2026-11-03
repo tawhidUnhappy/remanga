@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>remanga - Narration Writer</title>
+<link rel="icon" href="/shared/img/favicon.ico" sizes="any">
+<link rel="stylesheet" href="/shared/css/theme.css">
+<script src="/shared/js/look.js"></script>
+<link rel="stylesheet" href="/shared/css/screens.css">
+<link rel="stylesheet" href="/shared/css/panel-list.css">
+<link rel="stylesheet" href="/static/css/write.css">
+<link rel="stylesheet" href="/shared/css/theme-android.css">
+</head>
+<body>
+<header>
+  <div class="brand"><img class="logo" src="/shared/img/logo.png" alt="remanga" width="26" height="26">
+    <span class="brand-name">remanga</span><span class="brand-sub">Narration Writer</span></div>
+  <span class="meta" id="chapter-meta">loading…</span>
+  <div class="spacer"></div>
+  <span class="counts" id="counts"></span>
+</header>
+
+<main>
+  <div id="loading">Loading panels…</div>
+  <p class="hint" id="hint" style="display:none">
+    Every panel below shows its cropped image and a text field - type the narration line for that panel. Click an
+    image for a full-size lightbox (Esc or click to close). Leaving a field empty is allowed (a silent beat), but
+    stays marked below. Save writes everything to <code>narration.json</code>; you can reopen this UI later to
+    keep filling it in. Use the dots on the right to jump straight to any panel - a written one is
+    highlighted <span style="color:var(--ok)">teal</span>, empty is <span style="color:var(--danger)">red</span>.
+  </p>
+  <div id="panel-list"></div>
+</main>
+
+<nav id="panel-nav" aria-label="Jump to panel"></nav>
+
+<footer id="footer" style="display:none">
+  <button id="btn-save" class="primary">Save narration.json</button>
+</footer>
+
+<div id="lightbox">
+  <span class="lightbox-hint">click anywhere to close</span>
+  <img id="lightbox-img" alt="">
+</div>
+
+<script type="module" src="/static/js/main.js"></script>
+</body>
+</html>

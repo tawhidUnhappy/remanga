@@ -1,0 +1,21 @@
+/* Floating UI that sits above the canvas/sidebar: the bottom hint toast and
+   the full-screen "saved" overlay shown when Save ends the session. */
+
+.hint-toast {
+  position: fixed;
+  left: 50%; bottom: 22px;
+  transform: translateX(-50%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 12px;
+  padding: 8px 14px;
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  display: flex; gap: 14px;
+  white-space: nowrap;
+  z-index: 30;
+}
+.hint-toast b { color: var(--text); font-weight: 700; }
+.hint-toast kbd { font-family: "JetBrains Mono", monospace; background: var(--surface-3); border-radius: 3px; padding: 0 4px; font-size: 10.5px; }
+

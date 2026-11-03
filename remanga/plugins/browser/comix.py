@@ -1,0 +1,405 @@
+"""ComixClient: comix.to, read through your Firefox (see __init__.py).
+
+comix.to sits behind Cloudflare's check and signs and encrypts its own API, so
+nothing here talks to the site directly: the helper opens the manga's page and
+each chapter in your browser, the site's own reader loads the pages, and the
+images it received are what is saved - byte for byte, at the size the site
+serves them (the originals its page data names, when the reader shows smaller
+ones). A chapter already here and whole is checked on disk and left alone,
+without opening anything.
+
+Politely: one chapter at a time, read at a reader's pace, a pause between
+chapters, and the chapter list fetched at most once every 15 minutes."""
+
+from __future__ import annotations
+
+import io
+import re
+import time
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlparse
+
+from PIL import Image
+
+from remanga import activity
+from remanga.chapters import chapter_key, chapter_sort_key, page_stem
+from remanga.config import DownloaderConfig
+from remanga.console import console, escape as _esc
+from remanga.languages import language_rank, wanted_languages
+from remanga.paths import (
+    get_chapter_dir,
+    load_project_metadata,
+    read_manifest,
+    read_remote_chapter_cache,
+    save_project_metadata,
+    update_manifest_chapter,
+    write_remote_chapter_cache,
+)
+from remanga.plugins.browser.bridge import HelperError
+from remanga.plugins.browser.comix_list import ABSENT, ListState
+from remanga.plugins.browser.hooks import COMIX_TITLE
+from remanga.plugins.browser.session import Session, helper_session
+from remanga.plugins.mangadex.chapter_list import ChapterListMixin
+from remanga.plugins.mangadex.chapter_pages import sweep_strays
+from remanga.plugins.mangadex.pages import PageFile, remove_paths
+from remanga.sources import remember_source
+
+SOURCE = "comix"
+# The saved chapter list is shown for a day without asking the site (then read
+# again only if the helper is already running); updating it on purpose reuses
+# one younger than LIST_REFRESH_FLOOR_SECONDS, so no page is read twice in a row.
+LIST_TTL_SECONDS = 24 * 60 * 60
+LIST_REFRESH_FLOOR_SECONDS = 15 * 60
+# The type comix.to gives a manga -> its original language (for the reading direction).
+LANGUAGE_BY_TYPE = {"manga": "ja", "manhwa": "ko", "manhua": "zh"}
+EXTENSION_BY_FORMAT = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp", "AVIF": ".avif", "GIF": ".gif"}
+# What the site's page may say a chapter is: anything else is dropped, never
+# turned into a folder name or a link.
+CHAPTER_NUMBER = re.compile(r"^\d{1,5}(\.\d{1,3})?$")
+CHAPTER_ID = re.compile(r"^\d{1,12}$")
+
+# A manga's page as last read in this run.
+_TITLES: dict[str, tuple[float, dict[str, Any]]] = {}
+
+
+def _title_url(source: str) -> tuple[str, str]:
+    """(the manga's id on comix.to, its title page) from any link to it."""
+    match = COMIX_TITLE.match((source or "").strip())
+    if not match:
+        raise ValueError(f"Not a comix.to manga or chapter link: {source!r}")
+    site, hid, slug = match.group(1).lower(), match.group(2).lower(), match.group(3)
+    return hid, f"{site}/title/{hid}" + (f"-{slug}" if slug else "")
+
+
+def _well_formed(chapter: dict[str, Any], site: str) -> bool:
+    """A chapter as the page described it, checked: a plain number, a numeric
+    id, and a link (if any) on the manga's own site."""
+    number, ident, url = str(chapter.get("number", "")), str(chapter.get("id", "")), str(chapter.get("url") or "")
+    if not (CHAPTER_NUMBER.match(number) and CHAPTER_ID.match(ident)):
+        return False
+    return not url or (urlparse(url).scheme in ("http", "https") and urlparse(url).netloc == urlparse(site).netloc)
+
+
+def _best_per_number(chapters: list[dict[str, Any]], wanted: list[str], site: str = "") -> list[dict[str, Any]]:
+    """One upload per chapter number - several groups often post the same
+    chapter: in the most wanted language it is out in (remanga.languages:
+    the configured one, then each fallback), then the official one, else the
+    most voted, else the newest. Until 2026-10-27 the language was filtered
+    over the whole list, so a chapter out only in another language vanished
+    whenever any other chapter was in English."""
+    chapters = [c for c in chapters if _well_formed(c, site)] if site else chapters
+    best: dict[str, dict[str, Any]] = {}
+    for c in chapters:
+        place = language_rank(str(c.get("language") or ""), wanted)
+        if place is None:
+            continue
+        key = chapter_key(c["number"])
+        rank = (-place, bool(c.get("official")), c.get("votes") or 0, int(c["id"]) if str(c["id"]).isdigit() else 0)
+        if key not in best or rank > best[key]["_rank"]:
+            best[key] = {**c, "_rank": rank}
+    listing = [{"chapter": str(c["number"]), "chapter_id": str(c["id"]), "pages": c.get("pages") or None,
+                "title": (c.get("name") or "").strip(), "group": (c.get("group") or "").strip(),
+                "url": c.get("url", ""), "language": str(c.get("language") or "").lower()} for c in best.values()]
+    return sorted(listing, key=lambda c: chapter_sort_key(c["chapter"]))
+
+
+# The largest page taken, in pixels - read from the file's header before any
+# decoding. Real pages are ~2-30 million; a "page" far bigger is a
+# decompression bomb (a small file that unpacks into gigabytes).
+MAX_PAGE_PIXELS = 50_000_000
+
+
+def _check_image(content: bytes) -> tuple[str, int, int]:
+    """(format, width, height) of a page's bytes, which must be a whole image."""
+    with Image.open(io.BytesIO(content)) as image:
+        if image.width * image.height > MAX_PAGE_PIXELS:
+            raise ValueError(f"{image.width}x{image.height} is far larger than any page - refused")
+        image.verify()
+    with Image.open(io.BytesIO(content)) as image:
+        image.load()
+        return image.format or "", image.width, image.height
+
+
+def page_checks(total: int, data: dict[str, Any], sizes: list[tuple[int, int]]) -> list[dict[str, Any]]:
+    """Every count of the chapter's pages there is, against the pages saved:
+    [{"ok": True/False/None (couldn't check), "says": what was checked}].
+    A False anywhere and the chapter isn't saved."""
+    checks: list[dict[str, Any]] = [
+        {"ok": True, "says": f"{total} pages downloaded, numbered 1-{total}, every one a whole image"}]
+    expected, bar, site = int(data.get("expected") or 0), int(data.get("bar") or 0), data.get("site") or {}
+    if expected:
+        checks.append({"ok": expected == total, "says": f"the reader numbers {expected} pages (\"1 / {expected}\")"})
+    if bar:
+        checks.append({"ok": bar == total, "says": f"the reader's page bar has {bar} pages"})
+    if site.get("count"):
+        same = site.get("same_images")
+        checks.append({"ok": site["count"] == total and same is not False,
+                       "says": f"the site's own page list has {site['count']} images"
+                               + (" - the very images downloaded" if same else "")})
+    elif data.get("source") == "page data":
+        checks.append({"ok": True, "says": f"the pages are the site's own list in the page ({total} images) - "
+                                           "its originals"})
+    elif site.get("encrypted"):
+        checks.append({"ok": None, "says": "the site's own page list came encrypted - not readable, not counted"})
+    else:
+        checks.append({"ok": None, "says": "the site's own page list wasn't seen"})
+    shown = [tuple(size) for size in data.get("sizes") or []]
+    if len(shown) == len(sizes) and all(w and h for w, h in shown):
+        wrong = [i + 1 for i, (a, b) in enumerate(zip(shown, sizes, strict=True)) if a != b]
+        checks.append({"ok": not wrong, "says": "every page is the size the reader showed" if not wrong
+                       else f"page(s) {', '.join(map(str, wrong[:5]))} aren't the size the reader showed"})
+    return checks
+
+
+class ComixClient(ChapterListMixin):
+    def __init__(self, config: DownloaderConfig | None = None):
+        self.config = config or DownloaderConfig()
+        self._urls: dict[str, str] = {}
+
+    # ---- the manga
+
+    def parse_manga_id(self, source: str) -> str:
+        hid, url = _title_url(source)
+        self._urls[hid] = url
+        return hid
+
+    def _read_title(self, hid: str, session: Session | None = None) -> dict[str, Any]:
+        """The manga's page, opened on page 1 of its chapter list: its facts
+        and its newest uploads."""
+        cached = _TITLES.get(hid)
+        if cached and time.time() - cached[0] < LIST_REFRESH_FLOOR_SECONDS:
+            return cached[1]
+        if session is None:
+            with helper_session(self.config) as own:
+                return self._read_title(hid, own)
+        data = session.run("title", {"url": self._page_url(hid, 1), "hid": hid}, timeout=600).result["data"]
+        _TITLES[hid] = (time.time(), data)
+        return data
+
+    def _base_url(self, hid: str) -> str:
+        return self._urls.get(hid) or f"https://comix.to/title/{hid}"
+
+    def _page_url(self, hid: str, page: int) -> str:
+        return f"{self._base_url(hid)}?page={page}"
+
+    def _read_list_page(self, session: Session, state: ListState, page: int) -> None:
+        """One page of the chapter list, by its address, at a person's pace."""
+        session.pace_list()
+        activity.status(f"reading chapter list page {page} of {state.last_page or '?'}")
+        data = session.run("listpage", {"url": self._base_url(state.hid), "hid": state.hid, "page": page},
+                           timeout=600).result["data"]
+        state.add_page(page, data)
+        state.save()
+
+    def get_manga_info(self, manga_id: str) -> dict[str, Any]:
+        data = self._read_title(manga_id)
+        title = " ".join(str(data.get("title") or "").split()) or manga_id
+        alt = [str(t) for t in data.get("alt_titles") or []]
+        english = title if title.isascii() else next((t for t in alt if t.isascii()), "")
+        language = str(data.get("original_language") or LANGUAGE_BY_TYPE.get(str(data.get("type", "")).lower(), ""))
+        formats = {str(f).strip().lower() for f in data.get("formats") or []}
+        return {"title": title, "english_title": english, "original_language": language.lower(),
+                # comix.to's "Long Strip" format, as MangaDex's tag of that name;
+                # otherwise each chapter's images decide (remanga.layouts).
+                "layout": "long_strip" if "long strip" in formats else None}
+
+    # ---- the chapter list
+
+    def _manga_source(self, project: str, url: str | None) -> str:
+        source = url or load_project_metadata(project).get("manga_url")
+        if not source:
+            raise ValueError(f"No comix.to link saved for project '{project}'.")
+        return source
+
+    def _resolve_manga_id(self, project: str, url: str | None) -> str:
+        return self.parse_manga_id(self._manga_source(project, url))
+
+    def _rows(self, project: str, hid: str, state: ListState) -> list[dict[str, Any]]:
+        """The chapter list as known: the best upload of every chapter seen, and
+        a row for every chapter number between not looked up yet."""
+        chapters = _best_per_number(state.listed() or list(state.items.values()), wanted_languages(self.config),
+                                    self._urls.get(hid, ""))
+        rows = chapters + state.placeholders({chapter_key(c["chapter"]) for c in chapters})
+        rows.sort(key=lambda c: chapter_sort_key(c["chapter"]))
+        write_remote_chapter_cache(project, hid, rows, time.time())
+        return rows
+
+    def _overview(self, project: str, hid: str, session: Session) -> list[dict[str, Any]]:
+        """Page 1 of the list (the newest chapters - also all a re-read needs)
+        and, the first time, its last page (chapter 1): every chapter between
+        is then listed without reading the pages in between."""
+        state = ListState(project, hid)
+        _TITLES.pop(hid, None)
+        state.add_page(1, self._read_title(hid, session))
+        state.save()
+        last = state.last_page
+        if last > 1 and not state.complete() and last not in state.pages:
+            self._read_list_page(session, state, last)
+        if not state.items:
+            raise HelperError("comix.to's page showed no chapters - the site may have changed; see "
+                              ".cache/browser/last-title.json")
+        return self._rows(project, hid, state)
+
+    def _remote_chapters(self, project: str, hid: str, force_refresh: bool,
+                         session: Session | None = None) -> list[dict[str, Any]]:
+        cached = read_remote_chapter_cache(project, hid)
+        age = time.time() - cached.get("fetched_at", 0) if cached.get("manga_id") == hid else float("inf")
+        if age < (LIST_REFRESH_FLOOR_SECONDS if force_refresh else LIST_TTL_SECONDS):
+            return cached["chapters"]
+        if session is not None:
+            return self._overview(project, hid, session)
+        # Not asked for (a day-old list, just opened): only if the helper is
+        # already there - Firefox isn't started for it.
+        quiet = not force_refresh and cached.get("manga_id") == hid
+        try:
+            with helper_session(self.config, wait=5 if quiet else 120, quiet=quiet) as own:
+                return self._overview(project, hid, own)
+        except HelperError:
+            if cached.get("manga_id") == hid:
+                hours = int(age // 3600)
+                console.print(f"[yellow]Firefox isn't reachable - using the chapter list from {hours} h ago.[/]")
+                activity.status(f"chapter list from {hours} h ago - u updates it")
+                return cached["chapters"]
+            raise
+
+    def _locate(self, session: Session, project: str, hid: str, chapter: str) -> dict[str, Any] | None:
+        """The best upload of one chapter, its list pages read as needed (usually
+        one or two) - None when the list has no such chapter."""
+        state = ListState(project, hid)
+        number = float(chapter)
+        for _ in range(12):
+            page = state.next_page_for(number)
+            if page is None or page == ABSENT:
+                break
+            self._read_list_page(session, state, page)
+        rows = self._rows(project, hid, state)
+        return next((r for r in rows if chapter_key(r["chapter"]) == chapter_key(chapter) and r.get("chapter_id")),
+                    None)
+
+    def list_chapters_with_status(self, project_name: str, manga_id_or_url: str | None = None,
+                                  force_refresh: bool = False, session: Session | None = None) -> list[dict[str, Any]]:
+        hid = self._resolve_manga_id(project_name, manga_id_or_url)
+        chapters = [dict(c) for c in self._remote_chapters(project_name, hid, force_refresh, session)]
+        wanted = wanted_languages(self.config)
+        for entry in chapters:
+            entry["status"] = self._local_chapter_status(project_name, entry["chapter"], None)
+            # Out only in a fallback language: shown with it, and another
+            # source with it in the configured language is preferred.
+            entry["fallback"] = language_rank(entry.get("language", ""), wanted) not in (0, None)
+        return chapters
+
+    # ---- downloading
+
+    def _whole_on_disk(self, project: str, chapter: str) -> bool:
+        """A chapter this source downloaded and checked, still all there and
+        every page still a whole image."""
+        record = read_manifest(project).get("chapters", {}).get(str(chapter), {}).get("pages") or {}
+        pages = get_chapter_dir(project, chapter) / "pages"
+        files = sorted(p for p in pages.iterdir() if p.is_file()) if pages.exists() else []
+        if record.get("source") != SOURCE or not record.get("verified") or len(files) != record.get("total_pages"):
+            return False
+        try:
+            for path in files:
+                _check_image(path.read_bytes())
+        except Exception:
+            return False
+        return True
+
+    def download_chapters(self, project_name: str, chapter_nums: list[str], manga_id_or_url: str | None = None,
+                          force: bool = False) -> list[Path]:
+        hid = self._resolve_manga_id(project_name, manga_id_or_url)
+        seen: set[str] = set()
+        ordered = [n for n in chapter_nums if not (chapter_key(n) in seen or seen.add(chapter_key(n)))]
+        here = {n for n in ordered if not force and self._whole_on_disk(project_name, n)}
+        for n in ordered:
+            if n in here:
+                console.print(f"[green]✓ Chapter {_esc(n)} is here and whole - nothing to download.[/]")
+        todo = [n for n in ordered if n not in here]
+        if todo:
+            with helper_session(self.config, wait=None) as session:
+                self._remote_chapters(project_name, hid, False, session)
+                # Each chapter's uploads, read from the list as far as needed.
+                listing = {}
+                for chapter in todo:
+                    found = self._locate(session, project_name, hid, chapter)
+                    if found:
+                        listing[chapter_key(chapter)] = found
+                unknown = [n for n in todo if chapter_key(n) not in listing]
+                if unknown:
+                    raise ValueError(f"comix.to lists no chapter {', '.join(unknown)} for this manga.")
+                for i, chapter in enumerate(todo, start=1):
+                    session.pace_chapter()
+                    console.print(f"[bold cyan]({i}/{len(todo)}) Chapter {_esc(chapter)}[/]")
+                    try:
+                        self._download(session, project_name, hid, chapter, listing[chapter_key(chapter)], force)
+                    finally:
+                        session.chapter_done()
+        # Only comix.to's own entry: a project may have other sources (remanga.sources).
+        remember_source(project_name, SOURCE, hid, self._manga_source(project_name, manga_id_or_url))
+        save_project_metadata(project_name, {"last_chapter": str(ordered[-1]) if ordered else ""})
+        return [get_chapter_dir(project_name, n) / "pages" for n in ordered]
+
+    def _download(self, session: Session, project: str, hid: str, chapter: str, entry: dict[str, Any],
+                  force: bool) -> None:
+        number, ident = str(entry.get("chapter", "")), str(entry.get("chapter_id", ""))
+        if not (CHAPTER_NUMBER.match(number) and CHAPTER_ID.match(ident)):
+            raise HelperError(f"Chapter {chapter}: the site's listing for it doesn't look right - not downloading it.")
+        url = entry.get("url") or f"{self._urls[hid]}/{entry['chapter_id']}-chapter-{entry['chapter']}"
+        if urlparse(url).netloc != urlparse(self._urls[hid]).netloc:
+            raise HelperError(f"Chapter {chapter}: its link leaves the manga's site - not downloading it.")
+
+        def record(total: int, verified: bool, extra: dict[str, Any] | None = None) -> None:
+            update_manifest_chapter(project, chapter, "pages", {
+                "source": SOURCE, "chapter_id": entry["chapter_id"], "manga_id": hid, "url": url,
+                "total_pages": total, "quality": "original", "timestamp": time.time(), "verified": verified,
+                "language": entry.get("language", ""), **(extra or {}),
+            })
+
+        record(0, False)
+        job = session.run("chapter", {
+            "url": url, "hid": hid,
+            "scroll_delay": self.config.browser_scroll_seconds,
+            "request_delay": max(1.0, self.config.request_delay_seconds),
+        }, timeout=1800)
+        data = job.result["data"]
+        total = int(data.get("pages") or 0)
+        missing = [i for i in range(1, total + 1) if i not in job.pages]
+        if not total or missing:
+            raise HelperError(f"Chapter {chapter}: the helper sent {len(job.pages)} of {total} pages.")
+
+        dest = get_chapter_dir(project, chapter) / "pages"
+        planned: list[tuple[PageFile, bytes]] = []
+        sizes: list[tuple[int, int]] = []
+        for index in range(1, total + 1):
+            _type, content, source_url = job.pages[index]
+            try:
+                kind, width, height = _check_image(content)
+            except Exception as error:
+                raise HelperError(f"Chapter {chapter} page {index} isn't a whole image ({error}) - "
+                                  f"from {source_url[:120]}") from error
+            sizes.append((width, height))
+            name = f"{page_stem(chapter, index)}{EXTENSION_BY_FORMAT.get(kind, '.' + kind.lower())}"
+            planned.append((PageFile(dest / name, source_url), content))
+
+        checks = page_checks(total, data, sizes)
+        failed = [check for check in checks if check["ok"] is False]
+        if failed:
+            raise HelperError(f"Chapter {chapter}: the pages don't add up - " + "; ".join(c["says"] for c in failed)
+                              + ". Nothing was saved; try again.")
+
+        dest.mkdir(parents=True, exist_ok=True)
+        if force:
+            remove_paths(dest.iterdir())
+        sweep_strays(dest, [page for page, _ in planned], chapter)
+        for page, content in planned:
+            partial = page.path.with_name(page.path.name + ".partial")
+            partial.write_bytes(content)
+            partial.replace(page.path)
+        widths = [w for w, _ in sizes]
+        record(total, True, {"from": data.get("source", ""), "width_min": min(widths), "width_max": max(widths),
+                             "checks": checks})
+        console.print(f"[bold green]✓ {total} page(s), {min(widths)}-{max(widths)} px wide - every check passed:[/]")
+        for check in checks:
+            mark = "[green]✓[/]" if check["ok"] else "[dim]·[/]"
+            console.print(f"   {mark} {_esc(check['says'])}")

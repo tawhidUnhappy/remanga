@@ -1,0 +1,199 @@
+"""The synthesizer every TTS engine shares.
+
+BaseWorkerSynthesizer turns synthesize() calls into requests to one
+isolated-venv worker, splitting text an engine can't take in a single call.
+The worker itself - spawn, ready handshake, auto-heal, bounded reads, stderr
+draining, shutdown - is remanga/workers/. The engine subclass (kokoro.py)
+fills in only the command line and the per-request payload."""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+from typing import Any
+
+from remanga.audio.batching import CHARS_PER_SECOND, MAX_TAKE_SECONDS
+from remanga.config import AudioConfig
+from remanga.models import ModelManager
+from remanga.narration.speakable import speakable
+from remanga.workers import ToolWorker
+
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+# What synthesize() says about a page that timed out: that a re-run costs
+# only that page.
+_TIMEOUT_ADVICE = (" Safe to just re-run; already-synthesized pages are cached and this "
+                   "one regenerates automatically.")
+
+# How much wall clock one character of text is worth, used to give a long
+# call a timeout of its own. Measured on this machine: Qwen clone mode runs
+# at 1.4x real time and about 22.5 characters per second of speech, so a
+# character costs roughly 0.062s - doubled here, because a timeout that fires
+# on a take that was merely slow throws away the whole take, while one set
+# too high only delays a failure nobody was waiting on.
+#
+# It only ever RAISES the configured timeout (see _timeout_for), so a chunked
+# per-panel call is unaffected: 117 characters of narration asks for 15s and
+# keeps the configured 300.
+SECONDS_PER_CHAR = 0.125
+
+
+def _split_text_into_chunks(text: str, max_chars: int) -> list[str]:
+    """Greedily packs sentences into chunks of at most `max_chars`, so a
+    long narration line can be sent through an engine's fixed-generation-
+    budget worker as several bounded calls instead of one that silently
+    truncates. Splits on sentence boundaries (not mid-sentence) so each
+    chunk is still natural to speak on its own; a single sentence longer
+    than max_chars on its own becomes its own (oversized) chunk rather than
+    being cut apart mid-word - rare in narration text, and still better
+    than an engine truncating it further."""
+    sentences = _SENTENCE_SPLIT_RE.split(text.replace("\n", " "))
+    chunks: list[str] = []
+    current = ""
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+        candidate = f"{current} {sentence}".strip() if current else sentence
+        if len(candidate) > max_chars and current:
+            chunks.append(current)
+            current = sentence
+        else:
+            current = candidate
+    if current:
+        chunks.append(current)
+    return chunks or [text]
+
+
+class BaseWorkerSynthesizer(ToolWorker):
+    """Owns one long-lived isolated-venv worker subprocess and speaks to it
+    over stdin/stdout for every synthesize() call, so the model loads onto
+    the GPU once per run instead of once per page. Subclasses
+    fill in: `tool_name` (selects `.tools/venv-<tool_name>`), `display_name`
+    (for console messages), `_spawn_worker()` (the process command line),
+    and `_build_request()` (the per-call JSON payload)."""
+
+    # Subclasses opt in when their engine has a fixed per-call generation
+    # budget that silently truncates the audio - no error, it just stops
+    # partway through - once the input text needs more than that budget's
+    # worth of output (a fixed max_new_tokens budget, say).
+    # None (the default) means synthesize() always makes exactly one call,
+    # unchanged from before this existed.
+    chunk_max_chars: int | None = None
+
+    # How many characters of narration a second of this engine's speech is
+    # worth, as a joined batch reads (audio/batching.py). It sizes the takes
+    # and is what a take's length is held against to spot a collapse
+    # (audio/takes.py), so an engine that reads slower than this must say so
+    # or every take it makes sits on the collapse line.
+    chars_per_second: float = CHARS_PER_SECOND
+
+    # The longest one take may be - a chapter is read in takes this long. A
+    # voice cloned from a recording drifts off it as a take goes on, so a
+    # cloning engine lowers this to CLONE_MAX_TAKE_SECONDS (audio/batching.py).
+    max_take_seconds: float = MAX_TAKE_SECONDS
+
+    # Where the engine's own generation budget runs out, if it has one: a take
+    # that comes back this long stopped rather than finished (audio/takes.py).
+    # None for an engine that reads whatever it is given.
+    ceiling_seconds: float | None = None
+
+    def __init__(self, audio_config: AudioConfig, model_manager: ModelManager):
+        self.audio_config = audio_config
+        self.model_manager = model_manager
+        self._init_worker_state()
+
+    # --- subclass hooks -----------------------------------------------
+    def use_whole_text(self) -> None:
+        """Stop splitting long text into several bounded calls.
+
+        Chunking exists because a fixed generation budget silently truncates
+        (see chunk_max_chars). Batched narration asks for the opposite: the
+        whole batch has to be ONE generation, because the continuity of the
+        voice across it is the entire point - split it back into 260-character
+        pieces and every seam it was meant to remove comes straight back, just
+        somewhere else."""
+        self.chunk_max_chars = None
+
+    def _timeout_for(self, text: str) -> float:
+        """How long this particular call may take: the configured timeout, or
+        what the text is worth if that is longer. A batch of ten thousand
+        characters cannot be held to a number chosen for one panel."""
+        return max(self._synth_timeout_seconds(), len(text) * SECONDS_PER_CHAR)
+
+    def _build_request(self, text: str, output_wav: Path, voice: str | None = None) -> dict[str, Any]:
+        """One synthesize request. Which voice it is in comes from the
+        engine's own settings block, so nothing above has to know whether
+        that is a name, a description or a recording - `voice` overrides it
+        for one call, which is how the voice sampler reads the same line in
+        each of an engine's voices without reloading the model."""
+        raise NotImplementedError
+
+    def _synth_timeout_seconds(self) -> float:
+        raise NotImplementedError
+
+    def _post_synthesize(self, output_wav: Path, request: dict[str, Any]) -> None:
+        """Optional per-engine step after a successful synthesis. No engine
+        uses one: every voice is used raw - never sped up, slowed or filtered
+        (user, 2026-10-27; the old ffmpeg-atempo speed fallback is gone)."""
+
+    # --- requests to the worker -----------------------------------------
+    def synthesize(self, text: str, output_wav: Path, voice: str | None = None) -> None:
+        """Synthesizes speech via this engine's worker process. Text longer
+        than `chunk_max_chars` (when the engine sets one) is split on
+        sentence boundaries into several bounded calls first and the
+        resulting clips re-joined into `output_wav` - see chunk_max_chars'
+        docstring above for why. The rest of the pipeline never sees the
+        difference: still exactly one WAV at `output_wav` either way.
+
+        Every engine reads `speakable(text)` (narration/speakable.py): what
+        no engine can voice - emoji, symbols, kana - is taken out here."""
+        text = speakable(text)
+        if not text:
+            raise ValueError("this narration has nothing a voice can read once its symbols are taken out")
+        if self.chunk_max_chars and len(text) > self.chunk_max_chars:
+            chunks = _split_text_into_chunks(text, self.chunk_max_chars)
+            if len(chunks) > 1:
+                self._synthesize_chunks(chunks, output_wav, voice)
+                return
+        self._synthesize_once(text, output_wav, voice)
+
+    def _synthesize_once(self, text: str, output_wav: Path, voice: str | None = None) -> None:
+        """One bounded worker call, start to finish - what synthesize() used
+        to do inline before chunking existed. Also what each individual
+        chunk goes through in the chunked path below."""
+        request = self._build_request(text, output_wav, voice)
+        self._request(
+            request, self._timeout_for(text), action="synthesis",
+            on_timeout=f" on page text {text[:80]!r}", advice=_TIMEOUT_ADVICE,
+        )
+        self._post_synthesize(output_wav, request)
+
+    def _synthesize_chunks(self, chunks: list[str], output_wav: Path, voice: str | None = None) -> None:
+        """Synthesizes each chunk to its own temp WAV via the normal
+        single-call path (so per-chunk post-processing like the speed
+        ffmpeg-atempo fallback still applies), concatenates them in order,
+        and atomically replaces `output_wav` with the joined result. Temp
+        parts are always cleaned up, success or failure."""
+        from pydub import AudioSegment  # already a hard dependency (see audio/tts.py)
+
+        part_paths: list[Path] = []
+        try:
+            for i, chunk in enumerate(chunks):
+                # ".wav" suffix kept last (not ".wav.tmp") - some workers
+                # pick their output format from
+                # the file extension and error on anything else.
+                part_path = output_wav.with_name(f"{output_wav.stem}.chunk{i:03d}.tmp.wav")
+                self._synthesize_once(chunk, part_path, voice)
+                part_paths.append(part_path)
+
+            combined = AudioSegment.empty()
+            for part_path in part_paths:
+                combined += AudioSegment.from_file(part_path)
+
+            tmp_output = output_wav.with_name(output_wav.name + ".tmp")
+            combined.export(tmp_output, format="wav")
+            tmp_output.replace(output_wav)
+        finally:
+            for part_path in part_paths:
+                part_path.unlink(missing_ok=True)

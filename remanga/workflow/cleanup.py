@@ -1,0 +1,212 @@
+"""Resetting or deleting a chapter - the one place that removes a user's files,
+and the guard that keeps it inside the project it was given."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from remanga.paths import (
+    GENERATED_KINDS,
+    get_chapter_dir,
+    get_generated_dir,
+    get_narration_path,
+    get_panels_dir,
+    get_project_dir,
+)
+from remanga.store.locks import chapter_lock
+
+# What making a video produces, and nothing else. The PDF is deliberately
+# not in here: it is slow to make, it is what the user hands to the LLM, and
+# nothing about narrating or rendering can invalidate it. Neither is anything
+# under chapters/ - the pages, the cut panels, crops.json and the pasted
+# narration are what a run is made FROM, and losing the narration would mean
+# going back to the LLM.
+REMADE_KINDS = ("audio", "audio_modified", "subtitles", "video")
+
+
+def inside(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return path.resolve() != root.resolve()
+    except ValueError:
+        return False
+
+
+def _chapter_paths(project: str, chapter: str, *, with_pages: bool) -> list[Path]:
+    """What resetting (or, `with_pages`, deleting) a chapter aims at - each
+    one checked to be a chapter folder or file strictly inside this project,
+    so a blank or odd project/chapter name can never widen it.
+
+    Everything it aims at, including what isn't there. The caller deletes the
+    ones that exist, and prunes from all of them: a second reset of a chapter
+    whose pdf/chapter_3 went in the first one must still be able to take the
+    empty pdf/ the first one left behind."""
+    if not str(project).strip() or not str(chapter).strip():
+        raise ValueError("A project and a chapter are needed.")
+    project_dir = get_project_dir(project)
+    chapter_dir = get_chapter_dir(project, chapter)
+    paths = [get_generated_dir(project, kind, chapter, create=False) for kind in GENERATED_KINDS]
+    if with_pages:
+        paths.append(chapter_dir)
+    else:
+        # The panels are cut again from crops.json in seconds; the marks and
+        # the pasted narration are the two things nothing can rebuild, and
+        # only the narration is a reset's business.
+        paths += [get_narration_path(project, chapter), get_panels_dir(project, chapter, create=False)]
+    for path in paths:
+        if not inside(path, project_dir) or not path.name.startswith(("chapter_", "narration.json", "panels")):
+            raise ValueError(f"Refusing to delete {path} - it isn't one chapter's file inside {project_dir}.")
+    return paths
+
+
+def prune_empty_dirs(paths: list[Path], project_dir: Path) -> list[Path]:
+    """Removes the folders a deletion has left empty, walking up from each
+    path it aimed at and stopping below the project's own folder.
+
+    A reset takes a chapter out of pdf/, audio/, audio_modified/, subtitles/
+    and video/, and on the last (often the only) chapter that leaves five
+    empty folders standing in the project - a layout that says work was done
+    here when none of it is left. The chapter folder itself is the same story
+    after a delete: chapters/ stays behind, empty.
+
+    Only ever a folder this call emptied, and only inside the project (inside
+    excludes the project folder itself, so project.json and a project with no
+    chapters left are never at risk). A folder someone else is writing into
+    while this runs simply isn't empty, and rmdir refusing it is the right
+    answer, so an OSError ends that walk instead of failing the reset that has
+    already happened."""
+    pruned: list[Path] = []
+    for path in paths:
+        parent = path.parent
+        while inside(parent, project_dir) and parent.is_dir():
+            try:
+                parent.rmdir()   # refuses a folder that isn't empty - the check and the removal in one step
+            except OSError:
+                break
+            pruned.append(parent)
+            parent = parent.parent
+    return pruned
+
+
+def guard(paths: list[Path], project: str, names: tuple[str, ...] = ("chapter_",)) -> None:
+    """Refuses unless every path is strictly inside the project and named like
+    one chapter's own (`names`) - so a blank or odd name can never widen a delete."""
+    project_dir = get_project_dir(project)
+    for path in paths:
+        if not inside(path, project_dir) or not path.name.startswith(names):
+            raise ValueError(f"Refusing to delete {path} - it isn't one chapter's file inside {project_dir}.")
+
+
+def delete_paths(paths: list[Path], project: str, *, prune: bool = True) -> list[Path]:
+    """Deletes the paths that exist (folders and files alike) and, with
+    `prune`, the folders that leaves empty. Returns what went. Callers guard first."""
+    import shutil
+
+    removed = [path for path in paths if path.exists()]
+    for path in removed:
+        if path.is_dir():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+    return removed + (prune_empty_dirs(paths, get_project_dir(project)) if prune else [])
+
+
+def drop_mix_and_video(project: str, chapter: str) -> list[Path]:
+    """Deletes a chapter's mixed master and rendered video, keeping the raw
+    synthesized clips (audio/) and audio_timing.json - what Remake audio
+    leaves behind after narrating, mixing and rendering once to prove the
+    narration is good, so the mix and the render can be redone later (Make
+    video, unforced) from the clips already on disk rather than kept twice
+    over."""
+    paths = [get_generated_dir(project, kind, chapter, create=False) for kind in ("audio_modified", "video")]
+    guard(paths, project)
+    with chapter_lock(project, chapter):
+        return delete_paths(paths, project, prune=False)
+
+
+def drop_audio_and_video(project: str, chapter: str) -> list[Path]:
+    """Deletes everything a video run makes - the narration clips, the mix,
+    the word timings and the rendered video - so the run that follows starts
+    from nothing (user request, 2026-09-21).
+
+    Both Make video and Remake video do this, which is what makes a run mean
+    the same thing every time: what is on disk afterwards is what THIS run
+    produced, not a layer over whatever an earlier one left. It no longer
+    costs the reuse: the folders are a view of the store (store/versions.py),
+    so a take or a video made before comes back from there, and what was here
+    is kept as a version before a run clears it.
+
+    It is also what clears a folder that has been through a change of
+    approach: switching from a clip per panel to batched takes leaves the old
+    clips behind, and they are neither used nor obviously stale.
+
+    The PDF is never touched (see REMADE_KINDS), and neither is anything the
+    run is made from."""
+    paths = [get_generated_dir(project, kind, chapter, create=False) for kind in REMADE_KINDS]
+    guard(paths, project)
+    with chapter_lock(project, chapter):
+        return delete_paths(paths, project, prune=False)
+
+
+def drop_derived(project: str, chapter: str) -> list[Path]:
+    """Deletes everything a chapter's sources produce - the cut panels, the
+    PDF, the narration audio, the mix, the subtitles and the video - keeping
+    only what nothing can rebuild: the pages, the panel marks (crops.json)
+    and the pasted narration.json. The start of Remake from source."""
+    paths = [get_generated_dir(project, kind, chapter, create=False) for kind in GENERATED_KINDS]
+    paths.append(get_panels_dir(project, chapter, create=False))
+    guard(paths, project, ("chapter_", "panels"))
+    with chapter_lock(project, chapter):
+        return delete_paths(paths, project)
+
+
+def reset_chapter(project: str, chapter: str, *, delete_pages: bool = False) -> list[Path]:
+    """Deletes a chapter's PDF, cut panels, pasted narration, audio and video
+    - and, with `delete_pages`, its downloaded pages and marks too, removing
+    the chapter. Returns what was removed, the folders left empty by it
+    included (user request, 2026-09-22): a reset that leaves pdf/, audio/,
+    audio_modified/, subtitles/ and video/ standing there empty hasn't really
+    put the project back as it was.
+
+    Nothing has to recreate them: every folder here is made on demand the
+    next time something is written to it (remanga/paths/projects.py). The
+    chapter's versions (store/versions.py) are not touched - they are deleted
+    one by one, in the Versions menu, or with the project."""
+    with chapter_lock(project, chapter):
+        return delete_paths(_chapter_paths(project, chapter, with_pages=delete_pages), project)
+
+
+def project_footprint(project: str) -> dict:
+    """What deleting the project would delete: its size, files, chapters and finished videos."""
+    root = get_project_dir(project)
+    files = [p for p in root.rglob("*") if p.is_file() and not p.is_symlink()] if root.is_dir() else []
+    chapters = root / "chapters"
+    return {
+        "bytes": sum(p.stat().st_size for p in files),
+        "files": len(files),
+        "chapters": sum(1 for c in chapters.iterdir() if c.is_dir()) if chapters.is_dir() else 0,
+        "videos": sum(1 for p in files if p.suffix == ".mp4"),
+    }
+
+
+def delete_project(project: str) -> Path:
+    """Deletes the whole project - its folder (pages, marks, narration, audio,
+    videos, everything) and its jobs in the queue. Refuses anything that isn't
+    exactly one project folder directly inside projects/ (no blank or odd
+    name, no link) - so it can never reach further."""
+    import shutil
+
+    from remanga.paths import get_projects_dir
+    from remanga.workflow.queue import load_queue, save_queue
+
+    name = str(project).strip()
+    folder = get_project_dir(name)
+    if (not name or name in (".", "..") or folder.is_symlink() or not folder.is_dir()
+            or folder.resolve().parent != get_projects_dir().resolve()):
+        raise ValueError(f"Refusing to delete {folder} - it isn't one project folder in projects/.")
+    jobs = load_queue()
+    kept = [job for job in jobs if job.project != name]
+    if len(kept) != len(jobs):
+        save_queue(kept)
+    shutil.rmtree(folder)
+    return folder

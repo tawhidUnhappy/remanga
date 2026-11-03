@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>remanga - Narration Reviewer</title>
+<link rel="icon" href="/shared/img/favicon.ico" sizes="any">
+<link rel="stylesheet" href="/shared/css/theme.css">
+<script src="/shared/js/look.js"></script>
+<link rel="stylesheet" href="/shared/css/screens.css">
+<link rel="stylesheet" href="/shared/css/panel-list.css">
+<link rel="stylesheet" href="/static/css/review.css">
+<link rel="stylesheet" href="/shared/css/theme-android.css">
+</head>
+<body>
+<header>
+  <div class="brand"><img class="logo" src="/shared/img/logo.png" alt="remanga" width="26" height="26">
+    <span class="brand-name">remanga</span><span class="brand-sub">Narration Reviewer</span></div>
+  <span class="meta" id="chapter-meta">loading…</span>
+  <div class="spacer"></div>
+  <span class="counts" id="counts"></span>
+</header>
+
+<main>
+  <div id="loading">Loading narration…</div>
+  <p class="hint" id="hint" style="display:none">
+    Every panel below shows its image, its narration line, and a review field. Click an image for a full-size
+    lightbox (Esc or click to close). Leave a field empty if the panel is correct; type in it to flag what's
+    wrong - typing is all it takes, no separate click needed. When you're done, Submit sends this round's
+    flags to <code>narration_review.json</code>.
+  </p>
+  <div id="panel-list"></div>
+  <div class="general-note" id="general-note-wrap" style="display:none">
+    <label for="general-note">Overall note for this chapter (optional - anything that isn't about one specific panel)</label>
+    <textarea id="general-note" placeholder="e.g. speaker attribution keeps swapping in group scenes, punctuation is overused in the back half..."></textarea>
+  </div>
+</main>
+
+<footer id="footer" style="display:none">
+  <button id="btn-approve" class="primary">Approve — no issues, continue to voice synthesis</button>
+  <button id="btn-submit">Submit flagged issues for another LLM pass</button>
+</footer>
+
+<div id="lightbox">
+  <span class="lightbox-hint">click anywhere to close</span>
+  <img id="lightbox-img" alt="">
+</div>
+
+<script type="module" src="/static/js/main.js"></script>
+</body>
+</html>

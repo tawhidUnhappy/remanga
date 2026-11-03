@@ -1,0 +1,42 @@
+"""Audio settings: the volume and the background music - see remanga/audio/mix.py.
+
+Deliberately few (user request, 2026-10-25: "just keep the original vocal and
+volume and background music volume"). The narration is the engine's take as
+it read it: no effects, no pause cutting, the whole chapter in as few takes as
+the engine allows, a narrator's pause (420 ms) between takes. The presets and the voice chain
+were removed."""
+
+from __future__ import annotations
+
+from pydantic import AliasChoices, Field
+
+from remanga.config.base import ConfigModel
+
+
+class AudioConfig(ConfigModel):
+    sample_rate: int = 44100
+    # How loud the finished chapter is, in LUFS: one gain over the whole mix,
+    # measured. -14 is what YouTube plays at - a quieter video is not turned
+    # up there and sounds weaker next to others.
+    volume_lufs: float = Field(-14.0, validation_alias=AliasChoices("volume_lufs", "loudness_target_lufs"))
+    # Background music: off until a file is chosen.
+    bgm_enabled: bool = False
+    bgm_path: str = ""
+    # How far the music's LOUD PARTS sit under the narration, in loudness
+    # units (LU): the voice measured whole, the music by its loud parts
+    # (audio/mix.py:music_gain_db), so a chorus or a drop never comes up
+    # louder than this, whatever the track. 23.5 is where a recap channel the
+    # user likes sits, measured 2026-10-27 the same way (its voice and music
+    # pulled apart with Demucs, our own video too, to cancel the method's
+    # error): its music 3.5 LU further under than our old 20. Under 14 the
+    # music starts to mask consonants on phone speakers.
+    bgm_below_voice_lu: float = 23.5
+    # The level last typed in as "Custom..." (Settings - Music volume), kept so
+    # it is offered again next time beside the presets, whichever level is in
+    # use. None until one has been typed.
+    bgm_custom_lu: float | None = None
+    # Seconds of quiet between one play of the song and the next, when a
+    # chapter outlasts it (audio/master.py:music_bed): the song fades out,
+    # rests, and starts again from its intro, as a playlist would. 0 = no
+    # pause, the end crossfades straight into the start.
+    bgm_loop_gap_s: float = 2.0

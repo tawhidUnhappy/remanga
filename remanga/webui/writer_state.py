@@ -1,0 +1,77 @@
+"""In-memory session state for one narration-writing run: the panel images
+found in a chapter's panels/ folder, paired with whatever narration text the
+user types for each one in the Narration Writer web UI. No Flask/HTTP here -
+see writer_routes.py for the API that reads/writes this.
+
+Mirrors reviewer_state.py's shape (a flat list of panels the UI renders one
+card per), but the per-panel field IS the narration text itself, not a
+review note, and finishing writes narration.json directly instead of a
+separate review file.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from remanga.json_io import has_real_json_content
+from remanga.narration import PANEL_IMAGE_EXTS, narration_document, written_panels
+from remanga.webui.panel_session import PanelPassState
+
+
+class WriterState(PanelPassState):
+    """All in-memory state for one narration-writing session. One chapter at a time."""
+
+    def __init__(self, chapter_dir: Path, chapter_num: str):
+        super().__init__(chapter_dir, chapter_num)
+        self.narration_path = self.chapter_dir / "narration.json"
+
+        if not self.panels_dir.is_dir() or not any(self.panels_dir.glob("*")):
+            raise FileNotFoundError(
+                f"No cropped panels found at {self.panels_dir} - mark this chapter's "
+                "panels first, then make its PDF (which cuts them)."
+            )
+
+        panel_ids = sorted(p.stem for p in self.panels_dir.glob("*") if p.suffix.lower() in PANEL_IMAGE_EXTS)
+
+        # Re-opening this UI on a draft (or on an LLM's reply) shows what is
+        # already written rather than blanking it, and the reply's memory
+        # section is kept to be written back out with it.
+        existing_text, self.memory = written_panels(self.narration_path)
+
+        self.texts: dict[str, str] = {pid: existing_text.get(pid, "") for pid in panel_ids}
+        self.panel_order: list[str] = panel_ids
+
+        # Generate the empty narration.json placeholder up front (same
+        # convention as the wizard's own narration.json step) so the file
+        # exists on disk from the moment this UI opens, even if the user
+        # closes the tab without submitting.
+        if not has_real_json_content(self.narration_path):
+            self.narration_path.write_text("", encoding="utf-8")
+
+    def to_payload(self) -> dict[str, Any]:
+        panels = [
+            {
+                "panel_id": pid,
+                "text": self.texts.get(pid, ""),
+                "image": self.panel_image_filename(pid),
+            }
+            for pid in self.panel_order
+        ]
+        return {
+            "chapter": self.chapter_num,
+            "total_panels": len(panels),
+            "panels": panels,
+        }
+
+    def set_text(self, panel_id: str, text: str) -> None:
+        if panel_id in self.texts:
+            self.texts[panel_id] = text or ""
+
+    def build_narration_json(self) -> dict[str, Any]:
+        """Built through remanga.narration.narration_document, so a file
+        written here and a reply pasted from an LLM are the same file - the
+        checks before narrating do not care which one it was."""
+        return narration_document(
+            self.chapter_num, [(pid, self.texts.get(pid, "")) for pid in self.panel_order], self.memory,
+        )

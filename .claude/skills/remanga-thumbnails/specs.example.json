@@ -1,0 +1,14 @@
+{
+ "two_tiles": {"project": "MyManga", "chapter": "1",
+  "tiles": [{"panel": "001_012_01", "w": 0.55, "zoom": 1.25, "cx": 0.5, "cy": 0.35, "tint": ["#2a0505", "#ffd9cc"], "contrast": 1.15},
+            {"panel": "001_018_02", "w": 0.45, "zoom": 1.6, "cx": 0.3, "cy": 0.45}],
+  "labels": [{"text": "VILLAIN", "at": [0.22, 0.84], "size": 104, "color": "#FF3B30"},
+             {"text": "THE REAL\nHERO", "at": [0.78, 0.8], "size": 84},
+             {"text": "CH {num}", "at": [0.08, 0.07], "size": 50}]},
+ "colour_cover": {"project": "MyManga", "chapter": "1",
+  "tiles": [{"page": "001_002.jpg", "box": [530, 60, 1085, 1000], "w": 0.5, "saturation": 1.15},
+            {"panel": "001_034_02", "w": 0.5, "zoom": 1.2, "cx": 0.4, "cy": 0.0}],
+  "labels": [{"text": "NO FLAG?!", "at": [0.25, 0.86], "size": 96, "color": "#FF5FA8"},
+             {"text": "FLAG\nBREAKER", "at": [0.75, 0.82], "size": 84},
+             {"text": "CH {num}", "at": [0.92, 0.07], "size": 50}]}
+}
