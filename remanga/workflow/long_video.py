@@ -126,8 +126,10 @@ def prepare_chapter(project: str, chapter: str, config: RemangaConfig) -> None:
         console.print(f"[bold]Chapter {chapter}:[/] not narrated yet - making its video first")
         make_video(project, chapter, config)
         return
-    if not get_master_audio_path(project, chapter, create=False).exists():
-        mix(project, chapter, config)
+    # Always asked: the mix is fingerprinted, so it costs nothing when nothing changed, and when the
+    # music or the sound settings did, the render below must not see the old master audio - it once
+    # kept an old-music video under the new music's key.
+    mix(project, chapter, config)
     # The join takes the chapter's picture, not its finished video: render
     # makes sure it is there and current, rather than putting a finished
     # video back from the store without one.
