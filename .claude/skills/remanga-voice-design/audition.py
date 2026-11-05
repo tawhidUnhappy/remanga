@@ -185,8 +185,9 @@ def main() -> None:
                     str(out / f"{n}-{key_of(c)}.mp3")], check=True, capture=True)
 
     def card(r: dict) -> str:
-        return (f"{r['pitch_hz']} Hz, moves {r['movement_st']} st, {r['syllables_per_s']} syl/s, "
-                f"pause {r['pause_ms']} ms, heard {r['heard_pct']}%")
+        # The card prints 60 characters of it (workflow/voice_video.py).
+        return (f"{r['pitch_hz']} Hz, {r['movement_st']} st, {r['syllables_per_s']} syl/s, "
+                f"pauses {r['pause_ms']} ms, heard {r['heard_pct']}%")
 
     labelled_video([(f"{r['key']}", card(r), work / f"{r['key']}.wav") for r in rows],
                    "Drama 3 narrator audition", out / "ALL-in-a-row.mp4", config.audio.sample_rate)

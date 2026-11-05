@@ -46,7 +46,10 @@ PYTHONPATH=. .venv/bin/python .claude/skills/remanga-voice-design/audition.py CA
   syllables a second, 465-715 ms pauses - a calm recap narrator measured on recap channels. Pass
   other targets as a JSON object in the 4th argument.
 
-The numbers rank; a person listening decides. Present the labelled video, not just the table.
+The distance does not see how much the pauses vary - a voice whose every pause is ~300 ms ranks
+well yet sounds rushed beside one that pauses 0.3 to 1 s. Read `longest_pause_ms` and the gaps in
+`_work/*.words.json` for the top few. The numbers rank; a person listening decides: present the
+labelled video, not just the table.
 
 ## Using the winner
 
