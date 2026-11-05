@@ -41,12 +41,25 @@ remanga-ops) says only WHAT: the image, a box around the face, boxes to keep out
 the words. `remanga/upload_plan/framing.py` lays it out and writes an ordinary `thumbnail.json`, so a
 weak result can be fixed in the reply (another image, a tighter framing, an `avoid` box) or tuned by
 hand. What a reply replaces is kept in `upload/old_<time>/`. Claude can write the reply itself: make
-the upload PDF, look at its images (`pdfimages -j`), write `upload_reply.txt`, use it, LOOK at the
-previews.
+the upload PDF, look at what it offered (`thumb.py offered P` - contact sheets by id), read the boxes
+off the chosen images (`thumb.py boxes P ID ...` - each with the reply's 0-1000 grid), write
+`upload_reply.txt`, use it, LOOK at the previews.
+
+How `framing.py` crops decides what a reply can achieve:
+- The crop's height is the subject box's height divided by the framing's fill (close 0.62, medium
+  0.42, wide 0.86), its width the tile's shape; it may shift by up to 30% and tighten to 80% to keep an
+  `avoid` box out, but never cuts more than 3% of the subject. So a balloon right beside a face cannot
+  be avoided while the subject box takes in the whole head: box just the face, or pick an image whose
+  balloons sit clear of it.
+- The CH badge takes the first corner - top left, top right, bottom left - that no face box or label
+  touches. A tightened crop lifts the face into the top corners; a long label on the right-hand tile
+  goes to the top band (YouTube's length stamp holds the bottom right). `upload-from-reply` warns when
+  a set gets no badge: box a subject tighter, or swap the tiles.
 
 ## Making it by hand
 
-`thumb.py` (this folder, run with remanga's `.venv/bin/python` from the repo root):
+`thumb.py` (this folder, run with remanga's `.venv/bin/python` from the repo root; `offered` and
+`boxes` are for the reply, the rest for a hand-made spec):
 
 1. **Read the story** - the narration in `chapters/chapter_N/narration.json`. Find the hook: who the
    main character is and what the twist makes them.

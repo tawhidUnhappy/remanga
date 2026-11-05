@@ -20,7 +20,7 @@ from remanga.paths import get_upload_dir, get_upload_pdf_dir, load_project_metad
 from remanga.upload_plan import FIX_REQUEST_NAME, UploadReplyError, read_upload_reply
 from remanga.upload_plan.description import description_text
 from remanga.upload_plan.facts import credits
-from remanga.upload_plan.framing import spec_for
+from remanga.upload_plan.framing import BADGE_TEXT, spec_for
 from remanga.upload_plan.handoff import read_record
 from remanga.upload_plan.reply import fix_request_text, misplaced
 from remanga.workflow.upload import chapter_fields, stamp_all
@@ -75,6 +75,10 @@ def upload_from_reply(project: str, config: RemangaConfig) -> UploadReplyResult:
         suffix = "" if variant.letter == "A" else f"_{variant.letter.lower()}"
         files[f"title{suffix}.txt"] = variant.title + "\n"
         specs[variant.letter] = spec_for(project, variant, record)
+        if variant.badge and not any(lab.get("text") == BADGE_TEXT for lab in specs[variant.letter]["labels"]):
+            plan.warnings.append(f"Set {variant.letter} has no chapter badge: no corner was free (a face or a label "
+                                 f"holds the top corners and the bottom-left). Box a tile's subject tighter, around "
+                                 f"the face, or swap the tiles, and use the reply again.")
         files[f"thumbnail{suffix}.json"] = json.dumps(specs[variant.letter], indent=1) + "\n"
     files["description.txt"] = description_text(plan.hook, plan.hashtags,
                                                 load_project_metadata(project).get("manga_url", ""), found)

@@ -261,6 +261,12 @@ every count of its pages agrees. Mock tests use their own port (47699) - the rea
 - and must stub `session.explain_loading`, or a test opens about:debugging in the user's Firefox.
 UI tests must never open a comix.to project's chapter list for the same reason.
 
+**Upload set.** A set with no CH badge: `place_badge` needs a corner no face box or label touches, and
+the crop scores ties went by float noise (0.2 + 0.1 > 0.1 + 0.2), so a tightened crop won and lifted
+the face into the corner. Scores are rounded (ties go to the least-tightened crop) and
+`upload-from-reply` warns when a set gets no badge. Read reply boxes off `thumb.py boxes` (the
+thumbnails skill), never off the PDF's own rendering.
+
 **UI (Textual).** Nothing is highlighted until an arrow key or a click; a single click highlights,
 a double click (or Enter) chooses - a test that presses Enter first "hangs", by design. A subclass
 `_on_click` must `event.prevent_default()`; `OptionList.__init__` highlights option 0 itself; `log`

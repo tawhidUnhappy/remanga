@@ -38,6 +38,7 @@ GAP = 14             # px between a label and the face it names
 DURATION_CORNER = (W * 0.8, H * 0.8, W, H)   # YouTube's length stamp
 SIZE_RANGE = (54, 112)
 BADGE_SIZE = 50
+BADGE_TEXT = "CH {num}"   # the chapters, filled in when stamped beside each video
 ARROW_GAP = 30       # an arrow's tip stays this far from the face
 TINT_CONTRAST, COLOUR_SATURATION = 1.12, 1.15
 
@@ -117,7 +118,10 @@ def crop_for(size: tuple[int, int], tile: Tile, tile_w: int) -> Rect:
                 if _overlap(rect, subject) < _area(subject) * 0.97:   # the subject must stay in whole
                     continue
                 hidden = sum(_overlap(rect, a) for a in avoid) / _area(rect)
-                score = hidden * 10 + abs(dx) + abs(dy) + (1 - tighter)
+                # Rounded, so an exact tie goes to the crop found first - the least tightened:
+                # unrounded, 0.2 + 0.1 beat 0.1 + 0.2 by float noise, the tighter crop won
+                # and lifted the face into the badge's corner.
+                score = round(hidden * 10 + abs(dx) + abs(dy) + (1 - tighter), 6)
                 if score < best_score:
                     best, best_score = rect, score
     return best
@@ -245,7 +249,7 @@ def place_badge(text_width_sample: str, faces: list[Rect], taken: list[Rect]) ->
         if not any(_overlap(rect, f) > 0.03 * _area(rect) for f in faces) and not any(
                 _overlap(rect, t) > 0 for t in taken):
             taken.append(rect)
-            return {"text": "CH {num}", "at": [round(cx / W, 4), round(cy / H, 4)], "size": BADGE_SIZE}
+            return {"text": BADGE_TEXT, "at": [round(cx / W, 4), round(cy / H, 4)], "size": BADGE_SIZE}
     return None
 
 

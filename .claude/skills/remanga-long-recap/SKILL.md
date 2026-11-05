@@ -70,8 +70,10 @@ same checks apply, and any step can go back to the user's own LLM: the PDFs and 
    belongs to the render; a GPU job beside a big TTS model can kill a take):
    `./run.sh upload-pdf -p P -c <the first few chapters>`, extract its images
    (`pdfimages -j pdf/upload/upload_1.pdf OUT/i`) and its text (`pdftotext`), look at the strongest
-   candidates, write `projects/P/upload/upload_reply.txt` following `prompts/upload.md` - three
-   different angles, the faces boxed, anything to keep out boxed as `avoid` - then
+   candidates (`.claude/skills/remanga-thumbnails/thumb.py offered P`, then `thumb.py boxes P ID ...` to
+   read the boxes on the reply's grid), write `projects/P/upload/upload_reply.txt` following
+   `prompts/upload.md` - three different angles, the faces boxed, anything to keep out boxed as
+   `avoid` - then
    `./run.sh upload-from-reply -p P` and LOOK at `upload/preview_a.jpg` ... `_c`. Fix a weak one in
    the reply (a tighter framing, another image, an avoid box) and use it again.
 6. **Render, in the background, from the first finished chapter on** - `render_queue.py` renders each

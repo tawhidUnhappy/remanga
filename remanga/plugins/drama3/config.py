@@ -37,6 +37,13 @@ DRAMA_VOICES: tuple[DramaVoice, ...] = (
     # it is what the voice file was made from.
     DramaVoice("smooth_young_male", "Smooth young male narrator",
                "[smooth, slightly deep young man's voice, casual]", "smooth, slightly deep, casual"),
+    # Designed with .claude/skills/remanga-voice-design: of ten described voices reading the same
+    # narration, seed 1 of this one came closest to a calm recap narrator by the numbers (~101 Hz,
+    # 10 semitones of movement, 4.2 syllables a second, pauses varied 0.3-1.0 s) with no word added
+    # or dropped. As above, the cue stays word for word - with the seed it made the voice file.
+    DramaVoice("rich_young_narrator", "Rich young male narrator",
+               "[rich, warm young male narrator, smooth with clear diction, gentle storytelling]",
+               "rich, warm, clear diction"),
     DramaVoice("model", "Model's choice", "",
                "no description - the model picks, and the seed decides"),
 )
