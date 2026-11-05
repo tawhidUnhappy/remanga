@@ -200,7 +200,9 @@ entries carry no inner space (`7:1234-5678`).
 - A panel synthesized alone resets the voice's tone, so panels are read in batched takes and
   faster-whisper finds each panel inside its take. Whisper is trusted for WHEN, never WHAT; it
   refuses below 90% match (`align.MIN_MATCH_RATIO`) because a misalignment is silent. A name whisper
-  spells its own way counts as heard when 80%+ of its letters agree.
+  spells its own way counts as heard when 80%+ of its letters agree, or when it sounds the same
+  (`_sound_key`: arcs/arx, rayzer/razor) - letters alone failed a take that said every word, at
+  87%, because two invented names came up eight times in 62 words. A dropped sentence still fails.
 - Silence cannot find panel boundaries (a model pauses inside panels as long as between them).
 - A long take can collapse (a model reads a few panels then emits silence to the token budget):
   caught before transcription by length vs the ENGINE's own pace (`chars_per_second` - each engine

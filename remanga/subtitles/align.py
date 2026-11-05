@@ -46,6 +46,15 @@ MAX_UNANCHORED_SHARE = 0.05
 SPELLING_SIMILARITY = 0.8
 SPELLING_RUN = 4
 
+# Or written with other letters for the same sounds - "Arcs" -> "arx", "Rayzer" -> "razor",
+# "Anciness" -> "ansonis" (their letters only 0.57, 0.73 and 0.53 alike): counted as heard when
+# their sound keys (_sound_key) are the same and at least this long. Measured: a take that said
+# every word read 87% because two invented names came up eight times in 62 words. A short key
+# would match too much ("kt" is cat and kit), so it must have SOUND_KEY_MIN letters.
+SOUND_KEY_MIN = 3
+# Spellings that stand for the sounds the key keeps, tried in this order.
+_SAID_AS = (("ph", "f"), ("ck", "k"), ("qu", "kw"), ("x", "ks"), ("wh", "w"), ("gh", ""), ("kn", "n"), ("wr", "r"))
+
 
 class AlignmentError(RuntimeError):
     """The narration and the audio could not be lined up well enough to cut
@@ -161,8 +170,31 @@ def _spelled_alike(script: list[str], heard: list[str]) -> bool:
     another way (see SPELLING_SIMILARITY)."""
     if len(script) > SPELLING_RUN or len(heard) > SPELLING_RUN:
         return False
-    letters = SequenceMatcher(a="".join(script), b="".join(heard), autojunk=False)
-    return letters.ratio() >= SPELLING_SIMILARITY
+    said, written = "".join(script), "".join(heard)
+    if SequenceMatcher(a=said, b=written, autojunk=False).ratio() >= SPELLING_SIMILARITY:
+        return True
+    key = _sound_key(said)
+    return len(key) >= SOUND_KEY_MIN and key == _sound_key(written)
+
+
+def _sound_key(text: str) -> str:
+    """Roughly how a word sounds: its first letter, then its consonants as they
+    are said (x is ks, c before e/i/y is s and k otherwise, z is s), vowels
+    and doubled letters dropped - "arcs" and "arx" are both "arks"."""
+    word = "".join(ch for ch in text.lower() if ch.isalpha())
+    for spelled, said in _SAID_AS:
+        word = word.replace(spelled, said)
+    key: list[str] = []
+    for i, ch in enumerate(word):
+        if ch == "c":
+            ch = "s" if word[i + 1:i + 2] in ("e", "i", "y") else "k"
+        elif ch == "z":
+            ch = "s"
+        elif ch in "aeiouy" and i > 0:
+            continue
+        if not key or key[-1] != ch:
+            key.append(ch)
+    return "".join(key)
 
 
 def _fill_and_close(panels: list[tuple[str, str]], first: dict[int, float], last: dict[int, float],
