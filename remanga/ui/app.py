@@ -81,6 +81,22 @@ class RemangaApp(App):
         if not self.machine.menus.engine_chosen:
             self.run_worker(choose_engine(self, self.machine), exclusive=True, group="first-run")
 
+    def on_descendant_blur(self) -> None:
+        """Focus never stays nowhere: a click on a label, the title bar or empty space (or a dialog closing)
+        used to leave the keys going to no widget, so typing was lost until a click on the list or field.
+        The screen's first focusable widget - its list, table or text field - takes the keys back."""
+        self.call_later(self._keep_focus)
+
+    def _keep_focus(self) -> None:
+        screen = self.screen
+        if screen.focused is None and not isinstance(screen, TaskScreen):
+            chain = screen.focus_chain
+            if chain:
+                screen.set_focus(chain[0])
+
+    def on_screen_resume(self) -> None:
+        self.call_later(self._keep_focus)
+
     async def action_quit(self) -> None:
         if isinstance(self.screen, TaskScreen):
             self.notify("Still working - press Ctrl+C to stop it first.", severity="warning")
