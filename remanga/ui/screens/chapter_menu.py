@@ -54,49 +54,52 @@ class ChapterMenu:
                                 "and narrated audio - lists each mismatch, makes nothing", "check"))
         else:
             marked = any(workflow.has_marks(project, ch) for ch in chapters)
-            options.append(("Mark panels", "open the marker in the browser - it finds them, you fix them; "
-                            "only the marks are saved", "mark"))
-            if marked:
-                options += [("Remark panels", "throw the saved marks away and mark again - every panel is "
-                             "proposed afresh", "remark"),
-                            ("Create panels", "cut the marked panels out of the pages", "panels")]
-            options.append(("Make crop PDF", "the pages with the panels MAGI finds drawn on them, numbered - give "
-                            "it to the LLM with prompts/crop.md and it says what to fix", "croppdf"))
-            if any(workflow.has_crop_reply(project, ch) for ch in chapters):
-                options.append(("Use crop reply", "the LLM's reply pasted into crop_reply.txt becomes the panel "
-                                "marks, then the panels are cut", "cropreply"))
-            options += [("Make PDF", "the panels, to give to the LLM with the prompt", "pdf"),
-                        ("Write narration", "type it yourself instead, panel by panel, in the browser",
-                         "write"),
-                        ("Review narration", "go through what the LLM wrote and flag what is wrong",
-                         "review"),
-                        ]
             narrated = any(workflow.has_audio(project, ch) for ch in chapters)
+            # In the order the work goes, the LLM's hand-offs marked: "→ LLM" is a file to give it,
+            # "← LLM" its reply to use. 1 panels, 2 narration, 3 video, 4 upload set, then upkeep.
+            options.append(("Make crop PDF → LLM", "1 panels: the pages with the panels MAGI finds drawn on them, "
+                            "numbered - give it to the LLM with prompts/crop.md and it says what to fix",
+                            "croppdf"))
+            if any(workflow.has_crop_reply(project, ch) for ch in chapters):
+                options.append(("Use crop reply ← LLM", "1 panels: the LLM's reply pasted into crop_reply.txt "
+                                "becomes the panel marks, then the panels are cut", "cropreply"))
+            options.append(("Mark panels", "1 panels, by hand: open the marker in the browser - it finds them, "
+                            "you fix them; only the marks are saved", "mark"))
+            if marked:
+                options += [("Remark panels", "1 panels: throw the saved marks away and mark again - every panel "
+                             "is proposed afresh", "remark"),
+                            ("Create panels", "1 panels: cut the marked panels out of the pages", "panels")]
+            options += [("Make PDF → LLM", "2 narration: the panels, to give to the LLM with prompts/narration.md "
+                         "- paste its reply into narration.json", "pdf"),
+                        ("Write narration", "2 narration, by hand: type it yourself, panel by panel, in the "
+                         "browser", "write"),
+                        ("Review narration", "2 narration: go through what the LLM wrote and flag what is wrong",
+                         "review"),
+                        ("Check narration", "2 narration: every picked chapter's narration.json against its panels "
+                         "and its narrated audio - lists each mismatch, makes nothing", "check"),
+                        ("Make video", "3 video: narrates the whole chapter from narration.json (the slow part), "
+                         "then makes the video" + (" - replaces the narration there now" if narrated else ""),
+                         "video")]
             if narrated:
-                # First, because it is what is wanted after almost any change: the
-                # narration is the slow, costly part and nothing but a changed
-                # narration.json needs it made again.
-                options.append(("Rebuild video", "keeps the narration - remakes the music, intro and video "
-                                "(about a minute)", "remix"))
-            options.append(("Make video", "narrates the whole chapter from narration.json (the slow part), "
-                            "then makes the video" + (" - replaces the narration there now" if narrated else ""),
-                            "video"))
+                options += [("Rebuild video", "3 video: keeps the narration - remakes the music, intro and video "
+                             "(about a minute)", "remix"),
+                            ("Make video fresh", "3 video: everything made again from scratch - no take or video "
+                             "reused from before - and kept as a new version beside the others; says at the end "
+                             "how it compares with what was made before", "fresh")]
             if any(workflow.panel_files(project, ch) for ch in chapters):
-                options.append(("Make upload PDF", "titles, thumbnails and the description by the LLM: these "
-                                "chapters' biggest panels and the story - give it to the LLM with "
+                options.append(("Make upload PDF → LLM", "4 upload: titles, thumbnails and the description by the "
+                                "LLM: these chapters' biggest panels and the story - give it to the LLM with "
                                 "prompts/upload.md", "uploadpdf"))
             if workflow.has_upload_reply(project):
-                options.append(("Use upload reply", "the LLM's reply pasted into upload/upload_reply.txt becomes "
-                                "the three titles and thumbnails and the description, stamped beside every video",
-                                "uploadreply"))
+                options.append(("Use upload reply ← LLM", "4 upload: the LLM's reply pasted into "
+                                "upload/upload_reply.txt becomes the three titles and thumbnails and the "
+                                "description, stamped beside every video", "uploadreply"))
             if len(chapters) > 1 or any(set(v["chapters"]) & set(chapters)
                                         for v in workflow.long_videos(project)):
                 span = workflow.long_label(project, chapters) if len(chapters) > 1 else chapters[0]
-                options.append(("Long video...", f"one video of chapters {span} - join their videos, make it "
-                                "all from source, or delete one made before", "long"))
-            options.append(("Check narration", "every picked chapter's narration.json against its panels and "
-                            "its narrated audio - lists each mismatch, makes nothing", "check"))
-            if any(workflow.has_marks(project, ch) for ch in chapters):
+                options.append(("Long video...", f"4 upload: one video of chapters {span} - join their videos, "
+                                "make it all from source, or delete one made before", "long"))
+            if marked:
                 options.append(("Remake from source", "deletes everything but the pages, panel marks and "
                                 "narration.json, then makes it all again", "source"))
             if narrated:
@@ -108,10 +111,6 @@ class ChapterMenu:
                                 "whole, and as many as the site says", "pagecheck"))
             options += [("Check pages", "fix any missing or broken page", "download"),
                         ("Re-download", "delete the pages and fetch them all again", "redownload")]
-        if narrated:
-            options.append(("Make video fresh", "everything made again from scratch - no take or video reused "
-                            "from before - and kept as a new version beside the others; says at the end how it "
-                            "compares with what was made before", "fresh"))
         if len(chapters) == 1:
             kept = store_versions.versions(project, chapters[0])
             if kept:

@@ -13,7 +13,7 @@ from textual.widgets import DataTable
 from remanga import workflow
 from remanga.config import RemangaConfig
 from remanga.paths import list_projects, load_project_metadata
-from remanga.ui.dialogs import Ask, Result
+from remanga.ui.dialogs import Ask, Choice, Result
 from remanga.ui.screens.chapters import ChaptersScreen
 from remanga.ui.screens.common import _global_log
 from remanga.ui.screens.queue import QueueScreen
@@ -24,6 +24,7 @@ from remanga.ui.widgets import KeyBar, RowDetail, SafeTable, TopBar
 
 class ProjectsScreen(Screen):
     BINDINGS = [
+        Binding("b", "brief", "Brief (LLM)"),
         Binding("n", "new", "New project"),
         Binding("d", "delete", "Delete project"),
         Binding("j", "queue", "Queue"),
@@ -68,7 +69,7 @@ class ProjectsScreen(Screen):
         else:
             table.show_cursor = False
         self.query_one(TopBar).set_info(f"{len(projects)} project(s)" if projects else
-                                        "no projects yet - press n and paste a MangaDex or comix.to link")
+                    "no projects yet - press b to describe it to an LLM, or n and paste a link")
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         self.app.push_screen(ChaptersScreen(self.machine, self.names[event.cursor_row]))
@@ -103,6 +104,58 @@ class ProjectsScreen(Screen):
             return
         self.notify(f"Deleted {name}.")
         self.load()
+
+    @work(exclusive=True)
+    async def action_brief(self) -> None:
+        """Start from a few words: 1 write the prompt for the LLM, 2 use its reply."""
+        from remanga.json_io import has_real_json_content
+
+        path = ["remanga", "Brief"]
+        reply = workflow.brief.brief_reply_path()
+        replied = has_real_json_content(reply)
+        options = [("1  Describe what you want → LLM", "a few words (a character, a type, a look): writes the prompt "
+                    "file to give the LLM, which finds the manga, picks the chapters and designs a Drama 3 voice",
+                    "prompt")]
+        if replied:
+            options.append(("2  Use the LLM's reply ← LLM", f"the reply pasted into {reply} is checked against "
+                            "MangaDex, then the voice is saved, the project made and its chapters downloaded",
+                            "reply"))
+        action = await self.app.push_screen_wait(Choice(
+            "Brief", options, note="" if replied else f"After the LLM answers, paste its one JSON reply into {reply} "
+                                                       "and open this again."))
+        if action == "prompt":
+            reference = await self.app.push_screen_wait(Ask(
+                "Brief", "What are you after?", note='For example: isaki, villain, yandere white hair waifu',
+                check=lambda text: None if text.strip() else "Type a few words - or Esc to cancel."))
+            if not reference:
+                return
+            try:
+                prompt = workflow.make_brief_prompt(reference)
+            except Exception as error:
+                await self.app.push_screen_wait(Result(path, "Couldn't write the prompt", [str(error)], ok=False))
+                return
+            await self.app.push_screen_wait(Result(path, "Prompt ready", [
+                "Give this file to the LLM (one that can open MangaDex works best):", str(prompt.resolve()), "",
+                "Then paste its one JSON reply into:", str(reply.resolve()), "",
+                "and press b again for step 2."], ok=True, copy=[str(prompt.resolve()), str(reply.resolve())]))
+        elif action == "reply":
+            outcome: TaskOutcome = await self.app.push_screen_wait(TaskScreen(path, "Using the brief reply", [
+                Step("Check the manga on MangaDex, save the voice, download", lambda: workflow.apply_brief(
+                    workflow.read_reply_text(None), self.machine)),
+            ], _global_log()))
+            if not outcome.ok:
+                await self.app.push_screen_wait(Result(path, "The reply was not used", [outcome.error], ok=False,
+                                                       log=_global_log()))
+                return
+            done = outcome.results[0]
+            chapters = done.chapters
+            await self.app.push_screen_wait(Result(path, f"Project {done.project}", [
+                done.manga, f"Chapters {chapters[0]}-{chapters[-1]} ({len(chapters)}) downloaded.",
+                f"Narrator: {done.voice.label} ({done.voice.name}, seed {done.seed}) - now the Drama 3 voice "
+                f"(was {done.previous_voice}, seed {done.previous_seed}).", done.voice.cue,
+                "Listen to it first with: ./run.sh voices"], ok=True, warnings=done.notes))
+            self.load()
+            self.app.push_screen(ChaptersScreen(self.machine, done.project))
 
     @work(exclusive=True)
     async def action_new(self) -> None:
