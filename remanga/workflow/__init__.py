@@ -1,5 +1,6 @@
 """The whole workflow, one module per step and one function per thing it does:
 
+    brief      a few words -> an LLM -> a manga, its chapters and a new Drama 3 voice
     projects   making a project from a MangaDex link; the manga's own facts
     chapters   what a project has, what MangaDex lists, where each chapter is
     download   fetching a chapter's pages
@@ -23,6 +24,7 @@ from the command line (cli.py) and the menus (remanga/ui/) - which is the
 point: the two front-ends cannot do a step differently."""
 
 from remanga.narration import page_files, panel_files
+from remanga.workflow.brief import apply_brief, make_brief_prompt, print_brief_result, read_reply_text
 from remanga.workflow.chapters import (
     chapter_state,
     crop_reply_state,

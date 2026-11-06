@@ -4,9 +4,12 @@ the seed that keeps that narrator the same from chapter to chapter."""
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from remanga.config.base import ConfigModel
+from remanga.json_io import read_json_or, write_json
+from remanga.paths.roots import GLOBAL_DIR
 
 
 @dataclass(frozen=True)
@@ -53,10 +56,42 @@ VOICE_BY_NAME = {v.name: v for v in DRAMA_VOICES}
 DEFAULT_VOICE = "deep_male"
 
 
+def custom_voices_path() -> Path:
+    """Voices designed by an LLM (`remanga brief-from-reply`): data, so under
+    global/ (not in git), next to the ones in code above."""
+    return GLOBAL_DIR / "voices" / "drama3_custom.json"
+
+
+def custom_voices() -> tuple[DramaVoice, ...]:
+    """The saved designed voices, read each time (a run of the brief adds one
+    while the menus are open)."""
+    saved = read_json_or(custom_voices_path(), []) or []
+    found = [DramaVoice(e["name"], e.get("label") or e["name"], e.get("cue", ""), e.get("use", ""))
+             for e in saved if isinstance(e, dict) and e.get("name") and e["name"] not in VOICE_BY_NAME]
+    return tuple(found)
+
+
+def save_custom_voice(voice: DramaVoice, seed: int, note: str = "") -> None:
+    """Adds (or, for the same name, replaces) a designed voice. Its voice file
+    is keyed by name and seed, so a name must keep its cue - the caller refuses
+    a name that would change one."""
+    path = custom_voices_path()
+    saved = [e for e in (read_json_or(path, []) or []) if isinstance(e, dict) and e.get("name") != voice.name]
+    saved.append({"name": voice.name, "label": voice.label, "cue": voice.cue, "use": voice.use, "seed": seed,
+                  "note": note})
+    write_json(path, saved)
+
+
+def all_voices() -> tuple[DramaVoice, ...]:
+    return DRAMA_VOICES + custom_voices()
+
+
 def voice_spec(name: str) -> DramaVoice:
     """The voice named, or the default for a name it doesn't have - a typo in
     config.json narrates in the default voice rather than failing mid-chapter."""
-    return VOICE_BY_NAME.get((name or "").strip(), VOICE_BY_NAME[DEFAULT_VOICE])
+    name = (name or "").strip()
+    return VOICE_BY_NAME.get(name) or next((v for v in custom_voices() if v.name == name),
+                                           VOICE_BY_NAME[DEFAULT_VOICE])
 
 
 class Drama3Config(ConfigModel):
@@ -84,7 +119,7 @@ class Drama3Config(ConfigModel):
 
     def voice_options(self) -> list[tuple[str, str]]:
         """Every voice it can read in - see KokoroConfig.voice_options."""
-        return [(v.name, f"{v.label} - {v.use}") for v in DRAMA_VOICES]
+        return [(v.name, f"{v.label} - {v.use}") for v in all_voices()]
 
     @property
     def spec(self) -> DramaVoice:

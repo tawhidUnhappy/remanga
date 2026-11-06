@@ -1,5 +1,7 @@
 """The `remanga` command line. With no command, the menus.
 
+    remanga brief    WORDS...                   (a few words -> global/brief/brief_prompt.md for the LLM)
+    remanga brief-from-reply [--reply FILE]     (its reply -> a manga found, its chapters downloaded, a new voice)
     remanga new      URL                         (MangaDex or comix.to; names the project after the manga)
     remanga download -p NAME [-c 1-5]           (no -c: shows the site's chapter list)
     remanga mark     -p NAME -c 1-5             (the Panel Marker web UI)
@@ -48,6 +50,14 @@ def build_parser() -> argparse.ArgumentParser:
                            help="a chapter (3), a range (1-5), several (1-5,8), or 'all' (default)")
         return p
 
+    b = sub.add_parser("brief", help="Write the prompt file that has an LLM find a manga for what you describe and "
+                                     "design a Drama 3 voice and chapter range for it")
+    b.add_argument("reference", nargs="+", help='what you are after, e.g. "isaki, villain, yandere white hair waifu"')
+    br = sub.add_parser("brief-from-reply", help="Use the LLM's brief reply (global/brief/brief_reply.txt): check "
+                                                  "the manga on MangaDex, save the new voice, make the project, "
+                                                  "download the chapters")
+    br.add_argument("--reply", metavar="FILE", help="read the reply from this file instead")
+    br.add_argument("--no-download", action="store_true", help="make the project and the voice, download nothing")
     sub.add_parser("interactive", help="the menus (the default)")
     n = sub.add_parser("new", help="Create a project from a MangaDex or comix.to link (or a MangaDex title) - named "
                                        "after the manga")
@@ -144,6 +154,24 @@ def _run(args: argparse.Namespace) -> None:
         from remanga.config import RemangaConfig as _Config
 
         workflow.sample_voices(_Config.load())
+        return
+    if args.command == "brief":
+        prompt = workflow.make_brief_prompt(" ".join(args.reference))
+        console.print(f"[bold green]✓ Prompt:[/] {_esc(str(prompt.resolve()))}\n"
+                      "Give that file to the LLM (one with web access to MangaDex works best), then paste its one "
+                      f"JSON reply into {_esc(str(workflow.brief.brief_reply_path().resolve()))} and run:\n"
+                      "  ./run.sh brief-from-reply")
+        return
+    if args.command == "brief-from-reply":
+        from remanga.brief_plan import BriefReplyError
+
+        try:
+            workflow.print_brief_result(workflow.apply_brief(workflow.read_reply_text(args.reply),
+                                                              RemangaConfig.load(),
+                                                              download_chapters=not args.no_download))
+        except BriefReplyError as error:
+            err_console.print(f"[bold red]✗[/] {_esc(str(error))}")
+            sys.exit(1)
         return
     if args.command == "new":
         workflow.create_project(args.source, RemangaConfig.load())

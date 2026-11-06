@@ -434,6 +434,25 @@ accents, money and fractions are written plainly (Chloé -> Chloe, $5 -> 5 dolla
 Make each chapter's PDF after pasting the previous chapter's narration, so its story so far is up to
 date (the PDF step says so when an earlier chapter has none yet).
 
+## Start from a few words (the brief)
+
+Type what you are after and let an LLM pick the manga, the chapters and a new narrator voice:
+
+```bash
+./run.sh brief isaki, villain, yandere white hair waifu   # writes global/brief/brief_prompt.md
+# give that file to the LLM (best one that can open MangaDex), paste its one JSON reply into
+# global/brief/brief_reply.txt
+./run.sh brief-from-reply                                 # or --reply FILE, --no-download
+```
+
+The prompt is `prompts/brief.md` plus your words plus the Drama 3 voices that already exist. remanga
+checks the reply against MangaDex itself - each candidate manga must exist and have chapters in the
+range (the first that does is used) - and only then: saves the designed voice (`global/voices/
+drama3_custom.json`, listed in Settings beside the built-in ones), makes it the Drama 3 narrator for
+every project, makes the project and downloads the chapters. A reply with mistakes changes nothing
+and gets `global/brief/brief_fix_request.md` to paste back into the same chat. The choice is kept in
+the project's `brief.json`. Listen to the voice first with `./run.sh voices`.
+
 ## Titles, thumbnails and description
 
 ```bash
