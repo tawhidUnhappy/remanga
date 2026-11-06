@@ -18,7 +18,7 @@ from remanga.brief_plan.reply import FIX_REQUEST_NAME, fix_request_text
 from remanga.config import RemangaConfig
 from remanga.console import console, escape as _esc
 from remanga.json_io import has_real_json_content, write_json
-from remanga.paths import PROMPTS_DIR, get_project_dir
+from remanga.paths import PROMPTS_DIR, get_project_dir, list_projects, load_project_metadata
 from remanga.paths.roots import GLOBAL_DIR
 from remanga.plugins.drama3.config import (
     DRAMA_VOICES,
@@ -27,9 +27,9 @@ from remanga.plugins.drama3.config import (
     custom_voices,
     save_custom_voice,
 )
-from remanga.workflow.chapters import select_chapters
 from remanga.workflow.download import download
 from remanga.workflow.projects import create_project
+from remanga.workflow.seasons import next_season
 
 PROMPT_PATH = PROMPTS_DIR / "brief.md"
 
@@ -52,12 +52,25 @@ def make_brief_prompt(reference: str) -> Path:
     if not reference:
         raise ValueError('Type what you are after, e.g. remanga brief "isaki, villain, yandere white hair waifu".')
     voices = "\n".join(f"- `{v.name}` - {v.cue or '(no description)'}" for v in all_voices() if v.cue)
+    have = existing_manga()
+    owned = "\n".join(f"- {title} (`{mid}`)" for mid, title in have.items()) or "- (none yet)"
     text = (PROMPT_PATH.read_text(encoding="utf-8").rstrip()
+            + f"\n\n## Manga that are already projects - do NOT suggest these\n\n{owned}"
             + f"\n\n## Voices that already exist\n\n{voices}\n\n## The reference\n\n{reference}\n")
     out = brief_dir() / "brief_prompt.md"
     out.write_text(text, encoding="utf-8")
     brief_reply_path().touch()
     return out
+
+
+def existing_manga() -> dict[str, str]:
+    """Every manga id the projects already have -> its title."""
+    found = {}
+    for project in list_projects():
+        title = load_project_metadata(project["name"]).get("manga_title") or project["name"]
+        for manga_id in project["manga_ids"]:
+            found[str(manga_id).lower()] = title
+    return found
 
 
 @dataclass
@@ -71,6 +84,9 @@ class Verified:
 
 def _verify(candidate: Candidate, plan: BriefPlan, config: RemangaConfig) -> Verified:
     """Ask MangaDex itself. Raises ValueError saying why this candidate cannot be used."""
+    owned = existing_manga().get(candidate.manga_id)
+    if owned:
+        raise ValueError(f'already a project ("{owned}") - a new manga is wanted')
     client = sources.client(sources.source_for(candidate.manga_id), config)
     try:
         info = client.get_manga_info(client.parse_manga_id(candidate.manga_id))
@@ -89,15 +105,15 @@ def _verify(candidate: Candidate, plan: BriefPlan, config: RemangaConfig) -> Ver
     available = [c for c in dict.fromkeys(str(ch.get("attributes", {}).get("chapter") or "") for ch in listed) if c]
     if not available:
         raise ValueError(f'"{shown}" has no chapters in the languages remanga downloads')
-    chosen = select_chapters(f"{plan.first}-{plan.last}", available)
-    chosen = [c for c in chosen if c in available]
+    size = config.downloader.season_chapters
+    chosen = next_season(available, [], size, start=plan.first)
     if not chosen:
-        raise ValueError(f'"{shown}" has no chapter between {plan.first} and {plan.last} '
+        raise ValueError(f'"{shown}" has no chapter from {plan.first} on '
                          f"(it has {min(available, key=float)}-{max(available, key=float)})")
     if plan.first not in available:
-        notes.append(f"chapter {plan.first} is not listed; the range starts at chapter {chosen[0]}")
-    if plan.last not in available:
-        notes.append(f"chapter {plan.last} is not listed; the range ends at chapter {chosen[-1]}")
+        notes.append(f"chapter {plan.first} is not listed; season 1 starts at chapter {chosen[0]}")
+    if len(chosen) < size:
+        notes.append(f"only {len(chosen)} chapter(s) listed from {chosen[0]} - a short season")
     return Verified(candidate, client.parse_manga_id(candidate.manga_id), shown, chosen, notes)
 
 
@@ -145,8 +161,9 @@ def apply_brief(raw: str, config: RemangaConfig, *, download_chapters: bool = Tr
             skipped.append(f"{candidate.title}: {error}")
             console.print(f"[yellow]✗ {_esc(candidate.title)}:[/] {_esc(str(error))}")
     if verified is None:
-        refuse("None of the manga in the reply could be used.", skipped
-               + ["give MangaDex ids you have seen on mangadex.org itself, with chapters that exist"])
+        refuse("None of the manga in the reply could be used.", [*skipped,
+               "give MangaDex ids you have seen on mangadex.org itself, with chapters that exist, of manga "
+               "that are not already projects (the prompt lists them)"])
 
     # Checked - now change things.
     voice = DramaVoice(plan.voice.name, plan.voice.label, plan.voice.cue, plan.voice.use)
@@ -171,9 +188,10 @@ def apply_brief(raw: str, config: RemangaConfig, *, download_chapters: bool = Tr
 def print_brief_result(result: BriefResult) -> None:
     c = result.chapters
     console.print(f"\n[bold green]✓ {_esc(result.manga)}[/] -> project [bold]{_esc(result.project)}[/], "
-                  f"chapters {_esc(c[0])}-{_esc(c[-1])} ({len(c)})"
+                  f"season 1: chapters {_esc(c[0])}-{_esc(c[-1])} ({len(c)})"
                   + ("" if result.downloaded else " [yellow](not downloaded - run: ./run.sh download -p "
-                     f"{_esc(result.project)} -c {_esc(c[0])}-{_esc(c[-1])})[/]"))
+                     f"{_esc(result.project)} -c {_esc(c[0])}-{_esc(c[-1])})[/]")
+                  + f"\n[dim]Next 12: ./run.sh season -p {_esc(result.project)}[/]")
     console.print(f"[bold green]✓ Narrator[/] {_esc(result.voice.label)} [dim]({result.voice.name}, seed "
                   f"{result.seed})[/] - now the Drama 3 voice for every project (was {_esc(result.previous_voice)}, "
                   f"seed {result.previous_seed}). [dim]{_esc(result.voice.cue)}[/]")

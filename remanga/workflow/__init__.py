@@ -67,6 +67,7 @@ from remanga.workflow.projects import (
     project_name_from_title,
     settle_reading_direction,
 )
+from remanga.workflow.seasons import add_season, listing_next_season, season_label
 from remanga.workflow.upload import stamp_all
 from remanga.workflow.upload_pdf import UploadPdfResult, has_upload_reply, make_upload_pdf, print_upload_handoff
 from remanga.workflow.upload_reply import UploadReplyResult, print_upload_result, upload_from_reply
@@ -95,6 +96,8 @@ __all__ = [
     "PdfResult",
     "UploadPdfResult",
     "UploadReplyResult",
+    "add_season",
+    "apply_brief",
     "chapter_state",
     "check_chapter",
     "check_narration",
@@ -116,9 +119,11 @@ __all__ = [
     "has_panels",
     "has_upload_reply",
     "join_chapters",
+    "listing_next_season",
     "local_chapters",
     "long_label",
     "long_videos",
+    "make_brief_prompt",
     "make_crop_pdf",
     "make_long_video",
     "make_pdf",
@@ -134,6 +139,7 @@ __all__ = [
     "page_files",
     "panel_files",
     "prepare_chapter",
+    "print_brief_result",
     "print_chapter_list",
     "print_crop_handoff",
     "print_handoff",
@@ -143,6 +149,7 @@ __all__ = [
     "project_footprint",
     "project_name_from_title",
     "quality_warnings",
+    "read_reply_text",
     "remake_from_source",
     "remark",
     "remix_video",
@@ -151,6 +158,7 @@ __all__ = [
     "review_narration",
     "sample_voices",
     "samples_dir",
+    "season_label",
     "select_chapters",
     "settle_reading_direction",
     "source_names",

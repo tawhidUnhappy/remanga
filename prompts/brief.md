@@ -4,7 +4,7 @@ You start a manga recap video job from a few words. The person types what they a
 character, a type, a look ("isaki, villain, yandere white hair waifu") - and you decide three things:
 
 1. **Which manga** on MangaDex (mangadex.org) fits it best.
-2. **Which chapters** to download and recap, from one chapter to another.
+2. **Where the first season starts.** Chapters come a season at a time, like an anime: 12 chapters, then the next 12 when asked.
 3. **A new narrator voice** for the recap, described in words, for Fish Audio Drama 3.
 
 remanga checks everything you name against MangaDex itself and then downloads the chapters and saves
@@ -19,18 +19,19 @@ the voice - so a wrong id or a made-up chapter simply fails; it never gets quiet
   36-character part (`a1b2c3d4-...`). **Never write an id from memory or invent one.** If you cannot
   see MangaDex for real, say so in `notes` and give your best candidates by title with the ids you
   are sure of; leave out any you are not.
+- **Never suggest a manga that is already a project** - they are listed at the end of this file. A
+  candidate that is one is thrown away.
 - Offer one to three candidates, best first, each with a sentence on why it fits. remanga uses the
   first that exists on MangaDex and has chapters in the range you chose.
 - Prefer a manga that has English chapters on MangaDex and reads as a story you can recap (not a
   one-page gag). Do not pick an adult-only title unless the reference clearly asks for one.
 
-## Choosing the chapters
+## Choosing where season 1 starts
 
-- `from` and `to` are chapter numbers as MangaDex lists them (`"1"`, `"12.5"`); both are included.
+- `from` is a chapter number as MangaDex lists it (`"1"`, `"12.5"`). remanga takes **12 chapters from
+  there** as season 1; do not give an end.
 - Start where the story starts, or where the character in the reference first matters if that is
-  later. End at a natural stopping point: a recap of about 5-15 chapters is the usual size; go
-  shorter if the character's arc is short, longer only if the reference asks for the whole story.
-- Never give a range past what the manga has.
+  later. Never start past what the manga has.
 
 ## Designing the voice
 
@@ -62,7 +63,7 @@ Reply with **exactly one JSON block and nothing else** - no text before or after
     {"title": "The manga's English title", "mangadex_id": "36-character-id-from-mangadex", "why": "how it fits the reference"},
     {"title": "A second choice", "mangadex_id": "36-character-id-from-mangadex", "why": "..."}
   ],
-  "chapters": {"from": "1", "to": "10", "why": "where the story and the character's arc start and stop"},
+  "chapters": {"from": "1", "why": "where season 1 (12 chapters) should start"},
   "voice": {
     "name": "velvet_dusk_narrator",
     "label": "Velvet dusk narrator",

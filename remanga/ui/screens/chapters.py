@@ -32,6 +32,7 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
         Binding("r", "pick_range", "Pick range"),
         Binding("t", "type_range", "Type range"),
         Binding("p", "pick_all", "Pick all"),
+        Binding("n", "next_season", "Next season"),
         Binding("a", "download_new", "Download all new"),
         Binding("u", "update_list", "Update list"),
         Binding("o", "sources", "Sources"),
@@ -260,6 +261,19 @@ class ChaptersScreen(ChapterMenu, VideoWork, ChapterWork, Screen):
 
     def new_chapters(self) -> list[str]:
         return [r["chapter"] for r in self.rows if r["status"] in ("missing", "partial")]
+
+    @work(exclusive=True)
+    async def action_next_season(self) -> None:
+        """The next 12 chapters after the last one you have - an anime's next season."""
+        chapters = workflow.listing_next_season(self.rows, self.config.downloader.season_chapters)
+        if not chapters:
+            self.notify("Nothing after the last chapter you have.")
+            return
+        if await self.app.push_screen_wait(Confirm("Next season", f"Download chapters "
+                                                   f"{workflow.season_label(chapters)} ({len(chapters)})?",
+                                                   yes="Download")):
+            await self.download(chapters)
+            self.fetch(refresh=False)
 
     @work(exclusive=True)
     async def action_download_new(self) -> None:

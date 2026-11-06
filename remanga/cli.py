@@ -2,6 +2,7 @@
 
     remanga brief    WORDS...                   (a few words -> global/brief/brief_prompt.md for the LLM)
     remanga brief-from-reply [--reply FILE]     (its reply -> a manga found, its chapters downloaded, a new voice)
+    remanga season   -p NAME                    (the next season: the next 12 chapters after the last you have)
     remanga new      URL                         (MangaDex or comix.to; names the project after the manga)
     remanga download -p NAME [-c 1-5]           (no -c: shows the site's chapter list)
     remanga mark     -p NAME -c 1-5             (the Panel Marker web UI)
@@ -71,6 +72,8 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--url", help="the manga's link (MangaDex URL/ID/title, or comix.to) - needed once per project, "
                                  "then remembered")
     d.add_argument("--force", action="store_true", help="delete the pages and download them again")
+    with_project("season", "Download the next season - the next 12 chapters (downloader.season_chapters) after "
+                           "the last one you have, the way an anime rolls out", chapters=False)
     with_project("mark", "Open the Panel Marker web UI for these chapters - MAGI v3 finds the panels, you fix "
                          "them, saving writes crops.json")
     with_project("crop-pdf", "Make each chapter's crop PDF - its pages with the panels MAGI v3 finds drawn and "
@@ -225,6 +228,9 @@ def _run(args: argparse.Namespace) -> None:
             console.print("[yellow]No long videos yet - make one with -c 1-5.[/]")
         for video in made:
             console.print(f"  ch{_esc(video['label']):<12} {_esc(str(video['video'] or '(no finished video)'))}")
+        return
+    if args.command == "season":
+        workflow.add_season(args.project, config)
         return
     if args.command == "download":
         listing = workflow.mangadex_chapters(args.project, config, args.url)

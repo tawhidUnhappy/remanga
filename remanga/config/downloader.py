@@ -14,6 +14,9 @@ class DownloaderConfig(ConfigModel):
     # narration is still written in English: the PDF tells the LLM which
     # language the lettering is in (remanga/languages.py).
     fallback_languages: list[str] = Field(default_factory=lambda: ["*"])
+    # A "season": how many chapters the brief and "next season" take at a time, the way an anime
+    # rolls out 12 episodes and then the next 12.
+    season_chapters: int = Field(default=12, ge=1, le=100)
     image_quality: str = "data"  # 'data' (high quality) or 'data-saver'
     max_retries: int = 3
     retry_delay_seconds: int = 2

@@ -451,7 +451,7 @@ range (the first that does is used) - and only then: saves the designed voice (`
 drama3_custom.json`, listed in Settings beside the built-in ones), makes it the Drama 3 narrator for
 every project, makes the project and downloads the chapters. A reply with mistakes changes nothing
 and gets `global/brief/brief_fix_request.md` to paste back into the same chat. The choice is kept in
-the project's `brief.json`. Listen to the voice first with `./run.sh voices`.
+the project's `brief.json`. Chapters come **a season at a time**, like an anime: the brief downloads 12 chapters (`downloader.season_chapters`) from where the LLM says the story starts, and `./run.sh season -p NAME` - or `n` on the chapters screen - downloads the next 12 after the last you have. The prompt lists the manga you already have, and a candidate that is one is skipped. Listen to the voice first with `./run.sh voices`.
 
 ## Titles, thumbnails and description
 

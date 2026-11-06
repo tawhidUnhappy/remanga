@@ -51,8 +51,7 @@ class VoicePlan:
 @dataclass
 class BriefPlan:
     candidates: list[Candidate]
-    first: str                     # first chapter to download, as written ("1", "12.5")
-    last: str
+    first: str                     # the chapter the first season starts at, as written ("1", "12.5")
     voice: VoicePlan
     warnings: list[str] = field(default_factory=list)
 
@@ -99,16 +98,15 @@ def read_brief_reply(raw: str, taken_names: set[str] = frozenset()) -> BriefPlan
         candidates.append(Candidate(title, found.group(0).lower(), _text(entry.get("why"))))
 
     chapters = data.get("chapters")
-    first = last = ""
+    first = ""
     if not isinstance(chapters, dict):
-        errors.append('"chapters" must be {"from": "1", "to": "5"}')
+        errors.append('"chapters" must be {"from": "1"} - the chapter the first season starts at')
     else:
-        first, last = str(chapters.get("from", "")).strip(), str(chapters.get("to", "")).strip()
-        for key, value in (("from", first), ("to", last)):
-            if not CHAPTER.fullmatch(value):
-                errors.append(f'chapters.{key} must be a chapter number such as "1" or "12.5", not "{value}"')
-        if CHAPTER.fullmatch(first) and CHAPTER.fullmatch(last) and float(first) > float(last):
-            errors.append(f'chapters.from ({first}) is after chapters.to ({last})')
+        first = str(chapters.get("from", "")).strip()
+        if not CHAPTER.fullmatch(first):
+            errors.append(f'chapters.from must be a chapter number such as "1" or "12.5", not "{first}"')
+        if str(chapters.get("to", "")).strip():
+            warnings.append('chapters.to is not used - remanga takes one season (12 chapters) from chapters.from')
 
     voice_data = data.get("voice")
     voice = None
@@ -140,7 +138,7 @@ def read_brief_reply(raw: str, taken_names: set[str] = frozenset()) -> BriefPlan
 
     if errors:
         raise BriefReplyError(f"The reply has {len(errors)} mistake(s).", errors)
-    return BriefPlan(candidates, first, last, voice, warnings)
+    return BriefPlan(candidates, first, voice, warnings)
 
 
 def fix_request_text(errors: list[str]) -> str:
